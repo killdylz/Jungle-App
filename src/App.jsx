@@ -1460,35 +1460,39 @@ const JungleLogo = ({size=32}) => (
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 function StatCard({icon, label, value, color}) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
   return (
-    <div style={{padding:"18px",background:T.card,borderRadius:"10px",border:`1px solid ${T.border}`}}>
-      <div style={{fontSize:"22px",marginBottom:"8px"}}>{icon}</div>
-      <p style={{fontSize:"26px",fontWeight:"800",color:color||T.text,marginBottom:"3px",lineHeight:"1"}}>{value}</p>
-      <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</p>
+    <div style={{padding:isMobile?"12px 10px":"18px",background:T.card,borderRadius:"10px",border:`1px solid ${T.border}`}}>
+      <div style={{fontSize:isMobile?"18px":"22px",marginBottom:isMobile?"5px":"8px"}}>{icon}</div>
+      <p style={{fontSize:isMobile?"20px":"26px",fontWeight:"800",color:color||T.text,marginBottom:"3px",lineHeight:"1"}}>{value}</p>
+      <p style={{fontSize:"10px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</p>
     </div>
   );
 }
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
 function LoginScreen({onLogin, authError}) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
   return (
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`radial-gradient(ellipse at 50% 20%, ${T.navy} 0%, ${T.bg} 65%)`,color:T.text,padding:"30px",textAlign:"center"}}>
-      <JungleLogo size={80}/>
-      <h1 style={{marginTop:"28px",fontSize:"56px",fontWeight:"800",letterSpacing:"8px"}}>JUNGLE</h1>
-      <p style={{marginTop:"14px",color:T.muted,fontSize:"16px",maxWidth:"360px",lineHeight:"1.7"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`radial-gradient(ellipse at 50% 20%, ${T.navy} 0%, ${T.bg} 65%)`,color:T.text,padding:isMobile?"20px":"30px",textAlign:"center"}}>
+      <JungleLogo size={isMobile?60:80}/>
+      <h1 style={{marginTop:"20px",fontSize:isMobile?"36px":"56px",fontWeight:"800",letterSpacing:isMobile?"4px":"8px"}}>JUNGLE</h1>
+      <p style={{marginTop:"12px",color:T.muted,fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
       {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>⚠️ {authError}</div>}
       {IS_CONFIGURED ? (
-        <button onClick={onLogin} style={{marginTop:"40px",padding:"16px 52px",background:T.green,color:"white",border:"none",borderRadius:"32px",fontSize:"15px",fontWeight:"700",cursor:"pointer"}}>
+        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:T.green,color:"white",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"100%":"auto",maxWidth:"320px",minHeight:"44px"}}>
           🎵 Continue with Spotify
         </button>
       ) : (
-        <div style={{marginTop:"32px",padding:"22px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,maxWidth:"380px",textAlign:"left"}}>
+        <div style={{marginTop:"28px",padding:"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,maxWidth:"380px",width:"100%",textAlign:"left",boxSizing:"border-box"}}>
           <p style={{fontWeight:"700",marginBottom:"10px"}}>⚙️ Setup Required</p>
           <p style={{fontSize:"13px",color:T.muted,marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
-          <code style={{fontSize:"12px",color:T.accent,background:T.navy,padding:"10px 12px",borderRadius:"6px",display:"block"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
+          <code style={{fontSize:"12px",color:T.accent,background:T.navy,padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
         </div>
       )}
-      <p style={{marginTop:"28px",fontSize:"12px",color:T.muted}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
+      <p style={{marginTop:"24px",fontSize:"12px",color:T.muted,padding:"0 8px"}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
     </div>
   );
 }
@@ -1498,6 +1502,8 @@ function LoginScreen({onLogin, authError}) {
 function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBranding={}, onBrandingChange}) {
   if (!profile) return null;
 
+  const vwPM = useWindowWidth();
+  const isMobilePM = vwPM < 480;
   const [tab, setTab] = useState("profile"); // "profile" | "branding"
 
   // ── Profile stats ──
@@ -1578,8 +1584,8 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
   );
 
   return (
-    <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:"16px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:"14px",width:"100%",maxWidth:"420px",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid ${T.border}`}}>
+    <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.65)",display:"flex",alignItems:isMobilePM?"flex-end":"center",justifyContent:"center",zIndex:1000,padding:isMobilePM?"0":"16px"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobilePM?"14px 14px 0 0":"14px",width:"100%",maxWidth:"420px",maxHeight:isMobilePM?"96vh":"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid ${T.border}`}}>
 
         {/* Header */}
         <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
@@ -1806,19 +1812,19 @@ function PinScreen({onUnlock}) {
       </div>
 
       {/* Number pad */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,72px)",gap:"12px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",width:"min(280px,85vw)"}}>
         {pad.flat().map((k,i) => {
           if (k === null) return <div key={i}/>;
           return (
             <button key={i} onClick={k==="del" ? handleDelete : ()=>handleDigit(k)}
               style={{
-                width:"72px",height:"72px",borderRadius:"50%",
+                width:"100%",aspectRatio:"1",borderRadius:"50%",
                 background: k==="del" ? "transparent" : DARK.card,
                 border: `1px solid ${k==="del" ? "transparent" : DARK.border}`,
                 color: DARK.text,cursor:"pointer",
-                fontSize: k==="del" ? "13px" : "22px",
+                fontSize: k==="del" ? "16px" : "22px",
                 fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",
-                transition:"background 0.1s",
+                transition:"background 0.1s",minHeight:"44px",
               }}
               onMouseEnter={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.navy; }}
               onMouseLeave={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.card; }}
@@ -2098,13 +2104,14 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     color: tab===id ? "white" : T.muted,
     border: `1px solid ${tab===id?T.accent:T.border}`,
     borderRadius:"7px", cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.15s",
+    minHeight:"40px",
   });
 
   return (
     <div>
       {/* Tab bar */}
       <div style={{display:"flex",gap:"4px",marginBottom:"12px"}}>
-        {[["track","🔍 Track"],["genre","🎸 Genre"],["playlist","📋 Playlist"],["bpm","⏱ BPM"]].map(([id,lbl])=>(
+        {[["track","🔍 Track"],["genre","🎸 Genre"],["playlist","📋 List"],["bpm","⏱ BPM"]].map(([id,lbl])=>(
           <button key={id} style={tabStyle(id)} onClick={()=>switchTab(id)}>{lbl}</button>
         ))}
       </div>
@@ -2352,7 +2359,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
       </button>
 
       {/* Quick nav tiles */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:isMobile?"8px":"12px",marginBottom:isMobile?"20px":"32px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?"8px":"12px",marginBottom:isMobile?"20px":"32px"}}>
         {[
           { icon:<Calendar size={isMobile?18:22}/>, label:"Calendar",  onClick:onViewCalendar  },
           { icon:<BarChart2 size={isMobile?18:22}/>, label:"Analytics", onClick:onViewAnalytics },
@@ -2423,8 +2430,8 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
       {selClassType && (() => {
         const cls = WORKOUT_LIBRARY[selClassType];
         return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setSelClassType(null)}>
-            <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"460px",maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:500,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"20px"}} onClick={()=>setSelClassType(null)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"460px",maxHeight:isMobile?"92vh":"80vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
               {/* Header */}
               <div style={{padding:"18px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -2503,7 +2510,7 @@ function AnalyticsScreen({onBack}) {
         <StatCard icon="🔥" label="Best Streak"  value="7 days"  color="#F97316"/>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px",marginBottom:"20px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"20px",marginBottom:"20px"}}>
         {/* Weekly bar chart */}
         <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
           <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"18px"}}>This Week — Minutes</p>
@@ -2537,17 +2544,28 @@ function AnalyticsScreen({onBack}) {
       {/* Recent sessions */}
       <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
         <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Recent Sessions</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
-          {["Session","Duration","Stages","Date"].map(h => <p key={h} style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</p>)}
-        </div>
-        {recent.map((r,i) => (
-          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-            <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{r.name}</p>
-            <p style={{fontSize:"13px",color:T.muted}}>{r.dur}</p>
-            <p style={{fontSize:"13px",color:T.muted}}>{r.stages}</p>
-            <p style={{fontSize:"13px",color:T.muted}}>{r.date}</p>
-          </div>
-        ))}
+        {isMobile ? (
+          recent.map((r,i) => (
+            <div key={i} style={{padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+              <p style={{fontSize:"13px",fontWeight:"600",color:T.text,marginBottom:"3px"}}>{r.name}</p>
+              <p style={{fontSize:"11px",color:T.muted}}>{r.date} · {r.dur} · {r.stages} stage{r.stages!==1?"s":""}</p>
+            </div>
+          ))
+        ) : (
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
+              {["Session","Duration","Stages","Date"].map(h => <p key={h} style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</p>)}
+            </div>
+            {recent.map((r,i) => (
+              <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+                <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{r.name}</p>
+                <p style={{fontSize:"13px",color:T.muted}}>{r.dur}</p>
+                <p style={{fontSize:"13px",color:T.muted}}>{r.stages}</p>
+                <p style={{fontSize:"13px",color:T.muted}}>{r.date}</p>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -2576,7 +2594,7 @@ function GlossaryScreen({onBack}) {
               <span style={{color:T.muted}}>{(open===grp||search)?"▼":"▶"}</span>
             </button>
             {(open===grp||search) && (
-              <div style={{marginTop:"8px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",paddingLeft:"4px"}}>
+              <div style={{marginTop:"8px",display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"8px",paddingLeft:"4px"}}>
                 {filtered.map((ex,i) => (
                   <div key={i} style={{padding:"14px",background:T.card,borderRadius:"8px",border:`1px solid ${T.border}`}}>
                     <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"5px"}}>{ex.name}</p>
@@ -2693,8 +2711,8 @@ function CalendarScreen({onBack}) {
 
       {/* Add Class Modal */}
       {showModal && (
-        <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
-          <div style={{background:T.card,borderRadius:"14px",padding:"30px",maxWidth:"440px",width:"90%",border:`1px solid ${T.border}`}}>
+        <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.7)",display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",zIndex:1000}}>
+          <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",padding:isMobile?"20px":"30px",maxWidth:"440px",width:isMobile?"100%":"90%",border:`1px solid ${T.border}`,maxHeight:"90vh",overflowY:"auto"}}>
             <h2 style={{fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"22px"}}>Add New Class</h2>
             <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
               <div>
@@ -2870,8 +2888,8 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
     }
   };
 
-  const overlay = { position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" };
-  const modal   = { background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px", width:"680px", maxWidth:"95vw", maxHeight:"82vh", display:"flex", flexDirection:"column", overflow:"hidden" };
+  const overlay = { position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:isMobile?"flex-end":"center", justifyContent:"center" };
+  const modal   = { background:T.card, border:`1px solid ${T.border}`, borderRadius:isMobile?"14px 14px 0 0":"14px", width:isMobile?"100%":"680px", maxWidth:isMobile?"100%":"95vw", maxHeight:isMobile?"92vh":"82vh", display:"flex", flexDirection:"column", overflow:"hidden" };
 
   const [grantingAccess, setGrantingAccess] = useState(false);
 
@@ -3344,10 +3362,10 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"16px"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       {/* Fixed-size modal — height is always 88vh so layout never shifts */}
-      <div style={{background:T.card,borderRadius:"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"900px",height:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
+      <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"900px",height:isMobile?"96vh":"88vh",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
 
         {/* Toast */}
         {toast && (
@@ -3357,13 +3375,13 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         )}
 
         {/* ── Header ── */}
-        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,gap:"10px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"10px",minWidth:0}}>
+        <div style={{padding:isMobile?"10px 14px":"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,gap:"8px",flexWrap:isMobile?"wrap":"nowrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"10px",minWidth:0,flex:1}}>
             {/* Main tab switcher */}
             <div style={{display:"flex",gap:"4px",background:T.navy,borderRadius:"8px",padding:"3px"}}>
-              {[["library","📚 My Library"],["discover","🌐 Discover"]].map(([id,lbl])=>(
+              {[["library",isMobile?"📚 Library":"📚 My Library"],["discover",isMobile?"🌐 Discover":"🌐 Discover"]].map(([id,lbl])=>(
                 <button key={id} onClick={()=>setMainTab(id)}
-                  style={{padding:"5px 12px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"11px",fontWeight:"700",
+                  style={{padding:isMobile?"4px 10px":"5px 12px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:isMobile?"10px":"11px",fontWeight:"700",
                     background:mainTab===id?T.card:"transparent",
                     color:mainTab===id?T.text:T.muted,
                     boxShadow:mainTab===id?"0 1px 3px rgba(0,0,0,0.3)":"none",
@@ -3373,24 +3391,24 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
               ))}
             </div>
           </div>
-          <div style={{display:"flex",gap:"6px",flexShrink:0,alignItems:"center"}}>
+          <div style={{display:"flex",gap:"5px",flexShrink:0,alignItems:"center"}}>
             {mainTab==="library" && (
               <>
                 <button onClick={()=>{ setEditMode(v=>!v); setEditingId(null); }}
-                  style={{padding:"6px 12px",background:editMode?T.accent+"22":T.navy,border:`1px solid ${editMode?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:editMode?T.accent:T.muted,fontSize:"11px",fontWeight:"700"}}>
-                  {editMode ? "✓ Done Editing" : "✏️ Edit Library"}
+                  style={{padding:"6px 10px",background:editMode?T.accent+"22":T.navy,border:`1px solid ${editMode?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:editMode?T.accent:T.muted,fontSize:"10px",fontWeight:"700",whiteSpace:"nowrap"}}>
+                  {editMode ? "✓ Done" : "✏️ Edit"}
                 </button>
-                {editMode && (
+                {editMode && !isMobile && (
                   <button onClick={()=>setResetConfirm(true)}
-                    style={{padding:"6px 12px",background:"transparent",border:`1px solid #EF444440`,borderRadius:"7px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700"}}>
-                    Reset Defaults
+                    style={{padding:"6px 10px",background:"transparent",border:`1px solid #EF444440`,borderRadius:"7px",cursor:"pointer",color:"#EF4444",fontSize:"10px",fontWeight:"700",whiteSpace:"nowrap"}}>
+                    Reset
                   </button>
                 )}
               </>
             )}
             <button onClick={onClose}
-              style={{padding:"6px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",display:"flex",alignItems:"center",gap:"5px"}}>
-              <X size={12}/> Close
+              style={{padding:"6px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"10px",display:"flex",alignItems:"center",gap:"4px",minHeight:"32px"}}>
+              <X size={12}/> {!isMobile && "Close"}
             </button>
           </div>
         </div>
@@ -3420,25 +3438,32 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
           })}
         </div>
 
-        {/* ── Body: fixed flex row that never resizes ── */}
-        <div style={{flex:1,display:"flex",overflow:"hidden",minHeight:0}}>
+        {/* ── Body: flex column on mobile, row on desktop ── */}
+        <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:"hidden",minHeight:0}}>
 
-          {/* Sub-type sidebar — fixed width, fixed height via parent */}
-          <div style={{width:isMobile?"120px":"190px",borderRight:`1px solid ${T.border}`,overflowY:"auto",flexShrink:0,padding:"10px 6px",boxSizing:"border-box"}}>
-            <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",padding:"0 8px",marginBottom:"8px",fontWeight:"700"}}>Style</p>
+          {/* Sub-type sidebar — fixed width on desktop, full-width row on mobile */}
+          <div style={{width:isMobile?"100%":"190px",maxHeight:isMobile?"80px":"unset",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none",overflowY:isMobile?"hidden":"auto",overflowX:isMobile?"auto":"hidden",flexShrink:0,padding:isMobile?"6px 10px":"10px 6px",boxSizing:"border-box",display:"flex",flexDirection:isMobile?"row":"column",gap:isMobile?"4px":"0",WebkitOverflowScrolling:"touch"}}>
+            {!isMobile && <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",padding:"0 8px",marginBottom:"8px",fontWeight:"700"}}>Style</p>}
             {subKeys.map(sk => {
               const s = cls.subTypes[sk];
               const count = (s.warmup?.length||0)+(s.main?.length||0)+(s.cooldown?.length||0);
               const isActive = selSub === sk;
               return (
                 <button key={sk} onClick={()=>{ setSelSub(sk); setEditingId(null); }}
-                  style={{width:"100%",textAlign:"left",padding:"9px 10px",borderRadius:"8px",border:`1px solid ${isActive?classColor+"50":"transparent"}`,
+                  style={{
+                    width:isMobile?"auto":"100%",
+                    flexShrink:isMobile?0:undefined,
+                    textAlign:"left",padding:isMobile?"5px 10px":"9px 10px",
+                    borderRadius:"8px",border:`1px solid ${isActive?classColor+"50":"transparent"}`,
                     background:isActive?classColor+"18":"transparent",
                     color:isActive?classColor:T.muted,
-                    cursor:"pointer",fontSize:"11px",fontWeight:isActive?"700":"500",marginBottom:"3px",
-                    display:"flex",flexDirection:"column",gap:"2px",transition:"background 0.15s"}}>
+                    cursor:"pointer",fontSize:"11px",fontWeight:isActive?"700":"500",
+                    marginBottom:isMobile?"0":"3px",
+                    display:"flex",flexDirection:"column",gap:"2px",transition:"background 0.15s",
+                    whiteSpace:isMobile?"nowrap":"normal",
+                  }}>
                   <span style={{lineHeight:"1.3"}}>{s.label}</span>
-                  <span style={{fontSize:"9px",opacity:0.7}}>{count} exercise{count!==1?"s":""}</span>
+                  {!isMobile && <span style={{fontSize:"9px",opacity:0.7}}>{count} exercise{count!==1?"s":""}</span>}
                 </button>
               );
             })}
@@ -3743,34 +3768,34 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Stage Timeline — My Workout */}
-      <div style={{padding:"16px 20px 14px",borderBottom:`1px solid ${T.border}`,background:T.card}}>
-        <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"10px",flexWrap:isMobile?"wrap":"nowrap"}}>
-          <input type="text" value={sessionName} onChange={e=>onSessionNameChange(e.target.value)} placeholder="Session name…" style={{background:"transparent",border:"none",borderBottom:`2px solid ${T.border}`,color:T.text,fontSize:isMobile?"15px":"17px",fontWeight:"700",padding:"2px 0",outline:"none",width:isMobile?"100%":"260px",maxWidth:"260px"}}/>
-          <span style={{fontSize:"13px",color:T.muted,fontWeight:"600"}}>⏱ {fmt(totalDur)} total</span>
+      <div style={{padding:isMobile?"10px 14px":"16px 20px 14px",borderBottom:`1px solid ${T.border}`,background:T.card}}>
+        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px",flexWrap:"wrap"}}>
+          <input type="text" value={sessionName} onChange={e=>onSessionNameChange(e.target.value)} placeholder="Session name…" style={{background:"transparent",border:"none",borderBottom:`2px solid ${T.border}`,color:T.text,fontSize:isMobile?"14px":"17px",fontWeight:"700",padding:"2px 0",outline:"none",flex:"1",minWidth:"120px",maxWidth:"260px"}}/>
+          <span style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>⏱ {fmt(totalDur)}</span>
           {!isMobile && <span style={{fontSize:"11px",color:T.muted,opacity:0.6,marginLeft:"auto"}}>⠿ drag to reorder</span>}
         </div>
 
         {/* Class type + sub-type selector row */}
-        <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"10px",flexWrap:"wrap"}}>
-          <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class Type</span>
+        <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"10px",flexWrap:"wrap"}}>
+          {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
           <select value={selectedClass}
             onChange={e=>handleClassChange(e.target.value)}
-            style={{padding:"5px 10px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",cursor:"pointer",fontWeight:"600"}}>
+            style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
             {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
           </select>
 
           {selectedSubKeys.length > 0 && <>
-            <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>
+            {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
             <select value={selectedSub||""}
               onChange={e=>handleSubChange(e.target.value)}
-              style={{padding:"5px 10px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",cursor:"pointer"}}>
+              style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
               {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
             </select>
           </>}
 
           <button onClick={()=>setShowLibraryModal(true)}
-            style={{padding:"5px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0}}>
-            📚 Browse Library
+            style={{padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
+            📚 {!isMobile && "Browse "}Library
           </button>
 
           {/* ⚡ Smart Distribute — always overwrites all stages with current library selection */}
@@ -3792,8 +3817,8 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               setDistributeToast({msg:`⚡ ${totalEx} exercises distributed across ${filled} stage${filled!==1?"s":""} · ${clsInfo?.label} — ${subInfo?.label||selectedSub}`});
               setTimeout(()=>setDistributeToast(null),4000);
             }}
-            style={{padding:"5px 12px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0}}>
-            ⚡ Smart Distribute
+            style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
+            ⚡ {!isMobile && "Smart "}Distribute
           </button>
         </div>
 
@@ -3840,9 +3865,9 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                 onDragEnd={handleDragEnd}
                 onClick={()=>setSelIdx(i)}
                 title="Drag to reorder"
-                style={{flexShrink:0,padding:"10px 14px",borderRadius:"10px",cursor:"grab",
+                style={{flexShrink:0,padding:isMobile?"8px 10px":"10px 14px",borderRadius:"10px",cursor:"grab",
                   border:`2px solid ${podBorder}`,background:podBg,
-                  minWidth:isMobile?"90px":"148px",opacity:dragIdx.current===i?0.4:1,
+                  minWidth:isMobile?"80px":"148px",opacity:dragIdx.current===i?0.4:1,
                   boxShadow:podShadow,
                   transition:"opacity 0.15s, box-shadow 0.15s, border-color 0.15s, background 0.15s"}}>
                 {/* Stage type row */}
@@ -4274,11 +4299,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                         </div>
                       </div>
 
-                      {/* 3-column content */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+                      {/* 3-column content — stacks on mobile */}
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr"}}>
 
                         {/* Exercises */}
-                        <div style={{padding:"12px 14px",borderRight:`1px solid ${T.border}`}}>
+                        <div style={{padding:"12px 14px",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none"}}>
                           <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"9px"}}>🏋 Exercises</p>
                           {exList.length>0
                             ? exList.map((ex,ei)=>(
@@ -4294,7 +4319,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                         </div>
 
                         {/* Music */}
-                        <div style={{padding:"12px 14px",borderRight:`1px solid ${T.border}`}}>
+                        <div style={{padding:"12px 14px",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none"}}>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
                             <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>🎵 Music</p>
                             {trList.length>0 && (
@@ -4355,11 +4380,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       )}
 
       {/* Footer */}
-      <div style={{padding:"12px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",justifyContent:"flex-end"}}>
+      <div style={{padding:isMobile?"10px 14px":"12px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",justifyContent:isMobile?"stretch":"flex-end"}}>
         {(()=>{ const disabled = stages.length===0 || stages.some(s=>!(s.dur>=1)); return (
           <button onClick={onStartSession} disabled={disabled}
             title={stages.some(s=>!(s.dur>=1))?"All stages need a duration > 0 to start":undefined}
-            style={{padding:"12px 32px",background:disabled?T.muted:T.green,color:"white",border:"none",borderRadius:"7px",cursor:disabled?"not-allowed":"pointer",fontSize:"14px",fontWeight:"700",display:"flex",alignItems:"center",gap:"8px",opacity:disabled?0.5:1}}>
+            style={{padding:"12px 32px",background:disabled?T.muted:T.green,color:"white",border:"none",borderRadius:"7px",cursor:disabled?"not-allowed":"pointer",fontSize:"14px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",opacity:disabled?0.5:1,flex:isMobile?1:undefined,minHeight:"44px"}}>
             <Play size={16}/> Start Session
           </button>
         ); })()}
@@ -4492,34 +4517,36 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Top bar */}
-      <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:T.card}}>
-        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"6px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"13px"}}><ArrowLeft size={17}/> Edit</button>
-        <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-          {stages.map((s,i) => {
-            const c = SCFG[s.type]?.color||T.border;
-            return <div key={s.id} style={{width:i===liveState.idx?14:10,height:i===liveState.idx?14:10,borderRadius:"50%",background:i<=liveState.idx?c:T.navy,border:i===liveState.idx?"2px solid white":"none",transition:"all 0.3s"}}/>;
-          })}
-        </div>
-        <div style={{display:"flex",gap:"8px"}}>
-          <button onClick={()=>{setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true);}} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700"}}>
-            <Search size={13}/> Search
+      <div style={{padding:isMobile?"10px 14px":"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:T.card,gap:"8px"}}>
+        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"4px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"13px",flexShrink:0,minHeight:"44px",padding:"4px 8px"}}><ArrowLeft size={17}/> {!isMobile&&"Edit"}</button>
+        {!isMobile && (
+          <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+            {stages.map((s,i) => {
+              const c = SCFG[s.type]?.color||T.border;
+              return <div key={s.id} style={{width:i===liveState.idx?14:10,height:i===liveState.idx?14:10,borderRadius:"50%",background:i<=liveState.idx?c:T.navy,border:i===liveState.idx?"2px solid white":"none",transition:"all 0.3s"}}/>;
+            })}
+          </div>
+        )}
+        <div style={{display:"flex",gap:isMobile?"6px":"8px",flexShrink:0}}>
+          <button onClick={()=>{setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true);}} style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>
+            <Search size={13}/> {!isMobile&&"Search"}
           </button>
           {/* Feature 7: Mic Mode / Volume Duck — keyboard shortcut M */}
           {player && (
             <button onClick={handleMicMode} title="Mic Mode: duck music to 20% (shortcut: M)"
-              style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",
+              style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 12px",
                 background:micMode?"#EF444420":T.navy,
                 border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,
                 borderRadius:"7px",cursor:"pointer",
                 color:micMode?"#EF4444":T.muted,
                 fontSize:"12px",fontWeight:"700",
                 animation:micMode?"jg-pulse 1s ease-in-out infinite":"none",
-                transition:"all 0.2s"}}>
-              <Mic size={13}/> {micMode ? "🔴 Mic ON" : "Mic Mode"}
+                transition:"all 0.2s",minHeight:"44px"}}>
+              <Mic size={13}/> {micMode ? (isMobile?"🔴":"🔴 Mic ON") : (isMobile?"Mic":"Mic Mode")}
             </button>
           )}
-          <button onClick={handleDisplayMode} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700"}}>
-            <Monitor size={14}/> Display Mode
+          <button onClick={handleDisplayMode} style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>
+            <Monitor size={14}/> {!isMobile&&"Display Mode"}
           </button>
         </div>
       </div>
@@ -4527,33 +4554,39 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
       {/* Split layout */}
       <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:"hidden"}}>
         {/* LEFT: Timer + Exercises */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:isMobile?"18px 14px":"32px 24px",overflowY:"auto"}}>
-          <Tag color={cfg.color} style={{marginBottom:"12px",fontSize:"12px",padding:"5px 13px"}}>{cfg.label}</Tag>
-          <h1 style={{fontSize:"30px",fontWeight:"800",color:T.text,marginBottom:"28px",textAlign:"center"}}>{stage?.name||"Session Complete"}</h1>
+        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:isMobile?"14px 12px":"32px 24px",overflowY:"auto"}}>
+          <Tag color={cfg.color} style={{marginBottom:"8px",fontSize:"11px",padding:"4px 11px"}}>{cfg.label}</Tag>
+          <h1 style={{fontSize:isMobile?"22px":"30px",fontWeight:"800",color:T.text,marginBottom:isMobile?"16px":"28px",textAlign:"center",padding:"0 8px"}}>{stage?.name||"Session Complete"}</h1>
 
           {/* Pulse keyframe injected once */}
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
 
-          {/* Ring */}
-          <div style={{position:"relative",width:"190px",height:"190px",marginBottom:"28px",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>
-            <svg width="190" height="190" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="95" cy="95" r="82" fill="none" stroke={T.navy} strokeWidth="10"/>
-              <circle cx="95" cy="95" r="82" fill="none" stroke={timerColor} strokeWidth="10"
-                strokeDasharray={`${2*Math.PI*82}`} strokeDashoffset={`${2*Math.PI*82*(1-progress)}`}
-                strokeLinecap="round" style={{transition:"stroke-dashoffset 0.8s ease, stroke 0.5s ease"}}/>
-            </svg>
-            <div style={{position:"absolute",inset:"0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <p style={{fontSize:"42px",fontWeight:"800",color:timerColor,lineHeight:"1",transition:"color 0.5s ease"}}>{fmt(remaining)}</p>
-              <p style={{fontSize:"12px",color:T.muted,marginTop:"5px"}}>remaining</p>
-            </div>
-          </div>
+          {/* Ring — larger on mobile for easy reading */}
+          {(() => {
+            const ringSize = isMobile ? 220 : 190;
+            const r = isMobile ? 98 : 82;
+            return (
+              <div style={{position:"relative",width:`${ringSize}px`,height:`${ringSize}px`,marginBottom:isMobile?"16px":"28px",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>
+                <svg width={ringSize} height={ringSize} style={{transform:"rotate(-90deg)"}}>
+                  <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={T.navy} strokeWidth="10"/>
+                  <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={timerColor} strokeWidth="10"
+                    strokeDasharray={`${2*Math.PI*r}`} strokeDashoffset={`${2*Math.PI*r*(1-progress)}`}
+                    strokeLinecap="round" style={{transition:"stroke-dashoffset 0.8s ease, stroke 0.5s ease"}}/>
+                </svg>
+                <div style={{position:"absolute",inset:"0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <p style={{fontSize:isMobile?"50px":"42px",fontWeight:"800",color:timerColor,lineHeight:"1",transition:"color 0.5s ease"}}>{fmt(remaining)}</p>
+                  <p style={{fontSize:"12px",color:T.muted,marginTop:"5px"}}>remaining</p>
+                </div>
+              </div>
+            );
+          })()}
 
-          {/* Timer skip controls */}
-          <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"12px"}}>
-            <button onClick={()=>onSkipTimer(-30)} title="-30s" style={{padding:"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700"}}>-30s</button>
-            <button onClick={()=>onSkipTimer(-10)} title="-10s" style={{padding:"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700"}}>-10s</button>
-            <button onClick={()=>onSkipTimer(10)} title="+10s" style={{padding:"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700"}}>+10s</button>
-            <button onClick={()=>onSkipTimer(30)} title="+30s" style={{padding:"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700"}}>+30s</button>
+          {/* Timer skip controls — larger touch targets on mobile */}
+          <div style={{display:"flex",gap:isMobile?"8px":"6px",alignItems:"center",marginBottom:"12px"}}>
+            <button onClick={()=>onSkipTimer(-30)} title="-30s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>-30s</button>
+            <button onClick={()=>onSkipTimer(-10)} title="-10s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>-10s</button>
+            <button onClick={()=>onSkipTimer(10)} title="+10s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>+10s</button>
+            <button onClick={()=>onSkipTimer(30)} title="+30s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>+30s</button>
           </div>
 
           {/* Feature 4: Interval sub-timer (Tabata / EMOM) */}
@@ -4580,16 +4613,16 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
           })()}
 
           {/* Controls */}
-          <div style={{display:"flex",gap:"18px",alignItems:"center",marginBottom:"16px"}}>
-            <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipBack size={22}/></button>
-            <button onClick={handlePlayPause} style={{width:"68px",height:"68px",borderRadius:"50%",background:liveState.playing?T.accent:T.green,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
-              {liveState.playing ? <Pause size={28}/> : <Play size={28}/>}
+          <div style={{display:"flex",gap:isMobile?"22px":"18px",alignItems:"center",marginBottom:"14px"}}>
+            <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"10px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipBack size={isMobile?26:22}/></button>
+            <button onClick={handlePlayPause} style={{width:isMobile?"80px":"68px",height:isMobile?"80px":"68px",borderRadius:"50%",background:liveState.playing?T.accent:T.green,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0}}>
+              {liveState.playing ? <Pause size={isMobile?34:28}/> : <Play size={isMobile?34:28}/>}
             </button>
-            <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipForward size={22}/></button>
+            <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"10px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipForward size={isMobile?26:22}/></button>
           </div>
           {/* Manual stage advance */}
           {liveState.idx < stages.length - 1 && (
-            <button onClick={onNextStage} style={{display:"flex",alignItems:"center",gap:"6px",padding:"9px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"13px",fontWeight:"600",marginBottom:"28px"}}>
+            <button onClick={onNextStage} style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"11px 22px":"9px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"13px",fontWeight:"600",marginBottom:isMobile?"16px":"28px",minHeight:"44px"}}>
               Next Stage <ChevronRight size={15}/>
             </button>
           )}
@@ -4639,45 +4672,79 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
           )}
         </div>
 
-        {/* RIGHT: Music panel */}
-        <div style={{flex:isMobile?"0 0 auto":"0 0 260px",borderLeft:isMobile?"none":`1px solid ${T.border}`,borderTop:isMobile?`1px solid ${T.border}`:"none",display:"flex",flexDirection:"column",padding:"16px 20px",background:T.card}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"16px"}}>Now Playing</p>
-          {nowPlaying ? (
-            <>
-              {nowPlaying.album?.images?.[0]?.url && (
-                <img src={nowPlaying.album.images[0].url} style={{width:"100%",aspectRatio:"1",borderRadius:"10px",marginBottom:"14px",objectFit:"cover"}} alt="album"/>
-              )}
-              <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
-              <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
-              <div style={{display:"flex",justifyContent:"center",gap:"18px",alignItems:"center",marginBottom:"24px"}}>
-                <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipBack size={20}/></button>
-                <button onClick={handlePlayPause} style={{width:"48px",height:"48px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
-                  {liveState.playing ? <Pause size={20}/> : <Play size={20}/>}
-                </button>
-                <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipForward size={20}/></button>
+        {/* RIGHT: Music panel — compact horizontal strip on mobile, vertical column on desktop */}
+        {isMobile ? (
+          <div style={{flexShrink:0,borderTop:`1px solid ${T.border}`,background:T.card,padding:"10px 14px"}}>
+            {nowPlaying ? (
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                {nowPlaying.album?.images?.[0]?.url && (
+                  <img src={nowPlaying.album.images[0].url} style={{width:"40px",height:"40px",borderRadius:"6px",objectFit:"cover",flexShrink:0}} alt="album"/>
+                )}
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:"12px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
+                  <p style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
+                </div>
+                <div style={{display:"flex",gap:"8px",alignItems:"center",flexShrink:0}}>
+                  <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipBack size={18}/></button>
+                  <button onClick={handlePlayPause} style={{width:"44px",height:"44px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0}}>
+                    {liveState.playing ? <Pause size={18}/> : <Play size={18}/>}
+                  </button>
+                  <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipForward size={18}/></button>
+                </div>
               </div>
-            </>
-          ) : (
-            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"20px 0"}}>
-              <Music size={44} color={hasNoTracks ? T.accent+"80" : T.muted} style={{marginBottom:"12px"}}/>
-              <p style={{fontSize:"13px",color:hasNoTracks ? T.accent : T.muted,fontWeight:"600",marginBottom:"5px"}}>
-                {hasNoTracks ? "⏸ No music for this stage" : "No track playing"}
-              </p>
-              <p style={{fontSize:"11px",color:T.muted}}>
-                {hasNoTracks ? "Spotify paused — add tracks in the builder" : "Add songs in the builder to auto-play each stage"}
-              </p>
-            </div>
-          )}
-          <div style={{marginTop:"auto"}}>
-            <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Stage {liveState.idx+1} of {stages.length}</p>
-            <div style={{display:"flex",height:"6px",borderRadius:"3px",overflow:"hidden",gap:"2px"}}>
+            ) : (
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <Music size={20} color={hasNoTracks ? T.accent+"80" : T.muted}/>
+                <p style={{fontSize:"12px",color:T.muted}}>{hasNoTracks ? "⏸ No tracks — Spotify paused" : "No track playing"}</p>
+              </div>
+            )}
+            <div style={{display:"flex",height:"4px",borderRadius:"2px",overflow:"hidden",gap:"2px",marginTop:"8px"}}>
               {stages.map((s,i) => {
                 const c = SCFG[s.type]?.color||T.border;
                 return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:T.navy}}/>;
               })}
             </div>
           </div>
-        </div>
+        ) : (
+          <div style={{flex:"0 0 260px",borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",padding:"16px 20px",background:T.card}}>
+            <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"16px"}}>Now Playing</p>
+            {nowPlaying ? (
+              <>
+                {nowPlaying.album?.images?.[0]?.url && (
+                  <img src={nowPlaying.album.images[0].url} style={{width:"100%",aspectRatio:"1",borderRadius:"10px",marginBottom:"14px",objectFit:"cover"}} alt="album"/>
+                )}
+                <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
+                <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
+                <div style={{display:"flex",justifyContent:"center",gap:"18px",alignItems:"center",marginBottom:"24px"}}>
+                  <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipBack size={20}/></button>
+                  <button onClick={handlePlayPause} style={{width:"48px",height:"48px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
+                    {liveState.playing ? <Pause size={20}/> : <Play size={20}/>}
+                  </button>
+                  <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipForward size={20}/></button>
+                </div>
+              </>
+            ) : (
+              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"20px 0"}}>
+                <Music size={44} color={hasNoTracks ? T.accent+"80" : T.muted} style={{marginBottom:"12px"}}/>
+                <p style={{fontSize:"13px",color:hasNoTracks ? T.accent : T.muted,fontWeight:"600",marginBottom:"5px"}}>
+                  {hasNoTracks ? "⏸ No music for this stage" : "No track playing"}
+                </p>
+                <p style={{fontSize:"11px",color:T.muted}}>
+                  {hasNoTracks ? "Spotify paused — add tracks in the builder" : "Add songs in the builder to auto-play each stage"}
+                </p>
+              </div>
+            )}
+            <div style={{marginTop:"auto"}}>
+              <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Stage {liveState.idx+1} of {stages.length}</p>
+              <div style={{display:"flex",height:"6px",borderRadius:"3px",overflow:"hidden",gap:"2px"}}>
+                {stages.map((s,i) => {
+                  const c = SCFG[s.type]?.color||T.border;
+                  return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:T.navy}}/>;
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Feature 7: Live Search Overlay */}
@@ -4707,8 +4774,8 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
         </div>
       )}
 
-      {/* F15: Keyboard shortcut hints bar */}
-      <div style={{padding:"5px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",gap:"14px",alignItems:"center",flexWrap:"wrap"}}>
+      {/* F15: Keyboard shortcut hints bar — hidden on mobile */}
+      {!isMobile && <div style={{padding:"5px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",gap:"14px",alignItems:"center",flexWrap:"wrap"}}>
         {[
           {key:"Space",  label:"Play/Pause"},
           {key:"N",      label:"Next Stage"},
@@ -4721,7 +4788,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
             {h.label}
           </span>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -4992,7 +5059,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
 
   // ── Settings panel ──
   const SettingsPanel = () => (
-    <div style={{position:"absolute",top:"64px",right:"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"20px",width:"260px",boxShadow:"0 12px 40px rgba(0,0,0,0.5)"}}>
+    <div style={{position:"absolute",top:"64px",right:isMobile?"8px":"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"20px",width:isMobile?"min(260px,calc(100vw-16px))":"260px",boxShadow:"0 12px 40px rgba(0,0,0,0.5)",boxSizing:"border-box"}}>
       <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Layout Preset</p>
       <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"18px"}}>
         {DISPLAY_PRESETS.map(p => (
@@ -5199,13 +5266,13 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         </div>
       )}
 
-      <div style={{flex:1,display:"flex"}}>
+      <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:isMobile?"auto":"hidden"}}>
         {/* LEFT: Stage info */}
-        <div style={{flex:1,padding:"44px 52px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-          <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
+        <div style={{flex:1,padding:isMobile?"20px 16px":"44px 52px",display:"flex",flexDirection:"column",justifyContent:isMobile?"flex-start":"center"}}>
+          <h1 style={{fontSize:isMobile?`${Math.round(30*scaleMult)}px`:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"64px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"36px",transition:"background 0.5s"}}/>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:isMobile?`${Math.round(56*scaleMult)}px`:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"16px",color:T.muted,marginBottom:"36px"}}>remaining</p>
           <div style={{width:"100%",height:"8px",background:T.navy,borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -5259,7 +5326,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           {stage?.exercises?.length > 0 && (
             <div>
               <p style={{fontSize:"13px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Exercises</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"10px"}}>
                 {stage.exercises.map((ex,i) => (
                   <div key={i} style={{padding:"14px 18px",background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${cfg.color}`,borderRadius:"8px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"3px"}}>
@@ -5275,7 +5342,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         </div>
 
         {/* RIGHT: Spotify */}
-        <div style={{flex:"0 0 320px",background:T.card,borderLeft:`1px solid ${T.border}`,padding:"44px 28px",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:isMobile?"0 0 auto":"0 0 320px",background:T.card,borderLeft:isMobile?"none":`1px solid ${T.border}`,borderTop:isMobile?`1px solid ${T.border}`:"none",padding:isMobile?"16px":"44px 28px",display:"flex",flexDirection:isMobile?"row":"column",gap:isMobile?"12px":"0",alignItems:isMobile?"center":"stretch"}}>
           <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"20px"}}>Now Playing</p>
           {nowPlaying ? (
             <>
