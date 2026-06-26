@@ -1482,11 +1482,11 @@ function LoginScreen({onLogin, authError}) {
       <p style={{marginTop:"12px",color:T.muted,fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
       {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>⚠️ {authError}</div>}
       {IS_CONFIGURED ? (
-        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:T.green,color:"white",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"100%":"auto",maxWidth:"320px",minHeight:"44px"}}>
+        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:T.green,color:"white",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
           🎵 Continue with Spotify
         </button>
       ) : (
-        <div style={{marginTop:"28px",padding:"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,maxWidth:"380px",width:"100%",textAlign:"left",boxSizing:"border-box"}}>
+        <div style={{marginTop:"28px",padding:isMobile?"16px":"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,width:isMobile?"92vw":"420px",maxWidth:"100%",textAlign:"left",boxSizing:"border-box"}}>
           <p style={{fontWeight:"700",marginBottom:"10px"}}>⚙️ Setup Required</p>
           <p style={{fontSize:"13px",color:T.muted,marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
           <code style={{fontSize:"12px",color:T.accent,background:T.navy,padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
@@ -1758,6 +1758,8 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
 // ─── PinScreen ────────────────────────────────────────────────────────────────
 function PinScreen({onUnlock}) {
+  const vwPin = useWindowWidth();
+  const isMobilePin = vwPin < 480;
   const [pin, setPin]       = useState("");
   const [shake, setShake]   = useState(false);
   const [error, setError]   = useState(false);
@@ -1812,7 +1814,7 @@ function PinScreen({onUnlock}) {
       </div>
 
       {/* Number pad */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",width:"min(280px,85vw)"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:isMobilePin?"12px":"10px",width:isMobilePin?"min(320px,90vw)":"min(280px,85vw)"}}>
         {pad.flat().map((k,i) => {
           if (k === null) return <div key={i}/>;
           return (
@@ -1822,9 +1824,9 @@ function PinScreen({onUnlock}) {
                 background: k==="del" ? "transparent" : DARK.card,
                 border: `1px solid ${k==="del" ? "transparent" : DARK.border}`,
                 color: DARK.text,cursor:"pointer",
-                fontSize: k==="del" ? "16px" : "22px",
+                fontSize: k==="del" ? (isMobilePin?"20px":"16px") : (isMobilePin?"26px":"22px"),
                 fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",
-                transition:"background 0.1s",minHeight:"44px",
+                transition:"background 0.1s",minHeight:isMobilePin?"64px":"44px",minWidth:isMobilePin?"64px":"44px",
               }}
               onMouseEnter={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.navy; }}
               onMouseLeave={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.card; }}
@@ -2347,7 +2349,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
       </div>
 
       {/* Stats row */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:isMobile?"8px":"14px",marginBottom:isMobile?"18px":"28px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"repeat(3,1fr)",gap:isMobile?"8px":"14px",marginBottom:isMobile?"18px":"28px"}}>
         <StatCard icon="🏋️" label="Sessions This Week" value={String(sessionsThisWeek)} color={T.accent}/>
         <StatCard icon="⏱️" label="Hours This Month"   value={hoursThisMonth + "h"}     color={T.green}/>
         <StatCard icon="🔥" label="Day Streak"          value={String(streak)}           color="#F97316"/>
@@ -2408,10 +2410,10 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
       </div>
       <p style={{fontSize:"13px",color:T.muted,marginBottom:"24px",paddingLeft:"32px"}}>Choose a class type, then pick a style — we'll pre-fill your stages and exercises.</p>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:"12px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(5,1fr)",gap:isMobile?"8px":"12px"}}>
         {classTypes.map(([key,cls]) => (
           <div key={key} onClick={()=>setSelClassType(key)}
-            style={{padding:"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,cursor:"pointer",position:"relative",overflow:"hidden",transition:"border-color 0.15s"}}
+            style={{padding:isMobile?"12px":"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,cursor:"pointer",position:"relative",overflow:"hidden",transition:"border-color 0.15s"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color}
             onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
             <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:cls.color}}/>
@@ -2431,7 +2433,7 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
         const cls = WORKOUT_LIBRARY[selClassType];
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:500,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"20px"}} onClick={()=>setSelClassType(null)}>
-            <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"460px",maxHeight:isMobile?"92vh":"80vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"16px",border:`1px solid ${T.border}`,width:isMobile?"100vw":"560px",maxWidth:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
               {/* Header */}
               <div style={{padding:"18px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -2512,7 +2514,7 @@ function AnalyticsScreen({onBack}) {
 
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"20px",marginBottom:"20px"}}>
         {/* Weekly bar chart */}
-        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
+        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
           <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"18px"}}>This Week — Minutes</p>
           <div style={{display:"flex",alignItems:"flex-end",gap:"8px",height:"110px"}}>
             {weekly.map(d => (
@@ -2525,7 +2527,7 @@ function AnalyticsScreen({onBack}) {
         </div>
 
         {/* Type breakdown */}
-        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
+        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
           <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Session Types</p>
           {typeBreakdown.map(item => (
             <div key={item.label} style={{marginBottom:"10px"}}>
@@ -2542,7 +2544,7 @@ function AnalyticsScreen({onBack}) {
       </div>
 
       {/* Recent sessions */}
-      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
+      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
         <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Recent Sessions</p>
         {isMobile ? (
           recent.map((r,i) => (
@@ -2552,19 +2554,21 @@ function AnalyticsScreen({onBack}) {
             </div>
           ))
         ) : (
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
-              {["Session","Duration","Stages","Date"].map(h => <p key={h} style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</p>)}
-            </div>
-            {recent.map((r,i) => (
-              <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-                <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{r.name}</p>
-                <p style={{fontSize:"13px",color:T.muted}}>{r.dur}</p>
-                <p style={{fontSize:"13px",color:T.muted}}>{r.stages}</p>
-                <p style={{fontSize:"13px",color:T.muted}}>{r.date}</p>
+          <div style={{overflowX:"auto"}}>
+            <div style={{minWidth:"480px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
+                {["Session","Duration","Stages","Date"].map(h => <p key={h} style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</p>)}
               </div>
-            ))}
-          </>
+              {recent.map((r,i) => (
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+                  <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{r.name}</p>
+                  <p style={{fontSize:"13px",color:T.muted}}>{r.dur}</p>
+                  <p style={{fontSize:"13px",color:T.muted}}>{r.stages}</p>
+                  <p style={{fontSize:"13px",color:T.muted}}>{r.date}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -2581,7 +2585,7 @@ function GlossaryScreen({onBack}) {
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"920px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text}}><ArrowLeft size={20}/></button>
-        <h2 style={{fontSize:"22px",fontWeight:"700",color:T.text}}>Exercise Glossary</h2>
+        <h2 style={{fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text}}>Exercise Glossary</h2>
       </div>
       <Input type="text" placeholder="Search exercises…" value={search} onChange={e=>setSearch(e.target.value)} style={{marginBottom:"20px"}}/>
       {Object.entries(GLOSSARY).map(([grp, exs]) => {
@@ -2677,8 +2681,8 @@ function CalendarScreen({onBack}) {
           const today = new Date();
           const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===day;
           return (
-            <div key={day} style={{minHeight:isMobile?"44px":"64px",padding:isMobile?"3px":"6px",background:T.card,borderRadius:"7px",border:`1px solid ${isToday?T.accent:T.border}`,position:"relative"}}>
-              <p style={{fontSize:"12px",fontWeight:isToday?"800":"600",color:isToday?T.accent:T.text,marginBottom:"3px"}}>{day}</p>
+            <div key={day} style={{minHeight:isMobile?"40px":"64px",padding:isMobile?"2px":"6px",background:T.card,borderRadius:"7px",border:`1px solid ${isToday?T.accent:T.border}`,position:"relative"}}>
+              <p style={{fontSize:isMobile?"10px":"12px",fontWeight:isToday?"800":"600",color:isToday?T.accent:T.text,marginBottom:"2px"}}>{day}</p>
               {dayC.slice(0,2).map(c => (
                 <div key={c.id} style={{fontSize:"9px",padding:"2px 4px",background:(typeColor[c.type]||T.accent)+"30",color:typeColor[c.type]||T.accent,borderRadius:"3px",marginBottom:"2px",fontWeight:"700",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {c.name}
@@ -2691,7 +2695,7 @@ function CalendarScreen({onBack}) {
       </div>
 
       {/* Upcoming classes */}
-      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:"20px"}}>
+      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
         <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>All Scheduled Classes ({classes.length})</p>
         {upcoming.length === 0 && <p style={{fontSize:"13px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No classes scheduled yet. Click "+ Add Class" to get started.</p>}
         {upcoming.map(c => (
@@ -2712,7 +2716,7 @@ function CalendarScreen({onBack}) {
       {/* Add Class Modal */}
       {showModal && (
         <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.7)",display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",zIndex:1000}}>
-          <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",padding:isMobile?"20px":"30px",maxWidth:"440px",width:isMobile?"100%":"90%",border:`1px solid ${T.border}`,maxHeight:"90vh",overflowY:"auto"}}>
+          <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"16px",padding:isMobile?"16px":"30px",width:isMobile?"100vw":"560px",maxWidth:"100%",border:`1px solid ${T.border}`,maxHeight:"90vh",overflowY:"auto"}}>
             <h2 style={{fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"22px"}}>Add New Class</h2>
             <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
               <div>
@@ -3475,22 +3479,22 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
 
             {/* Stage tabs row — fixed height */}
-            <div style={{height:"46px",padding:"0 14px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"6px",alignItems:"center",flexShrink:0,overflowX:"auto"}}>
+            <div style={{minHeight:"46px",padding:isMobile?"4px 8px":"0 14px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"6px",alignItems:"center",flexShrink:0,overflowX:"auto",WebkitOverflowScrolling:"touch",flexWrap:isMobile?"nowrap":"nowrap"}}>
               {["warmup","main","cooldown"].map(stage=>(
                 <button key={stage} onClick={()=>{ setSelStage(stage); setEditingId(null); }}
-                  style={{padding:"5px 13px",borderRadius:"7px",border:`1px solid ${selStage===stage?classColor:T.border}`,
+                  style={{padding:isMobile?"4px 9px":"5px 13px",borderRadius:"7px",border:`1px solid ${selStage===stage?classColor:T.border}`,
                     background:selStage===stage?classColor+"20":"transparent",
                     color:selStage===stage?classColor:T.muted,
-                    cursor:"pointer",fontSize:"11px",fontWeight:"700",flexShrink:0,whiteSpace:"nowrap",
+                    cursor:"pointer",fontSize:isMobile?"10px":"11px",fontWeight:"700",flexShrink:0,whiteSpace:"nowrap",
                     transition:"border-color 0.15s, background 0.15s, color 0.15s"}}>
-                  {stage==="warmup"?"🔥 Warm-Up":stage==="main"?"💪 Main Workout":"🧘 Cool-Down"}
+                  {stage==="warmup"?(isMobile?"🔥 Warm-Up":"🔥 Warm-Up"):stage==="main"?(isMobile?"💪 Main":"💪 Main Workout"):(isMobile?"🧘 Cool-Down":"🧘 Cool-Down")}
                   <span style={{marginLeft:"5px",fontSize:"9px",opacity:0.6}}>({(sub?.[stage]||[]).length})</span>
                 </button>
               ))}
               {/* Search — pushes right */}
               <input value={search} onChange={e=>setSearch(e.target.value)}
                 placeholder="Search…"
-                style={{marginLeft:"auto",padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"11px",outline:"none",width:"140px",flexShrink:0}}/>
+                style={{marginLeft:"auto",padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"11px",outline:"none",width:isMobile?"90px":"140px",flexShrink:0}}/>
             </div>
 
             {/* Sub-type info bar — fixed height, no reflow */}
@@ -4819,17 +4823,18 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
     <div style={{position:"fixed",inset:0,background:T.bg,zIndex:500,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
       {/* Top bar */}
-      <div style={{flexShrink:0,padding:"20px 32px",borderBottom:`1px solid ${T.border}`,
-        background:T.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"20px"}}>
+      <div style={{flexShrink:0,padding:isMobile?"12px 16px":"20px 32px",borderBottom:`1px solid ${T.border}`,
+        background:T.card,display:"flex",alignItems:isMobile?"flex-start":"center",
+        justifyContent:"space-between",flexDirection:isMobile?"column":"row",gap:isMobile?"10px":"0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:isMobile?"12px":"20px"}}>
           <button onClick={onBack}
             style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",
               background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",
-              cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600"}}>
-            ← Back <span style={{fontSize:"10px",opacity:0.5,marginLeft:"2px"}}>Esc</span>
+              cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0}}>
+            ← Back {!isMobile && <span style={{fontSize:"10px",opacity:0.5,marginLeft:"2px"}}>Esc</span>}
           </button>
           <div>
-            <p style={{fontSize:"22px",fontWeight:"800",color:T.text,lineHeight:1,marginBottom:"4px"}}>
+            <p style={{fontSize:isMobile?"16px":"22px",fontWeight:"800",color:T.text,lineHeight:1,marginBottom:"4px"}}>
               {sessionName||"Workout Overview"}
             </p>
             <p style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>
@@ -4837,7 +4842,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
             </p>
           </div>
         </div>
-        <div style={{display:"flex",gap:"10px"}}>
+        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
           {stages.map((s,si)=>{
             const cfg = SCFG[s.type]||SCFG.circuit;
             return (
@@ -4853,9 +4858,9 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
       </div>
 
       {/* Stage cards — horizontal scroll row */}
-      <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
+      <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 14px":"24px 28px"}}>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?`repeat(${Math.min(stages.length,2)},1fr)`:`repeat(${Math.min(stages.length,4)},1fr)`,
-          gap:"18px",minWidth:0}}>
+          gap:isMobile?"12px":"18px",minWidth:0}}>
           {stages.map((s,si)=>{
             const cfg = SCFG[s.type]||SCFG.circuit;
             const exList  = s.exercises||[];
@@ -5391,10 +5396,12 @@ function AttendeeView({ data }) {
   const totalSec = stages.reduce((a, s) => a + (s.dur || 0), 0);
   const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
   const T2 = DARK;
+  const vwAV = useWindowWidth();
+  const isMobileAV = vwAV < 480;
   return (
     <div style={{minHeight:"100vh",background:T2.bg,color:T2.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",display:"flex",flexDirection:"column"}}>
       {/* Header */}
-      <div style={{padding:"16px 28px",borderBottom:`1px solid ${T2.border}`,background:T2.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{padding:isMobileAV?"12px 16px":"16px 28px",borderBottom:`1px solid ${T2.border}`,background:T2.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           <JungleLogo size={28}/>
           <span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>
@@ -5405,11 +5412,11 @@ function AttendeeView({ data }) {
       </div>
 
       {/* Body */}
-      <div style={{flex:1,maxWidth:"720px",width:"100%",margin:"0 auto",padding:"32px 24px"}}>
+      <div style={{flex:1,maxWidth:"720px",width:"100%",margin:"0 auto",padding:isMobileAV?"16px":"32px 24px",boxSizing:"border-box"}}>
         {/* Session header */}
-        <div style={{marginBottom:"28px"}}>
+        <div style={{marginBottom:isMobileAV?"20px":"28px"}}>
           <p style={{fontSize:"12px",color:T2.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Today's Session</p>
-          <h1 style={{fontSize:"32px",fontWeight:"800",color:T2.text,marginBottom:"8px"}}>{name}</h1>
+          <h1 style={{fontSize:isMobileAV?"24px":"32px",fontWeight:"800",color:T2.text,marginBottom:"8px"}}>{name}</h1>
           <div style={{display:"flex",gap:"16px",alignItems:"center",flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:"5px",color:T2.muted,fontSize:"13px"}}>
               <Clock size={14}/> {fmt(totalSec)} total
@@ -5447,7 +5454,7 @@ function AttendeeView({ data }) {
                 {exs.length > 0 && (
                   <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
                     {exs.map((ex, j) => (
-                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",background:T2.navy,borderRadius:"6px"}}>
+                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:isMobileAV?"flex-start":"center",flexDirection:isMobileAV?"column":"row",gap:isMobileAV?"2px":"0",padding:"7px 10px",background:T2.navy,borderRadius:"6px"}}>
                         <span style={{fontSize:"13px",fontWeight:"600",color:T2.text}}>{ex.n || "Exercise"}</span>
                         <span style={{fontSize:"11px",color:T2.muted}}>
                           {[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`].filter(Boolean).join(" · ")}
@@ -5486,6 +5493,7 @@ export default function App() {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
+  const isXSmall = vw < 380;
 
   const { token, player, deviceId, nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
@@ -5662,9 +5670,9 @@ export default function App() {
   if (!token) return <LoginScreen onLogin={redirectToSpotify} authError={authError}/>;
 
   const navItems = [
-    {key:"dashboard", label:"Dashboard"},
+    {key:"dashboard", label:isXSmall?"Home":"Dashboard"},
     {key:"builder",   label:"Builder"},
-    {key:"templates", label:"Templates"},
+    {key:"templates", label:isXSmall?"Tmpl":"Templates"},
   ];
 
   return (
@@ -5696,7 +5704,7 @@ export default function App() {
               if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
               if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
               setView(n.key);
-            }} style={{padding:isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
+            }} style={{padding:isXSmall?"5px 8px":isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isXSmall?"11px":isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
               {n.label}
             </button>
           ))}
@@ -5705,7 +5713,7 @@ export default function App() {
         {/* Right actions — fixed right */}
         <div style={{display:"flex",gap:isMobile?"6px":"12px",alignItems:"center",flexShrink:0}}>
           {/* Theme toggle */}
-          <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
+          <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:isXSmall?"none":"flex"}}>
             {dark
               ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
               : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -5713,7 +5721,7 @@ export default function App() {
           </button>
 
           {deviceId && !isMobile && <SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
-          {deviceId && isMobile && <Wifi size={14} color={T.green}/>}
+          {deviceId && isMobile && !isXSmall && <Wifi size={14} color={T.green}/>}
 
           {/* Share with Class button */}
           {!isMobile && (
