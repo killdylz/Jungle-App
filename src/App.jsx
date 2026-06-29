@@ -199,6 +199,75 @@ function normSpTrack(t) {
 function normTrack(sp, af) {
   return { t:sp.name, a:sp.artists.map(x=>x.name).join(", "), bpm:Math.round(af?.tempo||0), uri:sp.uri, id:sp.id, albumArt:sp.album?.images?.[1]?.url||sp.album?.images?.[0]?.url||null, dur:Math.round((sp.duration_ms||0)/1000) };
 }
+
+// ── Deezer BPM helpers (no API key required) ────────────────────────
+async function fetchBpmData(title, artist) {
+  const cacheKey = `${title}|${artist}`.toLowerCase().replace(/\s+/g,"_");
+  try {
+    const cached = JSON.parse(localStorage.getItem("gsb_bpm_cache")||"{}");
+    if (cached[cacheKey]) return cached[cacheKey];
+    // Try Deezer public API (no key required)
+    const q = encodeURIComponent(`track:"${title}" artist:"${artist}"`);
+    const r = await fetch(`https://api.deezer.com/search?q=${q}&limit=1`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const trackId = d.data?.[0]?.id;
+    if (!trackId) return null;
+    const r2 = await fetch(`https://api.deezer.com/track/${trackId}`);
+    if (!r2.ok) return null;
+    const t = await r2.json();
+    if (!t.bpm) return null;
+    const result = { bpm: Number(t.bpm)||0, key: "", camelot: "" };
+    const cache = JSON.parse(localStorage.getItem("gsb_bpm_cache")||"{}");
+    cache[cacheKey] = result;
+    localStorage.setItem("gsb_bpm_cache", JSON.stringify(cache));
+    return result;
+  } catch { return null; }
+}
+
+function camelotCompat(a, b) {
+  if (!a || !b) return 0.5;
+  if (a === b) return 1.0;
+  const numA = parseInt(a), numB = parseInt(b);
+  const letA = a.slice(-1), letB = b.slice(-1);
+  const diff = Math.min(Math.abs(numA-numB), 12-Math.abs(numA-numB));
+  if (diff === 0) return 0.85; // parallel major/minor
+  if (diff === 1) return 0.75; // adjacent key
+  return 0.2;
+}
+
+function scoreTrackForStage(track, bpmMin, bpmMax, prevCamelot) {
+  let score = 0;
+  const bpm = track.bpm || 0;
+  // BPM score (0-50): full 50 if within range, decreasing outside
+  if (bpm > 0) {
+    const mid = (bpmMin + bpmMax) / 2;
+    const halfRange = (bpmMax - bpmMin) / 2 || 10;
+    const dist = Math.max(0, Math.abs(bpm - mid) - halfRange);
+    score += Math.max(0, 50 - (dist / halfRange) * 50);
+  } else { score += 20; } // unknown BPM: partial credit
+  // Camelot score (0-30)
+  score += camelotCompat(track.camelot, prevCamelot) * 30;
+  // Freshness: slight bonus for longer tracks (fills time better)
+  score += Math.min(20, ((track.dur||180) / 60));
+  return score;
+}
+
+function selectTracksForDuration(scoredTracks, durationSec, stageType) {
+  const isIntense = ["circuit","cardio","hiit","strength","boxing","crossfit"].includes(stageType);
+  const sorted = [...scoredTracks].sort((a,b) => b._score - a._score);
+  const picked = [];
+  let total = 0;
+  for (const t of sorted) {
+    if (total >= durationSec) break;
+    picked.push(t);
+    total += (t.dur||210);
+  }
+  // Energy arc: low→high BPM for intense stages, high→low for recovery
+  picked.sort((a,b) => isIntense ? (a.bpm||120)-(b.bpm||120) : (b.bpm||120)-(a.bpm||120));
+  return picked;
+}
+
 async function apiPlay(deviceId, uris) {
   const token = await getToken();
   if (!token||!deviceId||!uris.length) return;
@@ -1729,6 +1798,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
               <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Loaded from Google Fonts — applied app-wide.</p>
             </div>
 
+
           </div>
         )}
 
@@ -2399,78 +2469,180 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
 function TemplatesScreen({onSelectClassStyle, onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
+  const isTablet = vw < 900;
   const [selClassType, setSelClassType] = useState(null);
+  const [selStyle, setSelStyle]         = useState(null);
+  const [search, setSearch]             = useState("");
   const classTypes = Object.entries(WORKOUT_LIBRARY);
 
+  const filteredTypes = search
+    ? classTypes.filter(([,cls]) => cls.label.toLowerCase().includes(search.toLowerCase()) || cls.description.toLowerCase().includes(search.toLowerCase()))
+    : classTypes;
+
+  // When class type changes, default to first style
+  const handleTypeClick = key => {
+    setSelClassType(key);
+    const firstSub = Object.keys(WORKOUT_LIBRARY[key].subTypes)[0];
+    setSelStyle(firstSub || null);
+  };
+
+  const selCls = selClassType ? WORKOUT_LIBRARY[selClassType] : null;
+
+  const totalStyles = classTypes.reduce((a,[,cls])=>a+Object.keys(cls.subTypes).length,0);
+
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"960px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"10px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text}}><ArrowLeft size={20}/></button>
-        <h2 style={{fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text}}>Class Templates</h2>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Page header */}
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{flex:1,minWidth:0}}>
+          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
+          <p style={{fontSize:"12px",color:T.muted}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
+        </div>
       </div>
-      <p style={{fontSize:"13px",color:T.muted,marginBottom:"24px",paddingLeft:"32px"}}>Choose a class type, then pick a style — we'll pre-fill your stages and exercises.</p>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(5,1fr)",gap:isMobile?"8px":"12px"}}>
-        {classTypes.map(([key,cls]) => (
-          <div key={key} onClick={()=>setSelClassType(key)}
-            style={{padding:isMobile?"12px":"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,cursor:"pointer",position:"relative",overflow:"hidden",transition:"border-color 0.15s"}}
-            onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color}
-            onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:cls.color}}/>
-            <div style={{fontSize:"32px",marginBottom:"8px"}}>{cls.icon}</div>
-            <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{cls.label}</p>
-            <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"12px"}}>{cls.description}</p>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:"11px",color:cls.color,fontWeight:"600"}}>{Object.keys(cls.subTypes).length} styles</span>
-              <ChevronRight size={14} color={T.muted}/>
+      {/* Body */}
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+
+        {/* ── Left panel: class type grid ── */}
+        <div style={{flex:isMobile?1:"1.5",display:"flex",flexDirection:"column",overflow:"hidden",borderRight:isMobile?"none":`1px solid ${T.border}`}}>
+          {/* Panel header */}
+          <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+            <div>
+              <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Choose a class type</p>
+              <p style={{fontSize:"11px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles} ready-made styles</p>
+            </div>
+            {/* Search */}
+            <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:0,flex:"0 0 180px"}}>
+              <Search size={13} color={T.muted}/>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates…"
+                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"12px",width:"100%"}}/>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* ── Style selection modal ── */}
-      {selClassType && (() => {
-        const cls = WORKOUT_LIBRARY[selClassType];
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:500,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"20px"}} onClick={()=>setSelClassType(null)}>
-            <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"16px",border:`1px solid ${T.border}`,width:isMobile?"100vw":"560px",maxWidth:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {/* Cards grid */}
+          <div style={{flex:1,overflowY:"auto",padding:"0 22px 22px"}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":isTablet?"1fr 1fr":"1fr 1fr 1fr",gap:"12px"}}>
+              {filteredTypes.map(([key,cls]) => {
+                const isSelected = selClassType === key;
+                return (
+                  <div key={key} onClick={()=>handleTypeClick(key)}
+                    style={{
+                      padding:"18px",borderRadius:"14px",cursor:"pointer",
+                      position:"relative",overflow:"hidden",
+                      border:isSelected?`1px solid ${cls.color}`:`1px solid ${T.border}`,
+                      background:isSelected?`linear-gradient(160deg,${T.navy},${T.card})`:`${T.card}`,
+                      boxShadow:isSelected?`0 0 0 3px ${cls.color}18`:"none",
+                      transition:"border-color 0.2s,box-shadow 0.2s"
+                    }}
+                    onMouseEnter={e=>{if(!isSelected){e.currentTarget.style.borderColor=cls.color+"90"; e.currentTarget.style.filter="brightness(1.07)";}}}
+                    onMouseLeave={e=>{if(!isSelected){e.currentTarget.style.borderColor=T.border; e.currentTarget.style.filter="brightness(1)";}}}
+                  >
+                    {/* 3px top accent bar */}
+                    <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:cls.color,borderRadius:"14px 14px 0 0"}}/>
 
-              {/* Header */}
-              <div style={{padding:"18px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                  <span style={{fontSize:"26px"}}>{cls.icon}</span>
-                  <div>
-                    <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>{cls.label}</p>
-                    <p style={{fontSize:"12px",color:T.muted}}>Choose a style to pre-fill your workout</p>
-                  </div>
-                </div>
-                <button onClick={()=>setSelClassType(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px"}}><X size={18}/></button>
-              </div>
+                    {/* Icon tile */}
+                    <div style={{
+                      width:"40px",height:"40px",borderRadius:"11px",
+                      background:`${cls.color}20`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:"20px",marginBottom:"12px",marginTop:"4px"
+                    }}>{cls.icon}</div>
 
-              {/* Styles list */}
-              <div style={{overflowY:"auto",padding:"12px"}}>
-                {Object.entries(cls.subTypes).map(([subKey,sub]) => {
-                  const stageCount = (CLASS_STAGE_TEMPLATES[selClassType]?.[subKey] || []).length;
-                  return (
-                    <div key={subKey}
-                      onClick={()=>{onSelectClassStyle(selClassType,subKey); setSelClassType(null);}}
-                      style={{padding:"16px",borderRadius:"10px",border:`1px solid ${T.border}`,marginBottom:"8px",cursor:"pointer",transition:"border-color 0.15s,background 0.15s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=cls.color; e.currentTarget.style.background=cls.color+"15";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background="transparent";}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
-                        <p style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{sub.label}</p>
-                        <span style={{fontSize:"10px",padding:"2px 7px",background:cls.color+"25",color:cls.color,borderRadius:"4px",fontWeight:"700"}}>{stageCount} stages</span>
-                      </div>
-                      <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>{sub.description}</p>
+                    <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{cls.label}</p>
+                    <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>{cls.description}</p>
+
+                    {/* Footer */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span style={{fontSize:"11px",color:cls.color,fontWeight:"600"}}>{Object.keys(cls.subTypes).length} styles</span>
+                      <ChevronRight size={14} color={isSelected?cls.color:T.muted}/>
                     </div>
-                  );
-                })}
-              </div>
-
+                  </div>
+                );
+              })}
             </div>
           </div>
-        );
-      })()}
+        </div>
+
+        {/* ── Right panel: style picker ── (hidden on mobile when no selection) */}
+        {(!isMobile || selClassType) && (
+          <div style={{
+            width:isMobile?"100%":"380px",flexShrink:0,
+            display:"flex",flexDirection:"column",overflow:"hidden",
+            background:T.card,
+            position:isMobile?"fixed":"relative",
+            inset:isMobile?"0":undefined,
+            zIndex:isMobile?600:undefined
+          }}>
+            {selCls ? (
+              <>
+                {/* Right panel header */}
+                <div style={{flexShrink:0,padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:"14px"}}>
+                  <div style={{
+                    width:"40px",height:"40px",borderRadius:"11px",flexShrink:0,
+                    background:`${selCls.color}20`,
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px"
+                  }}>{selCls.icon}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>{selCls.label}</p>
+                    <p style={{fontSize:"12px",color:T.muted}}>Pick a style to pre-fill your class</p>
+                  </div>
+                  {isMobile && (
+                    <button onClick={()=>setSelClassType(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px"}}><X size={18}/></button>
+                  )}
+                </div>
+
+                {/* Styles list */}
+                <div style={{flex:1,overflowY:"auto",padding:"14px"}}>
+                  {Object.entries(selCls.subTypes).map(([subKey,sub]) => {
+                    const stageCount = (CLASS_STAGE_TEMPLATES[selClassType]?.[subKey] || []).length;
+                    const isSelStyle = selStyle === subKey;
+                    return (
+                      <div key={subKey} onClick={()=>setSelStyle(subKey)}
+                        style={{
+                          padding:"16px",borderRadius:"11px",marginBottom:"8px",cursor:"pointer",
+                          border:isSelStyle?`1px solid ${selCls.color}`:`1px solid ${T.border}`,
+                          background:isSelStyle?`linear-gradient(160deg,${T.navy},${T.card})`:"transparent",
+                          boxShadow:isSelStyle?`0 0 0 3px ${selCls.color}12`:"none",
+                          transition:"border-color 0.15s,background 0.15s"
+                        }}
+                        onMouseEnter={e=>{if(!isSelStyle){e.currentTarget.style.borderColor=selCls.color+"60";}}}
+                        onMouseLeave={e=>{if(!isSelStyle){e.currentTarget.style.borderColor=T.border;}}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
+                          <p style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{sub.label}</p>
+                          {stageCount>0 && <span style={{fontSize:"10px",padding:"2px 8px",background:`${selCls.color}25`,color:selCls.color,borderRadius:"999px",fontWeight:"700"}}>{stageCount} stages</span>}
+                        </div>
+                        <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>{sub.description}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Sticky CTA */}
+                <div style={{flexShrink:0,padding:"14px",borderTop:`1px solid ${T.border}`}}>
+                  <button
+                    disabled={!selStyle}
+                    onClick={()=>{ if(selStyle){ onSelectClassStyle(selClassType,selStyle); setSelClassType(null); }}}
+                    style={{
+                      width:"100%",padding:"14px",borderRadius:"10px",border:"none",cursor:selStyle?"pointer":"not-allowed",
+                      background:selStyle?`linear-gradient(135deg,${selCls.color},${selCls.color}CC)`:`${T.border}`,
+                      color:selStyle?"#fff":T.muted,fontSize:"14px",fontWeight:"700",
+                      transition:"opacity 0.15s"
+                    }}>
+                    {selStyle ? `Build from ${selCls.subTypes[selStyle]?.label||selStyle}` : "Select a style above"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"12px"}}>
+                <div style={{fontSize:"40px",opacity:0.3}}>👈</div>
+                <p style={{fontSize:"14px",fontWeight:"600",color:T.muted}}>Select a class type</p>
+                <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Pick a discipline on the left to see available styles</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2579,41 +2751,112 @@ function AnalyticsScreen({onBack}) {
 function GlossaryScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
-  const [open, setOpen] = useState(null);
+  const [openGroups, setOpenGroups] = useState({"Upper Body":true});
   const [search, setSearch] = useState("");
+
+  const allGroups = Object.entries(GLOSSARY);
+  const totalMovements = allGroups.reduce((a,[,exs])=>a+exs.length,0);
+
+  const toggleGroup = grp => setOpenGroups(prev=>({...prev,[grp]:!prev[grp]}));
+
+  const diffStyle = diff => {
+    if (diff==="Advanced")     return {bg:"rgba(123,227,164,.18)",color:T.accent||"#7BE3A4"};
+    if (diff==="Intermediate") return {bg:"rgba(224,184,91,.15)", color:"#E0B85B"};
+    return                            {bg:"rgba(123,227,164,.15)",color:T.accent||"#7BE3A4"};
+  };
+
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"920px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"20px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text}}><ArrowLeft size={20}/></button>
-        <h2 style={{fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text}}>Exercise Glossary</h2>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Page header bar */}
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div>
+          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE GLOSSARY</p>
+          <p style={{fontSize:"12px",color:T.muted}}>Coaching reference — every movement with target muscles, difficulty and a one-line cue</p>
+        </div>
       </div>
-      <Input type="text" placeholder="Search exercises…" value={search} onChange={e=>setSearch(e.target.value)} style={{marginBottom:"20px"}}/>
-      {Object.entries(GLOSSARY).map(([grp, exs]) => {
-        const filtered = search ? exs.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())||e.muscles.toLowerCase().includes(search.toLowerCase())) : exs;
-        if (!filtered.length) return null;
-        return (
-          <div key={grp} style={{marginBottom:"10px"}}>
-            <button onClick={()=>setOpen(open===grp?null:grp)} style={{width:"100%",padding:"14px 18px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"14px",fontWeight:"700",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>{grp} <span style={{color:T.muted,fontWeight:"400",fontSize:"12px"}}>({filtered.length})</span></span>
-              <span style={{color:T.muted}}>{(open===grp||search)?"▼":"▶"}</span>
-            </button>
-            {(open===grp||search) && (
-              <div style={{marginTop:"8px",display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"8px",paddingLeft:"4px"}}>
-                {filtered.map((ex,i) => (
-                  <div key={i} style={{padding:"14px",background:T.card,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                    <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"5px"}}>{ex.name}</p>
-                    <p style={{fontSize:"11px",color:T.muted,marginBottom:"3px"}}>💪 {ex.muscles}</p>
-                    <p style={{fontSize:"11px",color:T.muted,marginBottom:"6px"}}>
-                      <span style={{padding:"1px 6px",background:ex.diff==="Advanced"?T.accent+"30":ex.diff==="Intermediate"?"#F59E0B30":"#10B98130",color:ex.diff==="Advanced"?T.accent:ex.diff==="Intermediate"?"#F59E0B":"#10B981",borderRadius:"3px",fontWeight:"600"}}>{ex.diff}</span>
-                    </p>
-                    <p style={{fontSize:"11px",color:T.accent,fontStyle:"italic",lineHeight:"1.4"}}>"{ex.cues}"</p>
-                  </div>
-                ))}
-              </div>
-            )}
+
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px 28px"}}>
+        <div style={{maxWidth:"1200px",margin:"0 auto"}}>
+          {/* Search bar + count */}
+          <div style={{
+            display:"flex",alignItems:"center",justifyContent:"space-between",
+            background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",
+            padding:"12px 18px",marginBottom:"20px",gap:"12px"
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:"10px",flex:1}}>
+              <Search size={15} color={T.muted}/>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Search exercises or muscles…"
+                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14px",width:"100%"}}/>
+            </div>
+            <span style={{fontSize:"12px",color:T.muted,flexShrink:0,fontWeight:"600"}}>
+              {allGroups.length} groups · {totalMovements} movements
+            </span>
           </div>
-        );
-      })}
+
+          {/* Accordion groups */}
+          {allGroups.map(([grp, exs]) => {
+            const filtered = search
+              ? exs.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())||e.muscles.toLowerCase().includes(search.toLowerCase()))
+              : exs;
+            if (!filtered.length) return null;
+            const isOpen = search ? true : !!openGroups[grp];
+            return (
+              <div key={grp} style={{marginBottom:"10px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,overflow:"hidden"}}>
+                {/* Group header */}
+                <button onClick={()=>toggleGroup(grp)}
+                  style={{
+                    width:"100%",padding:"15px 20px",background:"none",border:"none",cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"space-between"
+                  }}>
+                  <span style={{fontSize:"14px",fontWeight:"700",color:isOpen?T.text:T.muted}}>
+                    {grp} <span style={{fontSize:"12px",fontWeight:"400",color:T.muted,marginLeft:"6px"}}>({filtered.length})</span>
+                  </span>
+                  <ChevronRight size={16} color={isOpen?T.accent:T.muted}
+                    style={{transform:isOpen?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
+                </button>
+
+                {/* Exercise cards */}
+                {isOpen && (
+                  <div style={{
+                    display:"grid",
+                    gridTemplateColumns:isMobile?"1fr":"1fr 1fr",
+                    gap:"1px",
+                    borderTop:`1px solid ${T.border}`
+                  }}>
+                    {filtered.map((ex,i) => {
+                      const ds = diffStyle(ex.diff);
+                      return (
+                        <div key={i} style={{
+                          padding:"15px 18px",
+                          background:T.card,
+                          borderRight: (!isMobile && i%2===0) ? `1px solid ${T.border}` : "none",
+                          borderBottom: i < filtered.length - (isMobile?1:2) ? `1px solid ${T.border}` : "none"
+                        }}>
+                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ex.name}</p>
+                          <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>
+                            {ex.muscles.split(/[,·]/).map(m=>m.trim()).join(" · ")}
+                          </p>
+                          <span style={{
+                            display:"inline-block",fontSize:"10px",fontWeight:"700",
+                            padding:"2px 8px",borderRadius:"6px",marginBottom:"8px",
+                            background:ds.bg,color:ds.color
+                          }}>{ex.diff}</span>
+                          <p style={{fontSize:"12px",color:T.accent,fontStyle:"italic",lineHeight:"1.45",margin:0}}>
+                            "{ex.cues}"
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -3286,356 +3529,343 @@ function DiscoverTab({ onAddExercise }) {
 function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
-  const [mainTab, setMainTab] = useState("library"); // "library" | "discover"
+  const isTablet = vw < 900;
+  const [mainTab, setMainTab] = useState("library");
 
-  // Live library data (merges localStorage edits with built-in defaults)
   const [libData, setLibData] = useState(() => getLibrary());
   const classKeys = Object.keys(libData);
 
-  const [selClass, setSelClass] = useState(classKeys[0]);
-  const [selSub,   setSelSub]   = useState(null);
-  const [selStage, setSelStage] = useState("warmup");
-  const [search,   setSearch]   = useState("");
-  const [editMode, setEditMode] = useState(false);
-  const [editingId, setEditingId] = useState(null); // exercise id being edited
-  const [draftEx, setDraftEx]   = useState({}); // draft fields for inline editor
+  const [selClass,     setSelClass]     = useState(classKeys[0]);
+  const [selSub,       setSelSub]       = useState(null);
+  const [selStage,     setSelStage]     = useState("main");
+  const [search,       setSearch]       = useState("");
+  const [editMode,     setEditMode]     = useState(false);
+  const [editingId,    setEditingId]    = useState(null);
+  const [draftEx,      setDraftEx]      = useState({});
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [toast, setToast]       = useState(null);
+  const [toast,        setToast]        = useState(null);
 
-  const cls     = libData[selClass];
-  const subKeys = cls ? Object.keys(cls.subTypes) : [];
+  const cls      = libData[selClass];
+  const subKeys  = cls ? Object.keys(cls.subTypes) : [];
+  useEffect(() => { setSelSub(subKeys[0]||null); setEditingId(null); }, [selClass]);
 
-  // Auto-select first sub-type when class changes — DON'T reset selStage to keep layout stable
-  useEffect(() => { setSelSub(subKeys[0] || null); setEditingId(null); }, [selClass]);
-
-  const sub    = cls && selSub ? cls.subTypes[selSub] : null;
-  const rawEx  = sub ? (sub[selStage] || []) : [];
+  const sub       = cls && selSub ? cls.subTypes[selSub] : null;
+  const rawEx     = sub ? (sub[selStage]||[]) : [];
   const exercises = search
-    ? rawEx.filter(e => e.n.toLowerCase().includes(search.toLowerCase()) || (e.muscles||"").toLowerCase().includes(search.toLowerCase()))
+    ? rawEx.filter(e=>e.n.toLowerCase().includes(search.toLowerCase())||(e.muscles||"").toLowerCase().includes(search.toLowerCase()))
     : rawEx;
-
-  const totalEx = sub ? (sub.warmup?.length||0)+(sub.main?.length||0)+(sub.cooldown?.length||0) : 0;
   const classColor = libData[selClass]?.color || T.accent;
 
-  // ── Persist helpers ─────────────────────────────────────────────────────────
-  const persist = (updated) => { setLibData(updated); saveLibrary(updated); };
+  const persist = updated => { setLibData(updated); saveLibrary(updated); };
+  const updateExerciseList = newList => persist({...libData,[selClass]:{...cls,subTypes:{...cls.subTypes,[selSub]:{...sub,[selStage]:newList}}}});
 
-  const updateExerciseList = (newList) => {
-    const updated = {
-      ...libData,
-      [selClass]: {
-        ...cls,
-        subTypes: {
-          ...cls.subTypes,
-          [selSub]: { ...sub, [selStage]: newList },
-        },
-      },
-    };
-    persist(updated);
+  const startEdit  = ex => { setEditingId(ex.id); setDraftEx({...ex}); };
+  const cancelEdit = ()  => { setEditingId(null); setDraftEx({}); };
+  const saveEdit   = ()  => { updateExerciseList(rawEx.map(e=>e.id===editingId?{...draftEx}:e)); setEditingId(null); showToast("Saved"); };
+  const deleteEx   = id  => { if(!window.confirm("Delete this exercise?")) return; updateExerciseList(rawEx.filter(e=>e.id!==id)); showToast("Deleted"); };
+  const addNewEx   = ()  => {
+    const ex = {id:"custom_"+Date.now(),n:"New Exercise",s:"3",r:"10",rest:"30s",muscles:"",notes:"",timing:"none"};
+    updateExerciseList([...rawEx,ex]);
+    startEdit(ex);
   };
+  const handleReset = () => { resetLibrary(); setLibData(WORKOUT_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
+  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
 
-  // ── Edit handlers ────────────────────────────────────────────────────────────
-  const startEdit = (ex) => { setEditingId(ex.id); setDraftEx({...ex}); };
-  const cancelEdit = () => { setEditingId(null); setDraftEx({}); };
-  const saveEdit = () => {
-    const newList = rawEx.map(e => e.id===editingId ? {...draftEx} : e);
-    updateExerciseList(newList);
-    setEditingId(null);
-    showToast("Exercise saved");
-  };
-  const deleteEx = (id) => {
-    if (!window.confirm("Delete this exercise from the library?")) return;
-    updateExerciseList(rawEx.filter(e => e.id !== id));
-    showToast("Exercise deleted");
-  };
-  const addNewEx = () => {
-    const newEx = { id:"custom_"+Date.now(), n:"New Exercise", s:"3", r:"10", rest:"30s", muscles:"", notes:"", timing:"none" };
-    updateExerciseList([...rawEx, newEx]);
-    startEdit(newEx);
-    showToast("Exercise added — fill in details");
-  };
+  // Discover packs data
+  const DISCOVER_PACKS = [
+    {id:"hyrox12",icon:"🏋",title:"12 Days of Hyrox",author:"CrossFit Mile End",stats:"8 stations · 1.2k imports"},
+    {id:"tabata3",icon:"🔥",title:"Tabata Burner Vol. 3",author:"Jungle Editorial",stats:"16 exercises · 940 imports"},
+    {id:"5x5",    icon:"💪",title:"5×5 Strength Base",  author:"Mara K.",         stats:"5 lifts · 2.7k imports"},
+  ];
+  const [importedPacks, setImportedPacks] = useState([]);
 
-  // ── Reset to defaults ────────────────────────────────────────────────────────
-  const handleReset = () => {
-    resetLibrary();
-    setLibData(WORKOUT_LIBRARY);
-    setResetConfirm(false);
-    showToast("Library reset to defaults");
-  };
-
-  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
+  const stageLabels = {warmup:"Warm-up",main:"Main set",cooldown:"Cool-down"};
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"16px"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:600,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"20px"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      {/* Fixed-size modal — height is always 88vh so layout never shifts */}
-      <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"14px",border:`1px solid ${T.border}`,width:"100%",maxWidth:"900px",height:isMobile?"96vh":"88vh",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
+
+      <div style={{
+        background:T.card,borderRadius:isMobile?"14px 14px 0 0":"18px",
+        border:`1px solid ${T.border}`,
+        width:"100%",maxWidth:isTablet?"700px":"1200px",
+        height:isMobile?"96vh":"88vh",
+        display:"flex",flexDirection:"column",overflow:"hidden",position:"relative",
+        boxShadow:"0 30px 80px rgba(0,0,0,.45)"
+      }}>
 
         {/* Toast */}
-        {toast && (
-          <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:T.accent,color:"#fff",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>
-            {toast}
-          </div>
-        )}
+        {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:T.accent,color:"#fff",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
 
-        {/* ── Header ── */}
-        <div style={{padding:isMobile?"10px 14px":"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,gap:"8px",flexWrap:isMobile?"wrap":"nowrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:"10px",minWidth:0,flex:1}}>
-            {/* Main tab switcher */}
-            <div style={{display:"flex",gap:"4px",background:T.navy,borderRadius:"8px",padding:"3px"}}>
-              {[["library",isMobile?"📚 Library":"📚 My Library"],["discover",isMobile?"🌐 Discover":"🌐 Discover"]].map(([id,lbl])=>(
-                <button key={id} onClick={()=>setMainTab(id)}
-                  style={{padding:isMobile?"4px 10px":"5px 12px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:isMobile?"10px":"11px",fontWeight:"700",
-                    background:mainTab===id?T.card:"transparent",
-                    color:mainTab===id?T.text:T.muted,
-                    boxShadow:mainTab===id?"0 1px 3px rgba(0,0,0,0.3)":"none",
-                    transition:"all 0.15s"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
+        {/* ── Top page header ── */}
+        <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+          <div>
+            <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE LIBRARY</p>
+            <p style={{fontSize:"12px",color:T.muted}}>The studio's movement catalogue — editable per gym, with a Discover feed of community packs</p>
           </div>
-          <div style={{display:"flex",gap:"5px",flexShrink:0,alignItems:"center"}}>
-            {mainTab==="library" && (
-              <>
-                <button onClick={()=>{ setEditMode(v=>!v); setEditingId(null); }}
-                  style={{padding:"6px 10px",background:editMode?T.accent+"22":T.navy,border:`1px solid ${editMode?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:editMode?T.accent:T.muted,fontSize:"10px",fontWeight:"700",whiteSpace:"nowrap"}}>
-                  {editMode ? "✓ Done" : "✏️ Edit"}
-                </button>
-                {editMode && !isMobile && (
-                  <button onClick={()=>setResetConfirm(true)}
-                    style={{padding:"6px 10px",background:"transparent",border:`1px solid #EF444440`,borderRadius:"7px",cursor:"pointer",color:"#EF4444",fontSize:"10px",fontWeight:"700",whiteSpace:"nowrap"}}>
-                    Reset
-                  </button>
-                )}
-              </>
-            )}
-            <button onClick={onClose}
-              style={{padding:"6px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"10px",display:"flex",alignItems:"center",gap:"4px",minHeight:"32px"}}>
-              <X size={12}/> {!isMobile && "Close"}
-            </button>
-          </div>
+          <button onClick={onClose} style={{background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",padding:"6px 12px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+            <X size={13}/> Close
+          </button>
         </div>
 
-        {/* ── Discover Tab ── */}
-        {mainTab === "discover" && (
-          <DiscoverTab onAddExercise={onAddExercise} onClose={onClose}/>
-        )}
-
-        {/* ── Library Tab ── */}
-        {mainTab === "library" && <>
-
-        {/* ── Class type pills — fixed-height row ── */}
-        <div style={{height:"50px",display:"flex",gap:"6px",padding:"8px 16px",borderBottom:`1px solid ${T.border}`,overflowX:"auto",WebkitOverflowScrolling:"touch",flexShrink:0,alignItems:"center"}}>
-          {classKeys.map(k => {
-            const c = libData[k];
-            return (
-              <button key={k} onClick={()=>setSelClass(k)}
-                style={{flexShrink:0,padding:"5px 13px",borderRadius:"20px",border:`2px solid ${selClass===k?c.color:T.border}`,
-                  background:selClass===k?c.color+"22":"transparent",
-                  color:selClass===k?c.color:T.muted,
-                  cursor:"pointer",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",whiteSpace:"nowrap",
-                  transition:"border-color 0.15s, background 0.15s, color 0.15s"}}>
-                {c.icon} {c.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── Body: flex column on mobile, row on desktop ── */}
+        {/* ── Body: 3 columns (or stacked on mobile) ── */}
         <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:"hidden",minHeight:0}}>
 
-          {/* Sub-type sidebar — fixed width on desktop, full-width row on mobile */}
-          <div style={{width:isMobile?"100%":"190px",maxHeight:isMobile?"80px":"unset",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none",overflowY:isMobile?"hidden":"auto",overflowX:isMobile?"auto":"hidden",flexShrink:0,padding:isMobile?"6px 10px":"10px 6px",boxSizing:"border-box",display:"flex",flexDirection:isMobile?"row":"column",gap:isMobile?"4px":"0",WebkitOverflowScrolling:"touch"}}>
-            {!isMobile && <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",padding:"0 8px",marginBottom:"8px",fontWeight:"700"}}>Style</p>}
-            {subKeys.map(sk => {
-              const s = cls.subTypes[sk];
-              const count = (s.warmup?.length||0)+(s.main?.length||0)+(s.cooldown?.length||0);
-              const isActive = selSub === sk;
-              return (
-                <button key={sk} onClick={()=>{ setSelSub(sk); setEditingId(null); }}
-                  style={{
-                    width:isMobile?"auto":"100%",
-                    flexShrink:isMobile?0:undefined,
-                    textAlign:"left",padding:isMobile?"5px 10px":"9px 10px",
-                    borderRadius:"8px",border:`1px solid ${isActive?classColor+"50":"transparent"}`,
-                    background:isActive?classColor+"18":"transparent",
-                    color:isActive?classColor:T.muted,
-                    cursor:"pointer",fontSize:"11px",fontWeight:isActive?"700":"500",
-                    marginBottom:isMobile?"0":"3px",
-                    display:"flex",flexDirection:"column",gap:"2px",transition:"background 0.15s",
-                    whiteSpace:isMobile?"nowrap":"normal",
-                  }}>
-                  <span style={{lineHeight:"1.3"}}>{s.label}</span>
-                  {!isMobile && <span style={{fontSize:"9px",opacity:0.7}}>{count} exercise{count!==1?"s":""}</span>}
+          {/* ── LEFT RAIL: class type list ── */}
+          {!isMobile && (
+            <div style={{width:"220px",flexShrink:0,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+              <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",padding:"14px 18px 8px"}}>CLASS TYPE</p>
+              <div style={{flex:1,overflowY:"auto"}}>
+                {classKeys.map(k=>{
+                  const c = libData[k];
+                  const totalCount = Object.values(c.subTypes||{}).reduce((a,sub)=>a+(sub.warmup?.length||0)+(sub.main?.length||0)+(sub.cooldown?.length||0),0);
+                  const isActive = selClass===k;
+                  return (
+                    <button key={k} onClick={()=>setSelClass(k)}
+                      style={{
+                        width:"100%",textAlign:"left",padding:"10px 18px",border:"none",
+                        background:isActive?T.navy:"transparent",cursor:"pointer",
+                        display:"flex",alignItems:"center",gap:"10px",
+                        borderLeft:isActive?`3px solid ${c.color}`:"3px solid transparent",
+                        transition:"background 0.15s"
+                      }}>
+                      <div style={{width:"9px",height:"9px",borderRadius:"3px",flexShrink:0,background:c.color}}/>
+                      <span style={{flex:1,fontSize:"13px",fontWeight:isActive?"700":"500",color:isActive?T.text:T.muted}}>{c.label}</span>
+                      <span style={{fontSize:"11px",color:T.muted}}>{totalCount}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid ${T.border}`}}>
+                <button style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
+                  <Plus size={13}/> New class type
                 </button>
-              );
-            })}
+              </div>
+            </div>
+          )}
 
-            {/* Add Sub-Type button (edit mode) — future enhancement placeholder */}
-          </div>
-
-          {/* Right panel — stage tabs + exercises */}
+          {/* ── CENTER: library / discover content ── */}
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
 
-            {/* Stage tabs row — fixed height */}
-            <div style={{minHeight:"46px",padding:isMobile?"4px 8px":"0 14px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"6px",alignItems:"center",flexShrink:0,overflowX:"auto",WebkitOverflowScrolling:"touch",flexWrap:isMobile?"nowrap":"nowrap"}}>
-              {["warmup","main","cooldown"].map(stage=>(
-                <button key={stage} onClick={()=>{ setSelStage(stage); setEditingId(null); }}
-                  style={{padding:isMobile?"4px 9px":"5px 13px",borderRadius:"7px",border:`1px solid ${selStage===stage?classColor:T.border}`,
-                    background:selStage===stage?classColor+"20":"transparent",
-                    color:selStage===stage?classColor:T.muted,
-                    cursor:"pointer",fontSize:isMobile?"10px":"11px",fontWeight:"700",flexShrink:0,whiteSpace:"nowrap",
-                    transition:"border-color 0.15s, background 0.15s, color 0.15s"}}>
-                  {stage==="warmup"?(isMobile?"🔥 Warm-Up":"🔥 Warm-Up"):stage==="main"?(isMobile?"💪 Main":"💪 Main Workout"):(isMobile?"🧘 Cool-Down":"🧘 Cool-Down")}
-                  <span style={{marginLeft:"5px",fontSize:"9px",opacity:0.6}}>({(sub?.[stage]||[]).length})</span>
-                </button>
-              ))}
-              {/* Search — pushes right */}
-              <input value={search} onChange={e=>setSearch(e.target.value)}
-                placeholder="Search…"
-                style={{marginLeft:"auto",padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"11px",outline:"none",width:isMobile?"90px":"140px",flexShrink:0}}/>
-            </div>
+            {/* Center toolbar */}
+            <div style={{flexShrink:0,padding:isMobile?"10px 14px":"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+              {/* Mobile: class type select */}
+              {isMobile && (
+                <select value={selClass} onChange={e=>setSelClass(e.target.value)}
+                  style={{padding:"5px 8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",cursor:"pointer"}}>
+                  {classKeys.map(k=><option key={k} value={k}>{libData[k].icon} {libData[k].label}</option>)}
+                </select>
+              )}
 
-            {/* Sub-type info bar — fixed height, no reflow */}
-            <div style={{height:"34px",padding:"0 16px",display:"flex",alignItems:"center",gap:"8px",flexShrink:0,borderBottom:`1px solid ${T.border}22`}}>
-              {sub ? (
+              {/* My Library / Discover segmented toggle */}
+              <div style={{display:"flex",gap:"3px",background:T.navy,borderRadius:"8px",padding:"3px",flexShrink:0}}>
+                {[["library","My Library"],["discover","Discover"]].map(([id,lbl])=>(
+                  <button key={id} onClick={()=>setMainTab(id)}
+                    style={{padding:"5px 14px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",
+                      background:mainTab===id?T.card:"transparent",
+                      color:mainTab===id?T.text:T.muted,
+                      boxShadow:mainTab===id?"0 1px 4px rgba(0,0,0,.3)":"none",transition:"all 0.15s"}}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {mainTab==="library" && (
                 <>
-                  <span style={{fontSize:"10px",color:T.muted,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.description}</span>
-                  <span style={{fontSize:"10px",color:classColor,fontWeight:"700",flexShrink:0}}>{totalEx} exercises</span>
-                </>
-              ) : (
-                <span style={{fontSize:"10px",color:T.muted}}>Select a style to view exercises</span>
-              )}
-            </div>
-
-            {/* Exercise list */}
-            <div style={{flex:1,overflowY:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",gap:"7px"}}>
-
-              {exercises.length === 0 && !editMode && (
-                <div style={{textAlign:"center",padding:"40px 20px",color:T.muted}}>
-                  <p style={{fontSize:"26px",marginBottom:"8px"}}>🔍</p>
-                  <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>No exercises found</p>
-                  <p style={{fontSize:"11px"}}>{search ? "Try a different search term" : "No exercises for this stage yet"}</p>
-                </div>
-              )}
-
-              {exercises.map((ex) => {
-                const isEditing = editMode && editingId === ex.id;
-                return (
-                  <div key={ex.id}
-                    style={{background:isEditing?classColor+"10":T.navy,border:`1px solid ${isEditing?classColor+"50":T.border}`,
-                      borderRadius:"10px",padding:"11px 13px",transition:"border-color 0.15s, background 0.15s"}}>
-
-                    {isEditing ? (
-                      /* ── Inline editor ── */
-                      <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-                        <input value={draftEx.n||""} onChange={e=>setDraftEx(d=>({...d,n:e.target.value}))}
-                          placeholder="Exercise name *"
-                          style={{padding:"6px 10px",background:T.card,border:`1px solid ${classColor}60`,borderRadius:"6px",color:T.text,fontSize:"13px",fontWeight:"700",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                          {[["s","Sets","60px"],["r","Reps / Duration","100px"],["rest","Rest","80px"]].map(([field,ph,w])=>(
-                            <input key={field} value={draftEx[field]||""} onChange={e=>setDraftEx(d=>({...d,[field]:e.target.value}))}
-                              placeholder={ph}
-                              style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:w,boxSizing:"border-box"}}/>
-                          ))}
-                          <select value={draftEx.timing||"none"} onChange={e=>setDraftEx(d=>({...d,timing:e.target.value}))}
-                            style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",cursor:"pointer"}}>
-                            {["none","emom","tabata","amrap","for time"].map(t=><option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <input value={draftEx.muscles||""} onChange={e=>setDraftEx(d=>({...d,muscles:e.target.value}))}
-                          placeholder="Muscles targeted"
-                          style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                        <textarea value={draftEx.notes||""} onChange={e=>setDraftEx(d=>({...d,notes:e.target.value}))}
-                          placeholder="Coaching notes (optional)"
-                          rows={2}
-                          style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
-                        <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
-                          <button onClick={cancelEdit}
-                            style={{padding:"5px 14px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
-                            Cancel
-                          </button>
-                          <button onClick={saveEdit} disabled={!draftEx.n?.trim()}
-                            style={{padding:"5px 14px",background:classColor,border:"none",borderRadius:"6px",cursor:"pointer",color:"#fff",fontSize:"11px",fontWeight:"700",opacity:!draftEx.n?.trim()?0.5:1}}>
-                            Save Exercise
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── Read view ── */
-                      <>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"8px",marginBottom:"5px"}}>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,lineHeight:"1.3"}}>{ex.n}</p>
-                          <div style={{display:"flex",gap:"4px",flexShrink:0,alignItems:"center"}}>
-                            {ex.s && <span style={{fontSize:"9px",padding:"2px 6px",background:T.accent+"20",color:T.accent,borderRadius:"3px",fontWeight:"700"}}>{ex.s}×</span>}
-                            {ex.r && <span style={{fontSize:"9px",padding:"2px 6px",background:T.green+"20",color:T.green,borderRadius:"3px",fontWeight:"700"}}>{ex.r}</span>}
-                            {ex.rest && <span style={{fontSize:"9px",padding:"2px 5px",background:T.border+"40",color:T.muted,borderRadius:"3px"}}>{ex.rest}</span>}
-                            {editMode && (
-                              <>
-                                <button onClick={()=>startEdit(ex)} title="Edit"
-                                  style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:"5px",padding:"3px 7px",cursor:"pointer",color:T.muted,fontSize:"10px",lineHeight:1}}>
-                                  ✏️
-                                </button>
-                                <button onClick={()=>deleteEx(ex.id)} title="Delete"
-                                  style={{background:"transparent",border:`1px solid #EF444430`,borderRadius:"5px",padding:"3px 7px",cursor:"pointer",color:"#EF4444",fontSize:"10px",lineHeight:1}}>
-                                  🗑️
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        {ex.muscles && <p style={{fontSize:"10px",color:classColor,fontWeight:"600",marginBottom:"3px"}}>💪 {ex.muscles}</p>}
-                        {ex.notes   && <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.4"}}>{ex.notes}</p>}
-                        {ex.timing && ex.timing!=="none" && (
-                          <span style={{marginTop:"5px",display:"inline-block",fontSize:"9px",padding:"2px 7px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700"}}>
-                            {ex.timing.toUpperCase()}
-                          </span>
-                        )}
-                      </>
-                    )}
+                  {/* Search */}
+                  <div style={{flex:1,display:"flex",alignItems:"center",gap:"7px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:"120px"}}>
+                    <Search size={13} color={T.muted}/>
+                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercises…"
+                      style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"12px",width:"100%"}}/>
                   </div>
-                );
-              })}
-
-              {/* Add exercise button (edit mode) */}
-              {editMode && sub && !search && (
-                <button onClick={addNewEx}
-                  style={{padding:"12px",background:"transparent",border:`2px dashed ${classColor}50`,borderRadius:"10px",cursor:"pointer",color:classColor,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",marginTop:"4px"}}>
-                  + Add Exercise to {selStage==="warmup"?"Warm-Up":selStage==="main"?"Main Workout":"Cool-Down"}
-                </button>
+                  {/* Edit toggle */}
+                  <button onClick={()=>{setEditMode(v=>!v);setEditingId(null);}}
+                    style={{padding:"7px 14px",background:editMode?classColor+"22":T.navy,border:`1px solid ${editMode?classColor:T.border}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:T.muted,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+                    ✏️ {editMode?"Done":"Edit"}
+                  </button>
+                  {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid #EF444440",borderRadius:"8px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
+                </>
               )}
             </div>
+
+            {mainTab==="discover" ? (
+              <DiscoverTab onAddExercise={onAddExercise} onClose={onClose}/>
+            ) : (
+              <>
+                {/* Sub-type filter chips */}
+                <div style={{flexShrink:0,padding:"8px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"6px",overflowX:"auto",WebkitOverflowScrolling:"touch",alignItems:"center"}}>
+                  {subKeys.map(sk=>{
+                    const s = cls.subTypes[sk];
+                    const isActive = selSub===sk;
+                    return (
+                      <button key={sk} onClick={()=>{setSelSub(sk);setEditingId(null);}}
+                        style={{flexShrink:0,padding:"5px 14px",borderRadius:"999px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",whiteSpace:"nowrap",
+                          background:isActive?classColor:"transparent",
+                          color:isActive?"#fff":T.muted,
+                          outline:isActive?"none":`1px solid ${T.border}`,
+                          transition:"background 0.15s"}}>
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Stage tabs */}
+                <div style={{flexShrink:0,padding:"0 18px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"0",alignItems:"center"}}>
+                  {[["warmup","Warm-up"],["main","Main set"],["cooldown","Cool-down"]].map(([stage,lbl])=>{
+                    const cnt = (sub?.[stage]||[]).length;
+                    const isActive = selStage===stage;
+                    return (
+                      <button key={stage} onClick={()=>{setSelStage(stage);setEditingId(null);}}
+                        style={{
+                          padding:"12px 16px",background:"none",border:"none",cursor:"pointer",
+                          fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap",
+                          color:isActive?classColor:T.muted,
+                          borderBottom:isActive?`2px solid ${classColor}`:"2px solid transparent",
+                          transition:"color 0.15s,border-color 0.15s"
+                        }}>
+                        {lbl} <span style={{fontSize:"11px",opacity:0.7}}>{cnt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Exercise list */}
+                <div style={{flex:1,overflowY:"auto",padding:"12px 18px",display:"flex",flexDirection:"column",gap:"6px"}}>
+                  {exercises.length===0 && !editMode && (
+                    <div style={{textAlign:"center",padding:"40px",color:T.muted}}>
+                      <p style={{fontSize:"24px",marginBottom:"8px"}}>🔍</p>
+                      <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>No exercises found</p>
+                      <p style={{fontSize:"11px"}}>{search?"Try a different search":"No exercises for this stage yet"}</p>
+                    </div>
+                  )}
+
+                  {exercises.map(ex=>{
+                    const isEditing = editMode && editingId===ex.id;
+                    return (
+                      <div key={ex.id} style={{
+                        background:isEditing?classColor+"12":T.navy,
+                        border:`1px solid ${isEditing?classColor+"60":T.border}`,
+                        borderRadius:"10px",padding:"12px 14px",
+                        transition:"border-color 0.15s,background 0.15s"
+                      }}>
+                        {isEditing ? (
+                          <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                            <input value={draftEx.n||""} onChange={e=>setDraftEx(d=>({...d,n:e.target.value}))} placeholder="Exercise name *"
+                              style={{padding:"6px 10px",background:T.card,border:`1px solid ${classColor}60`,borderRadius:"6px",color:T.text,fontSize:"13px",fontWeight:"700",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                              {[["s","Sets","60px"],["r","Reps / Duration","110px"],["rest","Rest","80px"]].map(([f,p,w])=>(
+                                <input key={f} value={draftEx[f]||""} onChange={e=>setDraftEx(d=>({...d,[f]:e.target.value}))} placeholder={p}
+                                  style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:w,boxSizing:"border-box"}}/>
+                              ))}
+                              <select value={draftEx.timing||"none"} onChange={e=>setDraftEx(d=>({...d,timing:e.target.value}))}
+                                style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",cursor:"pointer"}}>
+                                {["none","emom","tabata","amrap","for time"].map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            <input value={draftEx.muscles||""} onChange={e=>setDraftEx(d=>({...d,muscles:e.target.value}))} placeholder="Muscles targeted"
+                              style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                            <textarea value={draftEx.notes||""} onChange={e=>setDraftEx(d=>({...d,notes:e.target.value}))} placeholder="Coaching notes (optional)" rows={2}
+                              style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
+                            <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
+                              <button onClick={cancelEdit} style={{padding:"5px 14px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Cancel</button>
+                              <button onClick={saveEdit} disabled={!draftEx.n?.trim()} style={{padding:"5px 14px",background:classColor,border:"none",borderRadius:"6px",cursor:"pointer",color:"#fff",fontSize:"11px",fontWeight:"700",opacity:!draftEx.n?.trim()?0.5:1}}>Save Exercise</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                            {/* Drag handle */}
+                            <div style={{color:T.muted,fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
+                            {/* Info */}
+                            <div style={{flex:1,minWidth:0}}>
+                              <p style={{fontSize:"14px",fontWeight:"600",color:T.text,marginBottom:"2px"}}>{ex.n}</p>
+                              {ex.muscles && <p style={{fontSize:"11px",color:T.muted}}>{ex.muscles}</p>}
+                            </div>
+                            {/* Tags */}
+                            <div style={{display:"flex",gap:"5px",flexShrink:0,alignItems:"center"}}>
+                              {ex.timing&&ex.timing!=="none" && (
+                                <span style={{fontSize:"10px",padding:"3px 8px",background:classColor+"20",color:classColor,borderRadius:"999px",fontWeight:"700"}}>{ex.timing} work</span>
+                              )}
+                              {ex.r && <span style={{fontSize:"10px",color:T.muted}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
+                              {editMode && (
+                                <>
+                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>✏️</button>
+                                  <button onClick={()=>deleteEx(ex.id)} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Add exercise dashed row */}
+                  {editMode && sub && !search && (
+                    <button onClick={addNewEx} style={{padding:"14px",background:"transparent",border:`2px dashed ${classColor}40`,borderRadius:"10px",cursor:"pointer",color:classColor,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",marginTop:"4px"}}>
+                      + Add exercise to this set
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+
+          {/* ── RIGHT RAIL: Discover packs ── */}
+          {!isMobile && !isTablet && (
+            <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+              <div style={{flexShrink:0,padding:"16px 18px 10px"}}>
+                <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px"}}>Discover packs</p>
+                <p style={{fontSize:"11px",color:T.muted}}>Community workouts — one tap to import</p>
+              </div>
+              <div style={{flex:1,overflowY:"auto",padding:"6px 14px"}}>
+                {DISCOVER_PACKS.map(pack=>(
+                  <div key={pack.id} style={{background:T.navy,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",marginBottom:"10px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
+                      <div style={{width:"36px",height:"36px",borderRadius:"9px",background:classColor+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:0}}>{pack.icon}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>{pack.title}</p>
+                        <p style={{fontSize:"11px",color:T.muted}}>by {pack.author}</p>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span style={{fontSize:"11px",color:T.muted}}>{pack.stats}</span>
+                      <button
+                        onClick={()=>setImportedPacks(p=>p.includes(pack.id)?p:[...p,pack.id])}
+                        style={{padding:"5px 12px",background:importedPacks.includes(pack.id)?"transparent":T.card,border:`1px solid ${importedPacks.includes(pack.id)?T.muted:classColor}`,borderRadius:"6px",cursor:"pointer",color:importedPacks.includes(pack.id)?T.muted:classColor,fontSize:"11px",fontWeight:"700"}}>
+                        {importedPacks.includes(pack.id)?"✓ Imported":"Import"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid ${T.border}`}}>
+                <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.5"}}>Every imported exercise keeps its BPM hints, so the Auto-DJ scores it automatically.</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Reset confirmation overlay */}
+        {/* Reset overlay */}
         {resetConfirm && (
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"14px"}}>
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center"}}>
               <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
               <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"8px"}}>Reset to Defaults?</p>
-              <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",lineHeight:"1.5"}}>This will remove all your custom exercises and edits, restoring the built-in library.</p>
+              <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
               <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
-                <button onClick={()=>setResetConfirm(false)}
-                  style={{padding:"8px 20px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>
-                  Cancel
-                </button>
-                <button onClick={handleReset}
-                  style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>
-                  Reset Library
-                </button>
+                <button onClick={()=>setResetConfirm(false)} style={{padding:"8px 20px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>Cancel</button>
+                <button onClick={handleReset} style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
               </div>
             </div>
           </div>
         )}
-        </> /* end mainTab==="library" */}
       </div>
     </div>
   );
 }
 
-function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange}) {
+function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress}) {
   const vw = useWindowWidth();
   const isMobile  = vw < 480;
   const isTablet  = vw < 768;
@@ -3824,7 +4054,29 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
             ⚡ {!isMobile && "Smart "}Distribute
           </button>
+
+          <button onClick={onDjClass} disabled={djProgress?.active} style={{
+            display:"flex", alignItems:"center", gap:"6px",
+            padding: isMobile?"6px 10px":"8px 14px",
+            background: djProgress?.active ? T.border : "linear-gradient(135deg,#1DB954,#148a3d)",
+            color:"#fff", border:"none", borderRadius:"8px", cursor: djProgress?.active?"wait":"pointer",
+            fontSize: isMobile?"12px":"13px", fontWeight:"700", whiteSpace:"nowrap", flexShrink:0
+          }}>
+            {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
+          </button>
         </div>
+
+        {djProgress?.active && (
+          <div style={{padding:"0 20px 12px", display:"flex", flexDirection:"column", gap:"6px"}}>
+            <div style={{display:"flex", justifyContent:"space-between", fontSize:"12px", color:T.muted}}>
+              <span>{djProgress.message}</span>
+              <span>{djProgress.pct}%</span>
+            </div>
+            <div style={{height:"4px", background:T.border, borderRadius:"2px"}}>
+              <div style={{height:"100%", width:`${djProgress.pct}%`, background:T.green, borderRadius:"2px", transition:"width 0.5s ease"}}/>
+            </div>
+          </div>
+        )}
 
         {/* Template-change confirmation banner — shown when swapping class while custom exercises exist */}
         {templatePrompt && (
@@ -4801,10 +5053,11 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
 function OverviewDisplayScreen({ stages, sessionName, onBack }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
-  const isTablet = vw < 768;
-  const totalDur = stages.reduce((a,s)=>a+s.dur,0);
+  const isTablet = vw < 900;
+  const totalDur    = stages.reduce((a,s)=>a+s.dur,0);
+  const totalTracks = stages.reduce((a,s)=>a+(s.tracks||[]).length, 0);
+  const totalExs    = stages.reduce((a,s)=>a+(s.exercises||[]).length, 0);
 
-  // Esc exits back to builder
   useEffect(() => {
     const onKey = e => { if (e.key==="Escape") onBack(); };
     window.addEventListener("keydown", onKey);
@@ -4816,157 +5069,164 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
     return sec ? `${m}m ${sec}s` : `${m}m`;
   };
 
-  const totalTracks   = stages.reduce((a,s)=>a+(s.tracks||[]).length, 0);
-  const totalExs      = stages.reduce((a,s)=>a+(s.exercises||[]).length, 0);
+  // Find "peak" stage (highest BPM range or most exercises)
+  const peakIdx = stages.reduce((best,s,i) => {
+    const cfg = SCFG[s.type]||SCFG.circuit;
+    const score = (cfg.bpmMax||0) + (s.exercises||[]).length;
+    const bestCfg = SCFG[stages[best]?.type]||SCFG.circuit;
+    const bestScore = (bestCfg.bpmMax||0) + (stages[best]?.exercises||[]).length;
+    return score > bestScore ? i : best;
+  }, 0);
+
+  const cols = isMobile ? 1 : isTablet ? Math.min(stages.length, 2) : Math.min(stages.length, 4);
 
   return (
-    <div style={{position:"fixed",inset:0,background:T.bg,zIndex:500,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div style={{position:"fixed",inset:0,background:"#050705",zIndex:500,display:"flex",flexDirection:"column",overflow:"auto",padding:isMobile?"0":"24px"}}>
 
-      {/* Top bar */}
-      <div style={{flexShrink:0,padding:isMobile?"12px 16px":"20px 32px",borderBottom:`1px solid ${T.border}`,
-        background:T.card,display:"flex",alignItems:isMobile?"flex-start":"center",
-        justifyContent:"space-between",flexDirection:isMobile?"column":"row",gap:isMobile?"10px":"0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:isMobile?"12px":"20px"}}>
-          <button onClick={onBack}
-            style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",
-              background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",
-              cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0}}>
-            ← Back {!isMobile && <span style={{fontSize:"10px",opacity:0.5,marginLeft:"2px"}}>Esc</span>}
-          </button>
-          <div>
-            <p style={{fontSize:isMobile?"16px":"22px",fontWeight:"800",color:T.text,lineHeight:1,marginBottom:"4px"}}>
-              {sessionName||"Workout Overview"}
-            </p>
-            <p style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>
-              {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
-            </p>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-          {stages.map((s,si)=>{
-            const cfg = SCFG[s.type]||SCFG.circuit;
-            return (
-              <div key={s.id} style={{display:"flex",alignItems:"center",gap:"5px",
-                padding:"5px 10px",background:`${cfg.color}18`,borderRadius:"6px",
-                border:`1px solid ${cfg.color}40`}}>
-                <div style={{width:"7px",height:"7px",borderRadius:"50%",background:cfg.color}}/>
-                <span style={{fontSize:"10px",fontWeight:"700",color:cfg.color}}>{fmtDur(s.dur)}</span>
+      {/* TV bezel frame */}
+      <div style={{
+        flex:1,background:"#050705",borderRadius:isMobile?"0":"16px",
+        padding:isMobile?"0":"14px",
+        boxShadow:isMobile?"none":"0 30px 80px rgba(0,0,0,.6)",
+        display:"flex",flexDirection:"column",overflow:"hidden",
+        minHeight:isMobile?"100vh":"auto"
+      }}>
+
+        {/* Inner screen */}
+        <div style={{flex:1,background:T.bg,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+          {/* Header row */}
+          <div style={{
+            flexShrink:0,padding:isMobile?"16px":"22px 26px",
+            borderBottom:`1px solid ${T.border}`,
+            display:"flex",alignItems:isMobile?"flex-start":"center",
+            justifyContent:"space-between",flexDirection:isMobile?"column":"row",gap:"12px"
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
+              <button onClick={onBack} style={{
+                display:"flex",alignItems:"center",gap:"6px",padding:"7px 13px",
+                background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",
+                cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0
+              }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
+              <div>
+                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px"}}>
+                  {sessionName||"Class Plan Overview"}
+                </p>
+                <p style={{fontSize:"12px",color:T.muted}}>
+                  {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
+                </p>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </div>
 
-      {/* Stage cards — horizontal scroll row */}
-      <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 14px":"24px 28px"}}>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?`repeat(${Math.min(stages.length,2)},1fr)`:`repeat(${Math.min(stages.length,4)},1fr)`,
-          gap:isMobile?"12px":"18px",minWidth:0}}>
-          {stages.map((s,si)=>{
-            const cfg = SCFG[s.type]||SCFG.circuit;
-            const exList  = s.exercises||[];
-            const trList  = s.tracks||[];
-            const grpList = s.groups||[];
-            return (
-              <div key={s.id} style={{borderRadius:"14px",overflow:"hidden",
-                border:`2px solid ${cfg.color}50`,background:T.card,
-                display:"flex",flexDirection:"column"}}>
-
-                {/* Card header */}
-                <div style={{background:`${cfg.color}20`,padding:"14px 18px",
-                  borderBottom:`1px solid ${cfg.color}30`}}>
-                  <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
-                    <div style={{width:"10px",height:"10px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
-                    <span style={{fontSize:"10px",fontWeight:"800",color:cfg.color,
-                      textTransform:"uppercase",letterSpacing:"0.8px"}}>{cfg.label}</span>
+            {/* Per-stage duration chips */}
+            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+              {stages.map((s,si)=>{
+                const cfg = SCFG[s.type]||SCFG.circuit;
+                return (
+                  <div key={s.id} style={{
+                    display:"flex",alignItems:"center",gap:"5px",
+                    padding:"5px 10px",background:`${cfg.color}18`,
+                    borderRadius:"999px",border:`1px solid ${cfg.color}40`
+                  }}>
+                    <div style={{width:"6px",height:"6px",borderRadius:"50%",background:cfg.color}}/>
+                    <span style={{fontSize:"11px",fontWeight:"700",color:cfg.color}}>{fmtDur(s.dur)}</span>
                   </div>
-                  <p style={{fontSize:"17px",fontWeight:"800",color:T.text,
-                    lineHeight:1.2,marginBottom:"4px"}}>{s.name}</p>
-                  <p style={{fontSize:"12px",fontWeight:"600",color:T.muted}}>{fmtDur(s.dur)}</p>
-                </div>
+                );
+              })}
+            </div>
+          </div>
 
-                {/* Card body */}
-                <div style={{flex:1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:"14px"}}>
+          {/* Stage cards grid */}
+          <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"22px 26px"}}>
+            <div style={{
+              display:"grid",
+              gridTemplateColumns:`repeat(${cols},1fr)`,
+              gap:isMobile?"12px":"16px"
+            }}>
+              {stages.map((s,si)=>{
+                const cfg     = SCFG[s.type]||SCFG.circuit;
+                const exList  = s.exercises||[];
+                const trList  = s.tracks||[];
+                const grpList = s.groups||[];
+                const isPeak  = si===peakIdx && stages.length>1;
+                const firstTrack = trList[0];
 
-                  {/* Exercises */}
-                  {exList.length>0 && (
-                    <div>
-                      <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,
-                        textTransform:"uppercase",letterSpacing:"0.6px",marginBottom:"8px"}}>
-                        🏋 Exercises
+                return (
+                  <div key={s.id} style={{
+                    borderRadius:"14px",overflow:"hidden",display:"flex",flexDirection:"column",
+                    border:isPeak?`2px solid ${cfg.color}`:`2px solid ${cfg.color}40`,
+                    background:isPeak?`linear-gradient(160deg,${T.navy},${T.card})`:`${T.card}`,
+                    boxShadow:isPeak?`0 0 0 3px ${cfg.color}18`:"none"
+                  }}>
+
+                    {/* Colored header band */}
+                    <div style={{background:`${cfg.color}${isPeak?"28":"18"}`,padding:"14px 18px"}}>
+                      {/* Stage label */}
+                      <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"8px"}}>
+                        <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
+                        <span style={{fontSize:"10px",fontWeight:"800",color:cfg.color,
+                          textTransform:"uppercase",letterSpacing:"1px"}}>
+                          {cfg.label}{isPeak?" · PEAK":""}
+                        </span>
+                      </div>
+                      {/* Stage name */}
+                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px"}}>{s.name}</p>
+                      {/* Duration + BPM */}
+                      <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>
+                        {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
                       </p>
+                    </div>
+
+                    {/* Body */}
+                    <div style={{flex:1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:"7px"}}>
+                      {exList.length===0 && trList.length===0 && grpList.length===0 && (
+                        <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>No content added yet</p>
+                      )}
+
+                      {/* Exercises */}
                       {exList.map((ex,ei)=>(
-                        <div key={ei} style={{display:"flex",alignItems:"flex-start",gap:"8px",
-                          marginBottom:"7px",paddingLeft:"8px",
-                          borderLeft:`3px solid ${cfg.color}60`}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <p style={{fontSize:"13px",fontWeight:"700",color:T.text,
-                              lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
-                            <p style={{fontSize:"10px",color:T.muted,lineHeight:1.3}}>
-                              {[ex.s&&`${ex.s}×`,ex.r&&`${ex.r}`,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
-                            </p>
-                          </div>
+                        <div key={ei} style={{
+                          paddingLeft:"10px",borderLeft:`3px solid ${cfg.color}`,
+                          marginBottom:"4px"
+                        }}>
+                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
+                          <p style={{fontSize:"11px",color:T.muted}}>
+                            {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
+                          </p>
                         </div>
                       ))}
-                    </div>
-                  )}
 
-                  {/* Music */}
-                  {trList.length>0 && (
-                    <div>
-                      <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,
-                        textTransform:"uppercase",letterSpacing:"0.6px",marginBottom:"8px"}}>
-                        🎵 Music
-                      </p>
-                      {trList.map((t,ti)=>(
-                        <div key={t.id||ti} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"7px"}}>
-                          {t.albumArt
-                            ? <img src={t.albumArt} style={{width:"32px",height:"32px",borderRadius:"5px",flexShrink:0,objectFit:"cover"}} alt=""/>
-                            : <div style={{width:"32px",height:"32px",borderRadius:"5px",flexShrink:0,
-                                background:T.border,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                <Music size={12} color={T.muted}/>
-                              </div>
-                          }
-                          <div style={{flex:1,minWidth:0}}>
-                            <p style={{fontSize:"12px",fontWeight:"700",color:T.text,
-                              whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-                              lineHeight:1.2,marginBottom:"1px"}}>{t.t}</p>
-                            <p style={{fontSize:"10px",color:T.muted,
-                              whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.a}</p>
-                          </div>
-                          {t.bpm>0 && (
-                            <span style={{fontSize:"10px",fontWeight:"700",color:bpmColor(t.bpm),
-                              flexShrink:0}}>{Math.round(t.bpm)}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Groups */}
-                  {grpList.length>0 && (
-                    <div>
-                      <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,
-                        textTransform:"uppercase",letterSpacing:"0.6px",marginBottom:"8px"}}>
-                        👥 Groups
-                      </p>
+                      {/* Groups */}
                       {grpList.map((g,gi)=>(
-                        <div key={g.id} style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"6px"}}>
-                          <div style={{width:"9px",height:"9px",borderRadius:"50%",flexShrink:0,
-                            background:grpColor(g.id)}}/>
-                          <p style={{fontSize:"12px",fontWeight:"600",color:T.text,
-                            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.name}</p>
+                        <div key={g.id} style={{display:"flex",alignItems:"center",gap:"7px"}}>
+                          <div style={{width:"8px",height:"8px",borderRadius:"50%",flexShrink:0,background:grpColor(g.id)}}/>
+                          <p style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</p>
                         </div>
                       ))}
                     </div>
-                  )}
 
-                  {exList.length===0 && trList.length===0 && grpList.length===0 && (
-                    <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>Nothing added yet</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                    {/* Music footer */}
+                    <div style={{
+                      flexShrink:0,padding:"10px 18px",
+                      borderTop:`1px solid ${cfg.color}25`,
+                      display:"flex",alignItems:"center",gap:"8px"
+                    }}>
+                      <Music size={12} color={cfg.color} style={{flexShrink:0}}/>
+                      {firstTrack ? (
+                        <p style={{fontSize:"11px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          <span style={{color:T.text,fontWeight:"600"}}>{firstTrack.t}</span>
+                          {firstTrack.a && <span> — {firstTrack.a}</span>}
+                          {trList.length>1 && <span style={{color:cfg.color}}> +{trList.length-1}</span>}
+                        </p>
+                      ) : (
+                        <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>No tracks</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -5499,6 +5759,7 @@ export default function App() {
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [dark, setDark]               = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
+  const [djProgress, setDjProgress]   = useState({active:false, message:"", pct:0, done:false});
   // Gym branding
   const [gymBranding, setGymBranding] = useState(() => {
     try { return JSON.parse(localStorage.getItem("jungle_gym_branding") || "null") || {}; } catch(_) { return {}; }
@@ -5581,6 +5842,14 @@ export default function App() {
         const ss = stagesRef.current;
         const dur = ss[ls.idx]?.dur||1;
         const next = ls.elapsed + 1;
+        // Crossfade: fade out 8s before stage ends
+        const stageDur = ss[ls.idx]?.dur || 0;
+        const timeLeft = stageDur - ls.elapsed;
+        if (player && ls.playing && timeLeft > 0 && timeLeft <= 8) {
+          player.setVolume(Math.max(0.01, timeLeft / 8)).catch(()=>{});
+        } else if (player && ls.playing && (ls.elapsed === 1 || timeLeft > 8)) {
+          player.setVolume(1).catch(()=>{});
+        }
         if (next >= dur) {
           fireSiren();
           if (ls.idx < ss.length-1) {
@@ -5620,6 +5889,62 @@ export default function App() {
       return n;
     });
   };
+
+  const handleDjThisClass = async () => {
+    if (!token) return;
+    setDjProgress({active:true, message:"Fetching your Spotify playlists...", pct:5, done:false});
+    try {
+      // 1. Get playlists
+      const pls = await apiGetPlaylists();
+      if (!pls?.length) { setDjProgress({active:true,message:"No playlists found.",pct:0,done:true}); return; }
+      setDjProgress({active:true, message:`Loading tracks from ${pls.length} playlists...`, pct:10, done:false});
+
+      // 2. Collect all tracks
+      let allTracks = [];
+      for (let i=0; i<pls.length; i++) {
+        const tracks = await apiGetPlaylistTracks(pls[i].id);
+        if (Array.isArray(tracks)) allTracks = allTracks.concat(tracks.map(normSpTrack));
+        setDjProgress({active:true, message:`Loading playlist ${i+1}/${pls.length}...`, pct:10+Math.round((i/pls.length)*15), done:false});
+      }
+      // Deduplicate
+      const seen = new Set();
+      allTracks = allTracks.filter(t=>{ if(!t?.id||seen.has(t.id)) return false; seen.add(t.id); return true; });
+      setDjProgress({active:true, message:`Analysing ${allTracks.length} tracks...`, pct:25, done:false});
+
+      // 3. Enrich BPM via GetSongBPM (batch, 150ms delay between calls)
+      const bpmCache = JSON.parse(localStorage.getItem("sp_bpm_cache")||"{}");
+      const enriched = [];
+      for (let i=0; i<allTracks.length; i++) {
+        const t = allTracks[i];
+        let bpm = bpmCache[t.id] || t.bpm || 0;
+        let camelot = t.camelot || "";
+        if (!bpm && t.t && t.a) {
+          const data = await fetchBpmData(t.t, t.a);
+          if (data) { bpm = data.bpm; camelot = data.camelot; }
+          await new Promise(r=>setTimeout(r,150)); // rate limit
+        }
+        enriched.push({...t, bpm, camelot});
+        if (i % 10 === 0) setDjProgress({active:true, message:`Analysing tracks... ${i}/${allTracks.length}`, pct:25+Math.round((i/allTracks.length)*35), done:false});
+      }
+
+      // 4. Fill each stage
+      const newStages = stages.map((stage, si) => {
+        const cfg = SCFG[stage.type] || {bpmMin:100, bpmMax:140};
+        setDjProgress({active:true, message:`Building music for "${stage.name}"...`, pct:60+Math.round((si/stages.length)*35), done:false});
+        let prevCamelot = "";
+        const scored = enriched.map(t=>({...t, _score: scoreTrackForStage(t, cfg.bpmMin, cfg.bpmMax, prevCamelot)}));
+        const selected = selectTracksForDuration(scored, stage.dur, stage.type);
+        return {...stage, tracks: selected};
+      });
+
+      setStages(newStages);
+      setDjProgress({active:true, message:"✅ Class DJ'd! Music assigned to all stages.", pct:100, done:true});
+    } catch(e) {
+      setDjProgress({active:true, message:`Error: ${e.message}`, pct:0, done:true});
+    }
+    setTimeout(()=>setDjProgress({active:false,message:"",pct:0,done:false}),3000);
+  };
+
   const handleSelectTemplate = t => {
     const saved = templateTracks[t.id] || {};
     setStages(t.stages.map((s, i) => ({ ...s, id:uid(), tracks:[...(saved[i]||[])], exercises:s.exercises.map(e=>({...e})) })));
@@ -5680,65 +6005,46 @@ export default function App() {
       fontFamily: gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
         ? `'${gymBranding.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
         : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
-      {/* Header (hidden in Display Mode) */}
+
       {view!=="display"&&view!=="overview-display" && (
       <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
-        {/* Logo — fixed left: shows gym logo/name when branding is set, else default */}
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
           {gymBranding?.logo
-            ? <>
-                <img src={gymBranding.logo} style={{height:isMobile?"26px":"32px",maxWidth:isMobile?"90px":"130px",objectFit:"contain"}} alt="gym logo"/>
-                {gymBranding.gymName && !isMobile && <span style={{fontSize:"14px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}
-              </>
-            : <>
-                <JungleLogo size={isMobile?24:30}/>
-                {!isMobile && <span style={{fontSize:"16px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}
-              </>
+            ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"32px",maxWidth:isMobile?"90px":"130px",objectFit:"contain"}} alt="gym logo"/>{gymBranding.gymName && !isMobile && <span style={{fontSize:"14px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}</>
+            : <><JungleLogo size={isMobile?24:30}/>{!isMobile && <span style={{fontSize:"16px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>
           }
         </div>
-
-        {/* Nav — fills remaining space, centered */}
         <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"4px",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
           {navItems.map(n => (
             <button key={n.key} onClick={()=>{
               if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
               if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
               setView(n.key);
-            }} style={{padding:isXSmall?"5px 8px":isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isXSmall?"11px":isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
+            }} style={{padding:isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
               {n.label}
             </button>
           ))}
         </nav>
-
-        {/* Right actions — fixed right */}
         <div style={{display:"flex",gap:isMobile?"6px":"12px",alignItems:"center",flexShrink:0}}>
-          {/* Theme toggle */}
-          <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:isXSmall?"none":"flex"}}>
+          <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
             {dark
               ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
               : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             }
           </button>
-
           {deviceId && !isMobile && <SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
-          {deviceId && isMobile && !isXSmall && <Wifi size={14} color={T.green}/>}
-
-          {/* Share with Class button */}
+          {deviceId && isMobile && <Wifi size={14} color={T.green}/>}
           {!isMobile && (
-            <button onClick={shareWithClass} title="Copy attendee link to clipboard"
-              style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?T.green+"20":T.navy,color:shareCopied?T.green:T.muted,border:`1px solid ${shareCopied?T.green+"40":T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600",transition:"all 0.2s"}}>
+            <button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?T.green+"20":T.navy,color:shareCopied?T.green:T.muted,border:`1px solid ${shareCopied?T.green+"40":T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600",transition:"all 0.2s"}}>
               {shareCopied ? <Check size={13}/> : <Share2 size={13}/>}
               {shareCopied ? "Copied!" : "Share"}
             </button>
           )}
           {isMobile && (
-            <button onClick={shareWithClass} title="Share"
-              style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?T.green:T.muted,padding:"4px",display:"flex"}}>
+            <button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?T.green:T.muted,padding:"4px",display:"flex"}}>
               {shareCopied ? <Check size={16}/> : <Share2 size={16}/>}
             </button>
           )}
-
-          {/* Profile avatar */}
           <button onClick={()=>setShowProfile(true)} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0}}>
             {profile?.images?.[0]?.url
               ? <img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>
@@ -5749,32 +6055,29 @@ export default function App() {
       </header>
       )}
 
-      {/* Spotify error banner (hidden in Display Mode) */}
       {spError && view!=="display"&&view!=="overview-display" && (
         <div style={{padding:"10px 24px",background:T.accent+"20",borderBottom:`1px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <p style={{fontSize:"13px",color:T.accent,fontWeight:"600"}}>⚠️ {spError}</p>
+          <p style={{fontSize:"13px",color:T.accent,fontWeight:"600"}}>&#9888;&#65039; {spError}</p>
           <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:T.accent,color:"white",border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
         </div>
       )}
 
-      {/* Views */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        {view==="dashboard" && <DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} profile={profile} sessionHistory={sessionHistory}/>}
-        {view==="templates" && <TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")}/>}
-        {view==="builder"   && <BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice}/>}
-        {view==="library"   && <LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
+        {view==="dashboard"        && <DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} profile={profile} sessionHistory={sessionHistory}/>}
+        {view==="templates"        && <TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")}/>}
+        {view==="builder"          && <BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjThisClass} djProgress={djProgress}/>}
+        {view==="library"          && <LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="overview-display" && <OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
-        {view==="live"      && <LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
-        {view==="display"   && <DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
-        {view==="analytics" && <AnalyticsScreen onBack={()=>setView("dashboard")}/>}
-        {view==="glossary"  && <GlossaryScreen onBack={()=>setView("dashboard")}/>}
-        {view==="calendar"  && <CalendarScreen onBack={()=>setView("dashboard")}/>}
+        {view==="live"             && <LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
+        {view==="display"          && <DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
+        {view==="analytics"        && <AnalyticsScreen onBack={()=>setView("dashboard")}/>}
+        {view==="glossary"         && <GlossaryScreen onBack={()=>setView("dashboard")}/>}
+        {view==="calendar"         && <CalendarScreen onBack={()=>setView("dashboard")}/>}
       </div>
 
-      {/* Footer (hidden in Display Mode) */}
       {view!=="display"&&view!=="overview-display" && (
       <footer style={{padding:"10px 24px",borderTop:`1px solid ${T.border}`,background:T.card,textAlign:"center"}}>
-        <p style={{fontSize:"11px",color:T.muted}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
+        <p style={{fontSize:"11px",color:T.muted}}>&#169; {new Date().getFullYear()} JUNGLE. All rights reserved.</p>
       </footer>
       )}
 
