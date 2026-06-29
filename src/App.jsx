@@ -5659,7 +5659,7 @@ function AttendeeView({ data }) {
   const vwAV = useWindowWidth();
   const isMobileAV = vwAV < 480;
   return (
-    <div style={{minHeight:"100vh",background:T2.bg,color:T2.text,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",display:"flex",flexDirection:"column"}}>
+    <div style={{minHeight:"100vh",background:T2.bg,color:T2.text,fontFamily:"'Hanken Grotesk',system-ui,sans-serif",display:"flex",flexDirection:"column"}}>
       {/* Header */}
       <div style={{padding:isMobileAV?"12px 16px":"16px 28px",borderBottom:`1px solid ${T2.border}`,background:T2.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
