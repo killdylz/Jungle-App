@@ -5,9 +5,9 @@ const SPOTIFY_CLIENT_ID = "594e4864b902473c86c939c9cccce420";
 const REDIRECT_URI      = window.location.origin + window.location.pathname;
 const IS_CONFIGURED     = SPOTIFY_CLIENT_ID !== "YOUR_CLIENT_ID_HERE";
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-const DARK  = { bg:"#060D18", card:"#0C1926", navy:"#0F2040", border:"#1A3556", accent:"#E94560", green:"#1DB954", text:"#E2E8F0", muted:"#7A94AA" };
-const LIGHT = { bg:"#F0F4F8", card:"#FFFFFF",  navy:"#E8EDF5", border:"#CBD8E4", accent:"#E94560", green:"#1DB954", text:"#1A2B3C", muted:"#5A6F80" };
+// ─── Theme — Canopy skin (matches design mockups) ─────────────────────────────
+const DARK  = { bg:"#0A0F0C", card:"#0F1611", navy:"#141D17", border:"rgba(255,255,255,.07)", accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" };
+const LIGHT = { bg:"#F0F4F8", card:"#FFFFFF",  navy:"#E8EDF5", border:"#CBD8E4",              accent:"#3DBF7A", green:"#1DB954", text:"#1A2B3C", muted:"#5A6F80" };
 const T = { ...DARK };
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
