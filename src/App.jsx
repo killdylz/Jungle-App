@@ -7644,7 +7644,7 @@ export default function App() {
         {view==="music"            && <MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>}
         {view==="schedule"         && <CalendarScreen onBack={()=>setView("dashboard")}/>}
         {view==="members"          && <MemberScreen onBack={()=>setView("dashboard")}/>}
-        {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
+        {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={setActiveSkinId} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
       </div>
 
       {/* ── Side Nav Drawer ── */}
