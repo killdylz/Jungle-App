@@ -1,6 +1,4 @@
 @echo off
 cd /d "%~dp0.."
-git log --oneline -5 > "%~dp0git-log.txt" 2>&1
-git diff HEAD --stat >> "%~dp0git-log.txt" 2>&1
-git status --short >> "%~dp0git-log.txt" 2>&1
-echo === %time% DONE === >> "%~dp0git-log.txt"
+git log --oneline -8 > "%~dp0git-log.txt" 2>&1
+echo === %time% === >> "%~dp0git-log.txt"
