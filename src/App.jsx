@@ -567,10 +567,22 @@ function useSpotify() {
   useEffect(() => {
     if (!sdkReady||!token) return;
     let live = true;
-    const p = new window.Spotify.Player({ name:"Jungle", getOAuthToken:async cb=>{ const t=await getToken(); if(t) cb(t); }, volume:0.8 });
-    p.addListener("ready", ({device_id})=>{ if(live) { setDeviceId(device_id); setSpError(null); } });
+    const p = new window.Spotify.Player({ name:"Jungle 🌿", getOAuthToken:async cb=>{ const t=await getToken(); if(t) cb(t); }, volume:0.8 });
+    p.addListener("ready", ({device_id})=>{
+      if (!live) return;
+      setDeviceId(device_id);
+      setSpError(null);
+      // Default active device to browser player unless user already picked one
+      setActiveDeviceId(prev => prev || device_id);
+      // Refresh device list once SDK is ready
+      apiGetDevices().then(devs => { if(live) setDevices(devs); }).catch(()=>{});
+    });
     p.addListener("not_ready", ()=>{ if(live) { setDeviceId(null); setSpError("Spotify player disconnected. Try refreshing the page."); } });
-    p.addListener("player_state_changed", state=>{ if(!state||!live) return; setNowPlaying(state.track_window?.current_track??null); setSpPaused(state.paused); });
+    p.addListener("player_state_changed", state=>{
+      if(!state||!live) return;
+      setNowPlaying(state.track_window?.current_track??null);
+      setSpPaused(state.paused);
+    });
     p.addListener("authentication_error", ({message})=>{ if(live) setSpError("Spotify authentication failed: " + (message||"session expired. Please re-login.")); });
     p.addListener("account_error", ({message})=>{ if(live) setSpError("Spotify account error: " + (message||"Premium required for playback.")); });
     p.connect();
@@ -578,8 +590,14 @@ function useSpotify() {
     return ()=>{ live=false; p.disconnect(); };
   }, [sdkReady, token]);
 
-  const logout = () => { clearTokens(); player?.disconnect(); setToken(null); setPlayer(null); setDeviceId(null); setNowPlaying(null); setSdkReady(false); setProfile(null); setSpError(null); };
-  return { token, player, deviceId, nowPlaying, spPaused, authError, spError, profile, logout };
+  const refreshDevices = async () => {
+    const devs = await apiGetDevices().catch(()=>[]);
+    setDevices(devs);
+    return devs;
+  };
+
+  const logout = () => { clearTokens(); player?.disconnect(); setToken(null); setPlayer(null); setDeviceId(null); setActiveDeviceId(null); setDevices([]); setNowPlaying(null); setSdkReady(false); setProfile(null); setSpError(null); };
+  return { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, spPaused, authError, spError, profile, logout };
 }
 
 // ─── General helpers ──────────────────────────────────────────────────────────
