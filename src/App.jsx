@@ -6583,10 +6583,10 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const handleDisplayMode = () => { goingToDisplayRef.current = true; onDisplayMode(); };
   useEffect(() => {
     return () => {
-      if (!goingToDisplayRef.current && player) player.pause().catch(()=>{});
+      if (!goingToDisplayRef.current) pauseDevice();
       goingToDisplayRef.current = false;
     };
-  }, [player]);
+  }, [player, playDeviceId]);
 
   return (
     <div style={{
