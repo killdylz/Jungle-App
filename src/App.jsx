@@ -5109,7 +5109,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                 cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0
               }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
               <div>
-                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px"}}>
+                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px",fontFamily:"'Space Grotesk',sans-serif"}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 <p style={{fontSize:"12px",color:T.muted}}>
