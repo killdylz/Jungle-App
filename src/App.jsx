@@ -2513,10 +2513,10 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
               <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
             </div>
             {/* Search */}
-            <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:0,flex:"0 0 180px"}}>
-              <Search size={13} color={T.muted}/>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"999px",padding:"8px 16px",minWidth:0,flex:"0 0 220px"}}>
+              <Search size={14} color={T.muted}/>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates…"
-                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"12px",width:"100%"}}/>
+                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"13px",width:"100%"}}/>
             </div>
           </div>
 
