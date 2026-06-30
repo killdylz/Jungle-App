@@ -2620,7 +2620,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         <div>
           <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
             letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} · {dateStr}</div>
-          <h1 style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:isMobile?"20px":"26px",
+          <h1 style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:isMobile?"20px":"26px",
             fontWeight:"800", color:T.text, margin:0, lineHeight:1.1}}>
             {greeting}, {first} 👋
           </h1>
@@ -2663,7 +2663,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               background:[T.accent, "#8B5CF6", "#06B6D4", "#F97316"][i], borderRadius:"3px 3px 0 0"}}/>
             <div style={{fontSize:"9px", fontWeight:"800", color:T.muted, textTransform:"uppercase",
               letterSpacing:"1.2px", marginBottom:"6px"}}>{k.label}</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:isMobile?"22px":"28px",
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:isMobile?"22px":"28px",
               fontWeight:"800", color:T.text, lineHeight:1, marginBottom:"5px"}}>{k.value}</div>
             <div style={{fontSize:"11px", fontWeight:"600",
               color: k.trendUp === true ? T.accent : k.trendUp === false ? "#EF4444" : T.muted}}>
@@ -2683,7 +2683,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           padding:"18px", minWidth:0}}>
           <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px"}}>
             <div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"15px", fontWeight:"700", color:T.text}}>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"15px", fontWeight:"700", color:T.text}}>
                 Today's schedule
               </div>
               <div style={{fontSize:"11px", color:T.muted, marginTop:"2px"}}>
@@ -2710,7 +2710,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                   <div style={{display:"flex", alignItems:"flex-start", gap:"12px"}}>
                     {/* Time */}
                     <div style={{flexShrink:0, textAlign:"center", minWidth:"38px"}}>
-                      <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"15px", fontWeight:"700",
+                      <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"15px", fontWeight:"700",
                         color:T.text, lineHeight:1}}>{cls.time}</div>
                       <div style={{fontSize:"9px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
                         letterSpacing:"0.8px"}}>{cls.period}</div>
@@ -2743,7 +2743,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
 
                     {/* BPM badge */}
                     <div style={{flexShrink:0, textAlign:"right"}}>
-                      <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"16px", fontWeight:"800",
+                      <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"16px", fontWeight:"800",
                         color:cls.color}}>{cls.bpm}</div>
                       <div style={{fontSize:"9px", color:T.muted, fontWeight:"600", textTransform:"uppercase"}}>BPM</div>
                     </div>
@@ -2777,7 +2777,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               <div style={{width:"28px", height:"28px", borderRadius:"8px", background:T.accent+"22",
                 display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🧠</div>
               <div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"12px", fontWeight:"800",
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"12px", fontWeight:"800",
                   color:T.accent, textTransform:"uppercase", letterSpacing:"1px"}}>Jungle Intelligence</div>
               </div>
             </div>
@@ -2810,7 +2810,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                 <div style={{width:"28px", height:"28px", borderRadius:"8px", background:"#8B5CF622",
                   display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🎧</div>
                 <div>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"12px", fontWeight:"800",
+                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"12px", fontWeight:"800",
                     color:"#8B5CF6", textTransform:"uppercase", letterSpacing:"1px"}}>AUTO-DJ</div>
                 </div>
               </div>
@@ -2824,7 +2824,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             {djActive ? (
               <>
                 <div style={{display:"flex", alignItems:"baseline", gap:"4px", marginBottom:"6px"}}>
-                  <span style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"36px", fontWeight:"800",
+                  <span style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"36px", fontWeight:"800",
                     color:T.text, lineHeight:1}}>{djBpm > 0 ? djBpm : 128}</span>
                   <span style={{fontSize:"13px", fontWeight:"600", color:"#8B5CF6"}}>BPM</span>
                 </div>
@@ -2861,7 +2861,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             <button onClick={onNewSession}
               style={{width:"100%", padding:"14px", background:T.accent, color:"#0A0F0C", border:"none",
                 borderRadius:"12px", fontSize:"14px", fontWeight:"800", cursor:"pointer",
-                fontFamily:"'Space Grotesk',sans-serif", display:"flex", alignItems:"center",
+                fontFamily:`'${T.displayFont}',sans-serif`, display:"flex", alignItems:"center",
                 justifyContent:"center", gap:"8px"}}>
               <Plus size={16}/> New Class Session
             </button>
@@ -2902,7 +2902,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         <button onClick={onNewSession}
           style={{width:"100%", padding:"15px", background:T.accent, color:"#0A0F0C", border:"none",
             borderRadius:"12px", fontSize:"15px", fontWeight:"800", cursor:"pointer", marginTop:"16px",
-            fontFamily:"'Space Grotesk',sans-serif", display:"flex", alignItems:"center",
+            fontFamily:`'${T.displayFont}',sans-serif`, display:"flex", alignItems:"center",
             justifyContent:"center", gap:"8px"}}>
           <Plus size={17}/> New Class Session
         </button>
@@ -2957,7 +2957,7 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
           {/* Panel header */}
           <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>
-              <p style={{fontSize:"20px",fontWeight:"700",color:T.text,fontFamily:"'Space Grotesk',sans-serif"}}>Choose a class type</p>
+              <p style={{fontSize:"20px",fontWeight:"700",color:T.text,fontFamily:`'${T.displayFont}',sans-serif`}}>Choose a class type</p>
               <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
             </div>
             {/* Search */}
@@ -3172,7 +3172,7 @@ function IntegrationsScreen({onBack}) {
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
-        <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text,margin:0}}>Integrations</h2>
+        <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text,margin:0}}>Integrations</h2>
       </div>
 
       {/* Card */}
@@ -3180,7 +3180,7 @@ function IntegrationsScreen({onBack}) {
         {/* Header row */}
         <div style={{padding:"24px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
           <div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"20px",fontWeight:"700",color:T.text}}>Connected apps</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Connected apps</div>
             <div style={{fontSize:"12px",color:T.muted,marginTop:"3px"}}>6 active · syncs in real time</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:T.accent,padding:"7px 13px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`}}>
@@ -3208,7 +3208,7 @@ function IntegrationsScreen({onBack}) {
               <div key={idx} style={{background:T.card,border:`1px solid ${borderCol}`,borderRadius:"14px",padding:"18px"}}>
                 {/* Header row */}
                 <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"13px"}}>
-                  <div style={{width:"42px",height:"42px",borderRadius:"11px",background:item.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"800",color:"#fff",fontSize:item.iconText?.length===1?"18px":"15px"}}>
+                  <div style={{width:"42px",height:"42px",borderRadius:"11px",background:item.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:`'${T.displayFont}',sans-serif`,fontWeight:"800",color:"#fff",fontSize:item.iconText?.length===1?"18px":"15px"}}>
                     {item.icon || item.iconText}
                   </div>
                   <div style={{flex:1}}>
@@ -3296,7 +3296,7 @@ function AnalyticsScreen({onBack}) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
           <div>
-            <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"18px":"20px",fontWeight:"700",color:T.text,margin:0}}>Studio analytics</h2>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"20px",fontWeight:"700",color:T.text,margin:0}}>Studio analytics</h2>
             <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Barry's · Shoreditch</div>
           </div>
         </div>
@@ -3321,7 +3321,7 @@ function AnalyticsScreen({onBack}) {
         {kpis.map((k,i)=>(
           <div key={i} style={{background:T.card,border:`1px solid ${k.warn?"#F59E0B40":T.border}`,borderRadius:"14px",padding:"18px"}}>
             <div style={{fontSize:"10px",letterSpacing:"1px",color:T.muted,fontWeight:"700",textTransform:"uppercase"}}>{k.label}</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"28px",fontWeight:"700",marginTop:"6px",color:k.warn?"#F59E0B":T.text}}>{k.value}</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"28px",fontWeight:"700",marginTop:"6px",color:k.warn?"#F59E0B":T.text}}>{k.value}</div>
             <div style={{fontSize:"12px",marginTop:"3px",color:k.warn?"#F59E0B":k.up?T.accent:"#EF4444"}}>{k.delta}</div>
           </div>
         ))}
@@ -3332,7 +3332,7 @@ function AnalyticsScreen({onBack}) {
         {/* Attendance chart */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Attendance & fill rate</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Attendance & fill rate</div>
             <div style={{fontSize:"11px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>
               <span style={{width:"8px",height:"8px",borderRadius:"2px",background:T.accent,display:"inline-block"}}/>Attendance
               <span style={{marginLeft:"8px",width:"8px",height:"8px",borderRadius:"2px",background:"#E0B85B",display:"inline-block"}}/>Fill %
@@ -3356,7 +3356,7 @@ function AnalyticsScreen({onBack}) {
 
         {/* Class type distribution */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Most-booked class types</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Most-booked class types</div>
           <div style={{display:"flex",flexDirection:"column",gap:"11px"}}>
             {classTypes.map((item,i)=>(
               <div key={i}>
@@ -3379,7 +3379,7 @@ function AnalyticsScreen({onBack}) {
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
             <div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>RPE distribution</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>RPE distribution</div>
               <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> · reported exertion · last 12 wks</div>
             </div>
           </div>
@@ -3401,7 +3401,7 @@ function AnalyticsScreen({onBack}) {
 
         {/* Trainer performance */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer performance</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer performance</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {trainers.map((t,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",background:T.navy,borderRadius:"10px",border:`1px solid ${T.border}`}}>
@@ -3412,7 +3412,7 @@ function AnalyticsScreen({onBack}) {
                   <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</div>
                   <div style={{fontSize:"11px",color:T.muted}}>{t.fill} fill · NPS {t.nps}</div>
                 </div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>{t.score}</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{t.score}</div>
               </div>
             ))}
           </div>
@@ -3423,7 +3423,7 @@ function AnalyticsScreen({onBack}) {
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.2fr 1fr",gap:"14px",marginBottom:"14px"}}>
         {/* Music that fills rooms */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Music that fills rooms</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Music that fills rooms</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {musicImpact.map((m,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<musicImpact.length-1?`1px solid ${T.border}`:"none"}}>
@@ -3439,7 +3439,7 @@ function AnalyticsScreen({onBack}) {
 
         {/* Best BPM by class */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Best BPM by class</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Best BPM by class</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {bpmByClass.map((b,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
@@ -3447,7 +3447,7 @@ function AnalyticsScreen({onBack}) {
                   <div style={{width:"8px",height:"8px",borderRadius:"50%",background:b.color}}/>
                   <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{b.label}</span>
                 </div>
-                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:b.color}}>{b.bpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></span>
+                <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:b.color}}>{b.bpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></span>
               </div>
             ))}
           </div>
@@ -3458,7 +3458,7 @@ function AnalyticsScreen({onBack}) {
       <div style={{background:T.card,border:`1px solid #F59E0B40`,borderRadius:"14px",padding:"18px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
           <div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Churn risk</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Churn risk</div>
             <div style={{fontSize:"11px",color:"#F59E0B",marginTop:"2px"}}>47 members flagged · no visit in 10+ days</div>
           </div>
           <button style={{padding:"7px 14px",background:"#F59E0B20",border:"1px solid #F59E0B50",borderRadius:"7px",cursor:"pointer",color:"#F59E0B",fontSize:"12px",fontWeight:"700"}}>Message all</button>
@@ -3679,7 +3679,7 @@ function CalendarScreen({onBack}) {
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
-            <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Planning & schedule</h2>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Planning & schedule</h2>
             <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
           </div>
         </div>
@@ -3712,7 +3712,7 @@ function CalendarScreen({onBack}) {
           {visibleDays.map((d,i)=>(
             <div key={d} style={{padding:"10px 8px",background:T.navy,borderLeft:`1px solid ${T.border}`,textAlign:"center"}}>
               <div style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{d}</div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{dayDates[i]}</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{dayDates[i]}</div>
             </div>
           ))}
         </div>
@@ -3783,7 +3783,7 @@ function CalendarScreen({onBack}) {
             <div style={{width:"28px",height:"28px",borderRadius:"8px",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Jungle Intelligence</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Jungle Intelligence</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {aiTips.filter(t=>!dismissedTips.includes(t.id)).map((tip,i)=>(
@@ -3803,7 +3803,7 @@ function CalendarScreen({onBack}) {
 
         {/* Trainer load */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load · this week</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load · this week</div>
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
             {trainers.map((t,i)=>(
               <div key={i}>
@@ -3896,7 +3896,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
-            <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub · Auto-DJ</h2>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub · Auto-DJ</h2>
             <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify Premium · {queueTracks.length} tracks queued</div>
           </div>
         </div>
@@ -3928,7 +3928,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                 </div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   {currentBpm > 0
-                    ? <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"32px",fontWeight:"700",color:T.accent}}>{currentBpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></div>
+                    ? <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"32px",fontWeight:"700",color:T.accent}}>{currentBpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></div>
                     : <div style={{fontSize:"13px",color:T.muted}}>BPM unknown</div>
                   }
                   <div style={{display:"flex",gap:"8px"}}>
@@ -4000,7 +4000,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                     {requests.map(r=>(
                       <div key={r.id} style={{padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
                         <div style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
-                          <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Space Grotesk',sans-serif",fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
+                          <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
                             <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member}{r.bpm?` · ${r.bpm} BPM`:""}{r.note?` · ${r.note}`:""}</div>
@@ -4126,7 +4126,7 @@ function MemberScreen({onBack}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
-        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:T.text}}>Member App</div>
+        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:T.text}}>Member App</div>
         <div style={{marginLeft:"auto",fontSize:"11px",color:T.muted}}>Sam Ellis</div>
         <div style={{width:"30px",height:"30px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>SE</div>
       </div>
@@ -4139,7 +4139,7 @@ function MemberScreen({onBack}) {
           <div style={{padding:"20px"}}>
             <div style={{marginBottom:"18px"}}>
               <div style={{fontSize:"12px",color:T.muted,fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam 👋</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam 👋</div>
               <div style={{padding:"14px",background:T.card,border:`1px solid ${T.accent}50`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
                 <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
                 <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Strength Lab</div>
@@ -4157,7 +4157,7 @@ function MemberScreen({onBack}) {
                 <div key={cls.id} onClick={()=>{setSelectedClass(cls);setTab("detail");}}
                   style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",cursor:"pointer"}}>
                   <div style={{width:"44px",height:"44px",borderRadius:"10px",background:`${CAT_COLOR[cls.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[cls.type]||T.accent}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"800",color:CAT_COLOR[cls.type]||T.accent}}>{cls.date.split(" ")[0][0]+cls.date.split(" ")[0].slice(-2)}</span>
+                    <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:CAT_COLOR[cls.type]||T.accent}}>{cls.date.split(" ")[0][0]+cls.date.split(" ")[0].slice(-2)}</span>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
@@ -4177,7 +4177,7 @@ function MemberScreen({onBack}) {
         {tab==="detail" && (
           <div style={{padding:"20px"}}>
             <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||T.accent}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||T.accent,marginBottom:"8px"}}>{classDetail.type} · {classDetail.dur}</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"24px",fontWeight:"800",color:T.text,marginBottom:"4px"}}>{classDetail.name}</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:T.text,marginBottom:"4px"}}>{classDetail.name}</div>
             <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
               <div style={{width:"36px",height:"36px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>{classDetail.coach[0]}</div>
               <div>
@@ -4191,7 +4191,7 @@ function MemberScreen({onBack}) {
               </div>
             </div>
 
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
             <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"16px"}}>
               {stagesPreview.map((s,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px",borderLeft:`3px solid ${s.color}`}}>
@@ -4219,13 +4219,13 @@ function MemberScreen({onBack}) {
         {tab==="live" && (
           <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:"20px"}}>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:T.text}}>Sunrise HIIT</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:T.text}}>Sunrise HIIT</div>
               <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>● LIVE</div>
             </div>
 
             <div style={{padding:"3px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted,marginBottom:"16px"}}>ROUND 3 / 8</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"72px",fontWeight:"800",color:T.text,lineHeight:"1",marginBottom:"8px"}}>00:42</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"22px",fontWeight:"700",color:T.accent,marginBottom:"4px"}}>Kettlebell Swings</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"72px",fontWeight:"800",color:T.text,lineHeight:"1",marginBottom:"8px"}}>00:42</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"22px",fontWeight:"700",color:T.accent,marginBottom:"4px"}}>Kettlebell Swings</div>
             <div style={{fontSize:"13px",color:T.muted,marginBottom:"24px"}}>×20 · 24kg</div>
 
             <div style={{padding:"12px 16px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
@@ -4234,7 +4234,7 @@ function MemberScreen({onBack}) {
                 <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>Pump It — Reso</div>
                 <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>now playing</div>
               </div>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:T.muted}}> BPM</span></div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:T.muted}}> BPM</span></div>
             </div>
 
             <button style={{width:"100%",padding:"12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"12px"}}>
@@ -4255,7 +4255,7 @@ function MemberScreen({onBack}) {
         {/* ── BOOK / SCHEDULE ── */}
         {tab==="book" && (
           <div style={{padding:"20px"}}>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Book a class</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Book a class</div>
 
             {/* Week strip */}
             <div style={{display:"flex",gap:"8px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px"}}>
@@ -4266,7 +4266,7 @@ function MemberScreen({onBack}) {
                   color:i===1?"#0A0F0C":T.text,
                 }}>
                   <div style={{fontSize:"9px",fontWeight:"700",letterSpacing:"0.5px"}}>{d.split("\n")[0]}</div>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700"}}>{d.split("\n")[1]}</div>
+                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700"}}>{d.split("\n")[1]}</div>
                 </div>
               ))}
             </div>
@@ -4285,7 +4285,7 @@ function MemberScreen({onBack}) {
                 {time:"19:30",name:"Spin Ride",dur:"45m",status:"Waitlist 3",full:true},
               ].map((cls,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.muted,minWidth:"44px"}}>{cls.time}</div>
+                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:T.muted,minWidth:"44px"}}>{cls.time}</div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
                     <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
@@ -4310,7 +4310,7 @@ function MemberScreen({onBack}) {
             <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px"}}>
               <div style={{width:"56px",height:"56px",borderRadius:"50%",background:T.accent+"22",border:`2px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",fontWeight:"800",color:T.accent,flexShrink:0}}>SE</div>
               <div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>Sam Ellis</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>Sam Ellis</div>
                 <div style={{fontSize:"12px",color:T.muted}}>Member since 2024 · Shoreditch</div>
               </div>
             </div>
@@ -4318,24 +4318,24 @@ function MemberScreen({onBack}) {
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"20px"}}>
               {[{val:"128",label:"classes"},{val:"7.6",label:"avg RPE"},{val:"12wk",label:"streak"}].map((s,i)=>(
                 <div key={i} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",textAlign:"center"}}>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"24px",fontWeight:"800",color:T.accent}}>{s.val}</div>
+                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:T.accent}}>{s.val}</div>
                   <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>{s.label}</div>
                 </div>
               ))}
             </div>
 
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
             <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"20px"}}>
               {[{type:"HIIT",n:48,color:"#F59E0B"},{type:"Strength",n:36,color:"#8B5CF6"},{type:"Hyrox",n:24,color:"#22D3A6"}].map((c,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"8px"}}>
                   <div style={{width:"8px",height:"8px",borderRadius:"50%",background:c.color}}/>
                   <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:T.text}}>{c.type}</span>
-                  <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:c.color}}>{c.n}</span>
+                  <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:c.color}}>{c.n}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
             <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px"}}>
               <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
                 {["House","Drum & Bass","Hip-hop"].map(g=>(
@@ -5628,7 +5628,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
     <div style={{width:"300px",display:"flex",flexDirection:"column",flexShrink:0,borderLeft:`1px solid ${T.border}`,background:T.card,overflow:"hidden"}}>
       {/* Header */}
       <div style={{padding:"16px 18px 12px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>Auto-DJ</div>
+        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>Auto-DJ</div>
         <div style={{fontSize:"11px",color:T.muted}}>Spotify BPM-matched per stage</div>
       </div>
 
@@ -5888,7 +5888,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           </button>
           <div style={{minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
-              <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"21px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
+              <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"21px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
               <button onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px",display:"flex",flexShrink:0}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
@@ -6342,7 +6342,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               </button>
               <div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{stage?.name||"Session"}</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{stage?.name||"Session"}</div>
                 <div style={{fontSize:"11px",color:T.muted}}>
                   {stages.length} stages · {fmt(totalDur)} total
                 </div>
@@ -6357,12 +6357,12 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
               {/* ELAPSED */}
               <div style={{textAlign:"center",flexShrink:0}}>
                 <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>ELAPSED</div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{fmt(liveState.elapsed)}</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{fmt(liveState.elapsed)}</div>
               </div>
               {/* ROUND */}
               <div style={{textAlign:"center",flexShrink:0}}>
                 <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>STAGE</div>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>
                   <span style={{color:T.accent}}>{liveState.idx+1}</span>/{stages.length}
                 </div>
               </div>
@@ -6381,12 +6381,12 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
                 </div>
 
                 {/* Big timer */}
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"80px":"120px",fontWeight:"700",lineHeight:"1",letterSpacing:"-3px",color:cfg.color,textShadow:`0 0 60px ${cfg.color}40`}}>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"80px":"120px",fontWeight:"700",lineHeight:"1",letterSpacing:"-3px",color:cfg.color,textShadow:`0 0 60px ${cfg.color}40`}}>
                   {fmt(remaining)}
                 </div>
 
                 {/* Stage name */}
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"22px":"28px",fontWeight:"700",color:T.text,textAlign:"center",marginTop:"4px"}}>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"22px":"28px",fontWeight:"700",color:T.text,textAlign:"center",marginTop:"4px"}}>
                   {stage?.name||"Complete"}
                 </div>
                 {stage?.exercises?.[0] && (
@@ -6502,7 +6502,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
                           <div style={{fontSize:"11px",color:T.muted}}>{nowPlaying.artists?.[0]?.name} · now playing</div>
                         </div>
                         {nowPlaying.bpm && <div style={{textAlign:"center",flexShrink:0}}>
-                          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>{Math.round(nowPlaying.bpm)}</div>
+                          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{Math.round(nowPlaying.bpm)}</div>
                           <div style={{fontSize:"9px",color:T.muted,letterSpacing:"1px"}}>BPM</div>
                         </div>}
                       </div>
@@ -6631,7 +6631,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                 cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0
               }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
               <div>
-                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px",fontFamily:"'Space Grotesk',sans-serif"}}>
+                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px",fontFamily:`'${T.displayFont}',sans-serif`}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 <p style={{fontSize:"12px",color:T.muted}}>
@@ -6692,7 +6692,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                         </span>
                       </div>
                       {/* Stage name */}
-                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px",fontFamily:"'Space Grotesk',sans-serif"}}>{s.name}</p>
+                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px",fontFamily:`'${T.displayFont}',sans-serif`}}>{s.name}</p>
                       {/* Duration + BPM */}
                       <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>
                         {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
@@ -7351,6 +7351,9 @@ export default function App() {
       ? { ..._baseSkin.tokens, accent: gymBranding.accentColor, green: gymBranding.secondColor || _baseSkin.tokens.green }
       : { ..._baseSkin.tokens };
   Object.assign(T, _resolvedTokens);
+  // Make font pair available to all components via T
+  T.displayFont = _baseSkin.fonts.display || "Space Grotesk";
+  T.bodyFont    = (_baseSkin.fonts.body || "Hanken Grotesk");
   applySkinCSS(_resolvedTokens);
 
   // ── Inject skin font pair ────────────────────────────────────────────────────
@@ -7663,7 +7666,7 @@ export default function App() {
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                 <JungleLogo size={22}/>
-                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
+                <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
               </div>
               <button onClick={()=>setShowNav(false)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:"16px",lineHeight:"1"}}>✕</button>
             </div>
