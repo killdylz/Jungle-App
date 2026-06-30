@@ -3890,6 +3890,227 @@ function MemberScreen({onBack}) {
 }
 
 
+// ─── BrandStudioScreen ────────────────────────────────────────────────────────
+function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange}) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
+  const isTablet = vw < 768;
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [step, setStep] = React.useState(0);
+  const [recommended, setRecommended] = React.useState(null);
+  const [selectedSkin, setSelectedSkin] = React.useState("canopy");
+  const [files, setFiles] = React.useState([]);
+  const fileRef = React.useRef(null);
+
+  const analyzeSteps = [
+    "Extracting colour palette from photos…",
+    "Matching typography to your logo…",
+    "Reading tone from brand guidelines…",
+    "Composing your Jungle identity…",
+  ];
+
+  const runAnalysis = () => {
+    setAnalyzing(true);
+    setStep(0);
+    const timer = (i) => {
+      if (i >= analyzeSteps.length) {
+        setAnalyzing(false);
+        setRecommended({name:"Ember",accent:"#FF6A3D",bg:"#0C0B0A",font:"Space Grotesk",vibe:["Bold","High-energy","Urban","Confident"]});
+        return;
+      }
+      setStep(i);
+      setTimeout(()=>timer(i+1), 900);
+    };
+    timer(0);
+  };
+
+  const skins = [
+    {id:"canopy", name:"Canopy", desc:"Wellness",  accent:"#7BE3A4", bg:"#0A0F0C"},
+    {id:"pulse",  name:"Pulse",  desc:"HIIT",      accent:"#D6FF3D", bg:"#08090A"},
+    {id:"atelier",name:"Atelier",desc:"Luxury",    accent:"#C8A86A", bg:"#0C0C0E"},
+    {id:"ember",  name:"Ember",  desc:"Brand-Studio",accent:"#FF6A3D",bg:"#0C0B0A"},
+  ];
+
+  const applyRecommended = () => {
+    if (!recommended) return;
+    onBrandingChange({...gymBranding, accentColor: recommended.accent, fontFamily:"Space Grotesk"});
+  };
+
+  const applySkin = (skin) => {
+    const map = {
+      canopy:  {accentColor:"#7BE3A4", secondColor:"#CFF5DE"},
+      pulse:   {accentColor:"#D6FF3D", secondColor:"#B8E000"},
+      atelier: {accentColor:"#C8A86A", secondColor:"#A08040"},
+      ember:   {accentColor:"#FF6A3D", secondColor:"#FF9B7A"},
+    };
+    onBrandingChange({...gymBranding, ...map[skin]});
+    setSelectedSkin(skin);
+  };
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"28px",boxSizing:"border-box"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"22px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div>
+          <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Brand Studio</h2>
+          <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Upload your brand — Jungle designs the identity, then reskins every surface</div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"18px"}}>
+
+        {/* Left: Upload + analyze */}
+        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+          {/* File drop */}
+          <div style={{background:T.card,border:`1px dashed ${T.border}`,borderRadius:"14px",padding:"24px",textAlign:"center"}}>
+            <div style={{fontSize:"32px",marginBottom:"10px"}}>🎨</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Drop in your brand</div>
+            <div style={{fontSize:"12px",color:T.muted,marginBottom:"14px"}}>Logo · guidelines · photos · brand site</div>
+            <input ref={fileRef} type="file" multiple accept="image/*,.pdf" style={{display:"none"}}
+              onChange={e=>setFiles(prev=>[...prev,...Array.from(e.target.files).map(f=>f.name)])}/>
+            <button onClick={()=>fileRef.current?.click()}
+              style={{padding:"9px 20px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"13px",fontWeight:"700"}}>
+              Browse files
+            </button>
+            {files.length>0 && (
+              <div style={{marginTop:"12px",display:"flex",flexDirection:"column",gap:"4px"}}>
+                {files.map((f,i)=>(
+                  <div key={i} style={{fontSize:"12px",color:T.muted,padding:"4px 8px",background:T.navy,borderRadius:"6px"}}>{f}</div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Analyze button */}
+          {!analyzing && !recommended && (
+            <button onClick={runAnalysis}
+              style={{width:"100%",padding:"14px",background:T.accent,border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"#0A0F0C",fontFamily:"'Space Grotesk',sans-serif"}}>
+              Analyse & design my brand
+            </button>
+          )}
+
+          {/* Analysis progress */}
+          {analyzing && (
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"20px"}}>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Reading your brand…</div>
+              <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                {analyzeSteps.map((s,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                    <div style={{width:"18px",height:"18px",borderRadius:"50%",flexShrink:0,
+                      background:i<step?T.accent:i===step?"transparent":T.navy,
+                      border:`1px solid ${i<=step?T.accent:T.border}`,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                    }}>
+                      {i<step && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0A0F0C" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                      {i===step && <div style={{width:"6px",height:"6px",borderRadius:"50%",background:T.accent,animation:"pulse 1s infinite"}}/>}
+                    </div>
+                    <span style={{fontSize:"12px",color:i<=step?T.text:T.muted}}>{s}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommended result */}
+          {recommended && (
+            <div style={{background:T.card,border:`1px solid ${T.accent}50`,borderRadius:"14px",padding:"18px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>RECOMMENDED</div>
+              <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
+                <div style={{width:"48px",height:"48px",borderRadius:"10px",background:recommended.accent,flexShrink:0}}/>
+                <div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"800",color:T.text}}>{recommended.name} — built from your brand</div>
+                  <div style={{display:"flex",gap:"6px",marginTop:"4px",flexWrap:"wrap"}}>
+                    {recommended.vibe.map(v=>(
+                      <span key={v} style={{padding:"2px 8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"4px",fontSize:"10px",color:T.muted}}>{v}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
+                <div style={{padding:"10px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:"10px",color:T.muted,marginBottom:"4px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>PALETTE FROM PHOTOS</div>
+                  <div style={{display:"flex",gap:"6px"}}>
+                    {[recommended.accent,"#FF9B7A","#0C0B0A","#2A1810"].map((c,i)=>(
+                      <div key={i} style={{width:"22px",height:"22px",borderRadius:"5px",background:c,border:"1px solid rgba(255,255,255,0.1)"}}/>
+                    ))}
+                  </div>
+                </div>
+                <div style={{padding:"10px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:"10px",color:T.muted,marginBottom:"4px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>TYPE PAIRING</div>
+                  <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{recommended.font}</div>
+                  <div style={{fontSize:"10px",color:T.muted}}>Hanken Grotesk · body</div>
+                </div>
+              </div>
+              <button onClick={applyRecommended}
+                style={{width:"100%",padding:"12px",background:recommended.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:"white"}}>
+                Apply to all surfaces
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: skin templates + live preview */}
+        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Or start from a template</div>
+            <div style={{fontSize:"11px",color:T.muted,marginBottom:"14px"}}>Each skin reskins every surface instantly</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"10px"}}>
+              {skins.map(skin=>(
+                <div key={skin.id} onClick={()=>applySkin(skin.id)} style={{
+                  padding:"14px",
+                  background:selectedSkin===skin.id?`${skin.accent}15`:T.navy,
+                  border:`1px solid ${selectedSkin===skin.id?skin.accent:T.border}`,
+                  borderRadius:"10px",cursor:"pointer",
+                  boxShadow:selectedSkin===skin.id?`0 0 0 2px ${skin.accent}30`:"none",
+                  transition:"all 0.15s",
+                }}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
+                    <div style={{width:"20px",height:"20px",borderRadius:"5px",background:skin.accent,flexShrink:0}}/>
+                    <div>
+                      <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{skin.name}</div>
+                      <div style={{fontSize:"10px",color:T.muted}}>{skin.desc}</div>
+                    </div>
+                  </div>
+                  <div style={{height:"4px",borderRadius:"2px",background:`linear-gradient(to right, ${skin.accent}, ${skin.bg})`}}/>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Live preview mini */}
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>LIVE PREVIEW · UPDATES INSTANTLY</div>
+            <div style={{background:"#050705",borderRadius:"10px",padding:"14px",border:`1px solid rgba(255,255,255,0.06)`}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"800",color:T.accent||"#7BE3A4"}}>JUNGLE</div>
+                <div style={{display:"flex",gap:"8px"}}>
+                  {[["FILL","92%"],["RPE","7.4"],["NPS","71"]].map(([l,v])=>(
+                    <div key={l} style={{textAlign:"center"}}>
+                      <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"13px",fontWeight:"800",color:T.accent||"#7BE3A4"}}>{v}</div>
+                      <div style={{fontSize:"9px",color:"#5a6f58",fontWeight:"700"}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{fontSize:"10px",color:"#5a6f58",marginBottom:"6px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>Today's schedule</div>
+              {["06:00  Sunrise HIIT","12:15  Hyrox Sim","18:30  Strength Lab"].map((c,i)=>(
+                <div key={i} style={{fontSize:"11px",color:i===0?T.text||"#E8EFE9":"#5a6f58",padding:"4px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>{c}</div>
+              ))}
+              <div style={{marginTop:"10px",padding:"8px 10px",background:"rgba(123,227,164,0.06)",border:"1px solid rgba(123,227,164,0.2)",borderRadius:"8px"}}>
+                <div style={{fontSize:"10px",color:T.muted,marginBottom:"2px"}}>TONIGHT · 18:30</div>
+                <div style={{fontSize:"12px",fontWeight:"700",color:T.text||"#E8EFE9"}}>Strength Lab</div>
+                <div style={{fontSize:"10px",color:"#5a6f58"}}>with Priya · 45 min</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ─── PlaylistImportModal ──────────────────────────────────────────────────────
 function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onClose }) {
   const vw = useWindowWidth();
