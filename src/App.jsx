@@ -6801,6 +6801,12 @@ export default function App() {
 
       {view!=="display"&&view!=="overview-display" && (
       <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
+        {/* Hamburger — left */}
+        <button onClick={()=>setShowNav(true)} style={{width:"36px",height:"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"5px",background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",padding:"0",flexShrink:0}}>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+        </button>
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
           {gymBranding?.logo
             ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"32px",maxWidth:isMobile?"90px":"130px",objectFit:"contain"}} alt="gym logo"/>{gymBranding.gymName && !isMobile && <span style={{fontSize:"14px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}</>
@@ -6808,17 +6814,11 @@ export default function App() {
           }
         </div>
         {/* Current screen label */}
-        <div style={{flex:1,paddingLeft:"8px"}}>
+        <div style={{flex:1,paddingLeft:"4px"}}>
           <span style={{fontSize:isMobile?"12px":"13px",fontWeight:"600",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>
             {navItems.find(n=>n.key===view)?.label || view}
           </span>
         </div>
-        {/* Hamburger */}
-        <button onClick={()=>setShowNav(true)} style={{width:"36px",height:"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"5px",background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",padding:"0",flexShrink:0}}>
-          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
-          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
-          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
-        </button>
         <div style={{display:"flex",gap:isMobile?"6px":"12px",alignItems:"center",flexShrink:0}}>
           <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
             {dark
