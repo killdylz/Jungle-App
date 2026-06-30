@@ -2801,45 +2801,57 @@ function AnalyticsScreen({onBack}) {
   const isMobile = vw < 480;
   const isTablet = vw < 768;
   const [timeFilter, setTimeFilter] = React.useState("12w");
+  const [rpeTab, setRpeTab] = React.useState("distribution");
 
   const attendanceData = [
-    {label:"Mon",val:82},{label:"Tue",val:91},{label:"Wed",val:74},{label:"Thu",val:95},
-    {label:"Fri",val:88},{label:"Sat",val:100},{label:"Sun",val:63},
+    {label:"W1",val:74},{label:"W2",val:81},{label:"W3",val:88},{label:"W4",val:72},
+    {label:"W5",val:90},{label:"W6",val:86},{label:"W7",val:93},{label:"W8",val:78},
+    {label:"W9",val:95},{label:"W10",val:82},{label:"W11",val:88},{label:"W12",val:91},
   ];
   const maxAttn = Math.max(...attendanceData.map(d=>d.val), 1);
 
   const classTypes = [
-    {label:"HIIT",      pct:38, color:"#F59E0B"},
-    {label:"Strength",  pct:24, color:"#8B5CF6"},
-    {label:"Hyrox",     pct:18, color:"#22D3A6"},
-    {label:"Circuit",   pct:12, color:"#F97316"},
-    {label:"Yoga",      pct:8,  color:"#10B981"},
-  ];
-
-  const topClasses = [
-    {name:"Sunrise HIIT",    sessions:24, rating:4.9, up:true},
-    {name:"Iron Protocol",   sessions:19, rating:4.8, up:true},
-    {name:"Flow & Restore",  sessions:16, rating:4.7, up:false},
-    {name:"Hyrox Sim",       sessions:14, rating:4.6, up:true},
-  ];
-
-  const atRiskMembers = [
-    {name:"Sarah M.",      lastSeen:"12d ago", missed:3},
-    {name:"James T.",      lastSeen:"18d ago", missed:4},
-    {name:"Priya K.",      lastSeen:"9d ago",  missed:2},
+    {label:"HIIT",       pct:94, color:"#F59E0B"},
+    {label:"Hyrox sim",  pct:88, color:"#22D3A6"},
+    {label:"Strength Lab",pct:71, color:"#8B5CF6"},
+    {label:"Spin",       pct:63, color:"#3B82F6"},
+    {label:"Yoga / recovery",pct:48,color:"#10B981"},
   ];
 
   const kpis = [
-    {label:"Sessions / week", value:"24",   delta:"+18% vs prev", up:true},
-    {label:"Attendance rate",  value:"87%",  delta:"+4%",          up:true},
-    {label:"Avg satisfaction", value:"4.8★", delta:"stable",       up:null},
-    {label:"Track plays today",value:"312",  delta:"+22%",         up:true},
+    {label:"Active members",  value:"1,284", delta:"▲ 6.2% vs prev", up:true},
+    {label:"Avg visits / wk", value:"3.4",   delta:"▲ 0.3",           up:true},
+    {label:"Churn risk",      value:"47",    delta:"members flagged",  up:false, warn:true},
+    {label:"Revenue / class", value:"£412",  delta:"▲ 9%",            up:true},
   ];
 
+  const trainers = [
+    {name:"Mara K.",  fill:"96%", nps:78, score:9.2},
+    {name:"Dev R.",   fill:"91%", nps:74, score:8.8},
+    {name:"Priya S.", fill:"79%", nps:69, score:8.1},
+  ];
+
+  const musicImpact = [
+    {rank:1, track:"Pump It — Reso",        stat:"+18% return when played"},
+    {rank:2, track:"Belters — C. Bland",    stat:"+14% return"},
+    {rank:3, track:"Lose Control — T.Swims",stat:"+11% return"},
+  ];
+
+  const bpmByClass = [
+    {label:"HIIT",     bpm:130, color:"#F59E0B"},
+    {label:"Hyrox",    bpm:140, color:"#22D3A6"},
+    {label:"Strength", bpm:95,  color:"#8B5CF6"},
+    {label:"Spin",     bpm:126, color:"#3B82F6"},
+    {label:"Yoga",     bpm:72,  color:"#10B981"},
+  ];
+
+  const rpeData = [5,6,7,8,9,10].map(v=>({v,count:v===7?38:v===8?29:v===6?16:v===9?11:v===5?4:2}));
+  const maxRpe = Math.max(...rpeData.map(d=>d.count));
+
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",boxSizing:"border-box"}}>
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"28px",boxSizing:"border-box"}}>
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"26px",flexWrap:"wrap",gap:"12px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px",flexWrap:"wrap",gap:"12px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -2850,7 +2862,6 @@ function AnalyticsScreen({onBack}) {
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-          {/* Time filter chips */}
           <div style={{display:"flex",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden",fontSize:"12px"}}>
             {[["4w","4 weeks"],["12w","12 weeks"],["year","Year"]].map(([k,lbl])=>(
               <div key={k} onClick={()=>setTimeFilter(k)}
@@ -2867,42 +2878,38 @@ function AnalyticsScreen({onBack}) {
       </div>
 
       {/* KPI row */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${isTablet?2:4},1fr)`,gap:"12px",marginBottom:"20px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${isTablet?2:4},1fr)`,gap:"12px",marginBottom:"18px"}}>
         {kpis.map((k,i)=>(
-          <div key={i} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{fontSize:"11px",letterSpacing:"1px",color:T.muted,fontWeight:"600",textTransform:"uppercase"}}>{k.label}</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"30px",fontWeight:"700",marginTop:"6px",color:T.text}}>{k.value}</div>
-            <div style={{fontSize:"12px",marginTop:"2px",color:k.up===null?T.muted:k.up?T.accent:"#EF4444"}}>
-              {k.up===true?"▲ ":k.up===false?"▼ ":""}{k.delta}
-            </div>
+          <div key={i} style={{background:T.card,border:`1px solid ${k.warn?"#F59E0B40":T.border}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"1px",color:T.muted,fontWeight:"700",textTransform:"uppercase"}}>{k.label}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"28px",fontWeight:"700",marginTop:"6px",color:k.warn?"#F59E0B":T.text}}>{k.value}</div>
+            <div style={{fontSize:"12px",marginTop:"3px",color:k.warn?"#F59E0B":k.up?T.accent:"#EF4444"}}>{k.delta}</div>
           </div>
         ))}
       </div>
 
       {/* Charts row */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"16px",marginBottom:"20px"}}>
-        {/* Attendance bar chart */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"14px",marginBottom:"14px"}}>
+        {/* Attendance chart */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
             <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Attendance & fill rate</div>
-            <div style={{display:"flex",gap:"14px",fontSize:"11px",color:T.muted}}>
-              <span style={{display:"flex",alignItems:"center",gap:"5px"}}>
-                <span style={{width:"9px",height:"9px",borderRadius:"2px",background:T.accent,display:"inline-block"}}/>Attendance
-              </span>
+            <div style={{fontSize:"11px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>
+              <span style={{width:"8px",height:"8px",borderRadius:"2px",background:T.accent,display:"inline-block"}}/>Attendance
+              <span style={{marginLeft:"8px",width:"8px",height:"8px",borderRadius:"2px",background:"#E0B85B",display:"inline-block"}}/>Fill %
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:isMobile?"6px":"10px",height:"110px",marginBottom:"8px"}}>
+          <div style={{display:"flex",alignItems:"flex-end",gap:isMobile?"3px":"6px",height:"100px",marginBottom:"8px"}}>
             {attendanceData.map((d,i)=>(
-              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"5px"}}>
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}}>
                 <div style={{
                   width:"100%",
-                  background:`linear-gradient(to top, ${T.accent}, ${T.green})`,
-                  borderRadius:"4px 4px 0 0",
-                  height:`${(d.val/maxAttn)*95}px`,
+                  background:`linear-gradient(to top, ${T.accent}cc, ${T.green}66)`,
+                  borderRadius:"3px 3px 0 0",
+                  height:`${(d.val/maxAttn)*90}px`,
                   transition:"height 0.4s",
-                  opacity: d.val/maxAttn * 0.6 + 0.4,
                 }}/>
-                <p style={{fontSize:"10px",color:T.muted}}>{d.label}</p>
+                <p style={{fontSize:"9px",color:T.muted}}>{d.label}</p>
               </div>
             ))}
           </div>
@@ -2911,15 +2918,15 @@ function AnalyticsScreen({onBack}) {
         {/* Class type distribution */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Most-booked class types</div>
-          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:"11px"}}>
             {classTypes.map((item,i)=>(
               <div key={i}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
                   <span style={{fontSize:"12px",color:T.text,fontWeight:"600"}}>{item.label}</span>
-                  <span style={{fontSize:"12px",color:T.muted}}>{item.pct}%</span>
+                  <span style={{fontSize:"12px",color:item.color,fontWeight:"700"}}>{item.pct}%</span>
                 </div>
-                <div style={{height:"7px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
-                  <div style={{width:`${item.pct}%`,height:"100%",background:item.color,borderRadius:"4px"}}/>
+                <div style={{height:"6px",background:T.navy,borderRadius:"3px",overflow:"hidden"}}>
+                  <div style={{width:`${item.pct}%`,height:"100%",background:item.color,borderRadius:"3px"}}/>
                 </div>
               </div>
             ))}
@@ -2927,45 +2934,114 @@ function AnalyticsScreen({onBack}) {
         </div>
       </div>
 
-      {/* Bottom panels */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"16px"}}>
-        {/* Top classes table */}
+      {/* RPE + Trainers row */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"14px",marginBottom:"14px"}}>
+        {/* RPE Distribution */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Top classes</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
-            {["Name","Sessions","Rating","Trend"].map(h=>(
-              <span key={h} style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",textAlign:h==="Name"?"left":"center"}}>{h}</span>
-            ))}
-          </div>
-          {topClasses.map((cls,i)=>(
-            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:"0",padding:"10px 0",borderBottom:i<topClasses.length-1?`1px solid ${T.border}`:"none",alignItems:"center"}}>
-              <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{cls.name}</span>
-              <span style={{fontSize:"13px",color:T.muted,textAlign:"center",paddingLeft:"12px"}}>{cls.sessions}</span>
-              <span style={{fontSize:"13px",color:T.muted,textAlign:"center",paddingLeft:"12px"}}>{cls.rating}</span>
-              <span style={{fontSize:"16px",textAlign:"center",paddingLeft:"12px",color:cls.up?T.accent:"#EF4444"}}>{cls.up?"↑":"↓"}</span>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
+            <div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>RPE distribution</div>
+              <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> · reported exertion · last 12 wks</div>
             </div>
-          ))}
-        </div>
-
-        {/* At-risk members */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>At-risk members</div>
-          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-            {atRiskMembers.map((m,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
-                <div style={{width:"34px",height:"34px",borderRadius:"50%",background:"#F59E0B20",border:"1px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",color:"#F59E0B",fontSize:"13px",fontWeight:"700",flexShrink:0}}>
-                  {m.name.split(" ").map(n=>n[0]).join("")}
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{m.name}</div>
-                  <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} · {m.missed} sessions missed</div>
-                </div>
-                <button style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.text,fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>
-                  Contact
-                </button>
+          </div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:"10px",height:"90px",marginBottom:"8px"}}>
+            {rpeData.map((d,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"4px"}}>
+                <div style={{
+                  width:"100%",
+                  background:d.v>=8?T.accent+"cc":d.v<=5?"#EF4444aa":"#E0B85Baa",
+                  borderRadius:"3px 3px 0 0",
+                  height:`${(d.count/maxRpe)*80}px`,
+                  transition:"height 0.4s",
+                }}/>
+                <p style={{fontSize:"10px",color:T.muted}}>{d.v}</p>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Trainer performance */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer performance</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {trainers.map((t,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",background:T.navy,borderRadius:"10px",border:`1px solid ${T.border}`}}>
+                <div style={{width:"34px",height:"34px",borderRadius:"50%",background:T.accent+"22",border:`1px solid ${T.accent}40`,display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700",flexShrink:0}}>
+                  {t.name.split(" ")[0][0]}{t.name.split(" ")[1]?.[0]||""}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</div>
+                  <div style={{fontSize:"11px",color:T.muted}}>{t.fill} fill · NPS {t.nps}</div>
+                </div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>{t.score}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Music impact + BPM by class */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.2fr 1fr",gap:"14px",marginBottom:"14px"}}>
+        {/* Music that fills rooms */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Music that fills rooms</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {musicImpact.map((m,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<musicImpact.length-1?`1px solid ${T.border}`:"none"}}>
+                <div style={{width:"24px",height:"24px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"11px",fontWeight:"800",flexShrink:0}}>{m.rank}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.track}</div>
+                </div>
+                <div style={{fontSize:"12px",color:T.accent,fontWeight:"700",whiteSpace:"nowrap"}}>{m.stat}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Best BPM by class */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Best BPM by class</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {bpmByClass.map((b,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:b.color}}/>
+                  <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{b.label}</span>
+                </div>
+                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:b.color}}>{b.bpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Churn risk members */}
+      <div style={{background:T.card,border:`1px solid #F59E0B40`,borderRadius:"14px",padding:"18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
+          <div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Churn risk</div>
+            <div style={{fontSize:"11px",color:"#F59E0B",marginTop:"2px"}}>47 members flagged · no visit in 10+ days</div>
+          </div>
+          <button style={{padding:"7px 14px",background:"#F59E0B20",border:"1px solid #F59E0B50",borderRadius:"7px",cursor:"pointer",color:"#F59E0B",fontSize:"12px",fontWeight:"700"}}>Message all</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {[
+            {name:"Sarah M.",  lastSeen:"12d ago", missed:3, type:"HIIT"},
+            {name:"James T.",  lastSeen:"18d ago", missed:4, type:"Hyrox"},
+            {name:"Priya K.",  lastSeen:"9d ago",  missed:2, type:"Yoga"},
+            {name:"Marcus L.", lastSeen:"14d ago", missed:5, type:"Strength"},
+          ].map((m,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px"}}>
+              <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"#F59E0B20",border:"1px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",color:"#F59E0B",fontSize:"11px",fontWeight:"700",flexShrink:0}}>
+                {m.name.split(" ").map(n=>n[0]).join("")}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{m.name}</div>
+                <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} · {m.missed} missed · {m.type}</div>
+              </div>
+              <button style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.text,fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>Contact</button>
+            </div>
+          ))}
         </div>
       </div>
     </div>
