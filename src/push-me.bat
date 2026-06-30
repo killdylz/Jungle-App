@@ -1,13 +1,7 @@
 @echo off
 cd /d "%~dp0.."
-echo Staging all changes...
 git add -A
-echo Committing...
-git commit -m "Canopy theme + 4-screen mockup upgrade"
-echo Pushing to GitHub...
+git commit -m "Full redesign: all 8 screens rebuilt to match Canopy mockup"
 git push
-echo.
-echo Done! Site deploys in ~60 seconds at:
-echo https://killdylz.github.io/Jungle-App/
-echo.
+echo Done! Deploying now...
 pause
