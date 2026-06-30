@@ -6186,7 +6186,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           ⚡ {!isMobile && "Smart "}Distribute
         </button>
-        <button onClick={onDjClass} disabled={djProgress?.active}
+        <button onClick={()=>{ if(isMobile||isTablet) setShowDjModal(true); else onDjClass(); }} disabled={djProgress?.active}
           style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?T.border:"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
           {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
         </button>
