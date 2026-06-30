@@ -6506,47 +6506,75 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const isPulsing = remaining <= 10 && remaining > 0 && liveState.playing;
   const hasNoTracks = !stage?.tracks?.length;
 
-  const handlePlayPause = () => {
-    const willPlay = !liveState.playing; // direction BEFORE toggling
-    onPlayPause();
-    if (!player || !deviceId) return;
-    if (willPlay) {
-      const uris = stage?.tracks?.map(t=>t.uri).filter(Boolean)||[];
-      if (uris.length) {
-        // Check if the currently playing Spotify track belongs to this stage's queue
-        const currentUri = nowPlaying?.uri;
-        const isStageTrackPlaying = currentUri && uris.includes(currentUri);
-        if (isStageTrackPlaying) {
-          // Resume the same track — don't restart from beginning
-          player.resume().catch(()=>{});
-        } else {
-          // Load this stage's tracks (either nothing is playing, or the wrong song is)
-          apiPlay(deviceId, uris).catch(()=>{});
-        }
-      } else {
-        // No tracks queued for this stage — just resume whatever Spotify has
-        player.resume().catch(()=>{});
-      }
-    } else {
-      player.pause().catch(()=>{});
+  // Use activeDeviceId for playback; fall back to browser SDK device
+  const playDeviceId = activeDeviceId || deviceId;
+
+  // Helper: play on the active device. If it's an external device, use REST API directly
+  const playOnDevice = (uris) => {
+    if (!uris.length) return;
+    if (playDeviceId === deviceId && player) {
+      // Browser SDK device — use REST API to start (handles track queue properly)
+      apiPlay(playDeviceId, uris).catch(()=>{});
+    } else if (playDeviceId) {
+      // External device (desktop app, phone, etc.) — pure REST
+      apiPlay(playDeviceId, uris).catch(()=>{});
     }
   };
 
-  // Auto-play/pause when stage advances based on whether new stage has tracks
+  const pauseDevice = () => {
+    if (playDeviceId === deviceId && player) {
+      player.pause().catch(()=>{});
+    } else if (playDeviceId) {
+      fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${playDeviceId}`, {
+        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_access_token")||""}` }
+      }).catch(()=>{});
+    }
+  };
+
+  const resumeDevice = () => {
+    if (playDeviceId === deviceId && player) {
+      player.resume().catch(()=>{});
+    } else if (playDeviceId) {
+      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${playDeviceId}`, {
+        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_access_token")||""}` }
+      }).catch(()=>{});
+    }
+  };
+
+  const handlePlayPause = () => {
+    const willPlay = !liveState.playing;
+    onPlayPause();
+    if (!playDeviceId) return;
+    if (willPlay) {
+      const uris = stage?.tracks?.map(t=>t.uri).filter(Boolean)||[];
+      if (uris.length) {
+        const currentUri = nowPlaying?.uri;
+        const isStageTrackPlaying = currentUri && uris.includes(currentUri);
+        if (isStageTrackPlaying) {
+          resumeDevice();
+        } else {
+          playOnDevice(uris);
+        }
+      } else {
+        resumeDevice();
+      }
+    } else {
+      pauseDevice();
+    }
+  };
+
+  // Auto-play/pause when stage advances
   useEffect(() => {
     const uris = stage?.tracks?.map(t=>t.uri).filter(Boolean)||[];
-    if (!deviceId || !liveState.playing) return;
+    if (!playDeviceId || !liveState.playing) return;
     if (uris.length) {
-      // If the current Spotify track is already from this stage (e.g. returning from
-      // Display Mode), don't restart — just leave it playing where it is.
       const currentUri = nowPlaying?.uri;
       const isAlreadyPlayingStageTrack = currentUri && uris.includes(currentUri);
       if (!isAlreadyPlayingStageTrack) {
-        apiPlay(deviceId, uris).catch(()=>{});
+        playOnDevice(uris);
       }
     } else {
-      // No tracks for this stage — pause Spotify automatically
-      if (player) player.pause().catch(()=>{});
+      pauseDevice();
     }
   }, [liveState.idx]);
 
