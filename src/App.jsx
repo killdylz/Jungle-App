@@ -7734,4 +7734,20 @@ export default function App() {
             </div>
 
             {/* Drawer footer */}
-            <di
+            {/* Drawer footer */}
+            <div style={{borderTop:`1px solid ${T.border}`,padding:"14px 16px",display:"flex",gap:"8px",flexShrink:0}}>
+              <button onClick={()=>setDark(!dark)} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                {dark?"☀ Light":"🌙 Dark"}
+              </button>
+              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                👤 Profile
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {showProfile && <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
+    </div>
+  );
+}
