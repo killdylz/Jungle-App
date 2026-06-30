@@ -4687,282 +4687,264 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
   }, [player]);
 
   return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Top bar */}
-      <div style={{padding:isMobile?"10px 14px":"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:T.card,gap:"8px"}}>
-        <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"4px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"13px",flexShrink:0,minHeight:"44px",padding:"4px 8px"}}><ArrowLeft size={17}/> {!isMobile&&"Edit"}</button>
-        {!isMobile && (
-          <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-            {stages.map((s,i) => {
-              const c = SCFG[s.type]?.color||T.border;
-              return <div key={s.id} style={{width:i===liveState.idx?14:10,height:i===liveState.idx?14:10,borderRadius:"50%",background:i<=liveState.idx?c:T.navy,border:i===liveState.idx?"2px solid white":"none",transition:"all 0.3s"}}/>;
-            })}
-          </div>
-        )}
-        <div style={{display:"flex",gap:isMobile?"6px":"8px",flexShrink:0}}>
-          <button onClick={()=>{setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true);}} style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>
-            <Search size={13}/> {!isMobile&&"Search"}
-          </button>
-          {/* Feature 7: Mic Mode / Volume Duck — keyboard shortcut M */}
-          {player && (
-            <button onClick={handleMicMode} title="Mic Mode: duck music to 20% (shortcut: M)"
-              style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 12px",
-                background:micMode?"#EF444420":T.navy,
-                border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,
-                borderRadius:"7px",cursor:"pointer",
-                color:micMode?"#EF4444":T.muted,
-                fontSize:"12px",fontWeight:"700",
-                animation:micMode?"jg-pulse 1s ease-in-out infinite":"none",
-                transition:"all 0.2s",minHeight:"44px"}}>
-              <Mic size={13}/> {micMode ? (isMobile?"🔴":"🔴 Mic ON") : (isMobile?"Mic":"Mic Mode")}
-            </button>
-          )}
-          <button onClick={handleDisplayMode} style={{display:"flex",alignItems:"center",gap:"4px",padding:isMobile?"8px":"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>
-            <Monitor size={14}/> {!isMobile&&"Display Mode"}
-          </button>
-        </div>
-      </div>
-
-      {/* Split layout */}
-      <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:"hidden"}}>
-        {/* LEFT: Timer + Exercises */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:isMobile?"14px 12px":"32px 24px",overflowY:"auto"}}>
-          <Tag color={cfg.color} style={{marginBottom:"8px",fontSize:"11px",padding:"4px 11px"}}>{cfg.label}</Tag>
-          <h1 style={{fontSize:isMobile?"22px":"30px",fontWeight:"800",color:T.text,marginBottom:isMobile?"16px":"28px",textAlign:"center",padding:"0 8px"}}>{stage?.name||"Session Complete"}</h1>
-
-          {/* Pulse keyframe injected once */}
-          <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-
-          {/* Ring — larger on mobile for easy reading */}
-          {(() => {
-            const ringSize = isMobile ? 220 : 190;
-            const r = isMobile ? 98 : 82;
-            return (
-              <div style={{position:"relative",width:`${ringSize}px`,height:`${ringSize}px`,marginBottom:isMobile?"16px":"28px",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>
-                <svg width={ringSize} height={ringSize} style={{transform:"rotate(-90deg)"}}>
-                  <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={T.navy} strokeWidth="10"/>
-                  <circle cx={ringSize/2} cy={ringSize/2} r={r} fill="none" stroke={timerColor} strokeWidth="10"
-                    strokeDasharray={`${2*Math.PI*r}`} strokeDashoffset={`${2*Math.PI*r*(1-progress)}`}
-                    strokeLinecap="round" style={{transition:"stroke-dashoffset 0.8s ease, stroke 0.5s ease"}}/>
-                </svg>
-                <div style={{position:"absolute",inset:"0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <p style={{fontSize:isMobile?"50px":"42px",fontWeight:"800",color:timerColor,lineHeight:"1",transition:"color 0.5s ease"}}>{fmt(remaining)}</p>
-                  <p style={{fontSize:"12px",color:T.muted,marginTop:"5px"}}>remaining</p>
+    <div style={{
+      flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:isMobile?"flex-start":"center",
+      background:"#000", overflowY:"auto", padding:isMobile?"0":"20px", boxSizing:"border-box"
+    }}>
+      {/* Tablet bezel — shown on non-mobile */}
+      <div style={{
+        width:"100%", maxWidth:isMobile?"100%":"900px",
+        background: isMobile?"transparent":"#111",
+        borderRadius: isMobile?"0":"34px",
+        padding: isMobile?"0":"16px",
+        border: isMobile?"none":`1px solid ${T.border}`,
+        boxShadow: isMobile?"none":"0 30px 80px rgba(0,0,0,.5)",
+        display:"flex", flexDirection:"column",
+        minHeight: isMobile?"100vh":"auto",
+      }}>
+        {/* Inner screen */}
+        <div style={{
+          borderRadius: isMobile?"0":"22px",
+          background: T.bg,
+          overflow:"hidden",
+          display:"flex", flexDirection:"column",
+          flex:1,
+        }}>
+          {/* HEADER */}
+          <div style={{height:"64px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+              <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+              </button>
+              <div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{stage?.name||"Session"}</div>
+                <div style={{fontSize:"11px",color:T.muted}}>
+                  {stages.length} stages · {fmt(totalDur)} total
                 </div>
               </div>
-            );
-          })()}
-
-          {/* Timer skip controls — larger touch targets on mobile */}
-          <div style={{display:"flex",gap:isMobile?"8px":"6px",alignItems:"center",marginBottom:"12px"}}>
-            <button onClick={()=>onSkipTimer(-30)} title="-30s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>-30s</button>
-            <button onClick={()=>onSkipTimer(-10)} title="-10s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>-10s</button>
-            <button onClick={()=>onSkipTimer(10)} title="+10s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>+10s</button>
-            <button onClick={()=>onSkipTimer(30)} title="+30s" style={{padding:isMobile?"10px 14px":"5px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"44px"}}>+30s</button>
-          </div>
-
-          {/* Feature 4: Interval sub-timer (Tabata / EMOM) */}
-          {(() => {
-            const ivState = calcIntervalState(stage?.exercises, elapsed);
-            if (!ivState) return null;
-            const isWork = ivState.phase === "WORK";
-            const ivColor = isWork ? "#EF4444" : "#06B6D4";
-            const ivBg    = isWork ? "#EF444415" : "#06B6D415";
-            return (
-              <div style={{width:"100%",maxWidth:"360px",marginBottom:"14px",background:ivBg,border:`2px solid ${ivColor}`,borderRadius:"14px",padding:"14px 18px",textAlign:"center"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",marginBottom:"8px"}}>
-                  <span style={{fontSize:"11px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"1.5px",padding:"2px 8px",background:ivColor+"25",borderRadius:"4px"}}>{ivState.phase}</span>
-                  <span style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>{ivState.exName}</span>
-                </div>
-                <p style={{fontSize:"52px",fontWeight:"900",color:ivColor,lineHeight:"1",margin:"0 0 4px"}}>{fmtSec(ivState.phaseRemaining)}</p>
-                <p style={{fontSize:"11px",color:T.muted,marginTop:"4px"}}>
-                  Round {ivState.round} of {ivState.totalRounds}
-                  <span style={{margin:"0 8px",opacity:0.4}}>·</span>
-                  {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}
-                </p>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
+              {/* Casting badge */}
+              <div style={{display:"flex",alignItems:"center",gap:"7px",padding:"6px 12px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`,fontSize:"12px",color:T.accent,fontWeight:"600",flexShrink:0}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 12a10 10 0 0 1 10-10"/><path d="M5 12a7 7 0 0 1 7-7"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+                {!isMobile && "Casting to Studio TV"}
               </div>
-            );
-          })()}
-
-          {/* Controls */}
-          <div style={{display:"flex",gap:isMobile?"22px":"18px",alignItems:"center",marginBottom:"14px"}}>
-            <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"10px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipBack size={isMobile?26:22}/></button>
-            <button onClick={handlePlayPause} style={{width:isMobile?"80px":"68px",height:isMobile?"80px":"68px",borderRadius:"50%",background:liveState.playing?T.accent:T.green,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0}}>
-              {liveState.playing ? <Pause size={isMobile?34:28}/> : <Play size={isMobile?34:28}/>}
-            </button>
-            <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"10px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipForward size={isMobile?26:22}/></button>
+              {/* ELAPSED */}
+              <div style={{textAlign:"center",flexShrink:0}}>
+                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>ELAPSED</div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{fmt(liveState.elapsed)}</div>
+              </div>
+              {/* ROUND */}
+              <div style={{textAlign:"center",flexShrink:0}}>
+                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>STAGE</div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>
+                  <span style={{color:T.accent}}>{liveState.idx+1}</span>/{stages.length}
+                </div>
+              </div>
+            </div>
           </div>
-          {/* Manual stage advance */}
-          {liveState.idx < stages.length - 1 && (
-            <button onClick={onNextStage} style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"11px 22px":"9px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"13px",fontWeight:"600",marginBottom:isMobile?"16px":"28px",minHeight:"44px"}}>
-              Next Stage <ChevronRight size={15}/>
-            </button>
-          )}
 
-          {/* Group Splits — shown prominently when defined */}
-          {stage?.groups?.length > 0 && (
-            <div style={{width:"100%",maxWidth:"480px",marginBottom:"20px"}}>
-              <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>👥 Groups</p>
-              <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(stage.groups.length,2)}, 1fr)`,gap:"10px"}}>
-                {stage.groups.map((grp,gi) => {
-                  const gc = grpColor(grp.id);
-                  const exerciseLabel = grp.exercise==="__custom__" ? (grp.customEx||"") : (grp.exercise||"");
+          {/* BODY */}
+          <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",minHeight:0,overflow:"hidden"}}>
+            {/* MAIN CONTROL: big stage display */}
+            <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid ${T.border}`,minWidth:0}}>
+              {/* Stage type + name */}
+              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",padding:"24px",position:"relative"}}>
+                {/* WORK/REST phase label */}
+                <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",fontSize:"12px",letterSpacing:"5px",color:cfg.color,fontWeight:"700"}}>
+                  {cfg.label.toUpperCase()}
+                </div>
+
+                {/* Big timer */}
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"80px":"120px",fontWeight:"700",lineHeight:"1",letterSpacing:"-3px",color:cfg.color,textShadow:`0 0 60px ${cfg.color}40`}}>
+                  {fmt(remaining)}
+                </div>
+
+                {/* Stage name */}
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"22px":"28px",fontWeight:"700",color:T.text,textAlign:"center",marginTop:"4px"}}>
+                  {stage?.name||"Complete"}
+                </div>
+                {stage?.exercises?.[0] && (
+                  <div style={{fontSize:"15px",color:T.muted}}>{stage.exercises[0].n}{stage.exercises[0].r?` · ${stage.exercises[0].s||""}×${stage.exercises[0].r}`:""}</div>
+                )}
+
+                {/* Skip timer controls */}
+                <div style={{display:"flex",gap:"8px",alignItems:"center",marginTop:"12px"}}>
+                  {[-30,-10,10,30].map(s=>(
+                    <button key={s} onClick={()=>onSkipTimer(s)}
+                      style={{padding:isMobile?"10px 14px":"7px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"40px"}}>
+                      {s>0?"+":""}{s}s
+                    </button>
+                  ))}
+                </div>
+
+                {/* Feature: Interval sub-timer */}
+                {(()=>{
+                  const ivState = calcIntervalState(stage?.exercises, elapsed);
+                  if (!ivState) return null;
+                  const isWork = ivState.phase==="WORK";
+                  const ivColor = isWork?"#EF4444":"#06B6D4";
                   return (
-                    <div key={grp.id} style={{
-                      padding:"14px 16px",background:T.card,
-                      border:`2px solid ${gc}`,borderRadius:"10px",
-                      boxShadow:`0 0 12px ${gc}25`,
-                    }}>
-                      <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"6px"}}>
-                        <div style={{width:"11px",height:"11px",borderRadius:"50%",background:gc,flexShrink:0}}/>
-                        <p style={{fontSize:"13px",fontWeight:"800",color:T.text}}>{grp.name}</p>
+                    <div style={{marginTop:"12px",background:`${ivColor}15`,border:`2px solid ${ivColor}`,borderRadius:"12px",padding:"12px 16px",textAlign:"center",width:"100%",maxWidth:"300px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",marginBottom:"6px"}}>
+                        <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"1.5px",padding:"2px 6px",background:`${ivColor}25`,borderRadius:"4px"}}>{ivState.phase}</span>
+                        <span style={{fontSize:"11px",color:T.muted}}>{ivState.exName}</span>
                       </div>
-                      {exerciseLabel
-                        ? <p style={{fontSize:"15px",fontWeight:"700",color:gc,lineHeight:"1.2"}}>{exerciseLabel}</p>
-                        : <p style={{fontSize:"12px",color:T.muted,fontStyle:"italic"}}>No exercise assigned</p>
-                      }
+                      <p style={{fontSize:"40px",fontWeight:"900",color:ivColor,lineHeight:"1",margin:"0 0 3px"}}>{fmtSec(ivState.phaseRemaining)}</p>
+                      <p style={{fontSize:"11px",color:T.muted}}>Round {ivState.round} of {ivState.totalRounds}</p>
                     </div>
                   );
-                })}
+                })()}
+              </div>
+
+              {/* TRANSPORT controls */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMobile?"16px":"18px",padding:"0 24px 20px",flexShrink:0}}>
+                {/* Prev stage */}
+                {liveState.idx > 0 && (
+                  <button onClick={()=>handleNextStage&&handleNextStage(-1)} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={T.text}><path d="M11 19V5l-8 7 8 7Zm9 0V5l-8 7 8 7Z"/></svg>
+                  </button>
+                )}
+                {/* Skip back track */}
+                <button onClick={()=>player?.previousTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                  <SkipBack size={20}/>
+                </button>
+                {/* Play/Pause — large accent button */}
+                <button onClick={handlePlayPause} style={{width:isMobile?"76px":"84px",height:isMobile?"76px":"84px",borderRadius:"50%",background:T.accent,border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 0 40px ${T.accent}40`,flexShrink:0}}>
+                  {liveState.playing
+                    ? <svg width="30" height="30" viewBox="0 0 24 24" fill={T.bg}><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                    : <svg width="30" height="30" viewBox="0 0 24 24" fill={T.bg}><path d="M8 5l11 7-11 7V5z"/></svg>
+                  }
+                </button>
+                {/* Skip forward track */}
+                <button onClick={()=>player?.nextTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                  <SkipForward size={20}/>
+                </button>
+                {/* Next stage */}
+                {liveState.idx < stages.length - 1 && (
+                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={T.text}><path d="M13 5v14l8-7-8-7ZM4 5v14l8-7L4 5Z"/></svg>
+                  </button>
+                )}
+                {/* Mic mode */}
+                {player && (
+                  <button onClick={handleMicMode} title="Mic Mode (M)"
+                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":T.muted,animation:micMode?"jg-pulse 1s ease-in-out infinite":"none"}}>
+                    <Mic size={16}/>
+                  </button>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div style={{height:"4px",background:T.navy,flexShrink:0,position:"relative"}}>
+                <div style={{position:"absolute",left:0,top:0,bottom:0,background:cfg.color,width:`${progress*100}%`,transition:"width 0.8s linear",borderRadius:"0 2px 2px 0"}}/>
               </div>
             </div>
-          )}
 
-          {stage?.exercises?.length > 0 && (
-            <div style={{width:"100%",maxWidth:"420px"}}>
-              <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Exercises</p>
-              {stage.exercises.map((ex,i) => (
-                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 15px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"7px",marginBottom:"6px"}}>
-                  <div>
-                    <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{ex.n}</p>
-                    {ex.timing && ex.timing!=="none" && <span style={{fontSize:"9px",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700"}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
-                  </div>
-                  <p style={{fontSize:"11px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</p>
+            {/* SIDE: Up Next + Music */}
+            {!isMobile && (
+              <div style={{width:"380px",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
+                {/* UP NEXT */}
+                <div style={{flex:1,padding:"18px 20px",display:"flex",flexDirection:"column",gap:"10px",overflow:"hidden",borderBottom:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.muted}}>UP NEXT</div>
+                  {stages.slice(liveState.idx+1, liveState.idx+4).map((s,i)=>{
+                    const sCfg = SCFG[s.type]||SCFG.circuit;
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 13px",borderRadius:"11px",background:i===0?T.card:T.navy,border:`1px solid ${i===0?T.border:T.border}`}}>
+                        <span style={{fontSize:"11px",fontWeight:"700",color:sCfg.color,background:`${sCfg.color}18`,padding:"3px 8px",borderRadius:"5px",flexShrink:0}}>{sCfg.label}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:"14px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                          <div style={{fontSize:"11px",color:T.muted}}>{fmt(s.dur)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {stages.slice(liveState.idx+1).length === 0 && (
+                    <div style={{fontSize:"12px",color:T.muted,padding:"10px 0"}}>Last stage — session ending soon</div>
+                  )}
                 </div>
-              ))}
+
+                {/* MUSIC panel */}
+                <div style={{padding:"16px 20px",background:T.card,flexShrink:0}}>
+                  {nowPlaying ? (
+                    <>
+                      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
+                        <div style={{width:"46px",height:"46px",borderRadius:"9px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 5px,#22382a 5px,#22382a 10px)",flexShrink:0,overflow:"hidden"}}>
+                          {nowPlaying.album?.images?.[0]?.url && <img src={nowPlaying.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.name}</div>
+                          <div style={{fontSize:"11px",color:T.muted}}>{nowPlaying.artists?.[0]?.name} · now playing</div>
+                        </div>
+                        {nowPlaying.bpm && <div style={{textAlign:"center",flexShrink:0}}>
+                          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>{Math.round(nowPlaying.bpm)}</div>
+                          <div style={{fontSize:"9px",color:T.muted,letterSpacing:"1px"}}>BPM</div>
+                        </div>}
+                      </div>
+                      <div style={{display:"flex",gap:"8px"}}>
+                        <button onClick={()=>player?.previousTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:T.navy,border:`1px solid ${T.border}`,fontSize:"12px",fontWeight:"600",color:T.text,cursor:"pointer"}}>
+                          <SkipBack size={13}/> Prev
+                        </button>
+                        <button onClick={handleMicMode} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:micMode?"#EF444420":T.navy,border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,fontSize:"12px",fontWeight:"600",color:micMode?"#EF4444":T.muted,cursor:"pointer"}}>
+                          <Mic size={13}/> Mic {micMode?"ON":"Mode"}
+                        </button>
+                        <button onClick={()=>player?.nextTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:T.navy,border:`1px solid ${T.border}`,fontSize:"12px",fontWeight:"600",color:T.text,cursor:"pointer"}}>
+                          <SkipForward size={13}/> Next
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"8px 0"}}>No music playing</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile: compact music strip */}
+          {isMobile && nowPlaying && (
+            <div style={{flexShrink:0,borderTop:`1px solid ${T.border}`,background:T.card,padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px"}}>
+              {nowPlaying.album?.images?.[0]?.url && (
+                <img src={nowPlaying.album.images[0].url} style={{width:"40px",height:"40px",borderRadius:"6px",objectFit:"cover",flexShrink:0}} alt="album"/>
+              )}
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:"12px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
+                <p style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
+              </div>
+              <button onClick={handleMicMode} style={{background:"none",border:"none",cursor:"pointer",color:micMode?"#EF4444":T.muted,padding:"6px",display:"flex"}}>
+                <Mic size={18}/>
+              </button>
+              <button onClick={handleDisplayMode} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
+                <Monitor size={18}/>
+              </button>
             </div>
           )}
         </div>
-
-        {/* RIGHT: Music panel — compact horizontal strip on mobile, vertical column on desktop */}
-        {isMobile ? (
-          <div style={{flexShrink:0,borderTop:`1px solid ${T.border}`,background:T.card,padding:"10px 14px"}}>
-            {nowPlaying ? (
-              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                {nowPlaying.album?.images?.[0]?.url && (
-                  <img src={nowPlaying.album.images[0].url} style={{width:"40px",height:"40px",borderRadius:"6px",objectFit:"cover",flexShrink:0}} alt="album"/>
-                )}
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:"12px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
-                  <p style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
-                </div>
-                <div style={{display:"flex",gap:"8px",alignItems:"center",flexShrink:0}}>
-                  <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipBack size={18}/></button>
-                  <button onClick={handlePlayPause} style={{width:"44px",height:"44px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0}}>
-                    {liveState.playing ? <Pause size={18}/> : <Play size={18}/>}
-                  </button>
-                  <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",minHeight:"44px",minWidth:"44px",display:"flex",alignItems:"center",justifyContent:"center"}}><SkipForward size={18}/></button>
-                </div>
-              </div>
-            ) : (
-              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                <Music size={20} color={hasNoTracks ? T.accent+"80" : T.muted}/>
-                <p style={{fontSize:"12px",color:T.muted}}>{hasNoTracks ? "⏸ No tracks — Spotify paused" : "No track playing"}</p>
-              </div>
-            )}
-            <div style={{display:"flex",height:"4px",borderRadius:"2px",overflow:"hidden",gap:"2px",marginTop:"8px"}}>
-              {stages.map((s,i) => {
-                const c = SCFG[s.type]?.color||T.border;
-                return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:T.navy}}/>;
-              })}
-            </div>
-          </div>
-        ) : (
-          <div style={{flex:"0 0 260px",borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",padding:"16px 20px",background:T.card}}>
-            <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"16px"}}>Now Playing</p>
-            {nowPlaying ? (
-              <>
-                {nowPlaying.album?.images?.[0]?.url && (
-                  <img src={nowPlaying.album.images[0].url} style={{width:"100%",aspectRatio:"1",borderRadius:"10px",marginBottom:"14px",objectFit:"cover"}} alt="album"/>
-                )}
-                <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
-                <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
-                <div style={{display:"flex",justifyContent:"center",gap:"18px",alignItems:"center",marginBottom:"24px"}}>
-                  <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipBack size={20}/></button>
-                  <button onClick={handlePlayPause} style={{width:"48px",height:"48px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
-                    {liveState.playing ? <Pause size={20}/> : <Play size={20}/>}
-                  </button>
-                  <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px"}}><SkipForward size={20}/></button>
-                </div>
-              </>
-            ) : (
-              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"20px 0"}}>
-                <Music size={44} color={hasNoTracks ? T.accent+"80" : T.muted} style={{marginBottom:"12px"}}/>
-                <p style={{fontSize:"13px",color:hasNoTracks ? T.accent : T.muted,fontWeight:"600",marginBottom:"5px"}}>
-                  {hasNoTracks ? "⏸ No music for this stage" : "No track playing"}
-                </p>
-                <p style={{fontSize:"11px",color:T.muted}}>
-                  {hasNoTracks ? "Spotify paused — add tracks in the builder" : "Add songs in the builder to auto-play each stage"}
-                </p>
-              </div>
-            )}
-            <div style={{marginTop:"auto"}}>
-              <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Stage {liveState.idx+1} of {stages.length}</p>
-              <div style={{display:"flex",height:"6px",borderRadius:"3px",overflow:"hidden",gap:"2px"}}>
-                {stages.map((s,i) => {
-                  const c = SCFG[s.type]?.color||T.border;
-                  return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:T.navy}}/>;
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Feature 7: Live Search Overlay */}
+      {/* Live search overlay */}
       {showLiveSearch && (
-        <div style={{position:"fixed",inset:0,background:"rgba(6,13,24,0.92)",zIndex:500,display:"flex",flexDirection:"column",padding:"20px"}} onClick={e=>e.target===e.currentTarget&&setShowLiveSearch(false)}>
-          <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,flex:1,display:"flex",flexDirection:"column",overflow:"hidden",maxWidth:"900px",width:"100%",margin:"0 auto"}}>
-            {/* Header */}
-            <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <p style={{fontSize:"15px",fontWeight:"700",color:T.text}}>🔍 Add Track — Live</p>
-              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                <select value={liveSearchStageIdx} onChange={e=>setLiveSearchStageIdx(Number(e.target.value))}
-                  style={{background:T.navy,color:T.text,border:`1px solid ${T.border}`,borderRadius:"6px",padding:"5px 10px",fontSize:"12px",cursor:"pointer"}}>
-                  {stages.map((s,i)=><option key={i} value={i}>Add to: {s.name}</option>)}
-                </select>
-                <button onClick={()=>setShowLiveSearch(false)} style={{background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",padding:"6px 12px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"5px"}}><X size={13}/> Close</button>
-              </div>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+          <div style={{background:T.card,borderRadius:"16px",padding:"24px",width:"100%",maxWidth:"480px",border:`1px solid ${T.border}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+              <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Add track to stage</div>
+              <button onClick={()=>setShowLiveSearch(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
             </div>
-            {/* Search panel */}
-            <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
-              <TrackSearch
-                key={liveSearchStageIdx}
-                onAdd={t=>{onAddTrack(liveSearchStageIdx,t);}}
-                addedIds={(stages[liveSearchStageIdx]?.tracks||[]).map(t=>t.id)}
-              />
-            </div>
+            <SpotifySearchModal
+              onClose={()=>setShowLiveSearch(false)}
+              onSelectTrack={t=>{ onAddTrack(liveSearchStageIdx, t); setShowLiveSearch(false); }}
+            />
           </div>
         </div>
       )}
 
-      {/* F15: Keyboard shortcut hints bar — hidden on mobile */}
-      {!isMobile && <div style={{padding:"5px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",gap:"14px",alignItems:"center",flexWrap:"wrap"}}>
-        {[
-          {key:"Space",  label:"Play/Pause"},
-          {key:"N",      label:"Next Stage"},
-          {key:"← →",   label:"±10s"},
-          {key:"S",      label:"Search"},
-          {key:"Esc",    label:"Back"},
-        ].map(h=>(
-          <span key={h.key} style={{display:"inline-flex",alignItems:"center",gap:"4px",fontSize:"10px",color:T.muted}}>
-            <kbd style={{padding:"1px 5px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"3px",fontSize:"10px",color:T.text,fontFamily:"monospace"}}>{h.key}</kbd>
-            {h.label}
-          </span>
-        ))}
-      </div>}
+      {/* Keyboard shortcut legend */}
+      <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
     </div>
   );
+}
 }
 
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
