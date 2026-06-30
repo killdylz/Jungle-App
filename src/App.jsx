@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic } from "lucide-react";
 
+// ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
+(function injectFonts() {
+  if (document.getElementById("jungle-fonts")) return;
+  const l = document.createElement("link");
+  l.id = "jungle-fonts"; l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap";
+  document.head.appendChild(l);
+})();
+
 const SPOTIFY_CLIENT_ID = "594e4864b902473c86c939c9cccce420";
 const REDIRECT_URI      = window.location.origin + window.location.pathname;
 const IS_CONFIGURED     = SPOTIFY_CLIENT_ID !== "YOUR_CLIENT_ID_HERE";
