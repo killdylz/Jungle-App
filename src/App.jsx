@@ -7142,6 +7142,18 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("jungle_gym_branding", JSON.stringify(gymBranding)); } catch(_) {}
   }, [gymBranding]);
+
+  // ── Active skin ──────────────────────────────────────────────────────────────
+  const [activeSkinId, setActiveSkinId] = useState(() =>
+    localStorage.getItem("jungle_active_skin") || "canopy"
+  );
+  const [customSkinTokens, setCustomSkinTokens] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("jungle_custom_skin") || "null"); } catch(_) { return null; }
+  });
+  useEffect(() => { localStorage.setItem("jungle_active_skin", activeSkinId); }, [activeSkinId]);
+  useEffect(() => {
+    try { localStorage.setItem("jungle_custom_skin", customSkinTokens ? JSON.stringify(customSkinTokens) : "null"); } catch(_) {}
+  }, [customSkinTokens]);
   // Workout library class choice
   const [classChoice, setClassChoice] = useState(() => {
     const firstClass = Object.keys(WORKOUT_LIBRARY)[0];
@@ -7184,28 +7196,23 @@ export default function App() {
     try { localStorage.setItem("jungle_history", JSON.stringify(updated)); } catch(_) {}
   };
 
-  Object.assign(T, dark ? DARK : LIGHT);
-  // Apply gym branding colour overrides
-  if (gymBranding?.accentColor) T.accent = gymBranding.accentColor;
-  if (gymBranding?.secondColor) T.green  = gymBranding.secondColor;
+  // ── Resolve active skin tokens ──────────────────────────────────────────────
+  const _baseSkin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
+  const _resolvedTokens = customSkinTokens
+    ? { ..._baseSkin.tokens, ...customSkinTokens }
+    : gymBranding?.accentColor
+      ? { ..._baseSkin.tokens, accent: gymBranding.accentColor, green: gymBranding.secondColor || _baseSkin.tokens.green }
+      : { ..._baseSkin.tokens };
+  Object.assign(T, _resolvedTokens);
+  applySkinCSS(_resolvedTokens);
 
-  // Inject Google Font when gym branding font changes
+  // ── Inject skin font pair ────────────────────────────────────────────────────
   useEffect(() => {
-    const font = gymBranding?.fontFamily;
-    if (!font || font === "system") {
-      const el = document.getElementById("jungle-gfont");
-      if (el) el.href = "";
-      return;
-    }
-    let link = document.getElementById("jungle-gfont");
-    if (!link) {
-      link = document.createElement("link");
-      link.id = "jungle-gfont";
-      link.rel = "stylesheet";
-      document.head.appendChild(link);
-    }
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;600;700;800;900&display=swap`;
-  }, [gymBranding?.fontFamily]);
+    const skin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
+    const bodyFont = gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
+      ? gymBranding.fontFamily : skin.fonts.body;
+    injectSkinFonts({ fonts: { display: skin.fonts.display, body: bodyFont } });
+  }, [activeSkinId, gymBranding?.fontFamily]);
 
   // Session timer (runs independently of Spotify state)
   const stagesRef = useRef(stages);
@@ -7410,9 +7417,13 @@ export default function App() {
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,
-      fontFamily: gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
-        ? `'${gymBranding.fontFamily}', 'Hanken Grotesk', system-ui, sans-serif`
-        : "'Hanken Grotesk',system-ui,sans-serif"}}>
+      fontFamily: (() => {
+        const skin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
+        const body = gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
+          ? gymBranding.fontFamily : skin.fonts.body;
+        return `'${body}',system-ui,sans-serif`;
+      })(),
+      transition:"background .4s ease, color .4s ease, border-color .4s ease, fill .4s ease, box-shadow .4s ease"}}>
 
       {view!=="display"&&view!=="overview-display" && (
       <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
