@@ -6223,6 +6223,7 @@ export default function App() {
         {view==="live"             && <LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
         {view==="display"          && <DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
         {view==="analytics"        && <AnalyticsScreen onBack={()=>setView("dashboard")}/>}
+        {view==="integrations"     && <IntegrationsScreen onBack={()=>setView("dashboard")}/>}
         {view==="glossary"         && <GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"         && <CalendarScreen onBack={()=>setView("dashboard")}/>}
       </div>
