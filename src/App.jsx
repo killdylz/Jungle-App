@@ -4945,7 +4945,6 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
     </div>
   );
 }
-}
 
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
 function OverviewDisplayScreen({ stages, sessionName, onBack }) {
