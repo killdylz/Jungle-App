@@ -1679,7 +1679,15 @@ const CLASS_TYPES = ["HIIT","Strength","Mobility","Circuit","Cardio","Recovery",
 
 // ─── UI Primitives ────────────────────────────────────────────────────────────
 const Btn = ({children, onClick, variant="primary", style:s={}, ...p}) => (
-  <button onClick={onClick} style={{padding:"10px 18px",background:variant==="ghost"?"transparent":variant==="green"?T.green:T.accent,color:variant==="ghost"?T.accent:"white",border:`1px solid ${variant==="ghost"?T.accent+"60":"transparent"}`,borderRadius:"6px",cursor:"pointer",fontSize:"13px",fontWeight:"700",display:"inline-flex",alignItems:"center",gap:"6px",...s}} {...p}>{children}</button>
+  <button onClick={onClick} style={{
+    padding:"10px 18px",
+    background:variant==="ghost"?"transparent":variant==="green"?"var(--green)":"var(--accent)",
+    color:variant==="ghost"?"var(--accent)":variant==="green"?"var(--on-green)":"var(--on-accent)",
+    border:`1px solid ${variant==="ghost"?"var(--accent)":"transparent"}`,
+    borderRadius:"6px",cursor:"pointer",fontSize:"13px",fontWeight:"700",
+    display:"inline-flex",alignItems:"center",gap:"6px",
+    transition:"background .3s ease, color .2s ease, border-color .3s ease",
+    ...s}} {...p}>{children}</button>
 );
 const Input = ({style:s={}, ...p}) => (
   <input style={{padding:"9px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"13px",outline:"none",width:"100%",boxSizing:"border-box",...s}} {...p}/>
