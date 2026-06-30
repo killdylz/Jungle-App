@@ -4801,7 +4801,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, s
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMobile?"16px":"18px",padding:"0 24px 20px",flexShrink:0}}>
                 {/* Prev stage */}
                 {liveState.idx > 0 && (
-                  <button onClick={()=>handleNextStage&&handleNextStage(-1)} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill={T.text}><path d="M11 19V5l-8 7 8 7Zm9 0V5l-8 7 8 7Z"/></svg>
                   </button>
                 )}
