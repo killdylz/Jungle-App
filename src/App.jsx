@@ -4,9 +4,10 @@ import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, M
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
   if (document.getElementById("jungle-fonts")) return;
+  // Load Canopy base fonts; skin switcher loads its own pair via injectSkinFonts()
   const l = document.createElement("link");
   l.id = "jungle-fonts"; l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap";
+  l.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Anton:wght@400&family=Archivo:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap";
   document.head.appendChild(l);
 })();
 
@@ -15,9 +16,58 @@ const REDIRECT_URI      = window.location.origin + window.location.pathname;
 const IS_CONFIGURED     = SPOTIFY_CLIENT_ID !== "YOUR_CLIENT_ID_HERE";
 
 // ─── Theme — Canopy skin (matches design mockups) ─────────────────────────────
-const DARK  = { bg:"#0A0F0C", card:"#0F1611", navy:"#141D17", border:"rgba(255,255,255,.07)", accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" };
-const LIGHT = { bg:"#F0F4F8", card:"#FFFFFF",  navy:"#E8EDF5", border:"#CBD8E4",              accent:"#3DBF7A", green:"#1DB954", text:"#1A2B3C", muted:"#5A6F80" };
-const T = { ...DARK };
+// ─── Preset Skins ──────────────────────────────────────────────────────────────
+const PRESET_SKINS = {
+  canopy: {
+    name:"Canopy", vibe:"natural",
+    tokens:{ bg:"#0A0F0C", card:"#0F1611", navy:"#141D17", border:"rgba(255,255,255,.07)",
+             accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" },
+    fonts:{ display:"Space Grotesk", body:"Hanken Grotesk" },
+  },
+  pulse: {
+    name:"Pulse", vibe:"energetic",
+    tokens:{ bg:"#08090A", card:"#101113", navy:"#17181B", border:"rgba(255,255,255,.08)",
+             accent:"#D6FF3D", green:"#ECFFA3", text:"#F4F5F2", muted:"#8B8F8A" },
+    fonts:{ display:"Anton", body:"Archivo" },
+  },
+  atelier: {
+    name:"Atelier", vibe:"luxury",
+    tokens:{ bg:"#0C0C0E", card:"#131316", navy:"#1A1A1E", border:"rgba(255,255,255,.06)",
+             accent:"#C8A86A", green:"#E8D6AE", text:"#ECEAE6", muted:"#908C85" },
+    fonts:{ display:"Instrument Serif", body:"Manrope" },
+  },
+};
+
+// ─── Theme object (populated from active skin at render — keeps all T.x refs working) ──
+const DARK = PRESET_SKINS.canopy.tokens;   // fallback reference kept for safety
+const T = { ...PRESET_SKINS.canopy.tokens };
+
+// ─── Inject skin font pair ─────────────────────────────────────────────────────
+function injectSkinFonts(skin) {
+  const families = [skin.fonts.display, skin.fonts.body].filter(Boolean);
+  const query = families.map(f => "family=" + encodeURIComponent(f) + ":wght@400;500;600;700;800").join("&");
+  let link = document.getElementById("jungle-skin-fonts");
+  if (!link) {
+    link = document.createElement("link");
+    link.id = "jungle-skin-fonts";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }
+  link.href = "https://fonts.googleapis.com/css2?" + query + "&display=swap";
+}
+
+// ─── Write CSS custom properties onto :root ─────────────────────────────────────
+function applySkinCSS(tokens) {
+  const r = document.documentElement.style;
+  r.setProperty("--bg",     tokens.bg);
+  r.setProperty("--card",   tokens.card);
+  r.setProperty("--navy",   tokens.navy);
+  r.setProperty("--border", tokens.border);
+  r.setProperty("--accent", tokens.accent);
+  r.setProperty("--green",  tokens.green);
+  r.setProperty("--text",   tokens.text);
+  r.setProperty("--muted",  tokens.muted);
+}
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
 const GROUP_PALETTE  = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"];
@@ -40,10 +90,57 @@ const GYM_FONTS = [
 ];
 
 // ─── Dominant colour extractor (canvas-based) ─────────────────────────────────
-function extractDominantColor(imgSrc, callback) {
+// ─── Colour utilities ─────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const h = hex.replace("#","");
+  const n = parseInt(h,16);
+  return [n>>16&255,(n>>8)&255,n&255];
+}
+function rgbToHex(r,g,b) {
+  return "#"+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,"0")).join("");
+}
+// RGB → HSL (0-360, 0-1, 0-1)
+function rgbToHsl(r,g,b){
+  r/=255;g/=255;b/=255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/2;
+  if(max===min)return[0,0,l];
+  const d=max-min,s=l>0.5?d/(2-max-min):d/(max+min);
+  let h=max===r?(g-b)/d+(g<b?6:0):max===g?(b-r)/d+2:(r-g)/d+4;
+  return[h*60,s,l];
+}
+function hslToRgb(h,s,l){
+  h/=360;
+  const q=l<0.5?l*(1+s):l+s-l*s,p=2*l-q;
+  const hue=(t)=>{if(t<0)t++;if(t>1)t--;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+  return[Math.round(hue(h+1/3)*255),Math.round(hue(h)*255),Math.round(hue(h-1/3)*255)];
+}
+// Relative luminance for WCAG contrast
+function relativeLuminance(r,g,b){
+  const sRGB=[r,g,b].map(v=>{v/=255;return v<=0.03928?v/12.92:((v+0.055)/1.055)**2.4;});
+  return 0.2126*sRGB[0]+0.7152*sRGB[1]+0.0722*sRGB[2];
+}
+function wcagContrast(hex1,hex2){
+  const l1=relativeLuminance(...hexToRgb(hex1));
+  const l2=relativeLuminance(...hexToRgb(hex2));
+  const lighter=Math.max(l1,l2),darker=Math.min(l1,l2);
+  return(lighter+0.05)/(darker+0.05);
+}
+// Nudge lightness until contrast target met
+function nudgeForContrast(fgHex, bgHex, target=4.5, maxIter=30){
+  let [h,s,l]=rgbToHsl(...hexToRgb(fgHex));
+  let iter=0;
+  while(wcagContrast(rgbToHex(...hslToRgb(h,s,l)),bgHex)<target && iter<maxIter){
+    l=Math.min(1,l+0.03);iter++;
+  }
+  return rgbToHex(...hslToRgb(h,s,l));
+}
+
+// ─── Extract colour palette from image ────────────────────────────────────────
+function extractPalette(imgSrc, callback) {
   const img = new Image();
+  img.crossOrigin = "anonymous";
   img.onload = () => {
-    const size = 100;
+    const size = 64;
     const canvas = document.createElement("canvas");
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext("2d");
@@ -53,20 +150,81 @@ function extractDominantColor(imgSrc, callback) {
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
       if (a < 128) continue;
-      if (r > 230 && g > 230 && b > 230) continue; // near-white
-      if (r < 25  && g < 25  && b < 25)  continue; // near-black
-      const max = Math.max(r, g, b), min = Math.min(r, g, b);
-      if (max === 0 || (max - min) / max < 0.2) continue; // grey
-      const k = `${Math.round(r/20)*20},${Math.round(g/20)*20},${Math.round(b/20)*20}`;
-      freq[k] = (freq[k] || 0) + 1;
+      if (r>230&&g>230&&b>230) continue; // near-white
+      if (r<20&&g<20&&b<20) continue;    // near-black
+      const [,s,l] = rgbToHsl(r,g,b);
+      if (s < 0.15) continue;            // near-grey
+      const k = `${Math.round(r/16)*16},${Math.round(g/16)*16},${Math.round(b/16)*16}`;
+      freq[k] = (freq[k]||0) + 1;
     }
-    const top = Object.entries(freq).sort((a,b) => b[1] - a[1])[0];
-    if (!top) { callback(null); return; }
-    const [r, g, b] = top[0].split(",").map(Number);
-    callback("#" + [r, g, b].map(v => v.toString(16).padStart(2,"0")).join(""));
+    const total = Object.values(freq).reduce((a,b)=>a+b,0) || 1;
+    const swatches = Object.entries(freq)
+      .map(([k,cnt]) => {
+        const [r,g,b] = k.split(",").map(Number);
+        const [,s,l] = rgbToHsl(r,g,b);
+        return { hex:rgbToHex(r,g,b), score: s * (cnt/total) };
+      })
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,6)
+      .map(x=>x.hex);
+    callback(swatches.length ? swatches : null);
   };
   img.onerror = () => callback(null);
   img.src = imgSrc;
+}
+
+// ─── Legacy single-colour extractor (kept for existing callers) ────────────────
+function extractDominantColor(imgSrc, callback) {
+  extractPalette(imgSrc, swatches => callback(swatches ? swatches[0] : null));
+}
+
+// ─── Generate a full accessible skin from a palette ───────────────────────────
+function generateSkinFromPalette(swatches, vibe="natural") {
+  const accent = swatches[0] || "#7BE3A4";
+  const [ah,as,al] = rgbToHsl(...hexToRgb(accent));
+
+  // Derive bg: same hue, very dark
+  const bg = rgbToHex(...hslToRgb(ah, Math.min(as*0.6,0.25), 0.06));
+  const card = rgbToHex(...hslToRgb(ah, Math.min(as*0.55,0.22), 0.09));
+  const navy = rgbToHex(...hslToRgb(ah, Math.min(as*0.5,0.20), 0.12));
+
+  // Text: near-white tinted by accent hue
+  let text = rgbToHex(...hslToRgb(ah, 0.08, 0.92));
+  let muted = rgbToHex(...hslToRgb(ah, 0.05, 0.60));
+
+  // Accent-light: lighten + desaturate
+  const green = rgbToHex(...hslToRgb(ah, Math.max(0,as-0.1), Math.min(0.95,al+0.22)));
+
+  // Accessibility clamp
+  text  = nudgeForContrast(text,  bg, 7.0);
+  muted = nudgeForContrast(muted, bg, 4.5);
+
+  // Font pair by vibe
+  const fontPairs = {
+    energetic: { display:"Anton",             body:"Archivo" },
+    luxury:    { display:"Instrument Serif",  body:"Manrope" },
+    bold:      { display:"Space Grotesk",     body:"Inter Tight" },
+    natural:   { display:"Space Grotesk",     body:"Hanken Grotesk" },
+    calm:      { display:"Space Grotesk",     body:"Hanken Grotesk" },
+  };
+  const fonts = fontPairs[vibe] || fontPairs.natural;
+
+  // Contrast metrics
+  const contrast = {
+    textOnBg:   wcagContrast(text,   bg),
+    mutedOnBg:  wcagContrast(muted,  bg),
+    accentOnBg: wcagContrast(accent, bg),
+    passesAA:   wcagContrast(text, bg) >= 4.5,
+  };
+
+  return {
+    name:"Custom — Generated",
+    source:"generated",
+    vibe,
+    tokens:{ bg, card, navy, border:"rgba(255,255,255,.07)", accent, green, text, muted },
+    fonts,
+    contrast,
+  };
 }
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
