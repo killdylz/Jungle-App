@@ -6439,12 +6439,20 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         />
       )}
       {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
+      {showDjModal && (
+        <DjPlaylistModal
+          stages={stages}
+          onDjClass={onDjClass}
+          djProgress={djProgress}
+          onClose={()=>setShowDjModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── LiveScreen ───────────────────────────────────────────────────────────────
-function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack}) {
+function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
