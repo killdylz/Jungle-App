@@ -2533,7 +2533,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               </div>
             </div>
             <button onClick={onViewSchedule}
-              style={{fontSize:"12px", fontWeight:"700", color:T.accent, background:"none", border:"none",
+              style={{fontSize:"12px", fontWeight:"700", color:T.accent, background:"none",
                 cursor:"pointer", padding:"6px 12px", borderRadius:"8px", border:`1px solid ${T.accent}40`}}>
               Full schedule →
             </button>
