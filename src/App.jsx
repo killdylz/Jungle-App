@@ -456,6 +456,19 @@ async function apiPlay(deviceId, uris) {
   if (!token||!deviceId||!uris.length) return;
   await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, { method:"PUT", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }, body:JSON.stringify({ uris }) });
 }
+async function apiGetDevices() {
+  const token = await getToken();
+  if (!token) return [];
+  const r = await fetch("https://api.spotify.com/v1/me/player/devices", { headers:{ Authorization:`Bearer ${token}` } });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return d.devices || [];
+}
+async function apiTransferPlayback(toDeviceId, play=false) {
+  const token = await getToken();
+  if (!token||!toDeviceId) return;
+  await fetch("https://api.spotify.com/v1/me/player", { method:"PUT", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }, body:JSON.stringify({ device_ids:[toDeviceId], play }) });
+}
 async function apiGetPlaylists() {
   const token = await getToken();
   if (!token) return [];
