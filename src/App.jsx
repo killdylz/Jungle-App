@@ -5988,6 +5988,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const isTablet  = vw < 768;
   const [showPlaylistModal,  setShowPlaylistModal]  = useState(false);
   const [showLibraryModal,   setShowLibraryModal]   = useState(false);
+  const [showDjModal,        setShowDjModal]        = useState(false);
   const [distributeToast,    setDistributeToast]    = useState(null); // {msg}
   const [selIdx, setSelIdx] = useState(0);
 
