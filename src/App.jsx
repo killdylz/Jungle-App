@@ -4252,7 +4252,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             <button onClick={onOverviewDisplay} style={{border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
               Preview on TV
             </button>
-            <button onClick={()=>{setLiveState&&setLiveState({playing:false,idx:0,elapsed:0}); onStartSession();}}
+            <button onClick={()=>{ onStartSession(); }}
               style={{border:"none",background:T.accent,color:T.bg,fontWeight:"700",fontSize:"13px",padding:"9px 17px",borderRadius:"9px",cursor:"pointer"}}>
               Add to schedule
             </button>
