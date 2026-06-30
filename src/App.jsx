@@ -7334,7 +7334,7 @@ export default function App() {
   const isTablet = vw < 768;
   const isXSmall = vw < 380;
 
-  const { token, player, deviceId, nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
+  const { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [dark, setDark]               = useState(true);
   const [shareCopied, setShareCopied] = useState(false);
