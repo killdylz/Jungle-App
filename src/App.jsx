@@ -67,6 +67,22 @@ function applySkinCSS(tokens) {
   r.setProperty("--green",  tokens.green);
   r.setProperty("--text",   tokens.text);
   r.setProperty("--muted",  tokens.muted);
+  // Compute on-accent / on-green: dark bg text for light accents, light text for dark accents
+  const _rgbA = hexToRgb(tokens.accent);
+  const _lumA = _rgbA ? relativeLuminance(_rgbA) : 0;
+  r.setProperty("--on-accent", _lumA > 0.18 ? tokens.bg : tokens.text);
+  const _rgbG = hexToRgb(tokens.green);
+  const _lumG = _rgbG ? relativeLuminance(_rgbG) : 0;
+  r.setProperty("--on-green", _lumG > 0.18 ? tokens.bg : tokens.text);
+  // Alpha variant shortcuts for CSS-only colour transitions
+  r.setProperty("--accent-10", tokens.accent + "1A");
+  r.setProperty("--accent-20", tokens.accent + "33");
+  r.setProperty("--accent-30", tokens.accent + "4D");
+  r.setProperty("--accent-40", tokens.accent + "66");
+  r.setProperty("--green-20",  tokens.green  + "33");
+  r.setProperty("--green-40",  tokens.green  + "66");
+  // Body background keeps in sync with skin
+  document.body.style.background = tokens.bg;
 }
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
