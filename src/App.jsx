@@ -2509,8 +2509,8 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
           {/* Panel header */}
           <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>
-              <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Choose a class type</p>
-              <p style={{fontSize:"11px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles} ready-made styles</p>
+              <p style={{fontSize:"20px",fontWeight:"700",color:T.text,fontFamily:"'Space Grotesk',sans-serif"}}>Choose a class type</p>
+              <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
             </div>
             {/* Search */}
             <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:0,flex:"0 0 180px"}}>
@@ -6003,8 +6003,8 @@ export default function App() {
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,
       fontFamily: gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
-        ? `'${gymBranding.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-        : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
+        ? `'${gymBranding.fontFamily}', 'Hanken Grotesk', system-ui, sans-serif`
+        : "'Hanken Grotesk',system-ui,sans-serif"}}>
 
       {view!=="display"&&view!=="overview-display" && (
       <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
