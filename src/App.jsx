@@ -6675,59 +6675,83 @@ export default function App() {
     });
   };
 
-  const handleDjThisClass = async () => {
-    if (!token) return;
+  const handleDjThisClass = async (selectedPlaylistIds=null) => {
+    if (!token) { setDjProgress({active:true,message:"Connect Spotify first.",pct:0,done:true}); setTimeout(()=>setDjProgress({active:false,message:"",pct:0,done:false}),3000); return; }
     setDjProgress({active:true, message:"Fetching your Spotify playlists...", pct:5, done:false});
     try {
-      // 1. Get playlists
+      // 1. Get playlists — respect user selection if provided
       const pls = await apiGetPlaylists();
-      if (!pls?.length) { setDjProgress({active:true,message:"No playlists found.",pct:0,done:true}); return; }
-      setDjProgress({active:true, message:`Loading tracks from ${pls.length} playlists...`, pct:10, done:false});
+      const toScan = selectedPlaylistIds?.length
+        ? (pls||[]).filter(p=>selectedPlaylistIds.includes(p.id))
+        : (pls||[]);
 
-      // 2. Collect all tracks
       let allTracks = [];
-      for (let i=0; i<pls.length; i++) {
-        const tracks = await apiGetPlaylistTracks(pls[i].id);
-        if (Array.isArray(tracks)) allTracks = allTracks.concat(tracks.map(normSpTrack));
-        setDjProgress({active:true, message:`Loading playlist ${i+1}/${pls.length}...`, pct:10+Math.round((i/pls.length)*15), done:false});
-      }
-      // Deduplicate
-      const seen = new Set();
-      allTracks = allTracks.filter(t=>{ if(!t?.id||seen.has(t.id)) return false; seen.add(t.id); return true; });
-      setDjProgress({active:true, message:`Analysing ${allTracks.length} tracks...`, pct:25, done:false});
 
-      // 3. Enrich BPM via GetSongBPM (batch, 150ms delay between calls)
-      const bpmCache = JSON.parse(localStorage.getItem("sp_bpm_cache")||"{}");
-      const enriched = [];
-      for (let i=0; i<allTracks.length; i++) {
-        const t = allTracks[i];
-        let bpm = bpmCache[t.id] || t.bpm || 0;
-        let camelot = t.camelot || "";
-        if (!bpm && t.t && t.a) {
-          const data = await fetchBpmData(t.t, t.a);
-          if (data) { bpm = data.bpm; camelot = data.camelot; }
-          await new Promise(r=>setTimeout(r,150)); // rate limit
+      if (toScan.length) {
+        setDjProgress({active:true, message:`Loading tracks from ${toScan.length} playlist${toScan.length!==1?"s":""}...`, pct:10, done:false});
+        // 2. Collect tracks from selected playlists
+        for (let i=0; i<toScan.length; i++) {
+          const tracks = await apiGetPlaylistTracks(toScan[i].id);
+          if (Array.isArray(tracks)) allTracks = allTracks.concat(tracks.map(normSpTrack));
+          setDjProgress({active:true, message:`Loading "${toScan[i].name}"...`, pct:10+Math.round(((i+1)/toScan.length)*20), done:false});
         }
-        enriched.push({...t, bpm, camelot});
-        if (i % 10 === 0) setDjProgress({active:true, message:`Analysing tracks... ${i}/${allTracks.length}`, pct:25+Math.round((i/allTracks.length)*35), done:false});
+        // Deduplicate by Spotify ID
+        const seen = new Set();
+        allTracks = allTracks.filter(t=>{ if(!t?.id||seen.has(t.id)) return false; seen.add(t.id); return true; });
       }
 
-      // 4. Fill each stage
-      const newStages = stages.map((stage, si) => {
+      // 3. Enrich BPM using Spotify Audio Features (batch 50/req — fast & accurate)
+      if (allTracks.length) {
+        setDjProgress({active:true, message:`Getting BPM for ${allTracks.length} tracks via Spotify...`, pct:30, done:false});
+        const enriched = await enrichTracksWithBpm(allTracks);
+        allTracks = enriched;
+        setDjProgress({active:true, message:"BPM analysis complete. Building stage soundtracks...", pct:55, done:false});
+      }
+
+      // 4. Fill each stage — with Camelot-aware scoring and key-compatible transitions
+      const newStages = [];
+      const usedIds = new Set(); // avoid same track in multiple stages
+      let globalPrevCamelot = "";
+
+      for (let si=0; si<stages.length; si++) {
+        const stage = stages[si];
         const cfg = SCFG[stage.type] || {bpmMin:100, bpmMax:140};
-        setDjProgress({active:true, message:`Building music for "${stage.name}"...`, pct:60+Math.round((si/stages.length)*35), done:false});
-        let prevCamelot = "";
-        const scored = enriched.map(t=>({...t, _score: scoreTrackForStage(t, cfg.bpmMin, cfg.bpmMax, prevCamelot)}));
+        setDjProgress({active:true, message:`Scoring tracks for "${stage.name}"...`, pct:55+Math.round(((si+1)/stages.length)*35), done:false});
+
+        let pool = allTracks.filter(t=>!usedIds.has(t.id));
+
+        // Fallback: if pool empty or all denied, use Spotify Recommendations for this stage's BPM range
+        if (pool.length < 3) {
+          setDjProgress({active:true, message:`Fetching Spotify recommendations for "${stage.name}"...`, pct:55+Math.round(((si+1)/stages.length)*35), done:false});
+          try {
+            const recs = await apiGetRecommendations({ seedGenres:["workout","pop","electronic"], minTempo:cfg.bpmMin, maxTempo:cfg.bpmMax, limit:20 });
+            const recNormed = await enrichTracksWithBpm(recs.map(normSpTrack));
+            pool = [...pool, ...recNormed.filter(t=>!usedIds.has(t.id))];
+          } catch(_) {}
+        }
+
+        // Score each track for this stage, using last selected track's key for Camelot compatibility
+        let prevCamelot = globalPrevCamelot;
+        const scored = pool.map(t=>({...t, _score: scoreTrackForStage(t, cfg.bpmMin, cfg.bpmMax, prevCamelot)}));
         const selected = selectTracksForDuration(scored, stage.dur, stage.type);
-        return {...stage, tracks: selected};
-      });
+
+        // Update prevCamelot to last selected track's key for next stage
+        if (selected.length) {
+          globalPrevCamelot = selected[selected.length-1].camelot || globalPrevCamelot;
+          selected.forEach(t=>usedIds.add(t.id));
+        }
+
+        newStages.push({...stage, tracks: selected});
+      }
 
       setStages(newStages);
-      setDjProgress({active:true, message:"✅ Class DJ'd! Music assigned to all stages.", pct:100, done:true});
+      const totalAssigned = newStages.reduce((a,s)=>a+s.tracks.length,0);
+      setDjProgress({active:false, message:`✅ Done! ${totalAssigned} tracks assigned across ${stages.length} stages.`, pct:100, done:true});
     } catch(e) {
-      setDjProgress({active:true, message:`Error: ${e.message}`, pct:0, done:true});
+      console.error("DJ error:", e);
+      setDjProgress({active:false, message:`Error: ${e.message}`, pct:0, done:true});
     }
-    setTimeout(()=>setDjProgress({active:false,message:"",pct:0,done:false}),3000);
+    setTimeout(()=>setDjProgress({active:false,message:"",pct:0,done:false}),4000);
   };
 
   const handleSelectTemplate = t => {
