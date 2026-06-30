@@ -1706,9 +1706,9 @@ const SpBadge = ({children}) => (
 // Option A (default): Leaf + Barbell in a circle
 const JungleLogo = ({size=32}) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="46" fill={T.accent+"18"} stroke={T.accent} strokeWidth="2"/>
+    <circle cx="50" cy="50" r="46" fill="var(--accent-10)" stroke="var(--accent)" strokeWidth="2"/>
     {/* Jungle leaf */}
-    <path d="M26 57 Q37 22 56 29 Q41 45 26 57Z" fill={T.green} opacity="0.95"/>
+    <path d="M26 57 Q37 22 56 29 Q41 45 26 57Z" fill="var(--green)" opacity="0.95"/>
     <path d="M56 29 Q71 17 74 35 Q62 40 56 29Z" fill={T.green} opacity="0.7"/>
     <line x1="26" y1="57" x2="56" y2="29" stroke={T.green} strokeWidth="1.5" opacity="0.4"/>
     {/* Barbell */}
@@ -1742,7 +1742,7 @@ function LoginScreen({onLogin, authError}) {
       <p style={{marginTop:"12px",color:T.muted,fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
       {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>⚠️ {authError}</div>}
       {IS_CONFIGURED ? (
-        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:T.green,color:"white",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
+        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:"var(--green)",color:"var(--on-green)",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
           🎵 Continue with Spotify
         </button>
       ) : (
@@ -1997,7 +1997,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
         <div style={{padding:"12px 18px",borderTop:`1px solid ${T.border}`,display:"flex",gap:"8px",flexShrink:0}}>
           {tab === "branding" ? <>
             <button onClick={saveBranding}
-              style={{flex:2,padding:"10px",background:saved?T.green:T.accent,color:"white",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"12px",transition:"background 0.3s",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+              style={{flex:2,padding:"10px",background:saved?"var(--green)":"var(--accent)",color:saved?"var(--on-green)":"var(--on-accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"12px",transition:"background .3s,color .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
               {saved ? <><Check size={13}/> Saved!</> : "💾 Save Branding"}
             </button>
             <button onClick={resetBranding}
@@ -2163,7 +2163,7 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
                 placeholder="BPM"
                 style={{width:"52px",padding:"1px 5px",background:T.card,border:`1px solid ${T.accent}`,borderRadius:"3px",color:T.text,fontSize:"10px",fontWeight:"700",outline:"none"}}
               />
-              <button onClick={saveBpm} style={{padding:"1px 6px",background:T.accent,border:"none",borderRadius:"3px",cursor:"pointer",color:"#fff",fontSize:"10px",fontWeight:"700"}}>✓</button>
+              <button onClick={saveBpm} style={{padding:"1px 6px",background:"var(--accent)",border:"none",borderRadius:"3px",cursor:"pointer",color:"var(--on-accent)",fontSize:"10px",fontWeight:"700"}}>✓</button>
               <button onClick={()=>setEditingBpm(false)} style={{padding:"1px 4px",background:"transparent",border:"none",cursor:"pointer",color:T.muted,fontSize:"10px"}}>✕</button>
             </span>
           ) : bpm > 0 ? (
@@ -2335,7 +2335,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
   // ── Sub-components ──
   const GoBtn = ({onClick, disabled}) => (
     <button onClick={onClick} disabled={disabled||loading}
-      style={{flexShrink:0,padding:"8px 14px",background:(disabled||loading)?T.border:T.accent,color:"white",border:"none",borderRadius:"6px",cursor:(disabled||loading)?"not-allowed":"pointer",fontWeight:"700",fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",transition:"background 0.15s"}}>
+      style={{flexShrink:0,padding:"8px 14px",background:(disabled||loading)?"var(--border)":"var(--accent)",color:(disabled||loading)?T.muted:"var(--on-accent)",border:"none",borderRadius:"6px",cursor:(disabled||loading)?"not-allowed":"pointer",fontWeight:"700",fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",transition:"background .3s,color .2s"}}>
       {loading?<Loader size={13}/>:<Search size={13}/>} {loading?"…":"Go"}
     </button>
   );
@@ -2435,7 +2435,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                     <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.4"}}>Import a playlist and auto-distribute songs across all stages by duration</p>
                   </div>
                   <button onClick={onSmartDistribute}
-                    style={{flexShrink:0,padding:"7px 14px",background:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap"}}>
+                    style={{flexShrink:0,padding:"7px 14px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap"}}>
                     Go
                   </button>
                 </div>
@@ -2445,7 +2445,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                   onChange={e=>setPlSearch(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&searchSpotifyPlaylists()}/>
                 <button onClick={searchSpotifyPlaylists} disabled={loadingPls||!plSearch.trim()}
-                  style={{flexShrink:0,padding:"8px 12px",background:(!plSearch.trim()||loadingPls)?T.border:T.accent,color:"white",border:"none",borderRadius:"6px",cursor:(!plSearch.trim()||loadingPls)?"not-allowed":"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px"}}>
+                  style={{flexShrink:0,padding:"8px 12px",background:(!plSearch.trim()||loadingPls)?"var(--border)":"var(--accent)",color:(!plSearch.trim()||loadingPls)?T.muted:"var(--on-accent)",border:"none",borderRadius:"6px",cursor:(!plSearch.trim()||loadingPls)?"not-allowed":"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px"}}>
                   {loadingPls?<Loader size={13}/>:<Search size={13}/>}
                 </button>
               </div>
@@ -2561,7 +2561,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
               ))}
             </div>
             <button onClick={runBpmSearch} disabled={loading||!bpmSeedGenre}
-              style={{width:"100%",padding:"10px",background:(loading||!bpmSeedGenre)?T.border:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:(loading||!bpmSeedGenre)?"not-allowed":"pointer",fontWeight:"700",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+              style={{width:"100%",padding:"10px",background:(loading||!bpmSeedGenre)?"var(--border)":"var(--accent)",color:(loading||!bpmSeedGenre)?T.muted:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:(loading||!bpmSeedGenre)?"not-allowed":"pointer",fontWeight:"700",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
               {loading?<><Loader size={14}/> Searching…</>:<><Search size={14}/> Find {bpmSeedGenre||"genre"} tracks</>}
             </button>
           </div>
@@ -4234,7 +4234,7 @@ function MemberScreen({onBack}) {
               ? <div style={{width:"100%",padding:"14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:T.accent}}>✓ Booked</div>
               : classDetail.waitlist
                 ? <button style={{width:"100%",padding:"14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:T.muted}}>Join waitlist ({classDetail.waitlist} ahead)</button>
-                : <button style={{width:"100%",padding:"14px",background:T.accent,border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"#0A0F0C"}}>Book with ClassPass</button>
+                : <button style={{width:"100%",padding:"14px",background:"var(--accent)",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--on-accent)"}}>Book with ClassPass</button>
             }
           </div>
         )}
@@ -5074,7 +5074,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
               ? <p style={{color:T.green, fontWeight:"700", fontSize:"13px", margin:"auto"}}>✓ All tracks added!</p>
               : <>
                   <button onClick={addAllToStage}
-                    style={{flex:1, padding:"10px", background:T.accent, color:"white", border:"none", borderRadius:"7px", cursor:"pointer", fontSize:"12px", fontWeight:"700"}}>
+                    style={{flex:1, padding:"10px", background:"var(--accent)", color:"var(--on-accent)", border:"none", borderRadius:"7px", cursor:"pointer", fontSize:"12px", fontWeight:"700"}}>
                     Add all {tracks.length} to "{stages[targetIdx]?.name}"
                   </button>
                   {stages.length > 1 && (
@@ -5196,7 +5196,7 @@ function DiscoverTab({ onAddExercise }) {
             style={{flex:1,padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",outline:"none"}}
           />
           <button onClick={search} disabled={loading||(!query.trim()&&!category)}
-            style={{padding:"8px 16px",background:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",opacity:(loading||(!query.trim()&&!category))?0.5:1}}>
+            style={{padding:"8px 16px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",opacity:(loading||(!query.trim()&&!category))?0.5:1}}>
             {loading ? <Loader size={13}/> : <Search size={13}/>} Search
           </button>
         </div>
@@ -5265,7 +5265,7 @@ function DiscoverTab({ onAddExercise }) {
                   )}
                   {onAddExercise && (
                     <button onClick={()=>handleAdd(ex)}
-                      style={{padding:"7px 16px",background:isAdded?T.green:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}>
+                      style={{padding:"7px 16px",background:isAdded?"var(--green)":"var(--accent)",color:isAdded?"var(--on-green)":"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}>
                       {isAdded ? <><Check size={13}/> Added to Stage</> : <><Plus size={13}/> Add to Stage</>}
                     </button>
                   )}
@@ -5349,7 +5349,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
       }}>
 
         {/* Toast */}
-        {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:T.accent,color:"#fff",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
+        {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:"var(--accent)",color:"var(--on-accent)",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
 
         {/* ── Top page header ── */}
         <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
@@ -7021,7 +7021,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               <p style={{fontSize:"14px",color:T.muted,marginTop:"4px"}}>{nowPlaying.artists?.[0]?.name}</p>
               <div style={{display:"flex",gap:"22px",alignItems:"center",marginTop:"20px"}}>
                 <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><SkipBack size={28}/></button>
-                <button onClick={handlePlayPause} style={{width:"60px",height:"60px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>{liveState.playing?<Pause size={24}/>:<Play size={24}/>}</button>
+                <button onClick={handlePlayPause} style={{width:"60px",height:"60px",borderRadius:"50%",background:"var(--accent)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--on-accent)"}}>{liveState.playing?<Pause size={24}/>:<Play size={24}/>}</button>
                 <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><SkipForward size={28}/></button>
               </div>
             </>}
@@ -7164,7 +7164,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               <p style={{fontSize:"14px",color:T.muted,marginBottom:"28px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
               <div style={{display:"flex",justifyContent:"center",gap:"22px",alignItems:"center"}}>
                 <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipBack size={26}/></button>
-                <button onClick={handlePlayPause} style={{width:"64px",height:"64px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
+                <button onClick={handlePlayPause} style={{width:"64px",height:"64px",borderRadius:"50%",background:"var(--accent)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--on-accent)"}}>
                   {liveState.playing ? <Pause size={26}/> : <Play size={26}/>}
                 </button>
                 <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipForward size={26}/></button>
@@ -7652,7 +7652,7 @@ export default function App() {
       {spError && view!=="display"&&view!=="overview-display" && (
         <div style={{padding:"10px 24px",background:T.accent+"20",borderBottom:`1px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <p style={{fontSize:"13px",color:T.accent,fontWeight:"600"}}>&#9888;&#65039; {spError}</p>
-          <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:T.accent,color:"white",border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
+          <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
         </div>
       )}
 
@@ -7734,19 +7734,4 @@ export default function App() {
             </div>
 
             {/* Drawer footer */}
-            <div style={{borderTop:`1px solid ${T.border}`,padding:"14px 16px",display:"flex",gap:"8px",flexShrink:0}}>
-              <button onClick={()=>setDark(!dark)} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                {dark?"☀ Light":"🌙 Dark"}
-              </button>
-              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                👤 Profile
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {showProfile && <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
-    </div>
-  );
-}
+            <di
