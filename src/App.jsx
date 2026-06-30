@@ -3162,144 +3162,234 @@ function GlossaryScreen({onBack}) {
   );
 }
 
-// ─── CalendarScreen ───────────────────────────────────────────────────────────
+// ─── CalendarScreen (Planning & Schedule Board) ───────────────────────────────
 function CalendarScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
-  const [classes, setClasses] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jungle_classes")||"[]"); } catch { return []; }
+  const isTablet = vw < 768;
+  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [viewMode, setViewMode] = React.useState("grid"); // "grid" | "heat"
+  const [dismissedTips, setDismissedTips] = React.useState([]);
+
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat"];
+  const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
+  const SLOT_LABELS = ["Morning","Mid-Morning","Lunch","Evening","Late"];
+
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + weekOffset * 7);
+  const startOfWeek = new Date(baseDate);
+  startOfWeek.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+
+  const dayDates = DAYS.map((d,i)=>{
+    const dt = new Date(startOfWeek);
+    dt.setDate(startOfWeek.getDate() + i);
+    return dt.getDate();
   });
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({date:"",time:"",name:"",coach:"",type:"HIIT"});
-  const [curMonth, setCurMonth] = useState(() => { const d=new Date(); return {y:d.getFullYear(),m:d.getMonth()}; });
 
-  const saveClasses = updated => { setClasses(updated); localStorage.setItem("jungle_classes", JSON.stringify(updated)); };
-  const addClass = () => {
-    if (!form.name||!form.date) return;
-    saveClasses([...classes, {id:uid(),...form}]);
-    setShowModal(false);
-    setForm({date:"",time:"",name:"",coach:"",type:"HIIT"});
-  };
-  const removeC = id => saveClasses(classes.filter(c=>c.id!==id));
+  const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
 
-  const {y,m} = curMonth;
-  const firstDay = new Date(y,m,1).getDay();
-  const daysInMonth = new Date(y,m+1,0).getDate();
-  const classesOnDay = day => {
-    const ds = `${y}-${String(m+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-    return classes.filter(c=>c.date===ds);
+  const schedule = {
+    "Mon-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:96, type:"HIIT", dur:"45m"},
+    "Mon-09:00": {name:"Flow Yoga",    coach:"Priya",fill:64, type:"Yoga", dur:"50m"},
+    "Mon-18:00": {name:"Hyrox Sim",   coach:"Dev",  fill:92, type:"Hyrox",dur:"60m"},
+    "Tue-06:00": {name:"Strength Lab", coach:"Mara", fill:100,type:"Strength",dur:"45m"},
+    "Tue-09:00": {name:"Sunrise HIIT", coach:"Mara", fill:88, type:"HIIT", dur:"45m"},
+    "Tue-18:00": {name:"Spin Ride",    coach:"Dev",  fill:71, type:"Spin", dur:"45m"},
+    "Tue-19:30": {name:"Boxing",       coach:"Jo",   fill:55, type:"Boxing",dur:"45m"},
+    "Wed-06:00": {name:"Sunrise HIIT", coach:"Jo",   fill:90, type:"HIIT", dur:"45m"},
+    "Wed-09:00": {name:"Mobility",     coach:"Priya",fill:58, type:"Mobility",dur:"45m"},
+    "Wed-12:00": {name:"Hyrox Sim",   coach:"Dev",  fill:94, type:"Hyrox",dur:"60m"},
+    "Wed-18:00": {name:"Strength Lab", coach:"Mara", fill:98, type:"Strength",dur:"45m"},
+    "Thu-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:86, type:"HIIT", dur:"45m"},
+    "Thu-18:00": {name:"Hyrox Sim",   coach:"Dev",  fill:89, type:"Hyrox",dur:"60m"},
+    "Thu-19:30": {name:"Recovery",     coach:"Jo",   fill:52, type:"Yoga", dur:"45m"},
+    "Fri-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:91, type:"HIIT", dur:"45m"},
+    "Fri-09:00": {name:"Flow Yoga",    coach:"Priya",fill:61, type:"Yoga", dur:"50m"},
+    "Fri-12:00": {name:"Hyrox Sim",   coach:"Dev",  fill:95, type:"Hyrox",dur:"60m"},
+    "Fri-18:00": {name:"Friday Burn",  coach:"Mara", fill:100,type:"Circuit",dur:"45m"},
+    "Sat-09:00": {name:"Strength Lab", coach:"Dev",  fill:82, type:"Strength",dur:"50m"},
+    "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
   };
-  const upcoming = [...classes].sort((a,b)=>a.date.localeCompare(b.date));
-  const typeColor = {HIIT:"#EF4444",Strength:"#8B5CF6",Mobility:"#10B981",Circuit:"#F97316",Cardio:"#F59E0B",Recovery:"#06B6D4","Open Gym":"#7A94AA"};
+
+  const suggested = [
+    {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
+    {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
+  ];
+
+  const trainers = [
+    {name:"Mara K.",  classes:14, cap:16, color:"#F59E0B"},
+    {name:"Dev R.",   classes:11, cap:14, color:"#22D3A6"},
+    {name:"Priya S.", classes:8,  cap:12, color:"#8B5CF6"},
+    {name:"Jo M.",    classes:5,  cap:10, color:"#3B82F6"},
+  ];
+
+  const aiTips = [
+    {id:0, text:"Tue 18:00 demand is up 34% — add a second Strength Lab. Likely 90%+ fill.", action:"Add it"},
+    {id:1, text:"Thu 09:00 Mobility under-fills. Try moving to 12:00 — matches lunchtime demand.", action:"Move it"},
+    {id:2, text:"Mara is near weekly cap (14/16). Shift Fri Burn to Jo to balance load.", action:"Reassign"},
+  ];
+
+  const fillColor = f => f >= 90 ? T.accent : f >= 70 ? "#E0B85B" : "#8AA294";
+
+  const visibleDays = isMobile ? DAYS.slice(0,4) : DAYS;
 
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"960px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"26px"}}>
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px":"24px",boxSizing:"border-box"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"18px",flexWrap:"wrap",gap:"10px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text}}><ArrowLeft size={20}/></button>
-          <h2 style={{fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text}}>Calendar</h2>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+          <div>
+            <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Planning & schedule</h2>
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
+          </div>
         </div>
-        <button onClick={()=>setShowModal(true)} style={{display:"flex",alignItems:"center",gap:"6px",padding:"10px 16px",background:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>
-          <Plus size={15}/> Add Class
-        </button>
+        <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+          {/* Week nav */}
+          <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden"}}>
+            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>‹</button>
+            <span style={{fontSize:"12px",fontWeight:"600",color:T.text,padding:"0 4px"}}>
+              {weekOffset===0?"This week":weekOffset===1?"Next week":weekOffset===-1?"Last week":`Week ${weekOffset>0?"+":""}${weekOffset}`}
+            </span>
+            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>›</button>
+          </div>
+          <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600"}}>
+            Demand heat
+          </button>
+          <button style={{padding:"8px 14px",background:T.accent,border:"none",borderRadius:"8px",cursor:"pointer",color:"#0A0F0C",fontSize:"12px",fontWeight:"700"}}>
+            Publish week
+          </button>
+          <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"8px",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"600"}}>
+            Auto-fill week
+          </button>
+        </div>
       </div>
 
-      {/* Month nav */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
-        <button onClick={()=>setCurMonth(p=>p.m===0?{y:p.y-1,m:11}:{y:p.y,m:p.m-1})} style={{background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",padding:"8px 12px",cursor:"pointer",color:T.text,fontWeight:"700"}}>‹</button>
-        <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>{MONTH_NAMES[m]} {y}</p>
-        <button onClick={()=>setCurMonth(p=>p.m===11?{y:p.y+1,m:0}:{y:p.y,m:p.m+1})} style={{background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",padding:"8px 12px",cursor:"pointer",color:T.text,fontWeight:"700"}}>›</button>
-      </div>
+      {/* Schedule grid */}
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",overflow:"hidden",marginBottom:"16px"}}>
+        {/* Day headers */}
+        <div style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid ${T.border}`}}>
+          <div style={{padding:"10px 12px",background:T.navy}}/>
+          {visibleDays.map((d,i)=>(
+            <div key={d} style={{padding:"10px 8px",background:T.navy,borderLeft:`1px solid ${T.border}`,textAlign:"center"}}>
+              <div style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{d}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>{dayDates[i]}</div>
+            </div>
+          ))}
+        </div>
 
-      {/* Day headers */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"4px",marginBottom:"4px"}}>
-        {(isMobile?["S","M","T","W","T","F","S"]:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]).map((d,i) => <p key={i} style={{textAlign:"center",fontSize:"11px",fontWeight:"700",color:T.muted,padding:"6px 0"}}>{d}</p>)}
-      </div>
-
-      {/* Calendar grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isMobile?"2px":"4px",marginBottom:"28px"}}>
-        {Array(firstDay).fill(null).map((_,i) => <div key={`e${i}`} style={{minHeight:isMobile?"44px":"64px"}}/>)}
-        {Array(daysInMonth).fill(null).map((_,i) => {
-          const day = i+1;
-          const dayC = classesOnDay(day);
-          const today = new Date();
-          const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===day;
-          return (
-            <div key={day} style={{minHeight:isMobile?"40px":"64px",padding:isMobile?"2px":"6px",background:T.card,borderRadius:"7px",border:`1px solid ${isToday?T.accent:T.border}`,position:"relative"}}>
-              <p style={{fontSize:isMobile?"10px":"12px",fontWeight:isToday?"800":"600",color:isToday?T.accent:T.text,marginBottom:"2px"}}>{day}</p>
-              {dayC.slice(0,2).map(c => (
-                <div key={c.id} style={{fontSize:"9px",padding:"2px 4px",background:(typeColor[c.type]||T.accent)+"30",color:typeColor[c.type]||T.accent,borderRadius:"3px",marginBottom:"2px",fontWeight:"700",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {c.name}
+        {/* Time slot rows */}
+        {SLOTS.map(slot=>(
+          <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid ${T.border}`,minHeight:"80px"}}>
+            <div style={{padding:"10px 12px",background:T.navy+"66",display:"flex",flexDirection:"column",justifyContent:"center",borderRight:`1px solid ${T.border}`}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{slot}</div>
+            </div>
+            {visibleDays.map(day=>{
+              const key = `${day}-${slot}`;
+              const cls = schedule[key];
+              const sug = suggested.find(s=>s.day===day && s.slot===slot);
+              return (
+                <div key={day} style={{padding:"6px",borderLeft:`1px solid ${T.border}`,position:"relative"}}>
+                  {cls && (
+                    <div style={{
+                      padding:"7px 8px",
+                      background:`${CAT_COLOR[cls.type]||T.accent}18`,
+                      border:`1px solid ${CAT_COLOR[cls.type]||T.accent}40`,
+                      borderRadius:"8px",
+                      cursor:"pointer",
+                      height:"calc(100% - 2px)",
+                      boxSizing:"border-box",
+                    }}>
+                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
+                      <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{cls.coach} · {cls.dur}</div>
+                      <div style={{marginTop:"4px",display:"flex",alignItems:"center",gap:"4px"}}>
+                        <div style={{flex:1,height:"3px",background:T.navy,borderRadius:"2px"}}>
+                          <div style={{width:`${cls.fill}%`,height:"100%",background:fillColor(cls.fill),borderRadius:"2px"}}/>
+                        </div>
+                        <span style={{fontSize:"9px",color:fillColor(cls.fill),fontWeight:"700"}}>{cls.fill}%</span>
+                      </div>
+                    </div>
+                  )}
+                  {!cls && sug && (
+                    <div style={{
+                      padding:"7px 8px",
+                      background:"rgba(123,227,164,.06)",
+                      border:`1px dashed ${T.accent}60`,
+                      borderRadius:"8px",
+                      cursor:"pointer",
+                    }}>
+                      <div style={{fontSize:"9px",fontWeight:"700",color:T.accent,letterSpacing:"0.5px",textTransform:"uppercase"}}>SUGGESTED</div>
+                      <div style={{fontSize:isMobile?"9px":"10px",fontWeight:"600",color:T.text,marginTop:"1px"}}>{sug.name}</div>
+                    </div>
+                  )}
+                  {!cls && !sug && (
+                    <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:0}}
+                      onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+                      onMouseLeave={e=>e.currentTarget.style.opacity="0"}>
+                      <span style={{fontSize:"18px",color:T.muted}}>+</span>
+                    </div>
+                  )}
                 </div>
-              ))}
-              {dayC.length>2 && <p style={{fontSize:"9px",color:T.muted}}>+{dayC.length-2} more</p>}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Upcoming classes */}
-      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
-        <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>All Scheduled Classes ({classes.length})</p>
-        {upcoming.length === 0 && <p style={{fontSize:"13px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No classes scheduled yet. Click "+ Add Class" to get started.</p>}
-        {upcoming.map(c => (
-          <div key={c.id} style={{display:"flex",alignItems:"center",gap:"14px",padding:"12px 0",borderBottom:`1px solid ${T.border}`}}>
-            <div style={{width:"4px",height:"40px",background:typeColor[c.type]||T.accent,borderRadius:"2px",flexShrink:0}}/>
-            <div style={{flex:1,minWidth:"0"}}>
-              <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"3px"}}>
-                <p style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{c.name}</p>
-                <span style={{fontSize:"10px",padding:"2px 7px",background:(typeColor[c.type]||T.accent)+"25",color:typeColor[c.type]||T.accent,borderRadius:"3px",fontWeight:"700"}}>{c.type}</span>
-              </div>
-              <p style={{fontSize:"12px",color:T.muted}}>{c.date}{c.time?` · ${c.time}`:""}{c.coach?` · 👤 ${c.coach}`:""}</p>
-            </div>
-            <button onClick={()=>removeC(c.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px"}}><X size={16}/></button>
+              );
+            })}
           </div>
         ))}
       </div>
 
-      {/* Add Class Modal */}
-      {showModal && (
-        <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.7)",display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",zIndex:1000}}>
-          <div style={{background:T.card,borderRadius:isMobile?"14px 14px 0 0":"16px",padding:isMobile?"16px":"30px",width:isMobile?"100vw":"560px",maxWidth:"100%",border:`1px solid ${T.border}`,maxHeight:"90vh",overflowY:"auto"}}>
-            <h2 style={{fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"22px"}}>Add New Class</h2>
-            <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-              <div>
-                <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"5px"}}>Class Name *</p>
-                <Input placeholder="e.g. Morning HIIT, Iron Protocol" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-              </div>
-              <div>
-                <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"5px"}}>Coach Name</p>
-                <Input placeholder="e.g. Alex, Jordan" value={form.coach} onChange={e=>setForm({...form,coach:e.target.value})}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
-                <div>
-                  <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"5px"}}>Date *</p>
-                  <Input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
-                </div>
-                <div>
-                  <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"5px"}}>Time</p>
-                  <Input type="time" value={form.time} onChange={e=>setForm({...form,time:e.target.value})}/>
-                </div>
-              </div>
-              <div>
-                <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"5px"}}>Class Type</p>
-                <Select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
-                  {CLASS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </Select>
-              </div>
-              <div style={{display:"flex",gap:"10px",marginTop:"6px"}}>
-                <button onClick={addClass} style={{flex:1,padding:"12px",background:T.accent,color:"white",border:"none",borderRadius:"7px",cursor:"pointer",fontWeight:"700",fontSize:"14px"}}>Add Class</button>
-                <button onClick={()=>setShowModal(false)} style={{padding:"12px 18px",background:T.navy,color:T.text,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer"}}>Cancel</button>
-              </div>
+      {/* Bottom: AI tips + Trainer load */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"14px"}}>
+        {/* Jungle Intelligence */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"}}>
+            <div style={{width:"28px",height:"28px",borderRadius:"8px",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Jungle Intelligence</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {aiTips.filter(t=>!dismissedTips.includes(t.id)).map((tip,i)=>(
+              <div key={tip.id} style={{padding:"12px 14px",background:T.navy,border:`1px solid ${T.accent}30`,borderRadius:"10px",position:"relative"}}>
+                <div style={{fontSize:"12px",color:T.text,lineHeight:"1.5",paddingRight:"20px"}}>{tip.text}</div>
+                <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+                  <button style={{padding:"5px 12px",background:T.accent,border:"none",borderRadius:"6px",cursor:"pointer",color:"#0A0F0C",fontSize:"11px",fontWeight:"700"}}>{tip.action}</button>
+                  <button onClick={()=>setDismissedTips(d=>[...d,tip.id])} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Dismiss</button>
+                </div>
+              </div>
+            ))}
+            {dismissedTips.length===aiTips.length && (
+              <div style={{textAlign:"center",padding:"24px",color:T.muted,fontSize:"13px"}}>All suggestions reviewed ✓</div>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Trainer load */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load · this week</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+            {trainers.map((t,i)=>(
+              <div key={i}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
+                  <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":T.muted,fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                </div>
+                <div style={{height:"7px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
+                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
+                </div>
+                <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
+              </div>
+            ))}
+          </div>
+          {trainers.some(t=>t.classes/t.cap>0.85) && (
+            <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
+              ⚠ Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── BuilderScreen ────────────────────────────────────────────────────────────
 // ─── PlaylistImportModal ──────────────────────────────────────────────────────
 function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onClose }) {
   const vw = useWindowWidth();
