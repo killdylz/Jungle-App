@@ -4054,7 +4054,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                   }
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
-                    <div style={{fontSize:"10px",color:T.muted}}>{p.tracks?.total||"?"} tracks</div>
+                    <div style={{fontSize:"10px",color:T.muted}}>{(p.tracks?.total ?? "?")} tracks</div>
                   </div>
                 </div>
               ))}
@@ -5725,7 +5725,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
                 }
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
-                  <div style={{fontSize:"10px",color:T.muted}}>{pl.tracks?.total || "?"} tracks</div>
+                  <div style={{fontSize:"10px",color:T.muted}}>{pl.tracks?.total ?? "?"} tracks</div>
                 </div>
               </div>
             ))}
