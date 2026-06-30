@@ -6004,9 +6004,13 @@ export default function App() {
   if (!token) return <LoginScreen onLogin={redirectToSpotify} authError={authError}/>;
 
   const navItems = [
-    {key:"dashboard", label:isXSmall?"Home":"Dashboard"},
-    {key:"builder",   label:"Builder"},
-    {key:"templates", label:isXSmall?"Tmpl":"Templates"},
+    {key:"dashboard",    label:isXSmall?"Home":"Dashboard"},
+    {key:"builder",      label:"Builder"},
+    {key:"templates",    label:isXSmall?"Tmpl":"Templates"},
+    {key:"library",      label:isXSmall?"Lib":"Library"},
+    {key:"glossary",     label:isXSmall?"Glos":"Glossary"},
+    {key:"analytics",    label:isXSmall?"Stats":"Analytics"},
+    {key:"integrations", label:isXSmall?"Intg":"Integrations"},
   ];
 
   return (
