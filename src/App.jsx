@@ -5421,34 +5421,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
         {/* RIGHT COLUMN: Auto-DJ panel (desktop only, non-tablet) */}
         {!isMobile && !isTablet && (
-          <div style={{width:"300px",display:"flex",flexDirection:"column",flexShrink:0,borderLeft:`1px solid ${T.border}`,background:T.card,overflow:"hidden"}}>
-            <div style={{padding:"20px 20px 14px",borderBottom:`1px solid ${T.border}`}}>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Auto-DJ</div>
-              <div style={{fontSize:"11px",color:T.muted}}>BPM matched per stage</div>
-            </div>
-            <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
-              {/* BPM range per stage */}
-              <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"16px"}}>
-                {stages.map((s,i)=>{
-                  const cfg = SCFG[s.type]||SCFG.circuit;
-                  const bpm = s.type==="warmup"?"88–100":s.type==="cooldown"?"80–90":s.type==="hiit"?"132–140":s.type==="strength"?"110–120":"120–130";
-                  return (
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                      <div style={{width:"3px",height:"18px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:"11px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                      </div>
-                      <div style={{fontSize:"11px",color:T.muted,flexShrink:0}}>{bpm}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <button onClick={onDjClass} disabled={djProgress?.active}
-                style={{width:"100%",padding:"12px",background:djProgress?.active?T.border:T.accent,color:djProgress?.active?T.muted:T.bg,border:"none",borderRadius:"9px",cursor:djProgress?.active?"wait":"pointer",fontSize:"13px",fontWeight:"700"}}>
-                {djProgress?.active?"⏳ DJ'ing...":"🎧 DJ This Class"}
-              </button>
-            </div>
-          </div>
+          <AutoDjPanel stages={stages} onDjClass={onDjClass} djProgress={djProgress}/>
         )}
       </div>
 
