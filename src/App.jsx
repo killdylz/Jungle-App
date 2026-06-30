@@ -2657,6 +2657,145 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
 }
 
 // ─── AnalyticsScreen ──────────────────────────────────────────────────────────
+// ─── IntegrationsScreen ───────────────────────────────────────────────────────
+function IntegrationsScreen({onBack}) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
+  const isTablet = vw < 768;
+
+  const integrations = [
+    {
+      name: "Spotify",
+      connected: true,
+      iconBg: "#1DB954",
+      detail: "Studio · Premium",
+      desc: "Powers the Auto-DJ. Pulls BPM & audio analysis, plays from studio Premium account.",
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4.6 14.4a.62.62 0 0 1-.86.2c-2.34-1.43-5.3-1.76-8.77-.96a.62.62 0 1 1-.28-1.21c3.8-.87 7.07-.5 9.7 1.11a.62.62 0 0 1 .2.86Zm1.23-2.74a.78.78 0 0 1-1.07.26c-2.68-1.65-6.77-2.13-9.94-1.16a.78.78 0 1 1-.45-1.49c3.63-1.1 8.13-.57 11.2 1.32a.78.78 0 0 1 .26 1.07Zm.1-2.85C14.83 8.96 9.4 8.78 6.3 9.72a.93.93 0 1 1-.54-1.79c3.56-1.08 9.56-.87 13.3 1.35a.94.94 0 0 1-.95 1.62Z"/>
+        </svg>
+      ),
+    },
+    {
+      name: "ClassPass",
+      connected: true,
+      iconBg: "#0B1F3A",
+      detail: "238 bookings / wk",
+      desc: "Two-way booking sync. Inventory, spot allocation & no-show fees flow automatically.",
+      iconText: "CP",
+    },
+    {
+      name: "Wearables",
+      connected: true,
+      iconBg: "#FF2D55",
+      detail: "HR zones live",
+      desc: "Apple Health, Whoop & Garmin. Live heart-rate to the TV, recovery into RPE data.",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff">
+          <path d="M12 21s-7-4.35-9.5-8.5C.7 9.3 2 5.5 5.5 5.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.5 0 4.8 3.8 3 7C19 16.65 12 21 12 21Z"/>
+        </svg>
+      ),
+    },
+    {
+      name: "Calendar",
+      connected: true,
+      iconBg: "#fff",
+      detail: "Google · Outlook",
+      desc: "Trainer shifts & member bookings sync to Google / Outlook calendars both ways.",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4285F4" strokeWidth="2">
+          <rect x="3" y="4" width="18" height="17" rx="2"/>
+          <path d="M3 9h18M8 2v4M16 2v4"/>
+        </svg>
+      ),
+    },
+    {
+      name: "Stripe",
+      connected: true,
+      iconBg: "#635BFF",
+      detail: "£48k / mo",
+      desc: "Memberships, drop-ins & retail. Revenue lands in the analytics dashboard live.",
+      iconText: "S",
+    },
+    {
+      name: null, // placeholder "Browse more"
+      connected: false,
+      isPlaceholder: true,
+    },
+  ];
+
+  const cols = isMobile ? 1 : isTablet ? 2 : 3;
+
+  return (
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",boxSizing:"border-box"}}>
+      {/* Back */}
+      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"26px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text,margin:0}}>Integrations</h2>
+      </div>
+
+      {/* Card */}
+      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:"18px",overflow:"hidden",maxWidth:"1200px",margin:"0 auto"}}>
+        {/* Header row */}
+        <div style={{padding:"24px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
+          <div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"20px",fontWeight:"700",color:T.text}}>Connected apps</div>
+            <div style={{fontSize:"12px",color:T.muted,marginTop:"3px"}}>6 active · syncs in real time</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:T.accent,padding:"7px 13px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`}}>
+            <div style={{width:"7px",height:"7px",borderRadius:"50%",background:T.accent}}/>
+            All systems healthy
+          </div>
+        </div>
+
+        {/* Grid */}
+        <div style={{padding:"24px 28px",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:"16px"}}>
+          {integrations.map((item, idx) => {
+            if (item.isPlaceholder) {
+              return (
+                <div key={idx} style={{border:`1px dashed ${T.border}`,borderRadius:"14px",padding:"18px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",minHeight:"170px",cursor:"pointer"}}>
+                  <div style={{width:"42px",height:"42px",borderRadius:"11px",border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted}}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
+                  </div>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:T.muted}}>Browse 40+ integrations</div>
+                  <div style={{fontSize:"11px",color:T.muted,textAlign:"center"}}>Mailchimp · Mindbody · Slack · Zapier · Sonos</div>
+                </div>
+              );
+            }
+            const borderCol = item.connected ? T.accent : T.border;
+            return (
+              <div key={idx} style={{background:T.card,border:`1px solid ${borderCol}`,borderRadius:"14px",padding:"18px"}}>
+                {/* Header row */}
+                <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"13px"}}>
+                  <div style={{width:"42px",height:"42px",borderRadius:"11px",background:item.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"800",color:"#fff",fontSize:item.iconText?.length===1?"18px":"15px"}}>
+                    {item.icon || item.iconText}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{item.name}</div>
+                    <div style={{fontSize:"11px",color:item.connected?T.accent:T.muted}}>
+                      {item.connected ? "● Connected" : "○ Available"}
+                    </div>
+                  </div>
+                </div>
+                <div style={{fontSize:"12px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>{item.desc}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:"13px",borderTop:`1px solid ${T.border}`}}>
+                  <span style={{fontSize:"11px",color:T.muted}}>{item.detail}</span>
+                  {/* Toggle */}
+                  <div style={{width:"38px",height:"22px",borderRadius:"11px",background:item.connected?T.accent:T.border,position:"relative",cursor:"pointer",flexShrink:0}}>
+                    <div style={{position:"absolute",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:T.bg,transition:"left 0.2s",[item.connected?"right":"left"]:"2px"}}/>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
