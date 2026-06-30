@@ -6785,6 +6785,10 @@ export default function App() {
     {key:"library",      label:isXSmall?"Lib":"Library"},
     {key:"glossary",     label:isXSmall?"Glos":"Glossary"},
     {key:"analytics",    label:isXSmall?"Stats":"Analytics"},
+    {key:"music",        label:isXSmall?"Music":"Music Hub"},
+    {key:"schedule",     label:isXSmall?"Sched":"Schedule"},
+    {key:"members",      label:isXSmall?"Mbrs":"Members"},
+    {key:"brand",        label:isXSmall?"Brand":"Brand Studio"},
     {key:"integrations", label:isXSmall?"Intg":"Integrations"},
   ];
 
