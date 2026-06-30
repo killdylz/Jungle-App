@@ -6625,12 +6625,16 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 </div>
               </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
-              {/* Casting badge */}
-              <div style={{display:"flex",alignItems:"center",gap:"7px",padding:"6px 12px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`,fontSize:"12px",color:T.accent,fontWeight:"600",flexShrink:0}}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 12a10 10 0 0 1 10-10"/><path d="M5 12a7 7 0 0 1 7-7"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
-                {!isMobile && "Casting to Studio TV"}
-              </div>
+            <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+              {/* Spotify device picker */}
+              <SpotifyDevicePicker
+                devices={devices}
+                activeDeviceId={activeDeviceId}
+                setActiveDeviceId={setActiveDeviceId}
+                browserDeviceId={deviceId}
+                refreshDevices={refreshDevices}
+                compact={isMobile}
+              />
               {/* ELAPSED */}
               <div style={{textAlign:"center",flexShrink:0}}>
                 <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>ELAPSED</div>
