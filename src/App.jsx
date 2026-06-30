@@ -6872,12 +6872,6 @@ export default function App() {
         {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
       </div>
 
-      {view!=="display"&&view!=="overview-display" && (
-      <footer style={{padding:"10px 24px",borderTop:`1px solid ${T.border}`,background:T.card,textAlign:"center"}}>
-        <p style={{fontSize:"11px",color:T.muted}}>&#169; {new Date().getFullYear()} JUNGLE. All rights reserved.</p>
-      </footer>
-      )}
-
       {showProfile && <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
   );
