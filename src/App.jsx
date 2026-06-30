@@ -4225,660 +4225,351 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const handleDragEnd = () => { setDragOver(null); dragIdx.current = null; };
 
   return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Stage Timeline — My Workout */}
-      <div style={{padding:isMobile?"10px 14px":"16px 20px 14px",borderBottom:`1px solid ${T.border}`,background:T.card}}>
-        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px",flexWrap:"wrap"}}>
-          <input type="text" value={sessionName} onChange={e=>onSessionNameChange(e.target.value)} placeholder="Session name…" style={{background:"transparent",border:"none",borderBottom:`2px solid ${T.border}`,color:T.text,fontSize:isMobile?"14px":"17px",fontWeight:"700",padding:"2px 0",outline:"none",flex:"1",minWidth:"120px",maxWidth:"260px"}}/>
-          <span style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>⏱ {fmt(totalDur)}</span>
-          {!isMobile && <span style={{fontSize:"11px",color:T.muted,opacity:0.6,marginLeft:"auto"}}>⠿ drag to reorder</span>}
-        </div>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:T.bg}}>
 
-        {/* Class type + sub-type selector row */}
-        <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"10px",flexWrap:"wrap"}}>
-          {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
-          <select value={selectedClass}
-            onChange={e=>handleClassChange(e.target.value)}
-            style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
-            {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
+      {/* TOP BAR */}
+      <div style={{height:"84px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,background:T.card,gap:"12px"}}>
+        {/* Left: back + session name */}
+        <div style={{display:"flex",alignItems:"center",gap:"14px",minWidth:0,flex:1}}>
+          <button onClick={()=>onOverviewDisplay()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style={{minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
+              <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"21px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
+              <button onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px",display:"flex",flexShrink:0}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+            </div>
+            {!isMobile && <div style={{fontSize:"12px",color:T.muted}}>
+              {Math.round(totalDur/60)} min · {stages.length} stages · {WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} · target RPE 7–8
+            </div>}
+          </div>
+        </div>
+        {/* Right: action buttons */}
+        {!isMobile && (
+          <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
+            <button onClick={onOverviewDisplay} style={{border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
+              Preview on TV
+            </button>
+            <button onClick={()=>{setLiveState&&setLiveState({playing:false,idx:0,elapsed:0}); onStartSession();}}
+              style={{border:"none",background:T.accent,color:T.bg,fontWeight:"700",fontSize:"13px",padding:"9px 17px",borderRadius:"9px",cursor:"pointer"}}>
+              Add to schedule
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Class type selector + DJ row */}
+      <div style={{padding:isMobile?"8px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+        {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
+        <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)}
+          style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
+        </select>
+        {selectedSubKeys.length > 0 && <>
+          {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
+          <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)}
+            style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+            {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
           </select>
+        </>}
+        <button onClick={()=>setShowLibraryModal(true)}
+          style={{padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
+          📚 {!isMobile && "Browse "}Library
+        </button>
+        <button title="Smart Distribute"
+          onClick={()=>{
+            const lib = getLibrary();
+            const allNew = distributeLibraryExercises(selectedClass, selectedSub, stages, lib);
+            const filled = allNew.filter(s=>(s.exercises||[]).length>0).length;
+            if (filled === 0) { setDistributeToast({msg:"No exercises found — try a different class or style"}); setTimeout(()=>setDistributeToast(null),3500); return; }
+            allNew.forEach((s,i)=>onStageChange(i,s));
+            const clsInfo = lib[selectedClass]; const subInfo = clsInfo?.subTypes?.[selectedSub];
+            const totalEx = allNew.reduce((a,s)=>a+(s.exercises?.length||0),0);
+            setDistributeToast({msg:`⚡ ${totalEx} exercises across ${filled} stage${filled!==1?"s":""}`});
+            setTimeout(()=>setDistributeToast(null),4000);
+          }}
+          style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
+          ⚡ {!isMobile && "Smart "}Distribute
+        </button>
+        <button onClick={onDjClass} disabled={djProgress?.active}
+          style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?T.border:"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
+          {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
+        </button>
+      </div>
 
-          {selectedSubKeys.length > 0 && <>
-            {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
-            <select value={selectedSub||""}
-              onChange={e=>handleSubChange(e.target.value)}
-              style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
-              {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
-            </select>
-          </>}
-
-          <button onClick={()=>setShowLibraryModal(true)}
-            style={{padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
-            📚 {!isMobile && "Browse "}Library
-          </button>
-
-          {/* ⚡ Smart Distribute — always overwrites all stages with current library selection */}
-          <button
-            title={`Distribute ${WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} exercises across all stages — replaces existing exercises`}
-            onClick={()=>{
-              const lib = getLibrary();
-              const allNew = distributeLibraryExercises(selectedClass, selectedSub, stages, lib);
-              const filled = allNew.filter(s=>(s.exercises||[]).length>0).length;
-              if (filled === 0) {
-                setDistributeToast({msg:"No exercises found for these stage types — try a different class or style"});
-                setTimeout(()=>setDistributeToast(null),3500);
-                return;
-              }
-              allNew.forEach((s,i)=>onStageChange(i,s));
-              const clsInfo = lib[selectedClass];
-              const subInfo = clsInfo?.subTypes?.[selectedSub];
-              const totalEx = allNew.reduce((a,s)=>a+(s.exercises?.length||0),0);
-              setDistributeToast({msg:`⚡ ${totalEx} exercises distributed across ${filled} stage${filled!==1?"s":""} · ${clsInfo?.label} — ${subInfo?.label||selectedSub}`});
-              setTimeout(()=>setDistributeToast(null),4000);
-            }}
-            style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
-            ⚡ {!isMobile && "Smart "}Distribute
-          </button>
-
-          <button onClick={onDjClass} disabled={djProgress?.active} style={{
-            display:"flex", alignItems:"center", gap:"6px",
-            padding: isMobile?"6px 10px":"8px 14px",
-            background: djProgress?.active ? T.border : "linear-gradient(135deg,#1DB954,#148a3d)",
-            color:"#fff", border:"none", borderRadius:"8px", cursor: djProgress?.active?"wait":"pointer",
-            fontSize: isMobile?"12px":"13px", fontWeight:"700", whiteSpace:"nowrap", flexShrink:0
-          }}>
-            {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
-          </button>
+      {/* DJ progress bar */}
+      {djProgress?.active && (
+        <div style={{padding:"8px 24px",display:"flex",flexDirection:"column",gap:"4px",background:T.card,borderBottom:`1px solid ${T.border}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted}}>
+            <span>{djProgress.message}</span><span>{djProgress.pct}%</span>
+          </div>
+          <div style={{height:"4px",background:T.border,borderRadius:"2px"}}>
+            <div style={{height:"100%",width:`${djProgress.pct}%`,background:T.green,borderRadius:"2px",transition:"width 0.5s ease"}}/>
+          </div>
         </div>
+      )}
 
-        {djProgress?.active && (
-          <div style={{padding:"0 20px 12px", display:"flex", flexDirection:"column", gap:"6px"}}>
-            <div style={{display:"flex", justifyContent:"space-between", fontSize:"12px", color:T.muted}}>
-              <span>{djProgress.message}</span>
-              <span>{djProgress.pct}%</span>
-            </div>
-            <div style={{height:"4px", background:T.border, borderRadius:"2px"}}>
-              <div style={{height:"100%", width:`${djProgress.pct}%`, background:T.green, borderRadius:"2px", transition:"width 0.5s ease"}}/>
-            </div>
+      {/* Template change banner */}
+      {templatePrompt && (
+        <div style={{padding:"10px 24px",background:"#F59E0B18",borderBottom:`1px solid #F59E0B50`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+          <span style={{fontSize:"11px",color:T.text,flex:1,minWidth:"200px"}}>
+            <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} template?</span>
+            {" "}This will replace your current stages.
+          </span>
+          <div style={{display:"flex",gap:"6px",flexShrink:0}}>
+            <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Keep Current</button>
+            <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType)} style={{padding:"5px 12px",background:T.accent,border:"none",borderRadius:"6px",cursor:"pointer",color:T.bg,fontSize:"11px",fontWeight:"700"}}>Apply</button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Template-change confirmation banner — shown when swapping class while custom exercises exist */}
-        {templatePrompt && (
-          <div style={{marginBottom:"10px",padding:"10px 14px",background:"#F59E0B18",border:`1px solid #F59E0B50`,borderRadius:"9px",display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-            <span style={{fontSize:"11px",color:T.text,flex:1,minWidth:"200px"}}>
-              <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} — {WORKOUT_LIBRARY[templatePrompt.classType]?.subTypes?.[templatePrompt.subType]?.label||templatePrompt.subType} template?</span>
-              {" "}This will replace your current stages and exercises.
-            </span>
-            <div style={{display:"flex",gap:"6px",flexShrink:0}}>
-              <button onClick={()=>setTemplatePrompt(null)}
-                style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
-                Keep Current
-              </button>
-              <button onClick={()=>applyTemplate(templatePrompt.classType, templatePrompt.subType)}
-                style={{padding:"5px 14px",background:"#F59E0B",border:"none",borderRadius:"6px",cursor:"pointer",color:"#fff",fontSize:"11px",fontWeight:"700"}}>
-                Apply Template
-              </button>
-            </div>
-          </div>
-        )}
-        <div style={{display:"flex",gap:"10px",overflowX:"auto",paddingBottom:"6px"}}>
-          {stages.map((s,i) => {
-            const cfg = SCFG[s.type]||SCFG.circuit;
-            const active = selIdx===i;
-            const isDragTarget = dragOver === i && dragIdx.current !== i;
-            const stageTotalSec = (s.tracks||[]).reduce((acc,t)=>acc+(t.dur||0),0);
-            const coversFull = stageTotalSec >= s.dur;
-            // Use class type colour to theme active pods
-            const classLib   = WORKOUT_LIBRARY[selectedClass];
-            const classColor  = classLib?.color || cfg.color;
-            const classIcon   = classLib?.icon  || "";
-            const subLabel    = classLib?.subTypes?.[selectedSub]?.label || null;
-            const podBorder   = isDragTarget ? T.green : active ? classColor : T.border;
-            const podBg       = isDragTarget ? T.green+"18" : active ? classColor+"20" : T.navy;
-            const podShadow   = active ? `0 0 0 3px ${classColor}28` : isDragTarget ? `0 0 0 2px ${T.green}40` : "none";
+      {/* Distribute toast */}
+      {distributeToast && (
+        <div style={{position:"fixed",bottom:"80px",left:"50%",transform:"translateX(-50%)",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"10px",padding:"12px 20px",color:T.text,fontSize:"13px",fontWeight:"600",zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",pointerEvents:"none",whiteSpace:"nowrap"}}>
+          {distributeToast.msg}
+        </div>
+      )}
+
+      {/* THREE-COLUMN BODY */}
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+
+        {/* LEFT COLUMN: Stage list */}
+        <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid ${T.border}`,minWidth:0,overflowY:"auto",padding:"20px 24px",gap:"12px"}}>
+          {stages.map((s, i) => {
+            const cfg = SCFG[s.type] || SCFG.circuit;
+            const isOpen = selIdx === i;
             return (
               <div key={s.id}
-                draggable
-                onDragStart={e=>handleDragStart(e,i)}
-                onDragOver={e=>handleDragOver(e,i)}
-                onDrop={e=>handleDrop(e,i)}
-                onDragEnd={handleDragEnd}
+                draggable onDragStart={e=>handleDragStart(e,i)} onDragOver={e=>handleDragOver(e,i)} onDrop={e=>handleDrop(e,i)} onDragEnd={handleDragEnd}
                 onClick={()=>setSelIdx(i)}
-                title="Drag to reorder"
-                style={{flexShrink:0,padding:isMobile?"8px 10px":"10px 14px",borderRadius:"10px",cursor:"grab",
-                  border:`2px solid ${podBorder}`,background:podBg,
-                  minWidth:isMobile?"80px":"148px",opacity:dragIdx.current===i?0.4:1,
-                  boxShadow:podShadow,
-                  transition:"opacity 0.15s, box-shadow 0.15s, border-color 0.15s, background 0.15s"}}>
-                {/* Stage type row */}
-                <div style={{display:"flex",alignItems:"center",gap:"5px",marginBottom:"4px"}}>
-                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
-                  <span style={{fontSize:"9px",color:cfg.color,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.4px"}}>{cfg.label}</span>
+                style={{border:`1px solid ${isOpen?T.accent:T.border}`,borderRadius:"14px",overflow:"hidden",background:T.card,cursor:"pointer",boxShadow:isOpen?`0 0 0 1px ${T.accent}20`:undefined,opacity:dragOver===i?0.6:1,transition:"opacity 0.15s"}}>
+                {/* Stage header */}
+                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"13px 16px",background:isOpen?"transparent":T.navy}}>
+                  <div style={{width:"3px",height:"26px",borderRadius:"2px",background:cfg.color,flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>{s.type} · {fmt(s.dur)}</div>
+                  </div>
+                  <span style={{fontSize:"11px",color:T.muted,flexShrink:0}}>{(s.exercises||[]).length} ex</span>
+                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  </button>
                 </div>
-                {/* Stage name */}
-                <p style={{fontSize:"12px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"150px",marginBottom:"3px"}}>{s.name}</p>
-                <p style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>{fmt(s.dur)}</p>
-                {/* Class type + sub-type badge */}
-                <div style={{display:"flex",alignItems:"center",gap:"4px",padding:"3px 7px",background:classColor+"18",borderRadius:"5px",border:`1px solid ${classColor}30`,marginBottom: s.tracks?.length>0?"4px":"0"}}>
-                  <span style={{fontSize:"9px"}}>{classIcon}</span>
-                  <span style={{fontSize:"9px",color:classColor,fontWeight:"700",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100px"}}>
-                    {subLabel || (classLib?.label || selectedClass)}
-                  </span>
-                </div>
-                {s.tracks?.length > 0 && (
-                  <div style={{display:"flex",alignItems:"center",gap:"4px"}}>
-                    <span style={{fontSize:"9px",color:coversFull?T.green:"#F59E0B",fontWeight:"700"}}>
-                      {coversFull?"✓":"⚠"} {s.tracks.length} track{s.tracks.length!==1?"s":""}
-                    </span>
+                {/* Exercise list when expanded */}
+                {isOpen && (s.exercises||[]).length > 0 && (
+                  <div style={{padding:"6px 14px 10px"}}>
+                    {(s.exercises||[]).map((ex,ei)=>(
+                      <div key={ei} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 6px",borderBottom:ei<(s.exercises||[]).length-1?`1px solid ${T.border}`:"none"}}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="1.8">
+                          <circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/>
+                          <circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>
+                        </svg>
+                        <div style={{flex:1,fontSize:"13px",color:T.text}}>{ex.n}</div>
+                        <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
+                      </div>
+                    ))}
+                    <button onClick={e=>{e.stopPropagation();addEx();}}
+                      style={{marginTop:"8px",width:"100%",padding:"7px",background:"transparent",border:`1px dashed ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                      Add exercise
+                    </button>
+                  </div>
+                )}
+                {isOpen && (s.exercises||[]).length === 0 && (
+                  <div style={{padding:"10px 14px"}}>
+                    <button onClick={e=>{e.stopPropagation();addEx();}}
+                      style={{width:"100%",padding:"10px",background:"transparent",border:`1px dashed ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                      Add exercise
+                    </button>
                   </div>
                 )}
               </div>
             );
           })}
-          <button onClick={onAddStage} style={{flexShrink:0,width:"52px",minHeight:"80px",borderRadius:"10px",cursor:"pointer",border:`2px dashed ${T.border}`,background:"transparent",color:T.muted,fontSize:"24px",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+
+          {/* Add stage button */}
+          <button onClick={onAddStage}
+            style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"9px",padding:"11px",border:`1px dashed ${T.border}`,borderRadius:"11px",color:T.muted,fontSize:"13px",fontWeight:"600",background:"transparent",cursor:"pointer",width:"100%"}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            Add stage
+          </button>
+
+          {/* Mobile: start session button */}
+          {isMobile && (
+            <button onClick={onStartSession}
+              style={{padding:"14px",background:T.accent,color:T.bg,border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:"700",fontSize:"14px",width:"100%",marginTop:"8px"}}>
+              ▶ Start Session
+            </button>
+          )}
         </div>
-      </div>
 
-      {!stage && (
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"12px",color:T.muted,padding:"40px"}}>
-          <p style={{fontSize:"32px"}}>🏋</p>
-          <p style={{fontSize:"15px",fontWeight:"700",color:T.text}}>No stages yet</p>
-          <p style={{fontSize:"12px",color:T.muted}}>Click <strong style={{color:T.text}}>+</strong> in the stage bar above to add your first stage.</p>
-        </div>
-      )}
-
-      {stage && (
-        <>
-          {/* Stage config compact row — always visible */}
-          <div style={{padding:"10px 20px",borderBottom:`1px solid ${T.border}`,background:T.card}}>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1.6fr 1.2fr",gap:"12px",alignItems:"start"}}>
-              {/* Name */}
-              <div>
-                <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"4px"}}>Stage Name</p>
-                <Input value={stage.name} onChange={e=>onStageChange(selIdx,{...stage,name:e.target.value})}/>
-              </div>
-              {/* Type */}
-              <div>
-                <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"4px"}}>Type</p>
-                <Select value={stage.type} onChange={e=>onStageChange(selIdx,{...stage,type:e.target.value})}>
-                  {Object.entries(SCFG).map(([t,c])=><option key={t} value={t}>{c.label}</option>)}
-                </Select>
-                {SCFG[stage.type]?.bpmMin && (
-                  <p style={{fontSize:"9px",color:T.muted,marginTop:"3px"}}>
-                    🎵 <span style={{color:bpmColor((SCFG[stage.type].bpmMin+SCFG[stage.type].bpmMax)/2),fontWeight:"700"}}>{SCFG[stage.type].bpmMin}–{SCFG[stage.type].bpmMax} BPM</span>
-                  </p>
-                )}
-              </div>
-              {/* Duration */}
-              <div>
-                <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"4px"}}>Duration</p>
-                <div style={{display:"flex",alignItems:"center",gap:"4px"}}>
-                  <Input type="number" min="0" value={Math.floor(stage.dur/60)}
-                    onChange={e=>{const m=Math.max(0,parseInt(e.target.value)||0); const s=stage.dur%60; onStageChange(selIdx,{...stage,dur:Math.max(10,m*60+s)});}}
-                    style={{textAlign:"center",width:"100%"}}/>
-                  <span style={{fontSize:"10px",color:T.muted,flexShrink:0}}>:</span>
-                  <Input type="number" min="0" max="59" value={String(stage.dur%60).padStart(2,"0")}
-                    onChange={e=>{const s=Math.min(59,Math.max(0,parseInt(e.target.value)||0)); const m=Math.floor(stage.dur/60); onStageChange(selIdx,{...stage,dur:Math.max(10,m*60+s)});}}
-                    style={{textAlign:"center",width:"100%"}}/>
-                </div>
-                <p style={{fontSize:"9px",color:T.muted,marginTop:"2px",textAlign:"center"}}>mm : ss</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Sub-tab navigation bar */}
-          <div style={{display:"flex",gap:"6px",padding:"10px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-            {[["exercises","🏋 Exercises"],["music","🎵 Add Music"],["groups","👥 Groups"],["queue","🎶 Queue"],["overview","📊 Overview"]].map(([id,lbl])=>(
-              <button key={id} onClick={()=>setSubTab(id)} style={{
-                padding:isMobile?"6px 11px":"7px 16px", fontSize:isMobile?"11px":"12px", fontWeight:"700",
-                background: subTab===id ? T.accent : T.navy,
-                color: subTab===id ? "white" : T.muted,
-                border: `1px solid ${subTab===id ? T.accent : T.border}`,
-                borderRadius:"8px", cursor:"pointer", transition:"all 0.15s",
-                display:"flex", alignItems:"center", gap:"5px",
-                flexShrink:0, whiteSpace:"nowrap",
-              }}>{lbl}</button>
-            ))}
-          </div>
-
-          {/* Sub-tab content area — single scrollable column, always visible */}
-          <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 14px":"18px 24px"}}>
-
-            {/* ── EXERCISES TAB ── */}
-            {subTab==="exercises" && (
-              <div>
-              {/* Toast notification */}
-              {distributeToast && (
-                <div style={{background:T.green+"20",border:`1px solid ${T.green}50`,borderRadius:"8px",padding:"10px 14px",marginBottom:"10px",fontSize:"12px",color:T.green,fontWeight:"700",display:"flex",alignItems:"center",gap:"8px"}}>
-                  ✅ {distributeToast.msg}
-                </div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px",gap:"8px",flexWrap:"wrap"}}>
-                <p style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Exercises ({stage.exercises?.length||0})</p>
-                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                  {/* Smart Distribute from Library */}
-                  <button
-                    title={`Populate this stage from ${WORKOUT_LIBRARY[selectedClass]?.label} — ${WORKOUT_LIBRARY[selectedClass]?.subTypes[selectedSub]?.label}`}
-                    onClick={()=>{
-                      const pool = STAGE_LIBRARY_MAP[stage.type] || "main";
-                      const sub = WORKOUT_LIBRARY[selectedClass]?.subTypes?.[selectedSub];
-                      const libExercises = (sub?.[pool] || sub?.main || []).map(ex => ({
-                        id: uid(), n: ex.n, s: ex.s||"", r: ex.r||"", rest: ex.rest||"",
-                        notes: ex.notes||"", timing: ex.timing||"none", muscles: ex.muscles||"", source:"library"
-                      }));
-                      if (libExercises.length === 0) { setDistributeToast({msg:"No library exercises match this stage type"}); setTimeout(()=>setDistributeToast(null),3000); return; }
-                      const hasExisting = (stage.exercises||[]).length > 0;
-                      if (hasExisting && !window.confirm(`Replace ${stage.exercises.length} existing exercise(s) with ${libExercises.length} from the library?`)) return;
-                      onStageChange(selIdx, {...stage, exercises: libExercises});
-                      setDistributeToast({msg:`Added ${libExercises.length} exercises from ${WORKOUT_LIBRARY[selectedClass]?.label}`});
-                      setTimeout(()=>setDistributeToast(null),3000);
-                    }}
-                    style={{background:T.accent+"15",border:`1px solid ${T.accent}40`,color:T.accent,cursor:"pointer",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",padding:"6px 10px",borderRadius:"7px"}}>
-                    📚 From Library
-                  </button>
-                  <button onClick={addEx} style={{background:T.green+"15",border:`1px solid ${T.green}40`,color:T.green,cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"7px"}}><Plus size={13}/> Add</button>
-                </div>
-              </div>
-              <div>
-              {stage.exercises?.map((ex,i) => (
-                <React.Fragment key={ex.id||ex.n||i}>
-                <div style={{background:T.navy,borderRadius:"6px",marginBottom:"2px",overflow:"hidden"}}>
-                  {editingEx===i ? (
-                    <div style={{padding:"10px"}}>
-                      <Input value={ex.n} onChange={e=>updEx(i,"n",e.target.value)} placeholder="Exercise name" style={{marginBottom:"6px",fontSize:"12px"}}/>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"5px",marginBottom:"8px"}}>
-                        <Input value={ex.s} onChange={e=>updEx(i,"s",e.target.value)} placeholder="Sets"  style={{fontSize:"11px"}}/>
-                        <Input value={ex.r} onChange={e=>updEx(i,"r",e.target.value)} placeholder="Reps"  style={{fontSize:"11px"}}/>
-                        <Input value={ex.rest} onChange={e=>updEx(i,"rest",e.target.value)} placeholder="Rest" style={{fontSize:"11px"}}/>
-                      </div>
-                      {/* F14: Tabata/EMOM timing */}
-                      <div style={{marginBottom:"8px"}}>
-                        <p style={{fontSize:"10px",color:T.muted,marginBottom:"4px"}}>Interval Timing</p>
-                        <Select value={ex.timing||"none"} onChange={e=>{
-                          const t=e.target.value;
-                          if(t==="tabata")  updEx(i,"timing","tabata"),  updEx(i,"workSec",20), updEx(i,"restSec",10), updEx(i,"rounds",8);
-                          else if(t==="emom") updEx(i,"timing","emom"),  updEx(i,"workSec",60), updEx(i,"restSec",0),  updEx(i,"rounds",10);
-                          else               updEx(i,"timing","none"),   updEx(i,"workSec",undefined), updEx(i,"restSec",undefined), updEx(i,"rounds",undefined);
-                        }} style={{fontSize:"11px",marginBottom:"4px"}}>
-                          <option value="none">No intervals</option>
-                          <option value="tabata">Tabata (20s on / 10s off × 8)</option>
-                          <option value="emom">EMOM (1 rep per min)</option>
-                          <option value="custom">Custom</option>
-                        </Select>
-                        {(ex.timing==="custom"||ex.timing==="tabata"||ex.timing==="emom") && (
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"5px"}}>
-                            <div><p style={{fontSize:"9px",color:T.muted,marginBottom:"2px"}}>Work (s)</p><Input type="number" value={ex.workSec||20} onChange={e=>updEx(i,"workSec",parseInt(e.target.value)||0)} style={{fontSize:"11px"}}/></div>
-                            <div><p style={{fontSize:"9px",color:T.muted,marginBottom:"2px"}}>Rest (s)</p><Input type="number" value={ex.restSec||10} onChange={e=>updEx(i,"restSec",parseInt(e.target.value)||0)} style={{fontSize:"11px"}}/></div>
-                            <div><p style={{fontSize:"9px",color:T.muted,marginBottom:"2px"}}>Rounds</p><Input type="number" value={ex.rounds||8} onChange={e=>updEx(i,"rounds",parseInt(e.target.value)||1)} style={{fontSize:"11px"}}/></div>
-                          </div>
-                        )}
-                      </div>
-                      {/* Group assignment */}
-                      {stage.groups?.length > 0 && (
-                        <div style={{marginBottom:"8px"}}>
-                          <p style={{fontSize:"10px",color:T.muted,marginBottom:"4px"}}>👥 Assign to group</p>
-                          <Select value={ex.group||""} onChange={e=>updEx(i,"group",e.target.value)} style={{fontSize:"11px"}}>
-                            <option value="">— no group —</option>
-                            {stage.groups.map((g,gi)=>(
-                              <option key={g.id} value={g.name}>{g.name}</option>
-                            ))}
-                          </Select>
-                        </div>
-                      )}
-                      {/* Superset toggle */}
-                      {i < stage.exercises.length - 1 && (
-                        <div style={{marginBottom:"8px",display:"flex",alignItems:"center",gap:"8px"}}>
-                          <button onClick={()=>updEx(i,"supersetNext",!ex.supersetNext)}
-                            style={{display:"flex",alignItems:"center",gap:"6px",padding:"6px 10px",fontSize:"11px",fontWeight:"700",
-                              background:ex.supersetNext?"#8B5CF620":"transparent",
-                              color:ex.supersetNext?"#8B5CF6":T.muted,
-                              border:`1px solid ${ex.supersetNext?"#8B5CF6":T.border}`,
-                              borderRadius:"5px",cursor:"pointer",transition:"all 0.15s"}}>
-                            <span style={{fontSize:"10px"}}>⟳</span>
-                            {ex.supersetNext?"Superset ON — linked to next":"Superset with next ↓"}
-                          </button>
-                        </div>
-                      )}
-                      {/* Move to stage */}
-                      {stages.length > 1 && (
-                        <div style={{marginBottom:"8px"}}>
-                          <p style={{fontSize:"10px",color:T.muted,marginBottom:"4px"}}>⤵ Move to stage</p>
-                          <Select style={{fontSize:"11px"}} defaultValue="" onChange={e=>{
-                            const toIdx=parseInt(e.target.value);
-                            if(!isNaN(toIdx)&&toIdx!==selIdx) { onMoveExercise(selIdx,i,toIdx); setEditingEx(null); }
-                          }}>
-                            <option value="" disabled>Select stage…</option>
-                            {stages.map((s,si)=>si!==selIdx&&<option key={si} value={si}>{s.name}</option>)}
-                          </Select>
-                        </div>
-                      )}
-                      <div style={{display:"flex",gap:"6px"}}>
-                        <button onClick={()=>setEditingEx(null)} style={{flex:1,padding:"6px",background:T.green,color:"white",border:"none",borderRadius:"4px",cursor:"pointer",fontSize:"11px",fontWeight:"700"}}>Done</button>
-                        <button onClick={()=>delEx(i)} style={{padding:"6px 10px",background:T.accent+"20",color:T.accent,border:"none",borderRadius:"4px",cursor:"pointer"}}><Trash2 size={12}/></button>
-                      </div>
-                    </div>
-                  ) : (
-                    (() => {
-                      // Find group color if exercise is assigned to a group
-                      const grpIdx = (stage.groups||[]).findIndex(g=>g.name===ex.group);
-                      const grpColorVal = grpIdx>=0 ? grpColor((stage.groups||[])[grpIdx]?.id) : null;
-                      return (
-                        <div style={{padding:"9px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",borderLeft:grpColorVal?`3px solid ${grpColorVal}`:"none"}}>
-                          <div>
-                            <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"2px"}}>
-                              {grpColorVal && <div style={{width:"7px",height:"7px",borderRadius:"50%",background:grpColorVal,flexShrink:0}}/>}
-                              <p style={{fontSize:"12px",fontWeight:"600",color:T.text}}>{ex.n}</p>
-                              {ex.supersetNext && i < stage.exercises.length-1 && (
-                                <span style={{fontSize:"8px",fontWeight:"800",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",letterSpacing:"0.3px"}}>SS</span>
-                              )}
-                            </div>
-                            <div style={{display:"flex",alignItems:"center",gap:"5px",flexWrap:"wrap"}}>
-                              <p style={{fontSize:"10px",color:T.muted}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`].filter(Boolean).join(" · ")}</p>
-                              {ex.timing && ex.timing!=="none" && (
-                                <span style={{fontSize:"9px",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700"}}>
-                                  {ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}
-                                </span>
-                              )}
-                              {grpColor && <span style={{fontSize:"9px",color:grpColor,fontWeight:"700"}}>{ex.group}</span>}
-                            </div>
-                          </div>
-                          <button onClick={()=>setEditingEx(i)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"14px",padding:"4px"}}>✏️</button>
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-                {/* Superset connector between exercises */}
-                {ex.supersetNext && i < stage.exercises.length-1 && (
-                  <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"2px 14px",marginBottom:"0px"}}>
-                    <div style={{width:"2px",height:"14px",background:"#8B5CF6",marginLeft:"12px",borderRadius:"1px"}}/>
-                    <span style={{fontSize:"9px",fontWeight:"800",color:"#8B5CF6",textTransform:"uppercase",letterSpacing:"0.5px",background:"#8B5CF615",padding:"2px 7px",borderRadius:"3px"}}>superset</span>
-                    <div style={{flex:1,height:"1px",background:"#8B5CF630"}}/>
-                  </div>
-                )}
-                </React.Fragment>
+        {/* CENTER COLUMN: Tabs panel (hidden on mobile) */}
+        {!isMobile && (
+          <div style={{flex:1,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid ${T.border}`,minWidth:0,overflow:"hidden"}}>
+            {/* Tabs */}
+            <div style={{height:"56px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-end",padding:"0 22px",gap:"22px",flexShrink:0,background:T.card}}>
+              {["Soundtrack","Exercise Library","Settings"].map(tab=>(
+                <button key={tab} onClick={()=>setSubTab(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")}
+                  style={{paddingBottom:"14px",fontSize:"14px",fontWeight:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?"700":"600",color:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?T.accent:T.muted,background:"none",border:"none",borderBottom:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?`2px solid ${T.accent}`:"2px solid transparent",cursor:"pointer",fontSize:"14px",whiteSpace:"nowrap"}}>
+                  {tab}
+                </button>
               ))}
             </div>
 
-              <button onClick={()=>{ onRemoveStage(selIdx); setSelIdx(i=>Math.max(0,Math.min(i,stages.length-2))); }} style={{marginTop:"12px",width:"100%",padding:"9px",background:"transparent",color:T.accent,border:`1px solid ${T.accent}40`,borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Remove Stage</button>
-            </div>
-            )}
-
-            {/* ── MUSIC TAB ── */}
+            {/* Soundtrack tab */}
             {subTab==="music" && (
-              <div>
-                {/* Stage destination picker */}
-                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",padding:"10px 14px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                  <Music size={14} color={T.green}/>
-                  <p style={{fontSize:"12px",fontWeight:"700",color:T.text,flexShrink:0}}>Add to:</p>
-                  <Select value={musicTargetIdx} onChange={e=>setMusicTargetIdx(parseInt(e.target.value))} style={{flex:1,fontSize:"12px",fontWeight:"700"}}>
-                    {stages.map((s,i)=>(
-                      <option key={i} value={i}>{s.name}</option>
-                    ))}
-                  </Select>
-                </div>
-                <TrackSearch
-                  key={`${stage.id}-${musicTargetIdx}-${stages[musicTargetIdx]?.type||stage.type}`}
-                  onAdd={t=>onAddTrack(musicTargetIdx,t)}
-                  addedIds={(stages[musicTargetIdx]?.tracks||[]).map(t=>t.id)}
-                  stageType={stages[musicTargetIdx]?.type||stage.type}
-                  onSmartDistribute={stages.length > 1 ? ()=>setShowPlaylistModal(true) : null}
-                />
-              </div>
-            )}
-
-            {/* ── GROUPS TAB ── */}
-            {subTab==="groups" && (
-              <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
-                  <div>
-                    <p style={{fontSize:"13px",fontWeight:"700",color:T.text}}>👥 Group Splits {stage.groups?.length > 0 ? `(${stage.groups.length})` : ""}</p>
-                    <p style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>Split your class into groups — highlighted in session mode</p>
+              <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
+                {/* Match music toggle */}
+                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px",borderRadius:"12px",background:`linear-gradient(160deg,${T.navy},${T.card})`,border:`1px solid ${T.accent}`}}>
+                  <div style={{width:"34px",height:"34px",borderRadius:"9px",background:"rgba(123,227,164,.14)",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent}}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="7" cy="18" r="2.5"/><circle cx="18" cy="16" r="2.5"/><path d="M9.5 18V6l11-2v10"/></svg>
                   </div>
-                  <button onClick={addGroup} style={{background:T.green+"15",border:`1px solid ${T.green}40`,color:T.green,cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"7px"}}><Plus size={13}/> Add Group</button>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Match music to structure</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>BPM follows each stage's intensity</div>
+                  </div>
+                  <div style={{width:"38px",height:"22px",borderRadius:"11px",background:T.accent,position:"relative",flexShrink:0,cursor:"pointer"}}>
+                    <div style={{position:"absolute",right:"2px",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:T.bg}}/>
+                  </div>
                 </div>
-                {(stage.groups||[]).map((grp,gi) => (
-                  <div key={grp.id} style={{background:T.navy,borderRadius:"8px",marginBottom:"8px",padding:"12px 14px",borderLeft:`3px solid ${grpColor(grp.id)}`}}>
-                    <div style={{display:"flex",gap:"8px",alignItems:"center",marginBottom:"8px"}}>
-                      <div style={{width:"10px",height:"10px",borderRadius:"50%",background:grpColor(grp.id),flexShrink:0}}/>
-                      <Input value={grp.name} onChange={e=>updGroup(gi,"name",e.target.value)} placeholder="Group name" style={{flex:1,fontSize:"12px",fontWeight:"700"}}/>
-                      <button onClick={()=>delGroup(gi)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px"}}><Trash2 size={13}/></button>
+
+                {/* Energy curve */}
+                <div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
+                    <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>ENERGY CURVE</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>peak intensity</div>
+                  </div>
+                  <div style={{position:"relative",height:"100px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",overflow:"hidden"}}>
+                    <svg width="100%" height="100" viewBox="0 0 400 100" preserveAspectRatio="none" style={{display:"block"}}>
+                      <defs><linearGradient id="eg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={T.accent} stopOpacity="0.4"/><stop offset="1" stopColor={T.accent} stopOpacity="0"/></linearGradient></defs>
+                      <path d="M0,80 C40,72 70,60 120,54 C170,48 180,32 220,26 C260,20 280,10 320,10 C360,10 380,20 400,24 L400,100 L0,100 Z" fill="url(#eg2)"/>
+                      <path d="M0,80 C40,72 70,60 120,54 C170,48 180,32 220,26 C260,20 280,10 320,10 C360,10 380,20 400,24" fill="none" stroke={T.accent} strokeWidth="2.5"/>
+                    </svg>
+                    {/* Stage labels */}
+                    <div style={{position:"absolute",left:0,right:0,bottom:0,display:"flex",fontSize:"9px",color:T.muted,textAlign:"center",borderTop:`1px solid ${T.border}`}}>
+                      {stages.slice(0,4).map((s,i)=>(
+                        <div key={i} style={{flex:1,padding:"4px 0",borderRight:i<Math.min(stages.length,4)-1?`1px solid ${T.border}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:i===selIdx?T.accent:T.muted,fontWeight:i===selIdx?"700":"400"}}>
+                          {s.name.slice(0,6).toUpperCase()}
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <p style={{fontSize:"9px",color:T.muted,marginBottom:"3px",textTransform:"uppercase",letterSpacing:"0.3px"}}>Exercise / Station</p>
-                      {stage.exercises?.length > 0
-                        ? <Select value={grp.exercise||""} onChange={e=>updGroup(gi,"exercise",e.target.value)} style={{fontSize:"11px"}}>
-                            <option value="">— pick an exercise —</option>
-                            {stage.exercises.map((ex,ei)=><option key={ei} value={ex.n}>{ex.n}</option>)}
-                            <option value="__custom__">Custom…</option>
-                          </Select>
-                        : <Input value={grp.exercise||""} onChange={e=>updGroup(gi,"exercise",e.target.value)} placeholder="e.g. Rows, Bench Press…" style={{fontSize:"11px"}}/>
-                      }
-                      {grp.exercise==="__custom__" && (
-                        <Input value={grp.customEx||""} onChange={e=>updGroup(gi,"customEx",e.target.value)} placeholder="Type exercise…" style={{fontSize:"11px",marginTop:"4px"}}/>
+                  </div>
+                </div>
+
+                {/* Track list */}
+                {stage && (
+                  <div style={{flex:1,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",display:"flex",flexDirection:"column",minHeight:0}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
+                      <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>TRACKS — {stage.name.toUpperCase()}</div>
+                      <div style={{fontSize:"11px",color:T.accent}}>{(stage.tracks||[]).length} tracks</div>
+                    </div>
+                    <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
+                      {(stage.tracks||[]).map((t,ti)=>(
+                        <div key={ti}
+                          draggable onDragStart={e=>handleTrackDragStart(e,ti)} onDragOver={e=>handleTrackDragOver(e,ti)} onDrop={e=>handleTrackDrop(e,ti)} onDragEnd={handleTrackDragEnd}
+                          style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",borderRadius:"8px",background:trackDragOver===ti?T.navy:"transparent",border:`1px solid ${trackDragOver===ti?T.border:"transparent"}`,cursor:"grab"}}>
+                          <div style={{width:"32px",height:"32px",borderRadius:"7px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 4px,#22382a 4px,#22382a 8px)",flexShrink:0,overflow:"hidden"}}>
+                            {t.album?.images?.[0]?.url && <img src={t.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:"12px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.name}</div>
+                            <div style={{fontSize:"11px",color:T.muted}}>{t.artists?.[0]?.name}{t.bpm?` · ${Math.round(t.bpm)} BPM`:""}</div>
+                          </div>
+                          <button onClick={()=>onRemoveTrack(selIdx,ti)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"3px",display:"flex"}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {(stage.tracks||[]).length === 0 && (
+                        <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No tracks yet — use DJ This Class or add manually</div>
                       )}
                     </div>
-                  </div>
-                ))}
-                {!(stage.groups?.length) && (
-                  <div style={{textAlign:"center",padding:"32px 20px",background:T.navy,borderRadius:"10px",border:`1px dashed ${T.border}`}}>
-                    <p style={{fontSize:"13px",color:T.muted,marginBottom:"8px"}}>No groups defined yet</p>
-                    <p style={{fontSize:"11px",color:T.muted,opacity:0.7}}>Add groups to split your class and highlight which group does what in session mode.</p>
+                    <button onClick={()=>setShowPlaylistModal(true)}
+                      style={{marginTop:"10px",border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"10px",borderRadius:"9px",cursor:"pointer"}}>
+                      + Add tracks
+                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* ── QUEUE TAB ── */}
-            {subTab==="queue" && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
-                  <div>
-                    <p style={{fontSize:"13px",fontWeight:"700",color:T.text}}>🎶 Queued Tracks {stage.tracks?.length > 0 ? `(${stage.tracks.length})` : ""}</p>
-                    <p style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>Songs play in this order during your session</p>
-                  </div>
-                  <button onClick={()=>setShowPlaylistModal(true)}
-                    style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:T.green+"15",color:T.green,border:`1px solid ${T.green}40`,borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700"}}>
-                    <Music size={11}/> Import Playlist
-                  </button>
-                </div>
-                {stage.tracks?.length > 0
-                  ? stage.tracks.map((t,i) => (
-                      <div key={t.id||i}
-                        draggable
-                        onDragStart={e=>handleTrackDragStart(e,i)}
-                        onDragOver={e=>handleTrackDragOver(e,i)}
-                        onDrop={e=>handleTrackDrop(e,i)}
-                        onDragEnd={handleTrackDragEnd}
-                        style={{
-                          display:"flex", alignItems:"center", gap:"4px",
-                          borderRadius:"6px", marginBottom:"3px",
-                          outline: trackDragOver===i && trackDragIdx.current!==i ? `2px solid ${T.accent}` : "none",
-                          opacity: trackDragIdx.current===i ? 0.4 : 1,
-                          transition:"opacity 0.15s",
-                        }}>
-                        <span title="Drag to reorder" style={{cursor:"grab",color:T.muted,padding:"0 4px",flexShrink:0,fontSize:"14px",userSelect:"none"}}>⠿</span>
-                        <div style={{flex:1, minWidth:0}}>
-                          <TrackItem track={t} onRemove={()=>onRemoveTrack(selIdx,i)} stageType={stage.type}/>
-                        </div>
-                      </div>
-                    ))
-                  : (
-                    <div style={{textAlign:"center",padding:"32px 20px",background:T.navy,borderRadius:"10px",border:`1px dashed ${T.border}`}}>
-                      <Music size={28} color={T.muted} style={{marginBottom:"10px",opacity:0.5}}/>
-                      <p style={{fontSize:"13px",color:T.muted,marginBottom:"6px"}}>No tracks queued yet</p>
-                      <p style={{fontSize:"11px",color:T.muted,opacity:0.7}}>Go to <strong style={{color:T.text}}>Add Music</strong> to search and add songs to this stage.</p>
-                    </div>
-                  )
-                }
+            {/* Exercise Library tab */}
+            {subTab==="exercises" && (
+              <div style={{flex:1,overflowY:"auto"}}>
+                <LibraryBrowserModal onClose={()=>setSubTab("music")} onAddExercise={handleAddLibraryExercise}/>
               </div>
             )}
 
-            {/* ── OVERVIEW TAB ── */}
-            {subTab==="overview" && (
-              <div>
-                {/* Display mode button */}
-                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}>
-                  <button onClick={onOverviewDisplay}
-                    style={{display:"flex",alignItems:"center",gap:"7px",padding:"8px 16px",
-                      background:T.accent,color:"white",border:"none",borderRadius:"8px",
-                      cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
-                    📺 Display Mode
-                  </button>
+            {/* Settings tab */}
+            {subTab==="settings" && stage && (
+              <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
+                <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{stage.name} — Settings</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+                  <div>
+                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
+                    <input value={stage.name} onChange={e=>onStageChange(selIdx,{...stage,name:e.target.value})}
+                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
+                    <input type="number" min="1" max="60" value={Math.round(stage.dur/60)}
+                      onChange={e=>onStageChange(selIdx,{...stage,dur:parseInt(e.target.value||"1")*60})}
+                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
+                    <select value={stage.type} onChange={e=>onStageChange(selIdx,{...stage,type:e.target.value})}
+                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",cursor:"pointer",boxSizing:"border-box"}}>
+                      {Object.entries(SCFG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
                 </div>
-                {/* Summary stats bar */}
-                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:"10px",marginBottom:"20px"}}>
-                  {[
-                    {label:"Stages",    val:stages.length,                                                  color:T.text},
-                    {label:"Duration",  val:fmt(totalDur),                                                  color:T.text},
-                    {label:"Tracks",    val:stages.reduce((a,s)=>a+(s.tracks||[]).length,0),                color:T.green},
-                    {label:"Exercises", val:stages.reduce((a,s)=>a+(s.exercises||[]).length,0),             color:T.accent},
-                  ].map(({label,val,color})=>(
-                    <div key={label} style={{background:T.navy,borderRadius:"10px",padding:"12px 14px",border:`1px solid ${T.border}`,textAlign:"center"}}>
-                      <p style={{fontSize:"22px",fontWeight:"800",color,marginBottom:"3px",lineHeight:1}}>{val}</p>
-                      <p style={{fontSize:"9px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.6px",fontWeight:"700"}}>{label}</p>
-                    </div>
-                  ))}
-                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                {/* Per-stage cards */}
-                {stages.map((s,si)=>{
+        {/* RIGHT COLUMN: Auto-DJ panel (desktop only, non-tablet) */}
+        {!isMobile && !isTablet && (
+          <div style={{width:"300px",display:"flex",flexDirection:"column",flexShrink:0,borderLeft:`1px solid ${T.border}`,background:T.card,overflow:"hidden"}}>
+            <div style={{padding:"20px 20px 14px",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Auto-DJ</div>
+              <div style={{fontSize:"11px",color:T.muted}}>BPM matched per stage</div>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+              {/* BPM range per stage */}
+              <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"16px"}}>
+                {stages.map((s,i)=>{
                   const cfg = SCFG[s.type]||SCFG.circuit;
-                  const trackSec = (s.tracks||[]).reduce((a,t)=>a+(t.dur||0),0);
-                  const covPct = s.dur>0 ? Math.min(100,Math.round((trackSec/s.dur)*100)) : 0;
-                  const isActive = si===selIdx;
-                  const exList   = s.exercises||[];
-                  const trList   = s.tracks||[];
-                  const grpList  = s.groups||[];
+                  const bpm = s.type==="warmup"?"88–100":s.type==="cooldown"?"80–90":s.type==="hiit"?"132–140":s.type==="strength"?"110–120":"120–130";
                   return (
-                    <div key={s.id} onClick={()=>setSelIdx(si)}
-                      style={{marginBottom:"14px",borderRadius:"12px",overflow:"hidden",
-                        border:`2px solid ${isActive?cfg.color:T.border}`,
-                        background:T.card,cursor:"pointer",
-                        boxShadow:isActive?`0 0 0 3px ${cfg.color}25`:"none",
-                        transition:"box-shadow 0.15s,border-color 0.15s"}}>
-
-                      {/* Stage header */}
-                      <div style={{background:`${cfg.color}18`,padding:"12px 16px",
-                        borderBottom:`1px solid ${cfg.color}30`,
-                        display:"flex",alignItems:"center",gap:"12px"}}>
-                        <div style={{width:"36px",height:"36px",borderRadius:"9px",flexShrink:0,
-                          background:`${cfg.color}28`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <div style={{width:"12px",height:"12px",borderRadius:"50%",background:cfg.color}}/>
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"2px"}}>
-                            <span style={{fontSize:"9px",color:cfg.color,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.6px"}}>{cfg.label}</span>
-                            {isActive && <span style={{fontSize:"8px",padding:"1px 5px",background:T.accent,color:"white",borderRadius:"4px",fontWeight:"700",letterSpacing:"0.3px"}}>EDITING</span>}
-                          </div>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</p>
-                        </div>
-                        <div style={{flexShrink:0,textAlign:"right"}}>
-                          <p style={{fontSize:"14px",fontWeight:"800",color:T.text}}>{fmt(s.dur)}</p>
-                          <p style={{fontSize:"9px",color:T.muted,marginTop:"2px"}}>{exList.length} ex · {trList.length} trk · {grpList.length} grp</p>
-                        </div>
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                      <div style={{width:"3px",height:"18px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:"11px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
                       </div>
-
-                      {/* 3-column content — stacks on mobile */}
-                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr"}}>
-
-                        {/* Exercises */}
-                        <div style={{padding:"12px 14px",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none"}}>
-                          <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"9px"}}>🏋 Exercises</p>
-                          {exList.length>0
-                            ? exList.map((ex,ei)=>(
-                                <div key={ei} style={{marginBottom:"7px",paddingLeft:"6px",borderLeft:`2px solid ${cfg.color}50`}}>
-                                  <p style={{fontSize:"11px",fontWeight:"700",color:T.text,marginBottom:"1px",lineHeight:1.2}}>{ex.n}</p>
-                                  <p style={{fontSize:"9px",color:T.muted,lineHeight:1.3}}>
-                                    {[ex.s&&`${ex.s}×`, ex.r&&`${ex.r}`, ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
-                                  </p>
-                                </div>
-                              ))
-                            : <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>None added</p>
-                          }
-                        </div>
-
-                        {/* Music */}
-                        <div style={{padding:"12px 14px",borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none"}}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
-                            <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>🎵 Music</p>
-                            {trList.length>0 && (
-                              <span style={{fontSize:"9px",fontWeight:"700",color:covPct>=100?T.green:"#F59E0B"}}>{covPct}%</span>
-                            )}
-                          </div>
-                          {trList.length>0 && (
-                            <div style={{height:"3px",borderRadius:"2px",background:T.border,marginBottom:"8px",overflow:"hidden"}}>
-                              <div style={{height:"100%",width:`${covPct}%`,borderRadius:"2px",
-                                background:covPct>=100?T.green:"#F59E0B",transition:"width 0.3s"}}/>
-                            </div>
-                          )}
-                          {trList.length>0
-                            ? trList.map((t,ti)=>(
-                                <div key={t.id||ti} style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"6px"}}>
-                                  {t.albumArt
-                                    ? <img src={t.albumArt} style={{width:"26px",height:"26px",borderRadius:"4px",flexShrink:0,objectFit:"cover"}} alt=""/>
-                                    : <div style={{width:"26px",height:"26px",borderRadius:"4px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={10} color={T.muted}/></div>
-                                  }
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <p style={{fontSize:"11px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2,marginBottom:"1px"}}>{t.t}</p>
-                                    <p style={{fontSize:"9px",color:T.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.a}</p>
-                                  </div>
-                                  {t.bpm>0 && <span style={{fontSize:"9px",fontWeight:"700",color:bpmColor(t.bpm),flexShrink:0,minWidth:"24px",textAlign:"right"}}>{Math.round(t.bpm)}</span>}
-                                </div>
-                              ))
-                            : <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>None added</p>
-                          }
-                        </div>
-
-                        {/* Groups */}
-                        <div style={{padding:"12px 14px"}}>
-                          <p style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"9px"}}>👥 Groups</p>
-                          {grpList.length>0
-                            ? grpList.map((g,gi)=>(
-                                <div key={g.id} style={{display:"flex",alignItems:"flex-start",gap:"7px",marginBottom:"7px"}}>
-                                  <div style={{width:"9px",height:"9px",borderRadius:"50%",background:grpColor(g.id),flexShrink:0,marginTop:"2px"}}/>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <p style={{fontSize:"11px",fontWeight:"700",color:T.text,lineHeight:1.2,marginBottom:"1px"}}>{g.name}</p>
-                                    {(g.exercise&&g.exercise!=="__custom__") && <p style={{fontSize:"9px",color:T.muted}}>{g.exercise}</p>}
-                                    {(g.exercise==="__custom__"&&g.customEx) && <p style={{fontSize:"9px",color:T.muted}}>{g.customEx}</p>}
-                                  </div>
-                                </div>
-                              ))
-                            : <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>None added</p>
-                          }
-                        </div>
-
-                      </div>{/* end 3-col grid */}
+                      <div style={{fontSize:"11px",color:T.muted,flexShrink:0}}>{bpm}</div>
                     </div>
                   );
                 })}
               </div>
-            )}
-
-          </div>{/* end sub-tab content area */}
-        </>
-      )}
-
-      {/* Footer */}
-      <div style={{padding:isMobile?"10px 14px":"12px 20px",borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",justifyContent:isMobile?"stretch":"flex-end"}}>
-        {(()=>{ const disabled = stages.length===0 || stages.some(s=>!(s.dur>=1)); return (
-          <button onClick={onStartSession} disabled={disabled}
-            title={stages.some(s=>!(s.dur>=1))?"All stages need a duration > 0 to start":undefined}
-            style={{padding:"12px 32px",background:disabled?T.muted:T.green,color:"white",border:"none",borderRadius:"7px",cursor:disabled?"not-allowed":"pointer",fontSize:"14px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",opacity:disabled?0.5:1,flex:isMobile?1:undefined,minHeight:"44px"}}>
-            <Play size={16}/> Start Session
-          </button>
-        ); })()}
+              <button onClick={onDjClass} disabled={djProgress?.active}
+                style={{width:"100%",padding:"12px",background:djProgress?.active?T.border:T.accent,color:djProgress?.active?T.muted:T.bg,border:"none",borderRadius:"9px",cursor:djProgress?.active?"wait":"pointer",fontSize:"13px",fontWeight:"700"}}>
+                {djProgress?.active?"⏳ DJ'ing...":"🎧 DJ This Class"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Playlist Import Modal */}
+      {/* Modals */}
       {showPlaylistModal && (
-        <PlaylistImportModal
-          stages={stages}
-          selIdx={selIdx}
-          onAddTrack={onAddTrack}
-          onAddTracksToAll={(stageIdx, track) => onAddTrack(stageIdx, track)}
+        <SpotifySearchModal
           onClose={()=>setShowPlaylistModal(false)}
+          onSelectTrack={t=>{ onAddTrack(selIdx, t); setShowPlaylistModal(false); }}
         />
       )}
       {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
