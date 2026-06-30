@@ -2812,7 +2812,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             </p>
             <div style={{display:"flex", gap:"8px"}}>
               <button onClick={onNewSession}
-                style={{flex:1, padding:"9px", background:T.accent, color:"#0A0F0C", border:"none",
+                style={{flex:1, padding:"9px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
                   borderRadius:"8px", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
                 {tip.action}
               </button>
@@ -2883,7 +2883,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           {/* Start session CTA (desktop right-col) */}
           {!isSmall && (
             <button onClick={onNewSession}
-              style={{width:"100%", padding:"14px", background:T.accent, color:"#0A0F0C", border:"none",
+              style={{width:"100%", padding:"14px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
                 borderRadius:"12px", fontSize:"14px", fontWeight:"800", cursor:"pointer",
                 fontFamily:`'${T.displayFont}',sans-serif`, display:"flex", alignItems:"center",
                 justifyContent:"center", gap:"8px"}}>
@@ -2924,7 +2924,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
       {/* ── MOBILE CTA ────────────────────────────────────────────────────────── */}
       {isMobile && (
         <button onClick={onNewSession}
-          style={{width:"100%", padding:"15px", background:T.accent, color:"#0A0F0C", border:"none",
+          style={{width:"100%", padding:"15px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
             borderRadius:"12px", fontSize:"15px", fontWeight:"800", cursor:"pointer", marginTop:"16px",
             fontFamily:`'${T.displayFont}',sans-serif`, display:"flex", alignItems:"center",
             justifyContent:"center", gap:"8px"}}>
@@ -3719,7 +3719,7 @@ function CalendarScreen({onBack}) {
           <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600"}}>
             Demand heat
           </button>
-          <button style={{padding:"8px 14px",background:T.accent,border:"none",borderRadius:"8px",cursor:"pointer",color:"#0A0F0C",fontSize:"12px",fontWeight:"700"}}>
+          <button style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             Publish week
           </button>
           <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"8px",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"600"}}>
@@ -3814,7 +3814,7 @@ function CalendarScreen({onBack}) {
               <div key={tip.id} style={{padding:"12px 14px",background:T.navy,border:`1px solid ${T.accent}30`,borderRadius:"10px",position:"relative"}}>
                 <div style={{fontSize:"12px",color:T.text,lineHeight:"1.5",paddingRight:"20px"}}>{tip.text}</div>
                 <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
-                  <button style={{padding:"5px 12px",background:T.accent,border:"none",borderRadius:"6px",cursor:"pointer",color:"#0A0F0C",fontSize:"11px",fontWeight:"700"}}>{tip.action}</button>
+                  <button style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--on-accent)",fontSize:"11px",fontWeight:"700"}}>{tip.action}</button>
                   <button onClick={()=>setDismissedTips(d=>[...d,tip.id])} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Dismiss</button>
                 </div>
               </div>
@@ -3959,7 +3959,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                     <button onClick={()=>player?.previousTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
                     </button>
-                    <button onClick={()=>player?.togglePlay?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#0A0F0C"}}>
+                    <button onClick={()=>player?.togglePlay?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:"var(--accent)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--on-accent)"}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                     </button>
                     <button onClick={()=>player?.nextTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
