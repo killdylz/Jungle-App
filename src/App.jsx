@@ -6866,6 +6866,10 @@ export default function App() {
         {view==="integrations"     && <IntegrationsScreen onBack={()=>setView("dashboard")}/>}
         {view==="glossary"         && <GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"         && <CalendarScreen onBack={()=>setView("dashboard")}/>}
+        {view==="music"            && <MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>}
+        {view==="schedule"         && <CalendarScreen onBack={()=>setView("dashboard")}/>}
+        {view==="members"          && <MemberScreen onBack={()=>setView("dashboard")}/>}
+        {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
       </div>
 
       {view!=="display"&&view!=="overview-display" && (
