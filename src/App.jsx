@@ -3395,46 +3395,57 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
-  const [energy, setEnergy] = React.useState("High");
-  const [bpmMin, setBpmMin] = React.useState(120);
-  const [bpmMax, setBpmMax] = React.useState(142);
-  const [transition, setTransition] = React.useState("Beat-match");
-  const [followStructure, setFollowStructure] = React.useState(true);
-  const [takeRequests, setTakeRequests] = React.useState(true);
-  const [cleanEdits, setCleanEdits] = React.useState(true);
+
+  // Settings (persisted)
+  const [energy,     setEnergy]     = React.useState(()=>localStorage.getItem("dj_energy")||"High");
+  const [bpmMin,     setBpmMin]     = React.useState(()=>Number(localStorage.getItem("dj_bpmMin")||120));
+  const [bpmMax,     setBpmMax]     = React.useState(()=>Number(localStorage.getItem("dj_bpmMax")||142));
+  const [transition, setTransition] = React.useState(()=>localStorage.getItem("dj_transition")||"Beat-match");
+  const [followStructure, setFollowStructure] = React.useState(()=>localStorage.getItem("dj_follow")!=="false");
+  const [takeRequests,    setTakeRequests]    = React.useState(()=>localStorage.getItem("dj_requests")!=="false");
+  const [cleanEdits,      setCleanEdits]      = React.useState(()=>localStorage.getItem("dj_clean")!=="false");
+
+  // Persist settings
+  React.useEffect(()=>{ localStorage.setItem("dj_energy",energy); },[energy]);
+  React.useEffect(()=>{ localStorage.setItem("dj_bpmMin",String(bpmMin)); localStorage.setItem("dj_bpmMax",String(bpmMax)); },[bpmMin,bpmMax]);
+  React.useEffect(()=>{ localStorage.setItem("dj_transition",transition); },[transition]);
+  React.useEffect(()=>{ localStorage.setItem("dj_follow",String(followStructure)); },[followStructure]);
+  React.useEffect(()=>{ localStorage.setItem("dj_requests",String(takeRequests)); },[takeRequests]);
+  React.useEffect(()=>{ localStorage.setItem("dj_clean",String(cleanEdits)); },[cleanEdits]);
+
+  // Real playlists from Spotify
+  const [playlists, setPlaylists] = React.useState([]);
+  const [loadingPls, setLoadingPls] = React.useState(false);
+  React.useEffect(()=>{
+    setLoadingPls(true);
+    apiGetPlaylists().then(pls=>{ setPlaylists((pls||[]).filter(Boolean)); setLoadingPls(false); }).catch(()=>setLoadingPls(false));
+  },[]);
+
+  // Member requests (demo — would come from a backend in production)
   const [requests, setRequests] = React.useState([
-    {id:1, track:"Titanium — David Guetta", member:"Sam",   votes:24, bpm:126, note:"fits Block B"},
-    {id:2, track:"Levels — Avicii",          member:"Jess",  votes:11, bpm:128, note:"too slow for finisher"},
-    {id:3, track:"Somebody That I Used to Know", member:"Alex", votes:7, bpm:122, note:"cool-down maybe"},
+    {id:1, track:"Titanium — David Guetta", member:"Sam",  votes:24, bpm:126, note:"fits Block B"},
+    {id:2, track:"Levels — Avicii",         member:"Jess", votes:11, bpm:128, note:"cool-down maybe"},
+    {id:3, track:"Somebody That I Used to Know", member:"Alex", votes:7, bpm:122, note:""},
   ]);
 
-  const queue = [
-    {title:"Pump It (Extended Mix)",  artist:"Reso",            bpm:132, stage:"Block A peak",  transition:""},
-    {title:"Belters",                  artist:"Christian Bland", bpm:138, stage:"Block B",        transition:"Beat-matched crossfade · 16 bars · +6 BPM"},
-    {title:"Lose Control",            artist:"Teddy Swims (remix)",bpm:142,stage:"Block B",       transition:"Filter-sweep down · cool-down · −44 BPM"},
-    {title:"Weightless",              artist:"Marconi Union",   bpm:98,  stage:"Finisher",       transition:""},
-  ];
+  // Build real queue from stages
+  const currentStageIdx = liveState.idx || 0;
+  const queueTracks = stages.flatMap((s,si)=>
+    (s.tracks||[]).map(t=>({...t, stageName:s.name, stageColor:(SCFG[s.type]||{}).color||T.accent, isCurrent:si===currentStageIdx}))
+  );
 
-  const playlists = [
-    {name:"HIIT Bangers",   tracks:42, color:"#F59E0B"},
-    {name:"Beast Mode",     tracks:31, color:"#8B5CF6"},
-    {name:"House 2026",     tracks:58, color:"#3B82F6"},
-    {name:"Strength Cuts",  tracks:27, color:"#22D3A6"},
-  ];
+  const np = nowPlaying;
+  const currentBpm = np?.bpm || (stages[currentStageIdx]?.tracks?.[0]?.bpm) || 0;
 
   const Toggle = ({value, onChange, label}) => (
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-      <span style={{fontSize:"12px",color:T.text,fontWeight:"600"}}>{label}</span>
+      <span style={{fontSize:"12px",color:T.text,fontWeight:"600",flex:1,paddingRight:"12px"}}>{label}</span>
       <div onClick={()=>onChange(!value)} style={{
         width:"38px",height:"20px",borderRadius:"10px",
-        background:value?T.accent:T.navy,
-        border:`1px solid ${value?T.accent:T.border}`,
+        background:value?T.accent:T.navy,border:`1px solid ${value?T.accent:T.border}`,
         cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0,
       }}>
-        <div style={{
-          width:"14px",height:"14px",borderRadius:"50%",background:"white",
-          position:"absolute",top:"2px",left:value?"21px":"2px",transition:"left 0.2s",
-        }}/>
+        <div style={{width:"14px",height:"14px",borderRadius:"50%",background:"white",position:"absolute",top:"2px",left:value?"21px":"2px",transition:"left 0.2s"}}/>
       </div>
     </div>
   );
@@ -3447,163 +3458,184 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
             <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub · Auto-DJ</h2>
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify · Premium · Live session</div>
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify Premium · {queueTracks.length} tracks queued</div>
           </div>
         </div>
-        <div style={{padding:"6px 14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>
-          ● AUTO-DJ LIVE
-        </div>
+        {queueTracks.length > 0 && (
+          <div style={{padding:"5px 14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>
+            ● AUTO-DJ READY
+          </div>
+        )}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr 1fr",gap:"16px"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr 1fr":"1fr 1fr 1fr",gap:"16px"}}>
 
-        {/* Now Playing + Queue */}
+        {/* Column 1: Now Playing + Queue */}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
           {/* Now playing */}
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
             <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Now playing</div>
-            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}}>
-              <div style={{width:"52px",height:"52px",borderRadius:"10px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 4px,#0f1611 4px,#0f1611 8px)",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:"14px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Pump It (Extended Mix)</div>
-                <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Reso · Block A peak</div>
-              </div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"32px",fontWeight:"700",color:T.accent}}>132</div>
-              <div style={{fontSize:"11px",color:T.muted}}>BPM</div>
-              <div style={{display:"flex",gap:"8px"}}>
-                <button style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-                </button>
-                <button style={{width:"34px",height:"34px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#0A0F0C"}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                </button>
-                <button style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Up next queue */}
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Up next · beat-matched</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {queue.map((q,i)=>(
-                <div key={i}>
-                  {q.transition && i>0 && (
-                    <div style={{fontSize:"10px",color:T.muted,fontStyle:"italic",padding:"4px 0 4px 12px",borderLeft:`2px solid ${T.border}`}}>{q.transition}</div>
-                  )}
-                  <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                    <div style={{width:"28px",height:"28px",borderRadius:"6px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 3px,#0f1611 3px,#0f1611 6px)",flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.title}</div>
-                      <div style={{fontSize:"10px",color:T.muted}}>{q.artist}</div>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:"12px",fontWeight:"700",color:T.accent}}>{q.bpm}</div>
-                      <div style={{fontSize:"9px",color:T.muted}}>BPM</div>
-                    </div>
+            {np ? (
+              <>
+                <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}}>
+                  {np.albumArt
+                    ? <img src={np.albumArt} style={{width:"52px",height:"52px",borderRadius:"10px",objectFit:"cover",flexShrink:0}} alt=""/>
+                    : <div style={{width:"52px",height:"52px",borderRadius:"10px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 4px,#0f1611 4px,#0f1611 8px)",flexShrink:0}}/>
+                  }
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.t||np.name}</div>
+                    <div style={{fontSize:"12px",color:T.muted,marginTop:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.a||np.artist}</div>
                   </div>
                 </div>
-              ))}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  {currentBpm > 0
+                    ? <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"32px",fontWeight:"700",color:T.accent}}>{currentBpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></div>
+                    : <div style={{fontSize:"13px",color:T.muted}}>BPM unknown</div>
+                  }
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <button onClick={()=>player?.previousTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                    </button>
+                    <button onClick={()=>player?.togglePlay?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#0A0F0C"}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    </button>
+                    <button onClick={()=>player?.nextTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:"28px",marginBottom:"8px"}}>🎵</div>
+                <div style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Nothing playing.<br/>Start a live session to see now-playing info.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Track queue (from stages) */}
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Stage queue</div>
+              <div style={{fontSize:"11px",color:T.muted}}>{queueTracks.length} tracks</div>
             </div>
+            {queueTracks.length === 0 ? (
+              <div style={{textAlign:"center",padding:"16px 0",fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>
+                No tracks yet.<br/>Run <strong style={{color:T.accent}}>DJ This Class</strong> in the Builder to fill the queue.
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"300px",overflowY:"auto"}}>
+                {queueTracks.slice(0,30).map((t,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 9px",background:t.isCurrent?T.accent+"14":T.navy,border:`1px solid ${t.isCurrent?T.accent+"50":T.border}`,borderRadius:"8px"}}>
+                    {t.albumArt
+                      ? <img src={t.albumArt} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
+                      : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:t.stageColor+"22",flexShrink:0}}/>
+                    }
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.t}</div>
+                      <div style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.a} · {t.stageName}</div>
+                    </div>
+                    {t.bpm > 0 && <div style={{fontSize:"11px",fontWeight:"700",color:t.stageColor,flexShrink:0}}>{t.bpm}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Member requests */}
+        {/* Column 2: Member requests + Playlists */}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
               <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Member requests</div>
-              <div style={{padding:"3px 9px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:T.accent}}>{requests.length} pending</div>
+              {takeRequests
+                ? <div style={{padding:"3px 9px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:T.accent}}>{requests.length} pending</div>
+                : <div style={{padding:"3px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted}}>Off</div>
+              }
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {requests.map((r,i)=>(
-                <div key={r.id} style={{padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
-                  <div style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
-                    <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Space Grotesk',sans-serif",fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
-                      <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member} · {r.bpm} BPM · {r.note}</div>
-                    </div>
+            {!takeRequests
+              ? <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Enable "Take requests" in Mix Controls to allow member track requests.</div>
+              : requests.length===0
+                ? <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No pending requests</div>
+                : <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                    {requests.map(r=>(
+                      <div key={r.id} style={{padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
+                        <div style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
+                          <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Space Grotesk',sans-serif",fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
+                            <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member}{r.bpm?` · ${r.bpm} BPM`:""}{r.note?` · ${r.note}`:""}</div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
+                          <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{flex:1,padding:"5px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"6px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700"}}>Queue it</button>
+                          <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Skip</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
-                    <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{flex:1,padding:"5px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"6px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700"}}>Queue it</button>
-                    <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Skip</button>
-                  </div>
-                </div>
-              ))}
-              {requests.length===0 && <div style={{textAlign:"center",padding:"24px",color:T.muted,fontSize:"13px"}}>No pending requests</div>}
-            </div>
+            }
           </div>
 
           {/* Source playlists */}
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Source playlists</div>
-              <button style={{fontSize:"11px",fontWeight:"700",color:T.accent,background:"none",border:"none",cursor:"pointer"}}>+ Add</button>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
-              {playlists.map((p,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                  <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:T.text}}>{p.name}</span>
-                  <span style={{fontSize:"11px",color:T.muted}}>{p.tracks} tracks</span>
+            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Your Spotify playlists</div>
+            {loadingPls && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading…</div>}
+            {!loadingPls && playlists.length===0 && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No playlists found — connect Spotify first.</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"240px",overflowY:"auto"}}>
+              {playlists.slice(0,15).map((p,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"7px 9px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                  {p.images?.[0]?.url
+                    ? <img src={p.images[0].url} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
+                    : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>🎵</div>
+                  }
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                    <div style={{fontSize:"10px",color:T.muted}}>{p.tracks?.total||"?"} tracks</div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Mix controls */}
+        {/* Column 3: Mix controls */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
           <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Mix controls</div>
 
-          {/* Energy target */}
           <div style={{marginBottom:"14px"}}>
             <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"6px"}}>Energy target</div>
-            <div style={{display:"flex",gap:"6px"}}>
+            <div style={{display:"flex",gap:"5px"}}>
               {["Low","Medium","High","Peak"].map(e=>(
-                <button key={e} onClick={()=>setEnergy(e)}
-                  style={{flex:1,padding:"7px",background:energy===e?T.accent:"transparent",border:`1px solid ${energy===e?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:energy===e?"#0A0F0C":T.muted,fontSize:"11px",fontWeight:"700"}}>
+                <button key={e} onClick={()=>setEnergy(e)} style={{flex:1,padding:"7px 2px",background:energy===e?T.accent:"transparent",border:`1px solid ${energy===e?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:energy===e?"#0A0F0C":T.muted,fontSize:"10px",fontWeight:"700"}}>
                   {e}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* BPM range */}
           <div style={{marginBottom:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
               <div style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>BPM range</div>
-              <div style={{fontSize:"11px",color:T.accent,fontWeight:"700"}}>{bpmMin}–{bpmMax} BPM</div>
+              <div style={{fontSize:"11px",color:T.accent,fontWeight:"700"}}>{bpmMin}–{bpmMax}</div>
             </div>
             <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-              <input type="range" min={60} max={180} value={bpmMin}
-                onChange={e=>setBpmMin(Math.min(Number(e.target.value),bpmMax-5))}
-                style={{flex:1,accentColor:T.accent}}/>
-              <input type="range" min={60} max={180} value={bpmMax}
-                onChange={e=>setBpmMax(Math.max(Number(e.target.value),bpmMin+5))}
-                style={{flex:1,accentColor:T.accent}}/>
+              <input type="range" min={60} max={180} value={bpmMin} onChange={e=>setBpmMin(Math.min(Number(e.target.value),bpmMax-5))} style={{flex:1,accentColor:T.accent}}/>
+              <input type="range" min={60} max={180} value={bpmMax} onChange={e=>setBpmMax(Math.max(Number(e.target.value),bpmMin+5))} style={{flex:1,accentColor:T.accent}}/>
             </div>
           </div>
 
-          {/* Transition style */}
           <div style={{marginBottom:"16px"}}>
             <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"6px"}}>Transition style</div>
-            <div style={{display:"flex",gap:"6px"}}>
+            <div style={{display:"flex",gap:"5px"}}>
               {["Beat-match","Cut","Echo"].map(s=>(
-                <button key={s} onClick={()=>setTransition(s)}
-                  style={{flex:1,padding:"7px",background:transition===s?T.accent+"22":"transparent",border:`1px solid ${transition===s?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:transition===s?T.accent:T.muted,fontSize:"11px",fontWeight:"700"}}>
+                <button key={s} onClick={()=>setTransition(s)} style={{flex:1,padding:"7px 2px",background:transition===s?T.accent+"22":"transparent",border:`1px solid ${transition===s?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:transition===s?T.accent:T.muted,fontSize:"10px",fontWeight:"700"}}>
                   {s}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Toggles */}
           <Toggle value={followStructure} onChange={setFollowStructure} label="Follow class structure · sync BPM to each stage"/>
           <Toggle value={takeRequests}    onChange={setTakeRequests}    label="Take requests · members queue tracks"/>
           <Toggle value={cleanEdits}      onChange={setCleanEdits}      label="Clean / radio edits · no explicit lyrics"/>
