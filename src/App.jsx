@@ -6562,6 +6562,7 @@ export default function App() {
   const [sessionName, setSessionName] = useState("My Workout");
   const [liveState, setLiveState]     = useState({ playing:false, idx:0, elapsed:0 });
   const [showProfile, setShowProfile] = useState(false);
+  const [showNav,     setShowNav]     = useState(false);
   // Per-template track assignments (persisted across sessions)
   const [templateTracks, setTemplateTracks] = useState(() => {
     try { return JSON.parse(localStorage.getItem("jungle_tmpl_tracks") || "{}"); } catch(_) { return {}; }
@@ -6806,17 +6807,18 @@ export default function App() {
             : <><JungleLogo size={isMobile?24:30}/>{!isMobile && <span style={{fontSize:"16px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>
           }
         </div>
-        <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"4px",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-          {navItems.map(n => (
-            <button key={n.key} onClick={()=>{
-              if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
-              if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
-              setView(n.key);
-            }} style={{padding:isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
-              {n.label}
-            </button>
-          ))}
-        </nav>
+        {/* Current screen label */}
+        <div style={{flex:1,paddingLeft:"8px"}}>
+          <span style={{fontSize:isMobile?"12px":"13px",fontWeight:"600",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>
+            {navItems.find(n=>n.key===view)?.label || view}
+          </span>
+        </div>
+        {/* Hamburger */}
+        <button onClick={()=>setShowNav(true)} style={{width:"36px",height:"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"5px",background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",padding:"0",flexShrink:0}}>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+          <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
+        </button>
         <div style={{display:"flex",gap:isMobile?"6px":"12px",alignItems:"center",flexShrink:0}}>
           <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
             {dark
@@ -6871,6 +6873,78 @@ export default function App() {
         {view==="members"          && <MemberScreen onBack={()=>setView("dashboard")}/>}
         {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
       </div>
+
+      {/* ── Side Nav Drawer ── */}
+      {showNav && (
+        <>
+          {/* Backdrop */}
+          <div onClick={()=>setShowNav(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,backdropFilter:"blur(2px)"}}/>
+          {/* Drawer panel */}
+          <div style={{
+            position:"fixed",top:0,right:0,bottom:0,width:"clamp(260px,75vw,320px)",
+            background:T.card,borderLeft:`1px solid ${T.border}`,
+            zIndex:201,display:"flex",flexDirection:"column",
+            boxShadow:"-8px 0 40px rgba(0,0,0,0.5)",
+          }}>
+            {/* Drawer header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <JungleLogo size={22}/>
+                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
+              </div>
+              <button onClick={()=>setShowNav(false)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:"16px",lineHeight:"1"}}>✕</button>
+            </div>
+
+            {/* Nav items */}
+            <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
+              {[
+                {key:"dashboard",    label:"Dashboard",    icon:"🏠"},
+                {key:"builder",      label:"Class Builder", icon:"🏗"},
+                {key:"templates",    label:"Templates",    icon:"📋"},
+                {key:"library",      label:"Exercise Library",icon:"📚"},
+                {key:"glossary",     label:"Glossary",     icon:"📖"},
+                {key:"analytics",    label:"Analytics",    icon:"📊"},
+                {key:"music",        label:"Music Hub",    icon:"🎵"},
+                {key:"schedule",     label:"Schedule",     icon:"📅"},
+                {key:"members",      label:"Members",      icon:"👥"},
+                {key:"brand",        label:"Brand Studio", icon:"🎨"},
+                {key:"integrations", label:"Integrations", icon:"🔗"},
+              ].map(n=>(
+                <button key={n.key} onClick={()=>{
+                  if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
+                  if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
+                  setView(n.key);
+                  setShowNav(false);
+                }} style={{
+                  width:"100%",display:"flex",alignItems:"center",gap:"12px",
+                  padding:"12px 14px",
+                  background:view===n.key?`${T.accent}18`:"transparent",
+                  color:view===n.key?T.accent:T.text,
+                  border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,
+                  borderRadius:"10px",cursor:"pointer",
+                  fontSize:"14px",fontWeight:view===n.key?"700":"500",
+                  textAlign:"left",marginBottom:"2px",
+                  transition:"background 0.15s",
+                }}>
+                  <span style={{fontSize:"17px",flexShrink:0}}>{n.icon}</span>
+                  <span style={{flex:1}}>{n.label}</span>
+                  {view===n.key && <span style={{width:"6px",height:"6px",borderRadius:"50%",background:T.accent,flexShrink:0}}/>}
+                </button>
+              ))}
+            </div>
+
+            {/* Drawer footer */}
+            <div style={{borderTop:`1px solid ${T.border}`,padding:"14px 16px",display:"flex",gap:"8px",flexShrink:0}}>
+              <button onClick={()=>setDark(!dark)} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                {dark?"☀ Light":"🌙 Dark"}
+              </button>
+              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                👤 Profile
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {showProfile && <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
