@@ -2800,96 +2800,173 @@ function AnalyticsScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
-  const weekly = [
-    {l:"Mon",m:45,s:1},{l:"Tue",m:0,s:0},{l:"Wed",m:60,s:1},{l:"Thu",m:90,s:2},{l:"Fri",m:30,s:1},{l:"Sat",m:50,s:1},{l:"Sun",m:0,s:0}
+  const [timeFilter, setTimeFilter] = React.useState("12w");
+
+  const attendanceData = [
+    {label:"Mon",val:82},{label:"Tue",val:91},{label:"Wed",val:74},{label:"Thu",val:95},
+    {label:"Fri",val:88},{label:"Sat",val:100},{label:"Sun",val:63},
   ];
-  const maxM = Math.max(...weekly.map(d=>d.m), 1);
-  const typeBreakdown = [
-    {label:"Circuit",   pct:35, color:"#EF4444"},
-    {label:"Strength",  pct:28, color:"#8B5CF6"},
-    {label:"Cardio",    pct:18, color:"#F97316"},
-    {label:"Recovery",  pct:12, color:"#06B6D4"},
-    {label:"Stretch",   pct:7,  color:"#10B981"},
+  const maxAttn = Math.max(...attendanceData.map(d=>d.val), 1);
+
+  const classTypes = [
+    {label:"HIIT",      pct:38, color:"#F59E0B"},
+    {label:"Strength",  pct:24, color:"#8B5CF6"},
+    {label:"Hyrox",     pct:18, color:"#22D3A6"},
+    {label:"Circuit",   pct:12, color:"#F97316"},
+    {label:"Yoga",      pct:8,  color:"#10B981"},
   ];
-  const recent = [
-    {date:"2025-02-22",name:"Apex HIIT",dur:"31 min",stages:5},
-    {date:"2025-02-20",name:"Iron Protocol",dur:"58 min",stages:5},
-    {date:"2025-02-18",name:"Circuit Surge",dur:"44 min",stages:5},
-    {date:"2025-02-15",name:"Flow State",dur:"47 min",stages:4},
-    {date:"2025-02-13",name:"Velocity",dur:"43 min",stages:5},
+
+  const topClasses = [
+    {name:"Sunrise HIIT",    sessions:24, rating:4.9, up:true},
+    {name:"Iron Protocol",   sessions:19, rating:4.8, up:true},
+    {name:"Flow & Restore",  sessions:16, rating:4.7, up:false},
+    {name:"Hyrox Sim",       sessions:14, rating:4.6, up:true},
   ];
+
+  const atRiskMembers = [
+    {name:"Sarah M.",      lastSeen:"12d ago", missed:3},
+    {name:"James T.",      lastSeen:"18d ago", missed:4},
+    {name:"Priya K.",      lastSeen:"9d ago",  missed:2},
+  ];
+
+  const kpis = [
+    {label:"Sessions / week", value:"24",   delta:"+18% vs prev", up:true},
+    {label:"Attendance rate",  value:"87%",  delta:"+4%",          up:true},
+    {label:"Avg satisfaction", value:"4.8★", delta:"stable",       up:null},
+    {label:"Track plays today",value:"312",  delta:"+22%",         up:true},
+  ];
+
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"960px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"26px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text}}><ArrowLeft size={20}/></button>
-        <h2 style={{fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text}}>Analytics</h2>
+    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",boxSizing:"border-box"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"26px",flexWrap:"wrap",gap:"12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          </button>
+          <div>
+            <h2 style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:isMobile?"18px":"20px",fontWeight:"700",color:T.text,margin:0}}>Studio analytics</h2>
+            <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Barry's · Shoreditch</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+          {/* Time filter chips */}
+          <div style={{display:"flex",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden",fontSize:"12px"}}>
+            {[["4w","4 weeks"],["12w","12 weeks"],["year","Year"]].map(([k,lbl])=>(
+              <div key={k} onClick={()=>setTimeFilter(k)}
+                style={{padding:"8px 14px",background:timeFilter===k?T.navy:"transparent",color:timeFilter===k?T.text:T.muted,fontWeight:timeFilter===k?"600":"400",cursor:"pointer"}}>
+                {lbl}
+              </div>
+            ))}
+          </div>
+          <button style={{border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"8px 15px",borderRadius:"9px",cursor:"pointer",display:"flex",alignItems:"center",gap:"7px"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            Export
+          </button>
+        </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:"12px",marginBottom:"24px"}}>
-        <StatCard icon="📅" label="This Month"    value="12"      color={T.accent}/>
-        <StatCard icon="⏱️" label="Total Hours"  value="18.5h"   color={T.green}/>
-        <StatCard icon="📊" label="Avg Duration" value="47 min"  color="#8B5CF6"/>
-        <StatCard icon="🔥" label="Best Streak"  value="7 days"  color="#F97316"/>
+      {/* KPI row */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${isTablet?2:4},1fr)`,gap:"12px",marginBottom:"20px"}}>
+        {kpis.map((k,i)=>(
+          <div key={i} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"11px",letterSpacing:"1px",color:T.muted,fontWeight:"600",textTransform:"uppercase"}}>{k.label}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"30px",fontWeight:"700",marginTop:"6px",color:T.text}}>{k.value}</div>
+            <div style={{fontSize:"12px",marginTop:"2px",color:k.up===null?T.muted:k.up?T.accent:"#EF4444"}}>
+              {k.up===true?"▲ ":k.up===false?"▼ ":""}{k.delta}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"20px",marginBottom:"20px"}}>
-        {/* Weekly bar chart */}
-        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
-          <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"18px"}}>This Week — Minutes</p>
-          <div style={{display:"flex",alignItems:"flex-end",gap:"8px",height:"110px"}}>
-            {weekly.map(d => (
-              <div key={d.l} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px"}}>
-                <div style={{width:"100%",background:d.m>0?T.green:T.navy,borderRadius:"4px 4px 0 0",height:`${(d.m/maxM)*90}px`,transition:"height 0.6s"}}/>
-                <p style={{fontSize:"10px",color:T.muted}}>{d.l}</p>
+      {/* Charts row */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"16px",marginBottom:"20px"}}>
+        {/* Attendance bar chart */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text}}>Attendance & fill rate</div>
+            <div style={{display:"flex",gap:"14px",fontSize:"11px",color:T.muted}}>
+              <span style={{display:"flex",alignItems:"center",gap:"5px"}}>
+                <span style={{width:"9px",height:"9px",borderRadius:"2px",background:T.accent,display:"inline-block"}}/>Attendance
+              </span>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:isMobile?"6px":"10px",height:"110px",marginBottom:"8px"}}>
+            {attendanceData.map((d,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"5px"}}>
+                <div style={{
+                  width:"100%",
+                  background:`linear-gradient(to top, ${T.accent}, ${T.green})`,
+                  borderRadius:"4px 4px 0 0",
+                  height:`${(d.val/maxAttn)*95}px`,
+                  transition:"height 0.4s",
+                  opacity: d.val/maxAttn * 0.6 + 0.4,
+                }}/>
+                <p style={{fontSize:"10px",color:T.muted}}>{d.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Type breakdown */}
-        <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
-          <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Session Types</p>
-          {typeBreakdown.map(item => (
-            <div key={item.label} style={{marginBottom:"10px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
-                <p style={{fontSize:"12px",color:T.text,fontWeight:"600"}}>{item.label}</p>
-                <p style={{fontSize:"12px",color:T.muted}}>{item.pct}%</p>
+        {/* Class type distribution */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Most-booked class types</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+            {classTypes.map((item,i)=>(
+              <div key={i}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
+                  <span style={{fontSize:"12px",color:T.text,fontWeight:"600"}}>{item.label}</span>
+                  <span style={{fontSize:"12px",color:T.muted}}>{item.pct}%</span>
+                </div>
+                <div style={{height:"7px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
+                  <div style={{width:`${item.pct}%`,height:"100%",background:item.color,borderRadius:"4px"}}/>
+                </div>
               </div>
-              <div style={{height:"6px",background:T.navy,borderRadius:"3px",overflow:"hidden"}}>
-                <div style={{height:"100%",background:item.color,width:`${item.pct}%`,borderRadius:"3px"}}/>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Recent sessions */}
-      <div style={{background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,padding:isMobile?"14px":"20px"}}>
-        <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Recent Sessions</p>
-        {isMobile ? (
-          recent.map((r,i) => (
-            <div key={i} style={{padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-              <p style={{fontSize:"13px",fontWeight:"600",color:T.text,marginBottom:"3px"}}>{r.name}</p>
-              <p style={{fontSize:"11px",color:T.muted}}>{r.date} · {r.dur} · {r.stages} stage{r.stages!==1?"s":""}</p>
-            </div>
-          ))
-        ) : (
-          <div style={{overflowX:"auto"}}>
-            <div style={{minWidth:"480px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
-                {["Session","Duration","Stages","Date"].map(h => <p key={h} style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</p>)}
-              </div>
-              {recent.map((r,i) => (
-                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"0",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-                  <p style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{r.name}</p>
-                  <p style={{fontSize:"13px",color:T.muted}}>{r.dur}</p>
-                  <p style={{fontSize:"13px",color:T.muted}}>{r.stages}</p>
-                  <p style={{fontSize:"13px",color:T.muted}}>{r.date}</p>
-                </div>
-              ))}
-            </div>
+      {/* Bottom panels */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"16px"}}>
+        {/* Top classes table */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Top classes</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:"0",borderBottom:`1px solid ${T.border}`,paddingBottom:"8px",marginBottom:"8px"}}>
+            {["Name","Sessions","Rating","Trend"].map(h=>(
+              <span key={h} style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",textAlign:h==="Name"?"left":"center"}}>{h}</span>
+            ))}
           </div>
-        )}
+          {topClasses.map((cls,i)=>(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:"0",padding:"10px 0",borderBottom:i<topClasses.length-1?`1px solid ${T.border}`:"none",alignItems:"center"}}>
+              <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{cls.name}</span>
+              <span style={{fontSize:"13px",color:T.muted,textAlign:"center",paddingLeft:"12px"}}>{cls.sessions}</span>
+              <span style={{fontSize:"13px",color:T.muted,textAlign:"center",paddingLeft:"12px"}}>{cls.rating}</span>
+              <span style={{fontSize:"16px",textAlign:"center",paddingLeft:"12px",color:cls.up?T.accent:"#EF4444"}}>{cls.up?"↑":"↓"}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* At-risk members */}
+        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>At-risk members</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {atRiskMembers.map((m,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
+                <div style={{width:"34px",height:"34px",borderRadius:"50%",background:"#F59E0B20",border:"1px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",color:"#F59E0B",fontSize:"13px",fontWeight:"700",flexShrink:0}}>
+                  {m.name.split(" ").map(n=>n[0]).join("")}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{m.name}</div>
+                  <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} · {m.missed} sessions missed</div>
+                </div>
+                <button style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.text,fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>
+                  Contact
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
