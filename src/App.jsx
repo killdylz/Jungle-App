@@ -6881,10 +6881,10 @@ export default function App() {
           <div onClick={()=>setShowNav(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:200,backdropFilter:"blur(2px)"}}/>
           {/* Drawer panel */}
           <div style={{
-            position:"fixed",top:0,right:0,bottom:0,width:"clamp(260px,75vw,320px)",
-            background:T.card,borderLeft:`1px solid ${T.border}`,
+            position:"fixed",top:0,left:0,bottom:0,width:"clamp(260px,75vw,320px)",
+            background:T.card,borderRight:`1px solid ${T.border}`,
             zIndex:201,display:"flex",flexDirection:"column",
-            boxShadow:"-8px 0 40px rgba(0,0,0,0.5)",
+            boxShadow:"8px 0 40px rgba(0,0,0,0.5)",
           }}>
             {/* Drawer header */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
