@@ -3615,6 +3615,281 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
 }
 
 
+// ─── MemberScreen ─────────────────────────────────────────────────────────────
+function MemberScreen({onBack}) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
+  const [tab, setTab] = React.useState("discover"); // discover | detail | live | book | profile
+  const [selectedClass, setSelectedClass] = React.useState(null);
+
+  const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899"};
+  const upcomingClasses = [
+    {id:1, name:"Sunrise HIIT",  date:"Tue 06:00", coach:"Mara", bpm:130, match:92, type:"HIIT",     spots:6, booked:false, dur:"45m"},
+    {id:2, name:"Hyrox Sim",    date:"Wed 12:15", coach:"Dev",  bpm:140, match:84, type:"Hyrox",    spots:4, booked:false, dur:"60m"},
+    {id:3, name:"Strength Lab", date:"Thu 18:30", coach:"Priya",bpm:95,  match:78, type:"Strength", spots:0, booked:true,  dur:"45m"},
+    {id:4, name:"Spin Ride",    date:"Fri 19:30", coach:"Dev",  bpm:126, match:71, type:"Spin",     spots:0, booked:false, waitlist:3, dur:"45m"},
+  ];
+
+  const classDetail = selectedClass || upcomingClasses[0];
+  const stagesPreview = [
+    {name:"Warm-up flow",   bpm:88, color:"#5BD0C0"},
+    {name:"AMRAP block",    bpm:128,color:"#7BE3A4"},
+    {name:"Interval peak",  bpm:138,color:"#7BE3A4"},
+    {name:"Cool-down",      bpm:78, color:"#E0B85B"},
+  ];
+
+  const TabBtn = ({id, label, icon}) => (
+    <button onClick={()=>setTab(id)} style={{
+      flex:1,padding:"10px 4px",background:"none",border:"none",cursor:"pointer",
+      color:tab===id?T.accent:T.muted,
+      borderTop:`2px solid ${tab===id?T.accent:"transparent"}`,
+      fontSize:"11px",fontWeight:"700",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",
+    }}>
+      <span style={{fontSize:"16px"}}>{icon}</span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:T.text}}>Member App</div>
+        <div style={{marginLeft:"auto",fontSize:"11px",color:T.muted}}>Sam Ellis</div>
+        <div style={{width:"30px",height:"30px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>SE</div>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto",padding:"0"}}>
+
+        {/* ── DISCOVER ── */}
+        {tab==="discover" && (
+          <div style={{padding:"20px"}}>
+            <div style={{marginBottom:"18px"}}>
+              <div style={{fontSize:"12px",color:T.muted,fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam 👋</div>
+              <div style={{padding:"14px",background:T.card,border:`1px solid ${T.accent}50`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
+                <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
+                <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Strength Lab</div>
+                <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
+                <div style={{marginTop:"10px",padding:"6px 12px",background:T.accent,borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",cursor:"pointer"}}>View workout →</div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+              <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Recommended for you</div>
+              <button style={{background:"none",border:"none",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"700"}}>See all</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+              {upcomingClasses.map((cls,i)=>(
+                <div key={cls.id} onClick={()=>{setSelectedClass(cls);setTab("detail");}}
+                  style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",cursor:"pointer"}}>
+                  <div style={{width:"44px",height:"44px",borderRadius:"10px",background:`${CAT_COLOR[cls.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[cls.type]||T.accent}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"800",color:CAT_COLOR[cls.type]||T.accent}}>{cls.date.split(" ")[0][0]+cls.date.split(" ")[0].slice(-2)}</span>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>{cls.date} · {cls.coach} · {cls.bpm} BPM</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:"14px",fontWeight:"800",color:T.accent}}>{cls.match}%</div>
+                    <div style={{fontSize:"10px",color:T.muted}}>match</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CLASS DETAIL ── */}
+        {tab==="detail" && (
+          <div style={{padding:"20px"}}>
+            <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||T.accent}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||T.accent,marginBottom:"8px"}}>{classDetail.type} · {classDetail.dur}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"24px",fontWeight:"800",color:T.text,marginBottom:"4px"}}>{classDetail.name}</div>
+            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
+              <div style={{width:"36px",height:"36px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>{classDetail.coach[0]}</div>
+              <div>
+                <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{classDetail.coach}</div>
+                <div style={{fontSize:"11px",color:T.muted}}>Lead coach · 4.9 ★</div>
+              </div>
+              <div style={{marginLeft:"auto",display:"flex",gap:"12px",fontSize:"11px",color:T.muted}}>
+                <span>RPE 7–8</span>
+                <span>Studio 1</span>
+                <span style={{color:classDetail.spots>0?T.accent:"#EF4444",fontWeight:"700"}}>{classDetail.spots>0?`${classDetail.spots} spots left`:"Full"}</span>
+              </div>
+            </div>
+
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"16px"}}>
+              {stagesPreview.map((s,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px",borderLeft:`3px solid ${s.color}`}}>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{s.name}</div>
+                  <div style={{fontSize:"12px",color:s.color,fontWeight:"700"}}>{s.bpm} BPM</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{padding:"12px 14px",background:T.accent+"11",border:`1px solid ${T.accent}30`,borderRadius:"10px",marginBottom:"16px"}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:T.accent,marginBottom:"2px"}}>Auto-DJ soundtrack ready</div>
+              <div style={{fontSize:"11px",color:T.muted}}>House · 52 tracks · beat-matched to every stage</div>
+            </div>
+
+            {classDetail.booked
+              ? <div style={{width:"100%",padding:"14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:T.accent}}>✓ Booked</div>
+              : classDetail.waitlist
+                ? <button style={{width:"100%",padding:"14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:T.muted}}>Join waitlist ({classDetail.waitlist} ahead)</button>
+                : <button style={{width:"100%",padding:"14px",background:T.accent,border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"#0A0F0C"}}>Book with ClassPass</button>
+            }
+          </div>
+        )}
+
+        {/* ── LIVE IN CLASS ── */}
+        {tab==="live" && (
+          <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:"20px"}}>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:T.text}}>Sunrise HIIT</div>
+              <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>● LIVE</div>
+            </div>
+
+            <div style={{padding:"3px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted,marginBottom:"16px"}}>ROUND 3 / 8</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"72px",fontWeight:"800",color:T.text,lineHeight:"1",marginBottom:"8px"}}>00:42</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"22px",fontWeight:"700",color:T.accent,marginBottom:"4px"}}>Kettlebell Swings</div>
+            <div style={{fontSize:"13px",color:T.muted,marginBottom:"24px"}}>×20 · 24kg</div>
+
+            <div style={{padding:"12px 16px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
+              <div style={{width:"36px",height:"36px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 3px,#0f1611 3px,#0f1611 6px)",flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>Pump It — Reso</div>
+                <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>now playing</div>
+              </div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:T.muted}}> BPM</span></div>
+            </div>
+
+            <button style={{width:"100%",padding:"12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"12px"}}>
+              🎵 Request a track · 3 in queue
+            </button>
+
+            <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%"}}>
+              <div style={{fontSize:"12px",color:T.muted,marginBottom:"10px"}}>How hard did that feel? Tap to log RPE after the round</div>
+              <div style={{display:"flex",gap:"6px"}}>
+                {[5,6,7,8,9,10].map(n=>(
+                  <button key={n} style={{flex:1,padding:"8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"13px",fontWeight:"700"}}>{n}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── BOOK / SCHEDULE ── */}
+        {tab==="book" && (
+          <div style={{padding:"20px"}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Book a class</div>
+
+            {/* Week strip */}
+            <div style={{display:"flex",gap:"8px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px"}}>
+              {["MON\n14","TUE\n15","WED\n16","THU\n17","FRI\n18","SAT\n19"].map((d,i)=>(
+                <div key={i} style={{
+                  minWidth:"48px",padding:"8px 4px",borderRadius:"10px",textAlign:"center",cursor:"pointer",flexShrink:0,
+                  background:i===1?T.accent:T.card,border:`1px solid ${i===1?T.accent:T.border}`,
+                  color:i===1?"#0A0F0C":T.text,
+                }}>
+                  <div style={{fontSize:"9px",fontWeight:"700",letterSpacing:"0.5px"}}>{d.split("\n")[0]}</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700"}}>{d.split("\n")[1]}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* ClassPass badge */}
+            <div style={{padding:"8px 14px",background:"#3B82F622",border:"1px solid #3B82F650",borderRadius:"8px",fontSize:"12px",fontWeight:"600",color:"#3B82F6",marginBottom:"14px",display:"flex",alignItems:"center",gap:"8px"}}>
+              <span style={{fontWeight:"800"}}>CP</span> ClassPass · 7 credits left this month
+            </div>
+
+            {/* Class list */}
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {[
+                {time:"06:00",name:"Sunrise HIIT",coach:"Mara",dur:"45m",status:"Booked"},
+                {time:"12:15",name:"Hyrox Sim",coach:"Dev",dur:"50m",spots:4,status:"Book"},
+                {time:"18:30",name:"Strength Lab",coach:"Priya",dur:"45m",spots:8,status:"Book"},
+                {time:"19:30",name:"Spin Ride",dur:"45m",status:"Waitlist 3",full:true},
+              ].map((cls,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"15px",fontWeight:"700",color:T.muted,minWidth:"44px"}}>{cls.time}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
+                    <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
+                  </div>
+                  <button style={{
+                    padding:"6px 12px",
+                    background:cls.status==="Booked"?T.accent+"22":cls.full?T.navy:"transparent",
+                    border:`1px solid ${cls.status==="Booked"?T.accent:T.border}`,
+                    borderRadius:"7px",cursor:"pointer",
+                    color:cls.status==="Booked"?T.accent:T.text,
+                    fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap",
+                  }}>{cls.status}</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── PROFILE / DATA ── */}
+        {tab==="profile" && (
+          <div style={{padding:"20px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px"}}>
+              <div style={{width:"56px",height:"56px",borderRadius:"50%",background:T.accent+"22",border:`2px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",fontWeight:"800",color:T.accent,flexShrink:0}}>SE</div>
+              <div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"18px",fontWeight:"700",color:T.text}}>Sam Ellis</div>
+                <div style={{fontSize:"12px",color:T.muted}}>Member since 2024 · Shoreditch</div>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"20px"}}>
+              {[{val:"128",label:"classes"},{val:"7.6",label:"avg RPE"},{val:"12wk",label:"streak"}].map((s,i)=>(
+                <div key={i} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",textAlign:"center"}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"24px",fontWeight:"800",color:T.accent}}>{s.val}</div>
+                  <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"20px"}}>
+              {[{type:"HIIT",n:48,color:"#F59E0B"},{type:"Strength",n:36,color:"#8B5CF6"},{type:"Hyrox",n:24,color:"#22D3A6"}].map((c,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"8px"}}>
+                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:c.color}}/>
+                  <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:T.text}}>{c.type}</span>
+                  <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"16px",fontWeight:"700",color:c.color}}>{c.n}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
+            <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px"}}>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
+                {["House","Drum & Bass","Hip-hop"].map(g=>(
+                  <div key={g} style={{padding:"5px 12px",background:T.accent+"22",border:`1px solid ${T.accent}40`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>{g}</div>
+                ))}
+              </div>
+              <div style={{fontSize:"12px",color:T.muted}}>128–140 BPM · peak zone</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",flexShrink:0}}>
+        <TabBtn id="discover" label="Discover" icon="🏠"/>
+        <TabBtn id="detail"   label="Classes"  icon="📋"/>
+        <TabBtn id="live"     label="Live"     icon="🎙"/>
+        <TabBtn id="book"     label="Book"     icon="📅"/>
+        <TabBtn id="profile"  label="Profile"  icon="👤"/>
+      </div>
+    </div>
+  );
+}
+
+
 // ─── PlaylistImportModal ──────────────────────────────────────────────────────
 function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onClose }) {
   const vw = useWindowWidth();
