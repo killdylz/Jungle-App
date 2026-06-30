@@ -4168,7 +4168,7 @@ function MemberScreen({onBack}) {
                 <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
                 <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Strength Lab</div>
                 <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
-                <div style={{marginTop:"10px",padding:"6px 12px",background:T.accent,borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",cursor:"pointer"}}>View workout →</div>
+                <div style={{marginTop:"10px",padding:"6px 12px",background:"var(--accent)",borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",cursor:"pointer"}}>View workout →</div>
               </div>
             </div>
 
@@ -4680,7 +4680,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             </div>
             <div style={{display:"flex",gap:"8px",marginTop:"14px"}}>
               <button onClick={()=>{onCustomSkinChange(draftTokens);onSkinChange(activeSkinId);}}
-                style={{flex:1,padding:"10px",background:T.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",fontFamily:`'${displayFont}',sans-serif`}}>
+                style={{flex:1,padding:"10px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",fontFamily:`'${displayFont}',sans-serif`}}>
                 Save custom tokens
               </button>
               <button onClick={()=>{setDraftTokens({..._baseSkin.tokens});onCustomSkinChange(null);}}
@@ -4721,7 +4721,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 </div>
               ))}
               {/* Mini button */}
-              <button style={{width:"100%",marginTop:"10px",padding:"9px",background:T.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",fontFamily:`'${displayFont}',sans-serif`}}>
+              <button style={{width:"100%",marginTop:"10px",padding:"9px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",fontFamily:`'${displayFont}',sans-serif`}}>
                 Start Class
               </button>
             </div>
