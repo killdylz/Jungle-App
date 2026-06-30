@@ -5093,7 +5093,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
       }}>
 
         {/* Inner screen */}
-        <div style={{flex:1,background:T.bg,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,background:`radial-gradient(120% 90% at 50% 0%,rgba(123,227,164,.06),transparent),${T.bg}`,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
           {/* Header row */}
           <div style={{
@@ -5170,7 +5170,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                         </span>
                       </div>
                       {/* Stage name */}
-                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px"}}>{s.name}</p>
+                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px",fontFamily:"'Space Grotesk',sans-serif"}}>{s.name}</p>
                       {/* Duration + BPM */}
                       <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>
                         {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
