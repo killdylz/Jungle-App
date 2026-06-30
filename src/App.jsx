@@ -1699,7 +1699,7 @@ const Tag = ({children, color, style:s={}}) => (
   <span style={{display:"inline-block",padding:"3px 9px",background:color||T.navy,color:"white",borderRadius:"4px",fontSize:"11px",fontWeight:"700",...s}}>{children}</span>
 );
 const SpBadge = ({children}) => (
-  <span style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",background:T.green+"20",color:T.green,borderRadius:"6px",fontSize:"12px",fontWeight:"700",border:`1px solid ${T.green}40`}}>{children}</span>
+  <span style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",background:"var(--green-20)",color:"var(--green)",borderRadius:"6px",fontSize:"12px",fontWeight:"700",border:"1px solid var(--green-40)",transition:"background .3s,color .2s,border-color .3s"}}>{children}</span>
 );
 
 // ─── Logo ─────────────────────────────────────────────────────────────────────
