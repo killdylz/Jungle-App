@@ -2392,87 +2392,368 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
 }
 
 // ─── DashboardScreen ──────────────────────────────────────────────────────────
-function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewAnalytics, onViewGlossary, onViewLibrary, profile, sessionHistory=[]}) {
+function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewAnalytics,
+  onViewGlossary, onViewLibrary, onViewMusic, onViewSchedule, onViewMembers, profile, sessionHistory=[], stages=[], djProgress=null}) {
   const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  const isTablet = vw < 768;
-  const first = profile?.display_name?.split(" ")?.[0] || null;
+  const isMobile  = vw < 480;
+  const isTablet  = vw < 768;
+  const isSmall   = vw < 900;
 
-  // Compute real stats from sessionHistory
-  const now = new Date();
-  const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0,0,0,0);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const weekStr = startOfWeek.toISOString().slice(0,10);
-  const monthStr = startOfMonth.toISOString().slice(0,10);
+  // ── Time-aware greeting ──────────────────────────────────────────────────────
+  const now   = new Date();
+  const hour  = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = profile?.display_name?.split(" ")?.[0] || "Coach";
+  const gymName = "Jungle Gym";
 
-  const sessionsThisWeek = sessionHistory.filter(s => s.date >= weekStr).length;
-  const hoursThisMonth = (sessionHistory.filter(s => s.date >= monthStr).reduce((a,s) => a + (s.durMin||0), 0) / 60).toFixed(1);
+  const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const monNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const dateStr = `${dayNames[now.getDay()]} ${now.getDate()} ${monNames[now.getMonth()]}`;
 
-  // Day streak: count consecutive days with sessions going backwards from today
-  const todayStr = now.toISOString().slice(0,10);
-  const sessionDates = new Set(sessionHistory.map(s => s.date));
-  let streak = 0;
-  for (let d = new Date(now); ; d.setDate(d.getDate()-1)) {
-    const ds = d.toISOString().slice(0,10);
-    if (sessionDates.has(ds)) { streak++; } else { if (ds < todayStr) break; }
-  }
+  // ── Mock today's classes ─────────────────────────────────────────────────────
+  const todayClasses = [
+    { time:"06:00", period:"AM", name:"Sunrise HIIT",        trainer:"Mara",  booked:18, cap:20, bpm:132, color:"#EF4444" },
+    { time:"09:30", period:"AM", name:"Flow & Strength",     trainer:"Priya", booked:12, cap:16, bpm:95,  color:"#8B5CF6" },
+    { time:"12:15", period:"PM", name:"Hyrox Simulation",    trainer:"Dev",   booked:24, cap:24, bpm:140, color:"#F97316" },
+    { time:"14:00", period:"PM", name:"Core & Conditioning", trainer:"Mara",  booked:8,  cap:16, bpm:110, color:"#06B6D4" },
+    { time:"18:30", period:"PM", name:"Strength Lab",        trainer:"Priya", booked:11, cap:16, bpm:96,  color:"#10B981" },
+    { time:"20:00", period:"PM", name:"Late HIIT",           trainer:"Dev",   booked:6,  cap:20, bpm:138, color:"#EF4444" },
+  ];
+  // Determine "upcoming" — classes after current hour
+  const upcoming = todayClasses.filter(c => {
+    const [h,m] = c.time.split(":").map(Number);
+    const totalMins = h * 60 + m + (c.period === "PM" && h !== 12 ? 720 : 0);
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    return totalMins >= nowMins;
+  });
+  const showClasses = upcoming.slice(0, 3).length > 0 ? upcoming.slice(0, 3) : todayClasses.slice(0, 3);
+
+  // ── Jungle Intelligence tip (cycles based on time) ───────────────────────────
+  const tips = [
+    { class: "18:30 Strength Lab",  tip: "fills 22% faster paired with a 90–100 BPM low-end soundtrack. Last 3 runs averaged RPE 6.8 — slightly under target.", action: "Apply to tonight" },
+    { class: "Hyrox Simulation",    tip: "peaks at 94% fill rate on Thursdays. Consider adding a 2nd slot — demand data supports it.", action: "Add slot" },
+    { class: "Sunrise HIIT",        tip: "retention is 18% higher when the DJ set starts before members arrive. Auto-DJ can schedule a pre-class warm-up mix.", action: "Schedule mix" },
+  ];
+  const tipIdx = now.getMinutes() % tips.length;
+  const tip = tips[tipIdx];
+
+  // ── Auto-DJ state derived from stages ────────────────────────────────────────
+  const djTrackCount = stages.reduce((a, s) => a + (s.tracks||[]).length, 0);
+  const djBpm = stages[0]?.tracks?.[0]?.bpm || 128;
+  const djActive = djProgress?.active || djTrackCount > 0;
+
+  // ── KPI cards data ────────────────────────────────────────────────────────────
+  const kpis = [
+    { label:"CLASS FILL RATE", value:"92%",   trend:"▲ 18% vs last wk", trendUp:true,  sub:null },
+    { label:"AVG RPE",         value:"7.4",   trend:"target band 7–8",  trendUp:null,  sub:null },
+    { label:"RETURN RATE",     value:"86%",   trend:"▲ 4 pts",          trendUp:true,  sub:null },
+    { label:"MEMBER NPS",      value:"71",    trend:"312 responses",    trendUp:null,  sub:null },
+  ];
+
+  // ── Fill bar colour ───────────────────────────────────────────────────────────
+  const fillColor = pct => pct >= 90 ? "#EF4444" : pct >= 70 ? T.accent : T.green;
 
   return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",maxWidth:"960px",margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
-      {/* Hero */}
-      <div style={{marginBottom:isMobile?"18px":"28px"}}>
-        <h1 style={{fontSize:isMobile?"22px":"30px",fontWeight:"800",color:T.text,marginBottom:"6px"}}>
-          Welcome back{first ? `, ${first}` : ""}! 👋
-        </h1>
-        <p style={{fontSize:isMobile?"13px":"14px",color:T.muted}}>Ready to crush today's session?</p>
+    <div style={{flex:1, overflowY:"auto", padding:isMobile?"14px":"28px 32px", boxSizing:"border-box"}}>
+
+      {/* ── HEADER ──────────────────────────────────────────────────────────── */}
+      <div style={{display:"flex", alignItems:isMobile?"flex-start":"center", justifyContent:"space-between",
+        flexDirection:isMobile?"column":"row", gap:"12px", marginBottom:"22px"}}>
+        <div>
+          <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+            letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} · {dateStr}</div>
+          <h1 style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:isMobile?"20px":"26px",
+            fontWeight:"800", color:T.text, margin:0, lineHeight:1.1}}>
+            {greeting}, {first} 👋
+          </h1>
+          <div style={{fontSize:"13px", color:T.muted, marginTop:"4px"}}>
+            {todayClasses.length} classes today · {upcoming.length} upcoming
+          </div>
+        </div>
+
+        {/* Search + Spotify badge */}
+        <div style={{display:"flex", alignItems:"center", gap:"10px", flexShrink:0}}>
+          {!isMobile && (
+            <div style={{position:"relative"}}>
+              <input placeholder="Search classes, members…"
+                style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"9px",
+                  padding:"9px 14px 9px 36px", color:T.text, fontSize:"13px", width:"220px",
+                  outline:"none", fontFamily:"'Hanken Grotesk',sans-serif"}}/>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2"
+                style={{position:"absolute", left:"12px", top:"50%", transform:"translateY(-50%)"}}>
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </div>
+          )}
+          <div style={{padding:"7px 12px", background:"#1DB95422", border:"1px solid #1DB95450",
+            borderRadius:"999px", fontSize:"11px", fontWeight:"700", color:"#1DB954",
+            display:"flex", alignItems:"center", gap:"6px", flexShrink:0}}>
+            <div style={{width:"6px", height:"6px", borderRadius:"50%", background:"#1DB954"}}/>
+            Spotify linked
+          </div>
+        </div>
       </div>
 
-      {/* Stats row */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr 1fr":"repeat(3,1fr)",gap:isMobile?"8px":"14px",marginBottom:isMobile?"18px":"28px"}}>
-        <StatCard icon="🏋️" label="Sessions This Week" value={String(sessionsThisWeek)} color={T.accent}/>
-        <StatCard icon="⏱️" label="Hours This Month"   value={hoursThisMonth + "h"}     color={T.green}/>
-        <StatCard icon="🔥" label="Day Streak"          value={String(streak)}           color="#F97316"/>
-      </div>
-
-      {/* CTA */}
-      <button onClick={onNewSession} style={{width:"100%",padding:isMobile?"14px":"17px",background:T.accent,color:"white",border:"none",borderRadius:"10px",fontSize:isMobile?"14px":"16px",fontWeight:"700",cursor:"pointer",marginBottom:isMobile?"20px":"32px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
-        <Plus size={isMobile?17:20}/> Start New Session
-      </button>
-
-      {/* Quick nav tiles */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?"8px":"12px",marginBottom:isMobile?"20px":"32px"}}>
-        {[
-          { icon:<Calendar size={isMobile?18:22}/>, label:"Calendar",  onClick:onViewCalendar  },
-          { icon:<BarChart2 size={isMobile?18:22}/>, label:"Analytics", onClick:onViewAnalytics },
-          { icon:<BookOpen size={isMobile?18:22}/>, label:"Glossary",  onClick:onViewGlossary  },
-          { icon:<BookOpen size={isMobile?18:22}/>, label:"Library",   onClick:onViewLibrary   },
-        ].map(item => (
-          <div key={item.label} onClick={item.onClick} style={{padding:isMobile?"12px 8px":"18px",background:T.card,borderRadius:"10px",border:`1px solid ${T.border}`,cursor:"pointer",textAlign:"center"}}>
-            <div style={{color:T.accent,marginBottom:"6px",display:"flex",justifyContent:"center"}}>{item.icon}</div>
-            <p style={{fontSize:isMobile?"11px":"13px",fontWeight:"700",color:T.text}}>{item.label}</p>
+      {/* ── KPI ROW ──────────────────────────────────────────────────────────── */}
+      <div style={{display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",
+        gap:isMobile?"10px":"14px", marginBottom:"22px"}}>
+        {kpis.map((k,i) => (
+          <div key={i} style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"12px",
+            padding:isMobile?"12px 14px":"16px 18px", position:"relative", overflow:"hidden"}}>
+            {/* accent top bar */}
+            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
+              background:[T.accent, "#8B5CF6", "#06B6D4", "#F97316"][i], borderRadius:"3px 3px 0 0"}}/>
+            <div style={{fontSize:"9px", fontWeight:"800", color:T.muted, textTransform:"uppercase",
+              letterSpacing:"1.2px", marginBottom:"6px"}}>{k.label}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:isMobile?"22px":"28px",
+              fontWeight:"800", color:T.text, lineHeight:1, marginBottom:"5px"}}>{k.value}</div>
+            <div style={{fontSize:"11px", fontWeight:"600",
+              color: k.trendUp === true ? T.accent : k.trendUp === false ? "#EF4444" : T.muted}}>
+              {k.trend}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Class Templates */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
-        <h2 style={{fontSize:isMobile?"15px":"18px",fontWeight:"700",color:T.text}}>Class Templates</h2>
-        <button onClick={onViewTemplates} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>View all →</button>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?"8px":"12px"}}>
-        {Object.entries(WORKOUT_LIBRARY).slice(0,isMobile?4:8).map(([key,cls]) => (
-          <div key={key} onClick={onViewTemplates} style={{padding:isMobile?"12px 10px":"16px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,cursor:"pointer",position:"relative",overflow:"hidden",textAlign:"center",transition:"border-color 0.15s"}}
-            onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color}
-            onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:cls.color}}/>
-            <div style={{fontSize:isMobile?"26px":"30px",marginBottom:"6px"}}>{cls.icon}</div>
-            <p style={{fontSize:isMobile?"11px":"12px",fontWeight:"700",color:T.text}}>{cls.label}</p>
+      {/* ── MAIN 2-COL BODY ─────────────────────────────────────────────────── */}
+      <div style={{display:"grid",
+        gridTemplateColumns:isSmall ? "1fr" : "1fr 340px",
+        gap:"16px", marginBottom:"22px"}}>
+
+        {/* ── TODAY'S SCHEDULE ────────────────────────────────────────────────── */}
+        <div style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px",
+          padding:"18px", minWidth:0}}>
+          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px"}}>
+            <div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"15px", fontWeight:"700", color:T.text}}>
+                Today's schedule
+              </div>
+              <div style={{fontSize:"11px", color:T.muted, marginTop:"2px"}}>
+                {showClasses.length} of {todayClasses.length} shown
+              </div>
+            </div>
+            <button onClick={onViewSchedule}
+              style={{fontSize:"12px", fontWeight:"700", color:T.accent, background:"none", border:"none",
+                cursor:"pointer", padding:"6px 12px", borderRadius:"8px", border:`1px solid ${T.accent}40`}}>
+              Full schedule →
+            </button>
           </div>
-        ))}
+
+          <div style={{display:"flex", flexDirection:"column", gap:"10px"}}>
+            {showClasses.map((cls, i) => {
+              const fillPct = Math.round((cls.booked / cls.cap) * 100);
+              const isFull  = cls.booked >= cls.cap;
+              return (
+                <div key={i} onClick={onNewSession}
+                  style={{padding:"13px 14px", background:T.navy, borderRadius:"10px",
+                    border:`1px solid ${T.border}`, cursor:"pointer", transition:"border-color 0.15s"}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color+"80"}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                  <div style={{display:"flex", alignItems:"flex-start", gap:"12px"}}>
+                    {/* Time */}
+                    <div style={{flexShrink:0, textAlign:"center", minWidth:"38px"}}>
+                      <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"15px", fontWeight:"700",
+                        color:T.text, lineHeight:1}}>{cls.time}</div>
+                      <div style={{fontSize:"9px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+                        letterSpacing:"0.8px"}}>{cls.period}</div>
+                    </div>
+
+                    {/* Colour dot */}
+                    <div style={{width:"3px", height:"42px", background:cls.color, borderRadius:"2px", flexShrink:0, marginTop:"2px"}}/>
+
+                    {/* Class info */}
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"4px", flexWrap:"wrap"}}>
+                        <span style={{fontSize:"13px", fontWeight:"700", color:T.text}}>{cls.name}</span>
+                        {isFull && (
+                          <span style={{fontSize:"9px", fontWeight:"800", color:"#EF4444",
+                            background:"#EF444420", border:"1px solid #EF444440",
+                            borderRadius:"4px", padding:"2px 6px", textTransform:"uppercase", letterSpacing:"0.8px"}}>
+                            FULL
+                          </span>
+                        )}
+                      </div>
+                      <div style={{fontSize:"11px", color:T.muted, marginBottom:"7px"}}>
+                        {cls.trainer} · {cls.booked}/{cls.cap} booked
+                      </div>
+                      {/* Fill bar */}
+                      <div style={{height:"4px", background:T.border, borderRadius:"2px", overflow:"hidden"}}>
+                        <div style={{height:"100%", width:`${fillPct}%`, background:fillColor(fillPct),
+                          borderRadius:"2px", transition:"width 0.6s ease"}}/>
+                      </div>
+                    </div>
+
+                    {/* BPM badge */}
+                    <div style={{flexShrink:0, textAlign:"right"}}>
+                      <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"16px", fontWeight:"800",
+                        color:cls.color}}>{cls.bpm}</div>
+                      <div style={{fontSize:"9px", color:T.muted, fontWeight:"600", textTransform:"uppercase"}}>BPM</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* View all remaining */}
+            {todayClasses.length > 3 && (
+              <button onClick={onViewSchedule}
+                style={{padding:"10px", background:"transparent", border:`1px dashed ${T.border}`,
+                  borderRadius:"10px", color:T.muted, fontSize:"12px", fontWeight:"600", cursor:"pointer",
+                  transition:"border-color 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                + {todayClasses.length - 3} more classes today
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN ─────────────────────────────────────────────────────── */}
+        <div style={{display:"flex", flexDirection:"column", gap:"14px"}}>
+
+          {/* Jungle Intelligence */}
+          <div style={{background:T.card, border:`1px solid ${T.accent}40`, borderRadius:"14px", padding:"18px", position:"relative", overflow:"hidden"}}>
+            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
+              background:`linear-gradient(90deg, ${T.accent}, #06B6D4)`}}/>
+            <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px"}}>
+              <div style={{width:"28px", height:"28px", borderRadius:"8px", background:T.accent+"22",
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🧠</div>
+              <div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"12px", fontWeight:"800",
+                  color:T.accent, textTransform:"uppercase", letterSpacing:"1px"}}>Jungle Intelligence</div>
+              </div>
+            </div>
+            <p style={{fontSize:"13px", color:T.text, lineHeight:"1.6", margin:"0 0 14px"}}>
+              Your{" "}
+              <span style={{fontWeight:"700", color:T.accent}}>{tip.class}</span>
+              {" "}{tip.tip}
+            </p>
+            <div style={{display:"flex", gap:"8px"}}>
+              <button onClick={onNewSession}
+                style={{flex:1, padding:"9px", background:T.accent, color:"#0A0F0C", border:"none",
+                  borderRadius:"8px", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
+                {tip.action}
+              </button>
+              <button onClick={onViewMusic}
+                style={{padding:"9px 14px", background:"transparent", color:T.muted,
+                  border:`1px solid ${T.border}`, borderRadius:"8px", fontSize:"12px",
+                  fontWeight:"700", cursor:"pointer"}}>
+                Tune
+              </button>
+            </div>
+          </div>
+
+          {/* Auto-DJ widget */}
+          <div style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px", padding:"18px",
+            position:"relative", overflow:"hidden"}}>
+            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px", background:"#8B5CF6"}}/>
+            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px"}}>
+              <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
+                <div style={{width:"28px", height:"28px", borderRadius:"8px", background:"#8B5CF622",
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🎧</div>
+                <div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"12px", fontWeight:"800",
+                    color:"#8B5CF6", textTransform:"uppercase", letterSpacing:"1px"}}>AUTO-DJ</div>
+                </div>
+              </div>
+              <div style={{padding:"3px 10px", background: djActive ? "#8B5CF622" : T.navy,
+                border:`1px solid ${djActive ? "#8B5CF650" : T.border}`, borderRadius:"999px",
+                fontSize:"10px", fontWeight:"700", color: djActive ? "#8B5CF6" : T.muted}}>
+                {djActive ? (djProgress?.active ? "Building set" : "Ready") : "Idle"}
+              </div>
+            </div>
+
+            {djActive ? (
+              <>
+                <div style={{display:"flex", alignItems:"baseline", gap:"4px", marginBottom:"6px"}}>
+                  <span style={{fontFamily:"'Space Grotesk',sans-serif", fontSize:"36px", fontWeight:"800",
+                    color:T.text, lineHeight:1}}>{djBpm > 0 ? djBpm : 128}</span>
+                  <span style={{fontSize:"13px", fontWeight:"600", color:"#8B5CF6"}}>BPM</span>
+                </div>
+                <div style={{fontSize:"12px", color:T.muted, lineHeight:"1.5", marginBottom:"12px"}}>
+                  {djTrackCount > 0
+                    ? `${djTrackCount} tracks queued · seamless beat-matched transitions`
+                    : "Smart-mixing your playlists · building…"}
+                </div>
+                {djProgress?.active && (
+                  <div style={{height:"4px", background:T.navy, borderRadius:"2px", overflow:"hidden", marginBottom:"12px"}}>
+                    <div style={{height:"100%", width:`${djProgress.pct||0}%`, background:"#8B5CF6",
+                      borderRadius:"2px", transition:"width 0.5s ease"}}/>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{fontSize:"12px", color:T.muted, lineHeight:"1.5", marginBottom:"12px"}}>
+                Open the Builder and run{" "}
+                <span style={{color:"#8B5CF6", fontWeight:"700"}}>DJ This Class</span>
+                {" "}to auto-fill your class soundtrack.
+              </div>
+            )}
+
+            <button onClick={onViewMusic}
+              style={{width:"100%", padding:"9px", background:"transparent",
+                border:`1px solid ${"#8B5CF6"}50`, borderRadius:"8px",
+                color:"#8B5CF6", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
+              Open Music Hub →
+            </button>
+          </div>
+
+          {/* Start session CTA (desktop right-col) */}
+          {!isSmall && (
+            <button onClick={onNewSession}
+              style={{width:"100%", padding:"14px", background:T.accent, color:"#0A0F0C", border:"none",
+                borderRadius:"12px", fontSize:"14px", fontWeight:"800", cursor:"pointer",
+                fontFamily:"'Space Grotesk',sans-serif", display:"flex", alignItems:"center",
+                justifyContent:"center", gap:"8px"}}>
+              <Plus size={16}/> New Class Session
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── QUICK ACTIONS ─────────────────────────────────────────────────────── */}
+      <div style={{marginBottom:"8px"}}>
+        <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+          letterSpacing:"1.2px", marginBottom:"12px"}}>Quick access</div>
+        <div style={{display:"grid",
+          gridTemplateColumns:isMobile?"repeat(3,1fr)":isTablet?"repeat(3,1fr)":"repeat(6,1fr)",
+          gap:"10px"}}>
+          {[
+            { icon:"📅", label:"Schedule",  onClick:onViewSchedule  },
+            { icon:"🏗️", label:"Builder",   onClick:onNewSession    },
+            { icon:"🎧", label:"Music Hub", onClick:onViewMusic     },
+            { icon:"📊", label:"Analytics", onClick:onViewAnalytics },
+            { icon:"👥", label:"Members",   onClick:onViewMembers   },
+            { icon:"📚", label:"Library",   onClick:onViewLibrary   },
+          ].map(item => (
+            <div key={item.label} onClick={item.onClick}
+              style={{padding:isMobile?"10px 6px":"14px 10px", background:T.card,
+                borderRadius:"10px", border:`1px solid ${T.border}`, cursor:"pointer",
+                textAlign:"center", transition:"border-color 0.15s, background 0.15s"}}
+              onMouseEnter={e=>{ e.currentTarget.style.borderColor=T.accent; e.currentTarget.style.background=T.accent+"0D"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background=T.card; }}>
+              <div style={{fontSize:isMobile?"18px":"22px", marginBottom:"5px"}}>{item.icon}</div>
+              <div style={{fontSize:isMobile?"10px":"12px", fontWeight:"700", color:T.text}}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── MOBILE CTA ────────────────────────────────────────────────────────── */}
+      {isMobile && (
+        <button onClick={onNewSession}
+          style={{width:"100%", padding:"15px", background:T.accent, color:"#0A0F0C", border:"none",
+            borderRadius:"12px", fontSize:"15px", fontWeight:"800", cursor:"pointer", marginTop:"16px",
+            fontFamily:"'Space Grotesk',sans-serif", display:"flex", alignItems:"center",
+            justifyContent:"center", gap:"8px"}}>
+          <Plus size={17}/> New Class Session
+        </button>
+      )}
+
     </div>
   );
 }
+
 
 // ─── TemplatesScreen ──────────────────────────────────────────────────────────
 function TemplatesScreen({onSelectClassStyle, onBack}) {
