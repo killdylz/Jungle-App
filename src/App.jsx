@@ -513,15 +513,17 @@ async function apiGetPlaylistTracks(playlistId) {
 
 // ─── useSpotify hook ──────────────────────────────────────────────────────────
 function useSpotify() {
-  const [token,      setToken]      = useState(null);
-  const [player,     setPlayer]     = useState(null);
-  const [deviceId,   setDeviceId]   = useState(null);
-  const [nowPlaying, setNowPlaying] = useState(null);
-  const [spPaused,   setSpPaused]   = useState(true);
-  const [sdkReady,   setSdkReady]   = useState(false);
-  const [authError,  setAuthError]  = useState(null);
-  const [spError,    setSpError]    = useState(null);
-  const [profile,    setProfile]    = useState(null);
+  const [token,          setToken]          = useState(null);
+  const [player,         setPlayer]         = useState(null);
+  const [deviceId,       setDeviceId]       = useState(null);  // browser SDK device
+  const [activeDeviceId, setActiveDeviceId] = useState(null);  // chosen playback device
+  const [devices,        setDevices]        = useState([]);    // all available devices
+  const [nowPlaying,     setNowPlaying]     = useState(null);
+  const [spPaused,       setSpPaused]       = useState(true);
+  const [sdkReady,       setSdkReady]       = useState(false);
+  const [authError,      setAuthError]      = useState(null);
+  const [spError,        setSpError]        = useState(null);
+  const [profile,        setProfile]        = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
