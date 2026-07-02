@@ -6526,7 +6526,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       player.pause().catch(()=>{});
     } else if (playDeviceId) {
       fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${playDeviceId}`, {
-        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_access_token")||""}` }
+        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_at")||""}` }
       }).catch(()=>{});
     }
   };
@@ -6536,7 +6536,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       player.resume().catch(()=>{});
     } else if (playDeviceId) {
       fetch(`https://api.spotify.com/v1/me/player/play?device_id=${playDeviceId}`, {
-        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_access_token")||""}` }
+        method:"PUT", headers:{ Authorization:`Bearer ${localStorage.getItem("sp_at")||""}` }
       }).catch(()=>{});
     }
   };
@@ -8005,15 +8005,4 @@ export default function App() {
               <button onClick={()=>setDark(!dark)} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
                 {dark?"☀ Light":"🌙 Dark"}
               </button>
-              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                👤 Profile
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {showProfile && <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
-    </div>
-  );
-}
+              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeig
