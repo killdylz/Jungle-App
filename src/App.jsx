@@ -5878,18 +5878,37 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
         <div style={{display:"flex",flexDirection:"column",gap:"7px",marginBottom:"16px"}}>
           {stages.map((s,i)=>{
             const cfg = SCFG[s.type] || {bpmMin:100,bpmMax:140,color:T.accent};
-            const trackCount = (s.tracks||[]).length;
+            const tracks = s.tracks||[];
+            const trackCount = tracks.length;
+            const firstTrack = tracks[0];
             return (
-              <div key={i} style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 10px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                <div style={{width:"3px",height:"20px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
-                  <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{cfg.bpmMin}–{cfg.bpmMax} BPM</div>
+              <div key={i} style={{background:T.navy,borderRadius:"8px",border:`1px solid ${trackCount>0?cfg.color+"40":T.border}`,overflow:"hidden",marginBottom:"2px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 10px"}}>
+                  <div style={{width:"3px",height:"20px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                    <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{cfg.bpmMin}–{cfg.bpmMax} BPM</div>
+                  </div>
+                  {trackCount > 0
+                    ? <div style={{fontSize:"10px",fontWeight:"700",color:cfg.color,flexShrink:0,background:cfg.color+"18",padding:"2px 6px",borderRadius:"4px"}}>{trackCount} ✓</div>
+                    : <div style={{fontSize:"10px",color:T.muted,flexShrink:0}}>–</div>
+                  }
                 </div>
-                {trackCount > 0
-                  ? <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,flexShrink:0}}>{trackCount} ✓</div>
-                  : <div style={{fontSize:"10px",color:T.muted,flexShrink:0}}>–</div>
-                }
+                {firstTrack && (
+                  <div style={{padding:"5px 10px 7px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"7px"}}>
+                    {firstTrack.albumArt
+                      ? <img src={firstTrack.albumArt} style={{width:"22px",height:"22px",borderRadius:"3px",objectFit:"cover",flexShrink:0}} alt=""/>
+                      : <div style={{width:"22px",height:"22px",borderRadius:"3px",background:cfg.color+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px"}}>🎵</div>
+                    }
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"10px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstTrack.t||firstTrack.name||""}</div>
+                      <div style={{fontSize:"9px",color:T.muted}}>
+                        {firstTrack.a||""}{firstTrack.bpm?` · ${Math.round(firstTrack.bpm)} BPM`:""}
+                        {trackCount>1?` +${trackCount-1} more`:""}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
