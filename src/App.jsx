@@ -7916,7 +7916,16 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {view==="dashboard"        && <DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} onViewMusic={()=>setView("music")} onViewSchedule={()=>setView("schedule")} onViewMembers={()=>setView("members")} profile={profile} sessionHistory={sessionHistory} stages={stages} djProgress={djProgress}/>}
         {view==="templates"        && <TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")}/>}
-        {view==="builder"          && <BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjThisClass} djProgress={djProgress}/>}
+        {view==="builder"          && <BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{
+  const firstStageUris = (stages[0]?.tracks||[]).map(t=>t.uri).filter(Boolean);
+  setLiveState({playing: firstStageUris.length > 0, idx:0, elapsed:0});
+  setView("live");
+  // Auto-start playback on active device if first stage has tracks
+  if (firstStageUris.length > 0) {
+    const devId = activeDeviceId || deviceId;
+    if (devId) setTimeout(()=>apiPlay(devId, firstStageUris).catch(()=>{}), 800);
+  }
+}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjThisClass} djProgress={djProgress}/>}
         {view==="library"          && <LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="overview-display" && <OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
         {view==="live"             && <LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
