@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic } from "lucide-react";
 
-// ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
+// â”€â”€â”€ Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 (function injectFonts() {
   if (document.getElementById("jungle-fonts")) return;
   // Load Canopy base fonts; skin switcher loads its own pair via injectSkinFonts()
@@ -15,8 +15,8 @@ const SPOTIFY_CLIENT_ID = "594e4864b902473c86c939c9cccce420";
 const REDIRECT_URI      = window.location.origin + window.location.pathname;
 const IS_CONFIGURED     = SPOTIFY_CLIENT_ID !== "YOUR_CLIENT_ID_HERE";
 
-// ─── Theme — Canopy skin (matches design mockups) ─────────────────────────────
-// ─── Preset Skins ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Theme â€” Canopy skin (matches design mockups) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Preset Skins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PRESET_SKINS = {
   canopy: {
     name:"Canopy", vibe:"natural",
@@ -38,11 +38,11 @@ const PRESET_SKINS = {
   },
 };
 
-// ─── Theme object (populated from active skin at render — keeps all T.x refs working) ──
+// â”€â”€â”€ Theme object (populated from active skin at render â€” keeps all T.x refs working) â”€â”€
 const DARK = PRESET_SKINS.canopy.tokens;   // fallback reference kept for safety
 const T = { ...PRESET_SKINS.canopy.tokens };
 
-// ─── Inject skin font pair ─────────────────────────────────────────────────────
+// â”€â”€â”€ Inject skin font pair â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function injectSkinFonts(skin) {
   const families = [skin.fonts.display, skin.fonts.body].filter(Boolean);
   const query = families.map(f => "family=" + encodeURIComponent(f) + ":wght@400;500;600;700;800").join("&");
@@ -56,7 +56,7 @@ function injectSkinFonts(skin) {
   link.href = "https://fonts.googleapis.com/css2?" + query + "&display=swap";
 }
 
-// ─── Write CSS custom properties onto :root ─────────────────────────────────────
+// â”€â”€â”€ Write CSS custom properties onto :root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function applySkinCSS(tokens) {
   const r = document.documentElement.style;
   r.setProperty("--bg",     tokens.bg);
@@ -87,10 +87,10 @@ function applySkinCSS(tokens) {
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
 const GROUP_PALETTE  = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"];
-// Stable colour for a group — derived from its id so it never shifts on reorder
+// Stable colour for a group â€” derived from its id so it never shifts on reorder
 const grpColor = id => GROUP_PALETTE[Math.abs((id||'').split('').reduce((a,c,i)=>a+c.charCodeAt(0)*(i+1),0))%GROUP_PALETTE.length];
 
-// ─── Gym Fonts ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Gym Fonts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const GYM_FONTS = [
   { label:"Default (System)",   value:"system" },
   { label:"Montserrat",         value:"Montserrat" },
@@ -105,8 +105,8 @@ const GYM_FONTS = [
   { label:"Graduate",           value:"Graduate" },
 ];
 
-// ─── Dominant colour extractor (canvas-based) ─────────────────────────────────
-// ─── Colour utilities ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Dominant colour extractor (canvas-based) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ Colour utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function hexToRgb(hex) {
   const h = hex.replace("#","");
   const n = parseInt(h,16);
@@ -115,7 +115,7 @@ function hexToRgb(hex) {
 function rgbToHex(r,g,b) {
   return "#"+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,"0")).join("");
 }
-// RGB → HSL (0-360, 0-1, 0-1)
+// RGB â†’ HSL (0-360, 0-1, 0-1)
 function rgbToHsl(r,g,b){
   r/=255;g/=255;b/=255;
   const max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/2;
@@ -151,7 +151,7 @@ function nudgeForContrast(fgHex, bgHex, target=4.5, maxIter=30){
   return rgbToHex(...hslToRgb(h,s,l));
 }
 
-// ─── Extract colour palette from image ────────────────────────────────────────
+// â”€â”€â”€ Extract colour palette from image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function extractPalette(imgSrc, callback) {
   const img = new Image();
   img.crossOrigin = "anonymous";
@@ -189,12 +189,12 @@ function extractPalette(imgSrc, callback) {
   img.src = imgSrc;
 }
 
-// ─── Legacy single-colour extractor (kept for existing callers) ────────────────
+// â”€â”€â”€ Legacy single-colour extractor (kept for existing callers) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function extractDominantColor(imgSrc, callback) {
   extractPalette(imgSrc, swatches => callback(swatches ? swatches[0] : null));
 }
 
-// ─── Generate a full accessible skin from a palette ───────────────────────────
+// â”€â”€â”€ Generate a full accessible skin from a palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function generateSkinFromPalette(swatches, vibe="natural") {
   const accent = swatches[0] || "#7BE3A4";
   const [ah,as,al] = rgbToHsl(...hexToRgb(accent));
@@ -234,7 +234,7 @@ function generateSkinFromPalette(swatches, vibe="natural") {
   };
 
   return {
-    name:"Custom — Generated",
+    name:"Custom â€” Generated",
     source:"generated",
     vibe,
     tokens:{ bg, card, navy, border:"rgba(255,255,255,.07)", accent, green, text, muted },
@@ -243,7 +243,7 @@ function generateSkinFromPalette(swatches, vibe="natural") {
   };
 }
 
-// ─── Responsive hook ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Responsive hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function useWindowWidth() {
   const [w, setW] = useState(typeof window!=="undefined" ? window.innerWidth : 1024);
   useEffect(() => {
@@ -254,7 +254,7 @@ function useWindowWidth() {
   return w;
 }
 
-// ─── Spotify PKCE Auth ────────────────────────────────────────────────────────
+// â”€â”€â”€ Spotify PKCE Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SP_SCOPES = ["streaming","user-read-email","user-read-private","user-read-playback-state","user-modify-playback-state","user-read-currently-playing","playlist-read-private","playlist-read-collaborative","playlist-modify-public","playlist-modify-private"].join(" ");
 
 function randStr(n) {
@@ -272,7 +272,7 @@ async function redirectToSpotify() {
   const p = new URLSearchParams({ client_id:SPOTIFY_CLIENT_ID, response_type:"code", redirect_uri:REDIRECT_URI, scope:SP_SCOPES, code_challenge_method:"S256", code_challenge:challenge });
   window.location.href = `https://accounts.spotify.com/authorize?${p}`;
 }
-// Opens Spotify auth in a small popup — used for in-app permission upgrades so the page stays open
+// Opens Spotify auth in a small popup â€” used for in-app permission upgrades so the page stays open
 async function openSpotifyAuthPopup() {
   const v = randStr(128);
   localStorage.setItem("pkce_v", v);
@@ -308,7 +308,7 @@ async function getToken() {
 }
 function clearTokens() { ["sp_at","sp_ex","sp_rt","pkce_v","sp_scope"].forEach(k=>localStorage.removeItem(k)); }
 
-// ─── Attendee Mode (shareable read-only URL) ─────────────────────────────────
+// â”€â”€â”€ Attendee Mode (shareable read-only URL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getAttendeePayload() {
   try {
     const p = new URLSearchParams(window.location.search);
@@ -318,7 +318,7 @@ function getAttendeePayload() {
 }
 const ATTENDEE_PAYLOAD = getAttendeePayload();
 
-// ─── Spotify REST API ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Spotify REST API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function spFetch(path, opts={}) {
   const token = await getToken();
   if (!token) throw new Error("Not authenticated");
@@ -347,7 +347,7 @@ async function getAudioFeatures(ids) {
   const d = await spFetch(`/audio-features?ids=${ids.slice(0,50).join(",")}`);
   return d.audio_features || [];
 }
-// ── BPM cache — persist fetched tempo data so we never re-fetch the same track ──
+// â”€â”€ BPM cache â€” persist fetched tempo data so we never re-fetch the same track â”€â”€
 const BPM_CACHE_KEY = "sp_bpm_cache";
 function getBpmCache() { try { return JSON.parse(localStorage.getItem(BPM_CACHE_KEY)||"{}"); } catch { return {}; } }
 function saveBpmCache(map) { try { localStorage.setItem(BPM_CACHE_KEY, JSON.stringify(map)); } catch(_) {} }
@@ -383,7 +383,7 @@ function normTrack(sp, af) {
   return { t:sp.name, a:sp.artists.map(x=>x.name).join(", "), bpm:Math.round(af?.tempo||0), uri:sp.uri, id:sp.id, albumArt:sp.album?.images?.[1]?.url||sp.album?.images?.[0]?.url||null, dur:Math.round((sp.duration_ms||0)/1000) };
 }
 
-// ── Deezer BPM helpers (no API key required) ────────────────────────
+// â”€â”€ Deezer BPM helpers (no API key required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchBpmData(title, artist) {
   const cacheKey = `${title}|${artist}`.toLowerCase().replace(/\s+/g,"_");
   try {
@@ -446,7 +446,7 @@ function selectTracksForDuration(scoredTracks, durationSec, stageType) {
     picked.push(t);
     total += (t.dur||210);
   }
-  // Energy arc: low→high BPM for intense stages, high→low for recovery
+  // Energy arc: lowâ†’high BPM for intense stages, highâ†’low for recovery
   picked.sort((a,b) => isIntense ? (a.bpm||120)-(b.bpm||120) : (b.bpm||120)-(a.bpm||120));
   return picked;
 }
@@ -497,7 +497,7 @@ async function apiGetPlaylistTracks(playlistId) {
         return { denied: true, message: errMsg || "Forbidden" };
       }
       if (r.status === 404) {
-        return { denied: true, message: "Playlist not found — it may have been deleted or made private." };
+        return { denied: true, message: "Playlist not found â€” it may have been deleted or made private." };
       }
       break;
     }
@@ -511,7 +511,7 @@ async function apiGetPlaylistTracks(playlistId) {
   return tracks;
 }
 
-// ─── useSpotify hook ──────────────────────────────────────────────────────────
+// â”€â”€â”€ useSpotify hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function useSpotify() {
   const [token,          setToken]          = useState(null);
   const [player,         setPlayer]         = useState(null);
@@ -567,7 +567,7 @@ function useSpotify() {
   useEffect(() => {
     if (!sdkReady||!token) return;
     let live = true;
-    const p = new window.Spotify.Player({ name:"Jungle 🌿", getOAuthToken:async cb=>{ const t=await getToken(); if(t) cb(t); }, volume:0.8 });
+    const p = new window.Spotify.Player({ name:"Jungle ðŸŒ¿", getOAuthToken:async cb=>{ const t=await getToken(); if(t) cb(t); }, volume:0.8 });
     p.addListener("ready", ({device_id})=>{
       if (!live) return;
       setDeviceId(device_id);
@@ -600,13 +600,13 @@ function useSpotify() {
   return { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, spPaused, authError, spError, profile, logout };
 }
 
-// ─── General helpers ──────────────────────────────────────────────────────────
+// â”€â”€â”€ General helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _uid = 1;
 const uid = () => `s${_uid++}`;
 const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
 const fmtSec = s => `${s}s`;
 
-// ── Feature 4: interval state calculator ─────────────────────────────────────
+// â”€â”€ Feature 4: interval state calculator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Given the exercises for a stage and the elapsed seconds, returns the current
 // interval sub-timer state (Tabata / EMOM), or null if no timed exercises are active.
 function calcIntervalState(exercises, elapsed) {
@@ -647,8 +647,8 @@ function fireSiren() {
   } catch(_) {}
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-// bpmMin/bpmMax are science-backed target ranges per workout phase (see PRD §4.2)
+// â”€â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// bpmMin/bpmMax are science-backed target ranges per workout phase (see PRD Â§4.2)
 const SCFG = {
   warmup:   { label:"Warm-Up",        color:"#F59E0B", bpmMin:80,  bpmMax:110 },
   circuit:  { label:"Circuit",        color:"#EF4444", bpmMin:110, bpmMax:130 },
@@ -686,7 +686,7 @@ function mkStages() {
 }
 
 const TEMPLATES = [
-  { id:"t1", name:"Apex HIIT",       tag:"30 min", emoji:"⚡", desc:"Zero-rest intervals, max output every round",      color:"#EF4444",
+  { id:"t1", name:"Apex HIIT",       tag:"30 min", emoji:"âš¡", desc:"Zero-rest intervals, max output every round",      color:"#EF4444",
     stages:[
       { type:"warmup",   name:"Ignition",      dur:300,  exercises:[{n:"Light Jog",s:"",r:"5 min",rest:""},{n:"World's Greatest Stretch",s:"1",r:"60s",rest:""}],  tracks:[] },
       { type:"circuit",  name:"Surge Block 1", dur:480,  exercises:[{n:"Burpee Complex",s:"4",r:"10",rest:"20s"},{n:"Box Jump",s:"4",r:"8",rest:"20s"}],             tracks:[] },
@@ -695,7 +695,7 @@ const TEMPLATES = [
       { type:"cooldown", name:"Reset",         dur:180,  exercises:[{n:"Pigeon Flow",s:"",r:"60s each",rest:""},{n:"Hamstring Floss",s:"",r:"45s",rest:""}],          tracks:[] },
     ]
   },
-  { id:"t2", name:"Iron Protocol",   tag:"60 min", emoji:"🏋️", desc:"Compound lifts, progressive overload structure",   color:"#8B5CF6",
+  { id:"t2", name:"Iron Protocol",   tag:"60 min", emoji:"ðŸ‹ï¸", desc:"Compound lifts, progressive overload structure",   color:"#8B5CF6",
     stages:[
       { type:"warmup",   name:"Mobility Prime", dur:600,  exercises:[{n:"Hip 90/90 Flow",s:"",r:"3 min",rest:""},{n:"Thoracic CAR",s:"2",r:"10",rest:""}],          tracks:[] },
       { type:"strength", name:"Primary Lift",   dur:1200, exercises:[{n:"Primal Squat",s:"5",r:"5",rest:"3 min"},{n:"Atlas Press",s:"4",r:"6",rest:"2 min"}],         tracks:[] },
@@ -704,7 +704,7 @@ const TEMPLATES = [
       { type:"cooldown", name:"Restore",        dur:600,  exercises:[{n:"Pigeon Flow",s:"",r:"90s each",rest:""},{n:"Hollow Rock",s:"2",r:"30s",rest:"30s"}],          tracks:[] },
     ]
   },
-  { id:"t3", name:"Circuit Surge",   tag:"45 min", emoji:"🔥", desc:"Mixed modality, maximum metabolic output",         color:"#F97316",
+  { id:"t3", name:"Circuit Surge",   tag:"45 min", emoji:"ðŸ”¥", desc:"Mixed modality, maximum metabolic output",         color:"#F97316",
     stages:[
       { type:"warmup",   name:"Activation",    dur:300,  exercises:[{n:"Bear Crawl Sprint",s:"3",r:"20m",rest:"30s"}],                                               tracks:[] },
       { type:"circuit",  name:"Station A",     dur:600,  exercises:[{n:"Burpee Complex",s:"3",r:"10",rest:"30s"},{n:"Box Jump",s:"3",r:"8",rest:"30s"}],              tracks:[] },
@@ -713,7 +713,7 @@ const TEMPLATES = [
       { type:"cooldown", name:"Cool-Down",     dur:300,  exercises:[{n:"World's Greatest Stretch",s:"",r:"90s each",rest:""}],                                        tracks:[] },
     ]
   },
-  { id:"t4", name:"Flow State",      tag:"45 min", emoji:"🧘", desc:"Mind-body connection, breath-led movement",        color:"#10B981",
+  { id:"t4", name:"Flow State",      tag:"45 min", emoji:"ðŸ§˜", desc:"Mind-body connection, breath-led movement",        color:"#10B981",
     stages:[
       { type:"warmup",   name:"Centering",     dur:600,  exercises:[{n:"Hip 90/90 Flow",s:"",r:"5 min",rest:""}],                                                    tracks:[] },
       { type:"stretch",  name:"Active Flow",   dur:900,  exercises:[{n:"World's Greatest Stretch",s:"",r:"90s each",rest:""},{n:"Pigeon Flow",s:"",r:"2 min each",rest:""}], tracks:[] },
@@ -721,7 +721,7 @@ const TEMPLATES = [
       { type:"cooldown", name:"Savasana",      dur:300,  exercises:[{n:"Hamstring Floss",s:"",r:"60s each",rest:""}],                                                  tracks:[] },
     ]
   },
-  { id:"t5", name:"Velocity",        tag:"45 min", emoji:"🚴", desc:"Cadence peaks, structured recovery valleys",       color:"#3B82F6",
+  { id:"t5", name:"Velocity",        tag:"45 min", emoji:"ðŸš´", desc:"Cadence peaks, structured recovery valleys",       color:"#3B82F6",
     stages:[
       { type:"warmup",   name:"Base Build",    dur:300,  exercises:[{n:"Light Jog",s:"",r:"5 min",rest:""}],                                                          tracks:[] },
       { type:"cardio",   name:"Threshold Push",dur:600,  exercises:[{n:"Skater Bound",s:"4",r:"30s",rest:"20s"}],                                                     tracks:[] },
@@ -730,7 +730,7 @@ const TEMPLATES = [
       { type:"cooldown", name:"Restore",       dur:300,  exercises:[{n:"Hamstring Floss",s:"",r:"60s each",rest:""}],                                                  tracks:[] },
     ]
   },
-  { id:"t6", name:"Reset & Restore", tag:"30 min", emoji:"🌿", desc:"Active recovery, mobility restoration",            color:"#06B6D4",
+  { id:"t6", name:"Reset & Restore", tag:"30 min", emoji:"ðŸŒ¿", desc:"Active recovery, mobility restoration",            color:"#06B6D4",
     stages:[
       { type:"stretch",  name:"Unwind",        dur:600,  exercises:[{n:"Hip 90/90 Flow",s:"",r:"5 min",rest:""},{n:"Thoracic CAR",s:"2",r:"8",rest:""}],              tracks:[] },
       { type:"stretch",  name:"Deep Release",  dur:600,  exercises:[{n:"Pigeon Flow",s:"",r:"2 min each",rest:""},{n:"World's Greatest Stretch",s:"",r:"90s each",rest:""}], tracks:[] },
@@ -739,18 +739,18 @@ const TEMPLATES = [
   },
 ];
 
-// ─── Workout Library ──────────────────────────────────────────────────────────
-// Each class type → sub-types → { warmup[], main[], cooldown[] }
+// â”€â”€â”€ Workout Library â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Each class type â†’ sub-types â†’ { warmup[], main[], cooldown[] }
 // Exercise fields match builder format: { id, n, s, r, rest, muscles, notes, timing }
 const WORKOUT_LIBRARY = {
   crossfit: {
-    label:"CrossFit", icon:"⚡", color:"#EF4444",
+    label:"CrossFit", icon:"âš¡", color:"#EF4444",
     description:"Constantly varied functional movements performed at high intensity",
     subTypes:{
       wod:{
         label:"WOD (Workout of the Day)", description:"Classic CrossFit daily workout combining gymnastics, weightlifting and metabolic conditioning",
         warmup:[
-          {id:"cf-wod-wu-1",n:"Jump Rope Drill",s:"3",r:"30s",rest:"20s",muscles:"Calves, Shoulders, Coordination",notes:"Single unders → attempts at double unders"},
+          {id:"cf-wod-wu-1",n:"Jump Rope Drill",s:"3",r:"30s",rest:"20s",muscles:"Calves, Shoulders, Coordination",notes:"Single unders â†’ attempts at double unders"},
           {id:"cf-wod-wu-2",n:"PVC Overhead Squat",s:"2",r:"10",rest:"30s",muscles:"Shoulders, Thoracic, Ankles",notes:"Focus on depth and vertical torso"},
           {id:"cf-wod-wu-3",n:"Hip 90/90 Flow",s:"",r:"90s each side",rest:"",muscles:"Hip Flexors, Glutes, Thoracic",notes:"Slow controlled transitions"},
           {id:"cf-wod-wu-4",n:"Banded Glute Activation",s:"2",r:"15",rest:"20s",muscles:"Glutes, Abductors",notes:"Monster walk + clamshell"},
@@ -765,14 +765,14 @@ const WORKOUT_LIBRARY = {
           {id:"cf-wod-m-6",n:"Toes to Bar",s:"3",r:"10",rest:"30s",muscles:"Core, Hip Flexors, Lats",notes:"Control the swing, avoid kipping wildly"},
         ],
         cooldown:[
-          {id:"cf-wod-cd-1",n:"Doorway Pec Stretch",s:"",r:"60s each",rest:"",muscles:"Pectorals, Anterior Shoulder",notes:"Two heights: 90° and 135° elbow"},
+          {id:"cf-wod-cd-1",n:"Doorway Pec Stretch",s:"",r:"60s each",rest:"",muscles:"Pectorals, Anterior Shoulder",notes:"Two heights: 90Â° and 135Â° elbow"},
           {id:"cf-wod-cd-2",n:"Pigeon Stretch",s:"",r:"90s each side",rest:"",muscles:"Hip External Rotators, Glutes",notes:"Support on forearms if tight"},
           {id:"cf-wod-cd-3",n:"Couch Stretch",s:"",r:"90s each side",rest:"",muscles:"Hip Flexors, Quads",notes:"Against a wall or box"},
           {id:"cf-wod-cd-4",n:"Thoracic Foam Roll",s:"",r:"90s",rest:"",muscles:"Thoracic Spine, Lats",notes:"10 passes, pause on tight spots"},
         ],
       },
       amrap:{
-        label:"AMRAP", description:"As Many Rounds As Possible — maximum work within a fixed time window",
+        label:"AMRAP", description:"As Many Rounds As Possible â€” maximum work within a fixed time window",
         warmup:[
           {id:"cf-amrap-wu-1",n:"Light Row / Bike",s:"",r:"5 min",rest:"",muscles:"Full Body, Cardio",notes:"Build intensity over 5 minutes"},
           {id:"cf-amrap-wu-2",n:"World's Greatest Stretch",s:"",r:"60s each side",rest:"",muscles:"Hip Flexors, Thoracic, Hamstrings",notes:"Elbow to ground, rotate"},
@@ -793,7 +793,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       emom:{
-        label:"EMOM", description:"Every Minute On the Minute — structured interval work with built-in recovery",
+        label:"EMOM", description:"Every Minute On the Minute â€” structured interval work with built-in recovery",
         warmup:[
           {id:"cf-emom-wu-1",n:"Dynamic Hip Circle",s:"2",r:"10 each direction",rest:"20s",muscles:"Hips, Glutes",notes:"Large slow circles"},
           {id:"cf-emom-wu-2",n:"Band Pull-Apart",s:"3",r:"15",rest:"20s",muscles:"Rear Delts, Rhomboids",notes:"Stretch band at chest height"},
@@ -816,7 +816,7 @@ const WORKOUT_LIBRARY = {
   },
 
   spin:{
-    label:"Spin / Indoor Cycling", icon:"🚴", color:"#3B82F6",
+    label:"Spin / Indoor Cycling", icon:"ðŸš´", color:"#3B82F6",
     description:"High-energy indoor cycling combining endurance, intervals and strength on the bike",
     subTypes:{
       endurance:{
@@ -840,7 +840,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       hiit_ride:{
-        label:"HIIT Ride", description:"Max-effort sprint intervals with full recovery — anaerobic capacity and explosive power",
+        label:"HIIT Ride", description:"Max-effort sprint intervals with full recovery â€” anaerobic capacity and explosive power",
         warmup:[
           {id:"sp-hiit-wu-1",n:"Easy Pedal",s:"",r:"3 min",rest:"",muscles:"Legs, Cardio",notes:"Resistance 1, 85 RPM. Just moving"},
           {id:"sp-hiit-wu-2",n:"Pyramid Acceleration",s:"3",r:"30s",rest:"30s",muscles:"Legs, Cardio",notes:"Each sprint slightly faster. Build to 90% effort"},
@@ -881,7 +881,7 @@ const WORKOUT_LIBRARY = {
   },
 
   circuit:{
-    label:"Circuit Training", icon:"🔥", color:"#F97316",
+    label:"Circuit Training", icon:"ðŸ”¥", color:"#F97316",
     description:"Structured rotation through exercise stations targeting different muscle groups",
     subTypes:{
       cardio_circuit:{
@@ -889,7 +889,7 @@ const WORKOUT_LIBRARY = {
         warmup:[
           {id:"cir-card-wu-1",n:"March on Spot",s:"",r:"2 min",rest:"",muscles:"Legs, Core, Heart Rate",notes:"Lift knees to hip height, pump arms"},
           {id:"cir-card-wu-2",n:"Lateral Shuffle",s:"3",r:"30s",rest:"20s",muscles:"Glutes, Adductors, Cardio",notes:"Low athletic stance, quick feet"},
-          {id:"cir-card-wu-3",n:"Arm Circle Progression",s:"",r:"30s each direction",rest:"",muscles:"Shoulders, Thoracic",notes:"Small → large circles, forward and backward"},
+          {id:"cir-card-wu-3",n:"Arm Circle Progression",s:"",r:"30s each direction",rest:"",muscles:"Shoulders, Thoracic",notes:"Small â†’ large circles, forward and backward"},
           {id:"cir-card-wu-4",n:"High Knee Drive",s:"2",r:"20",rest:"20s",muscles:"Hip Flexors, Cardio, Coordination",notes:"Drive arms in opposition"},
         ],
         main:[
@@ -909,7 +909,7 @@ const WORKOUT_LIBRARY = {
       strength_circuit:{
         label:"Strength Circuit", description:"Compound movement stations with moderate rest building full-body strength",
         warmup:[
-          {id:"cir-str-wu-1",n:"Foam Roll Thoracic",s:"",r:"90s",rest:"",muscles:"Thoracic Spine, Lats",notes:"Pause on tight spots, 5–10 passes"},
+          {id:"cir-str-wu-1",n:"Foam Roll Thoracic",s:"",r:"90s",rest:"",muscles:"Thoracic Spine, Lats",notes:"Pause on tight spots, 5â€“10 passes"},
           {id:"cir-str-wu-2",n:"Goblet Squat",s:"2",r:"8",rest:"30s",muscles:"Quads, Glutes, Mobility",notes:"Light KB, focus on depth and upright torso"},
           {id:"cir-str-wu-3",n:"Band Pull-Apart",s:"3",r:"15",rest:"20s",muscles:"Rear Delts, Rhomboids",notes:"Squeeze at full extension"},
           {id:"cir-str-wu-4",n:"Single Leg Hip Hinge",s:"2",r:"8 each",rest:"20s",muscles:"Hamstrings, Glutes, Balance",notes:"Bodyweight RDL on one leg"},
@@ -917,7 +917,7 @@ const WORKOUT_LIBRARY = {
         main:[
           {id:"cir-str-m-1",n:"Barbell Back Squat",s:"4",r:"8",rest:"90s",muscles:"Quads, Glutes, Core",notes:"Controlled descent, 3 seconds down"},
           {id:"cir-str-m-2",n:"Dumbbell Bench Press",s:"4",r:"10",rest:"90s",muscles:"Chest, Shoulders, Triceps",notes:"Full range of motion, slight arch"},
-          {id:"cir-str-m-3",n:"Bent-Over Row",s:"4",r:"10",rest:"90s",muscles:"Lats, Rhomboids, Biceps",notes:"Hinge 45°, row elbows to hip"},
+          {id:"cir-str-m-3",n:"Bent-Over Row",s:"4",r:"10",rest:"90s",muscles:"Lats, Rhomboids, Biceps",notes:"Hinge 45Â°, row elbows to hip"},
           {id:"cir-str-m-4",n:"Romanian Deadlift",s:"4",r:"10",rest:"90s",muscles:"Hamstrings, Glutes, Lower Back",notes:"Hip hinge, bar close to legs"},
           {id:"cir-str-m-5",n:"Overhead Press",s:"3",r:"10",rest:"90s",muscles:"Shoulders, Triceps, Core",notes:"Rib cage down, glutes engaged"},
           {id:"cir-str-m-6",n:"Farmer's Carry",s:"4",r:"30m",rest:"60s",muscles:"Core, Grip, Traps, Legs",notes:"Shoulders back, walk tall"},
@@ -929,7 +929,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       fundamental:{
-        label:"Fundamentals", description:"Movement pattern mastery — bodyweight fundamentals for beginners or skill refinement",
+        label:"Fundamentals", description:"Movement pattern mastery â€” bodyweight fundamentals for beginners or skill refinement",
         warmup:[
           {id:"cir-fund-wu-1",n:"Cat-Cow",s:"2",r:"10",rest:"",muscles:"Spine, Core",notes:"Inhale on extension, exhale on flexion"},
           {id:"cir-fund-wu-2",n:"Dead Bug",s:"2",r:"8 each side",rest:"20s",muscles:"Core, Hip Flexors",notes:"Press lower back to floor throughout"},
@@ -938,9 +938,9 @@ const WORKOUT_LIBRARY = {
         ],
         main:[
           {id:"cir-fund-m-1",n:"Bodyweight Squat",s:"3",r:"15",rest:"45s",muscles:"Quads, Glutes",notes:"Sit back, heels down, chest up"},
-          {id:"cir-fund-m-2",n:"Push-Up (Progression)",s:"3",r:"10",rest:"45s",muscles:"Chest, Triceps, Core",notes:"Scale: incline → full → archer"},
+          {id:"cir-fund-m-2",n:"Push-Up (Progression)",s:"3",r:"10",rest:"45s",muscles:"Chest, Triceps, Core",notes:"Scale: incline â†’ full â†’ archer"},
           {id:"cir-fund-m-3",n:"Inverted Row",s:"3",r:"12",rest:"45s",muscles:"Lats, Rhomboids, Biceps",notes:"Straight body from ears to heels"},
-          {id:"cir-fund-m-4",n:"Reverse Lunge",s:"3",r:"10 each",rest:"45s",muscles:"Quads, Glutes, Balance",notes:"Step back, 90° angles both knees"},
+          {id:"cir-fund-m-4",n:"Reverse Lunge",s:"3",r:"10 each",rest:"45s",muscles:"Quads, Glutes, Balance",notes:"Step back, 90Â° angles both knees"},
           {id:"cir-fund-m-5",n:"Plank Hold",s:"3",r:"30s",rest:"30s",muscles:"Core, Shoulders",notes:"Squeeze everything, breathe normally"},
           {id:"cir-fund-m-6",n:"Hip Hinge (Kettlebell Swing Prep)",s:"3",r:"10",rest:"30s",muscles:"Posterior Chain",notes:"Hinge at hip, soft knees, flat back"},
         ],
@@ -954,11 +954,11 @@ const WORKOUT_LIBRARY = {
   },
 
   strength:{
-    label:"Strength Training", icon:"🏋️", color:"#8B5CF6",
+    label:"Strength Training", icon:"ðŸ‹ï¸", color:"#8B5CF6",
     description:"Progressive resistance training to build maximum strength and muscle mass",
     subTypes:{
       powerlifting:{
-        label:"Powerlifting", description:"Squat, bench, deadlift — maximal strength through the big three lifts",
+        label:"Powerlifting", description:"Squat, bench, deadlift â€” maximal strength through the big three lifts",
         warmup:[
           {id:"str-pow-wu-1",n:"Hip Airplanes",s:"2",r:"8 each",rest:"20s",muscles:"Glutes, Hip Stabilizers",notes:"Standing, kick leg back and rotate"},
           {id:"str-pow-wu-2",n:"Thoracic Extension (foam roll)",s:"",r:"2 min",rest:"",muscles:"Thoracic Spine",notes:"Arms crossed, roll from T4 to T12"},
@@ -969,7 +969,7 @@ const WORKOUT_LIBRARY = {
           {id:"str-pow-m-1",n:"Back Squat",s:"5",r:"3",rest:"3 min",muscles:"Quads, Glutes, Core, Upper Back",notes:"85% 1RM. Brace hard, controlled descent"},
           {id:"str-pow-m-2",n:"Bench Press",s:"5",r:"3",rest:"3 min",muscles:"Pectorals, Triceps, Shoulders",notes:"Arch, retract scapula, drive feet into floor"},
           {id:"str-pow-m-3",n:"Conventional Deadlift",s:"4",r:"3",rest:"3 min",muscles:"Hamstrings, Glutes, Lower Back, Traps",notes:"Lat engagement cue: bend the bar"},
-          {id:"str-pow-m-4",n:"Romanian Deadlift",s:"3",r:"8",rest:"90s",muscles:"Hamstrings, Glutes",notes:"Accessory — moderate weight, feel the stretch"},
+          {id:"str-pow-m-4",n:"Romanian Deadlift",s:"3",r:"8",rest:"90s",muscles:"Hamstrings, Glutes",notes:"Accessory â€” moderate weight, feel the stretch"},
           {id:"str-pow-m-5",n:"Paused Bench (60%)",s:"3",r:"5",rest:"90s",muscles:"Chest, Triceps",notes:"2s pause on chest, no bounce"},
         ],
         cooldown:[
@@ -979,7 +979,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       bodybuilding:{
-        label:"Bodybuilding / Hypertrophy", description:"Volume-focused training in the 8–15 rep range maximising muscle growth",
+        label:"Bodybuilding / Hypertrophy", description:"Volume-focused training in the 8â€“15 rep range maximising muscle growth",
         warmup:[
           {id:"str-bbd-wu-1",n:"Resistance Band Chest Fly",s:"2",r:"15",rest:"20s",muscles:"Pectorals",notes:"Pre-activate before pressing"},
           {id:"str-bbd-wu-2",n:"Cable Face Pull",s:"2",r:"15",rest:"20s",muscles:"Rear Delts, External Rotators",notes:"External rotate at top"},
@@ -987,7 +987,7 @@ const WORKOUT_LIBRARY = {
           {id:"str-bbd-wu-4",n:"Hip Abduction",s:"2",r:"15",rest:"",muscles:"Glutes, Abductors",notes:"Cable or machine, slow eccentric"},
         ],
         main:[
-          {id:"str-bbd-m-1",n:"Incline Dumbbell Press",s:"4",r:"12",rest:"90s",muscles:"Upper Chest, Shoulders, Triceps",notes:"30–45° angle, stretch at bottom"},
+          {id:"str-bbd-m-1",n:"Incline Dumbbell Press",s:"4",r:"12",rest:"90s",muscles:"Upper Chest, Shoulders, Triceps",notes:"30â€“45Â° angle, stretch at bottom"},
           {id:"str-bbd-m-2",n:"Cable Lateral Raise",s:"4",r:"15",rest:"60s",muscles:"Lateral Deltoid",notes:"Lead with elbow, no shrug"},
           {id:"str-bbd-m-3",n:"Leg Press",s:"4",r:"12",rest:"90s",muscles:"Quads, Glutes",notes:"Foot position controls emphasis"},
           {id:"str-bbd-m-4",n:"Machine Row",s:"4",r:"12",rest:"90s",muscles:"Lats, Rhomboids, Rear Delts",notes:"Drive elbows back, feel squeeze"},
@@ -1011,12 +1011,12 @@ const WORKOUT_LIBRARY = {
         main:[
           {id:"str-func-m-1",n:"Single Leg Deadlift (DB)",s:"4",r:"8 each",rest:"90s",muscles:"Hamstrings, Glutes, Balance",notes:"Hip hinge, slight knee bend, tall spine"},
           {id:"str-func-m-2",n:"Turkish Get-Up",s:"4",r:"3 each side",rest:"90s",muscles:"Full Body, Core, Shoulder Stability",notes:"Slow on both up and down"},
-          {id:"str-func-m-3",n:"Split Squat (Rear-Foot Elevated)",s:"4",r:"8 each",rest:"90s",muscles:"Quads, Glutes",notes:"Bulgarian — back foot elevated, vertical shin front"},
+          {id:"str-func-m-3",n:"Split Squat (Rear-Foot Elevated)",s:"4",r:"8 each",rest:"90s",muscles:"Quads, Glutes",notes:"Bulgarian â€” back foot elevated, vertical shin front"},
           {id:"str-func-m-4",n:"Suitcase Carry",s:"4",r:"40m",rest:"60s",muscles:"Core (Anti-Lateral Flexion), Grip",notes:"One arm, resist leaning"},
           {id:"str-func-m-5",n:"Landmine Press",s:"3",r:"10 each",rest:"75s",muscles:"Shoulders, Chest, Core",notes:"Staggered stance for stability"},
         ],
         cooldown:[
-          {id:"str-func-cd-1",n:"90/90 Hip Stretch",s:"",r:"90s each",rest:"",muscles:"Hip Internal/External Rotators",notes:"Both positions — front and back leg"},
+          {id:"str-func-cd-1",n:"90/90 Hip Stretch",s:"",r:"90s each",rest:"",muscles:"Hip Internal/External Rotators",notes:"Both positions â€” front and back leg"},
           {id:"str-func-cd-2",n:"Thoracic Rotation (Quadruped)",s:"",r:"45s each",rest:"",muscles:"Thoracic Spine, Obliques",notes:"Hand behind head, rotate elbow to ceiling"},
           {id:"str-func-cd-3",n:"Ankle Circles",s:"",r:"30s each direction",rest:"",muscles:"Ankles, Lower Leg",notes:"Full range, seated or standing"},
         ],
@@ -1025,8 +1025,8 @@ const WORKOUT_LIBRARY = {
   },
 
   hiit:{
-    label:"HIIT", icon:"⚡", color:"#F59E0B",
-    description:"High-Intensity Interval Training — maximum effort bursts with strategic rest for fat loss and conditioning",
+    label:"HIIT", icon:"âš¡", color:"#F59E0B",
+    description:"High-Intensity Interval Training â€” maximum effort bursts with strategic rest for fat loss and conditioning",
     subTypes:{
       tabata:{
         label:"Tabata", description:"20 seconds maximum effort, 10 seconds rest, 8 rounds = 4 minutes per exercise",
@@ -1058,10 +1058,10 @@ const WORKOUT_LIBRARY = {
           {id:"hiit-boot-wu-4",n:"Iron Cross Leg Swing",s:"2",r:"10 each",rest:"",muscles:"Adductors, Hamstrings, Hip Flexors",notes:"Hold wall for balance"},
         ],
         main:[
-          {id:"hiit-boot-m-1",n:"Burpee",s:"4",r:"10",rest:"30s",muscles:"Full Body, Cardio",notes:"No pause at top — continuous flow"},
+          {id:"hiit-boot-m-1",n:"Burpee",s:"4",r:"10",rest:"30s",muscles:"Full Body, Cardio",notes:"No pause at top â€” continuous flow"},
           {id:"hiit-boot-m-2",n:"Sprint (50m)",s:"6",r:"1",rest:"45s",muscles:"Full Legs, Power, Cardio",notes:"Drive knees, pump arms"},
           {id:"hiit-boot-m-3",n:"Squat Thrust",s:"4",r:"15",rest:"30s",muscles:"Core, Quads, Shoulders",notes:"Plank position + feet jump in"},
-          {id:"hiit-boot-m-4",n:"Push-Up Hold (Bottom Position)",s:"3",r:"20s",rest:"30s",muscles:"Chest, Triceps, Core",notes:"2 inches off floor, elbows at 45°"},
+          {id:"hiit-boot-m-4",n:"Push-Up Hold (Bottom Position)",s:"3",r:"20s",rest:"30s",muscles:"Chest, Triceps, Core",notes:"2 inches off floor, elbows at 45Â°"},
           {id:"hiit-boot-m-5",n:"Broad Jump",s:"4",r:"6",rest:"30s",muscles:"Power, Quads, Glutes",notes:"Land and reset, max distance each jump"},
           {id:"hiit-boot-m-6",n:"Flutter Kick",s:"3",r:"30s",rest:"20s",muscles:"Core, Hip Flexors",notes:"Lower back pressed down, controlled"},
         ],
@@ -1076,7 +1076,7 @@ const WORKOUT_LIBRARY = {
         warmup:[
           {id:"hiit-ath-wu-1",n:"Hip Circle",s:"2",r:"10 each direction",rest:"",muscles:"Hips, Glutes",notes:"Forward and backward hip circles"},
           {id:"hiit-ath-wu-2",n:"Ankle Bounce",s:"2",r:"30s",rest:"15s",muscles:"Calves, Achilles",notes:"Minimal ground contact time"},
-          {id:"hiit-ath-wu-3",n:"A-Skip",s:"2",r:"20m",rest:"20s",muscles:"Hip Flexors, Calves, Coordination",notes:"Knee to 90°, push through forefoot"},
+          {id:"hiit-ath-wu-3",n:"A-Skip",s:"2",r:"20m",rest:"20s",muscles:"Hip Flexors, Calves, Coordination",notes:"Knee to 90Â°, push through forefoot"},
           {id:"hiit-ath-wu-4",n:"Lateral Bound (small)",s:"2",r:"8 each",rest:"20s",muscles:"Glutes, Adductors",notes:"Small, controlled lateral hops to start"},
         ],
         main:[
@@ -1096,7 +1096,7 @@ const WORKOUT_LIBRARY = {
   },
 
   yoga:{
-    label:"Yoga", icon:"🧘", color:"#10B981",
+    label:"Yoga", icon:"ðŸ§˜", color:"#10B981",
     description:"Mind-body practice integrating breath, movement and mindfulness",
     subTypes:{
       vinyasa:{
@@ -1108,9 +1108,9 @@ const WORKOUT_LIBRARY = {
           {id:"yoga-vin-wu-4",n:"Sun Salutation A (half speed)",s:"2",r:"1 round",rest:"",muscles:"Full Body",notes:"Focus on breath transitions, not speed"},
         ],
         main:[
-          {id:"yoga-vin-m-1",n:"Sun Salutation B",s:"3",r:"1 round",rest:"",muscles:"Full Body, Cardio, Flexibility",notes:"Chair → Warrior 1 → Vinyasa"},
-          {id:"yoga-vin-m-2",n:"Warrior 1 → 2 → Reverse",s:"",r:"5 breaths each side",rest:"",muscles:"Hips, Legs, Shoulders",notes:"Ground back foot, lengthen through fingertips"},
-          {id:"yoga-vin-m-3",n:"Triangle → Extended Side Angle",s:"",r:"5 breaths each side",rest:"",muscles:"Adductors, Obliques, Hamstrings",notes:"Stack hips, lengthen side body"},
+          {id:"yoga-vin-m-1",n:"Sun Salutation B",s:"3",r:"1 round",rest:"",muscles:"Full Body, Cardio, Flexibility",notes:"Chair â†’ Warrior 1 â†’ Vinyasa"},
+          {id:"yoga-vin-m-2",n:"Warrior 1 â†’ 2 â†’ Reverse",s:"",r:"5 breaths each side",rest:"",muscles:"Hips, Legs, Shoulders",notes:"Ground back foot, lengthen through fingertips"},
+          {id:"yoga-vin-m-3",n:"Triangle â†’ Extended Side Angle",s:"",r:"5 breaths each side",rest:"",muscles:"Adductors, Obliques, Hamstrings",notes:"Stack hips, lengthen side body"},
           {id:"yoga-vin-m-4",n:"Crow Pose (Bakasana)",s:"3",r:"15s",rest:"",muscles:"Core, Wrists, Shoulder Girdle",notes:"Round upper back, gaze forward"},
           {id:"yoga-vin-m-5",n:"Wheel (Urdhva Dhanurasana)",s:"3",r:"5 breaths",rest:"",muscles:"Hip Flexors, Chest, Shoulders, Spinal Extensors",notes:"Press into hands and feet evenly"},
         ],
@@ -1132,7 +1132,7 @@ const WORKOUT_LIBRARY = {
           {id:"yoga-yin-m-2",n:"Sleeping Swan (Yin Pigeon)",s:"",r:"4-5 min each",rest:"",muscles:"Glutes, Hip External Rotators",notes:"Fold forward, use blocks under hip"},
           {id:"yoga-yin-m-3",n:"Caterpillar",s:"",r:"4-5 min",rest:"",muscles:"Hamstrings, Lower Back",notes:"Seated forward fold, fully round back"},
           {id:"yoga-yin-m-4",n:"Twisted Root (Reclined)",s:"",r:"3 min each",rest:"",muscles:"IT Band, Glutes, Thoracic",notes:"Cross leg over, both shoulders down"},
-          {id:"yoga-yin-m-5",n:"Saddle Pose",s:"",r:"3-5 min",rest:"",muscles:"Quads, Hip Flexors, Ankles",notes:"Recline back — block under sacrum if needed"},
+          {id:"yoga-yin-m-5",n:"Saddle Pose",s:"",r:"3-5 min",rest:"",muscles:"Quads, Hip Flexors, Ankles",notes:"Recline back â€” block under sacrum if needed"},
         ],
         cooldown:[
           {id:"yoga-yin-cd-1",n:"Savasana",s:"",r:"10 min",rest:"",muscles:"Nervous System, Full Body",notes:"Bolster under knees, eye pillow. Complete surrender"},
@@ -1162,11 +1162,11 @@ const WORKOUT_LIBRARY = {
   },
 
   boxing:{
-    label:"Boxing / Kickboxing", icon:"🥊", color:"#EC4899",
-    description:"Combat sports conditioning — technique, power and cardiovascular fitness through striking",
+    label:"Boxing / Kickboxing", icon:"ðŸ¥Š", color:"#EC4899",
+    description:"Combat sports conditioning â€” technique, power and cardiovascular fitness through striking",
     subTypes:{
       boxing_fundamentals:{
-        label:"Boxing Fundamentals", description:"Stance, footwork and the six basic punches — beginner to intermediate",
+        label:"Boxing Fundamentals", description:"Stance, footwork and the six basic punches â€” beginner to intermediate",
         warmup:[
           {id:"box-fund-wu-1",n:"Jump Rope",s:"3",r:"2 min",rest:"30s",muscles:"Calves, Coordination, Cardio",notes:"Focus on rhythm, not speed"},
           {id:"box-fund-wu-2",n:"Neck Rolls + Shoulder Circles",s:"2",r:"45s",rest:"",muscles:"Cervical Spine, Shoulders",notes:"Slow, no full backward roll"},
@@ -1178,7 +1178,7 @@ const WORKOUT_LIBRARY = {
           {id:"box-fund-m-2",n:"1-2-3-4 Combo",s:"4",r:"2 min rounds",rest:"1 min",muscles:"Full Upper Body, Core",notes:"Jab-Cross-Left hook-Right hook"},
           {id:"box-fund-m-3",n:"Slip and Counter",s:"3",r:"90s",rest:"60s",muscles:"Core, Legs, Reaction",notes:"Bob outside lead foot, counter cross"},
           {id:"box-fund-m-4",n:"Footwork Ladder",s:"3",r:"60s",rest:"30s",muscles:"Calves, Glutes, Coordination",notes:"In/out, lateral, pivot patterns"},
-          {id:"box-fund-m-5",n:"3-Minute Bag Round",s:"5",r:"3 min",rest:"1 min",muscles:"Full Body, Cardio, Endurance",notes:"Vary combos — work jabs, body shots"},
+          {id:"box-fund-m-5",n:"3-Minute Bag Round",s:"5",r:"3 min",rest:"1 min",muscles:"Full Body, Cardio, Endurance",notes:"Vary combos â€” work jabs, body shots"},
         ],
         cooldown:[
           {id:"box-fund-cd-1",n:"Shoulder Pendulum Swing",s:"",r:"60s each",rest:"",muscles:"Rotator Cuff, Anterior Shoulder",notes:"Lean forward, arm hangs and circles"},
@@ -1192,7 +1192,7 @@ const WORKOUT_LIBRARY = {
           {id:"kick-wu-1",n:"Jump Rope Intervals",s:"3",r:"90s",rest:"30s",muscles:"Cardio, Coordination",notes:"Vary between single and alternating foot"},
           {id:"kick-wu-2",n:"Dynamic Hip Opener",s:"2",r:"10 each",rest:"",muscles:"Hips, Groin",notes:"Hold something, circle leg forward/back"},
           {id:"kick-wu-3",n:"Leg Swing Kick",s:"2",r:"10 each",rest:"",muscles:"Hamstrings, Hip Flexors",notes:"Front kick motion, controlled"},
-          {id:"kick-wu-4",n:"Shadow Combo",s:"2",r:"2 min",rest:"30s",muscles:"Full Body, Cardio",notes:"Include low kicks — visualise targets"},
+          {id:"kick-wu-4",n:"Shadow Combo",s:"2",r:"2 min",rest:"30s",muscles:"Full Body, Cardio",notes:"Include low kicks â€” visualise targets"},
         ],
         main:[
           {id:"kick-m-1",n:"Roundhouse Kick (pad or bag)",s:"4",r:"10 each side",rest:"45s",muscles:"Glutes, Obliques, Hip Flexors",notes:"Chamber, rotate hip, snap and retract"},
@@ -1211,7 +1211,7 @@ const WORKOUT_LIBRARY = {
   },
 
   pilates:{
-    label:"Pilates", icon:"🌀", color:"#06B6D4",
+    label:"Pilates", icon:"ðŸŒ€", color:"#06B6D4",
     description:"Core-centred training integrating breath, alignment and controlled movement",
     subTypes:{
       mat_pilates:{
@@ -1237,7 +1237,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       core_focus:{
-        label:"Core Focus", description:"Deep stabiliser activation targeting the Pilates powerhouse — transversus abdominis, pelvic floor, multifidus",
+        label:"Core Focus", description:"Deep stabiliser activation targeting the Pilates powerhouse â€” transversus abdominis, pelvic floor, multifidus",
         warmup:[
           {id:"pil-core-wu-1",n:"Imprinting Exercise",s:"",r:"2 min",rest:"",muscles:"Multifidus, Pelvic Floor",notes:"Find neutral spine, breathe deep abdomen"},
           {id:"pil-core-wu-2",n:"Heel Slides",s:"2",r:"8 each",rest:"",muscles:"Deep Core, Hip Flexors",notes:"Maintain neutral spine as leg extends"},
@@ -1261,15 +1261,15 @@ const WORKOUT_LIBRARY = {
   },
 
   bootcamp:{
-    label:"Bootcamp", icon:"🎖️", color:"#7A94AA",
+    label:"Bootcamp", icon:"ðŸŽ–ï¸", color:"#7A94AA",
     description:"Military-inspired group training combining functional fitness, resilience and team challenge",
     subTypes:{
       military:{
-        label:"Military Style", description:"Classic military physical training — functional endurance and raw toughness",
+        label:"Military Style", description:"Classic military physical training â€” functional endurance and raw toughness",
         warmup:[
           {id:"boot-mil-wu-1",n:"Jog on Spot",s:"",r:"3 min",rest:"",muscles:"Legs, Cardio",notes:"Progress intensity each minute"},
           {id:"boot-mil-wu-2",n:"Squat Thrust",s:"2",r:"10",rest:"20s",muscles:"Core, Quads, Shoulders",notes:"Controlled, not rushed"},
-          {id:"boot-mil-wu-3",n:"Side-Straddle Hop",s:"2",r:"20",rest:"15s",muscles:"Full Body, Coordination",notes:"Military jumping jack — 4-count"},
+          {id:"boot-mil-wu-3",n:"Side-Straddle Hop",s:"2",r:"20",rest:"15s",muscles:"Full Body, Coordination",notes:"Military jumping jack â€” 4-count"},
           {id:"boot-mil-wu-4",n:"Arm Circles",s:"",r:"30s each direction",rest:"",muscles:"Shoulders",notes:"Forward and backward, small to large"},
         ],
         main:[
@@ -1277,7 +1277,7 @@ const WORKOUT_LIBRARY = {
           {id:"boot-mil-m-2",n:"Squat",s:"4",r:"20",rest:"30s",muscles:"Quads, Glutes",notes:"Parallel or below, weight in heels"},
           {id:"boot-mil-m-3",n:"Sit-Up",s:"4",r:"20",rest:"30s",muscles:"Core, Hip Flexors",notes:"Feet secured, full range"},
           {id:"boot-mil-m-4",n:"Burpee",s:"3",r:"15",rest:"45s",muscles:"Full Body, Cardio",notes:"Max effort, consistent form"},
-          {id:"boot-mil-m-5",n:"Run (400m)",s:"4",r:"1",rest:"2 min",muscles:"Full Legs, Cardio, Endurance",notes:"Moderate pace, not sprint — maintain form"},
+          {id:"boot-mil-m-5",n:"Run (400m)",s:"4",r:"1",rest:"2 min",muscles:"Full Legs, Cardio, Endurance",notes:"Moderate pace, not sprint â€” maintain form"},
           {id:"boot-mil-m-6",n:"Plank",s:"3",r:"45s",rest:"30s",muscles:"Core, Shoulders",notes:"Rigid as a plank"},
         ],
         cooldown:[
@@ -1298,8 +1298,8 @@ const WORKOUT_LIBRARY = {
           {id:"boot-ath-m-1",n:"Sled Push / Prowler",s:"4",r:"20m",rest:"90s",muscles:"Quads, Glutes, Calves, Drive",notes:"Forward lean, short fast steps"},
           {id:"boot-ath-m-2",n:"Tyre Flip",s:"4",r:"6",rest:"60s",muscles:"Posterior Chain, Grip, Power",notes:"Deadlift pattern, push as it tips"},
           {id:"boot-ath-m-3",n:"Battle Rope",s:"4",r:"30s",rest:"30s",muscles:"Shoulders, Core, Cardio",notes:"Alternate waves, maintain low stance"},
-          {id:"boot-ath-m-4",n:"Sandbag Carry",s:"4",r:"40m",rest:"60s",muscles:"Core, Grip, Traps, Legs",notes:"Bear hug or shoulder carry — both sides"},
-          {id:"boot-ath-m-5",n:"Box Jump Burpee",s:"3",r:"8",rest:"45s",muscles:"Power, Full Body, Cardio",notes:"Burpee into box jump — land controlled"},
+          {id:"boot-ath-m-4",n:"Sandbag Carry",s:"4",r:"40m",rest:"60s",muscles:"Core, Grip, Traps, Legs",notes:"Bear hug or shoulder carry â€” both sides"},
+          {id:"boot-ath-m-5",n:"Box Jump Burpee",s:"3",r:"8",rest:"45s",muscles:"Power, Full Body, Cardio",notes:"Burpee into box jump â€” land controlled"},
         ],
         cooldown:[
           {id:"boot-ath-cd-1",n:"Standing Overhead Stretch",s:"",r:"60s",rest:"",muscles:"Lats, Thoracic, Shoulders",notes:"Interlace fingers overhead, lengthen"},
@@ -1311,8 +1311,8 @@ const WORKOUT_LIBRARY = {
   },
 
   hyrox:{
-    label:"Hyrox", icon:"🏅", color:"#F59E0B",
-    description:"The world fitness race — 8×1km runs each followed by a functional workout station",
+    label:"Hyrox", icon:"ðŸ…", color:"#F59E0B",
+    description:"The world fitness race â€” 8Ã—1km runs each followed by a functional workout station",
     subTypes:{
       race_prep:{
         label:"Race Simulation", description:"Full Hyrox-format session simulating the 8 station race structure with running intervals",
@@ -1325,9 +1325,9 @@ const WORKOUT_LIBRARY = {
         ],
         main:[
           {id:"hx-race-m-1",n:"1km Run + Ski Erg",s:"",r:"1km + 1000m",rest:"Into next station",muscles:"Full Body, Cardio, Shoulders",notes:"Ski erg: hinge at hips, drive with arms and legs. Consistent stroke rate",timing:"none"},
-          {id:"hx-race-m-2",n:"1km Run + Sled Push",s:"",r:"1km + 50m",rest:"Into next station",muscles:"Quads, Glutes, Drive",notes:"Heavy sled: forward lean 45°, fast short steps, breathe every 2-3 steps"},
+          {id:"hx-race-m-2",n:"1km Run + Sled Push",s:"",r:"1km + 50m",rest:"Into next station",muscles:"Quads, Glutes, Drive",notes:"Heavy sled: forward lean 45Â°, fast short steps, breathe every 2-3 steps"},
           {id:"hx-race-m-3",n:"1km Run + Sled Pull",s:"",r:"1km + 50m",rest:"Into next station",muscles:"Posterior Chain, Grip",notes:"Light sled: walk backward, hand over hand rope pull. Keep back straight"},
-          {id:"hx-race-m-4",n:"1km Run + Burpee Broad Jumps",s:"",r:"1km + 80m",rest:"Into next station",muscles:"Full Body, Power, Cardio",notes:"Chest to floor, explosive jump forward. Find rhythm — don't sprint then die"},
+          {id:"hx-race-m-4",n:"1km Run + Burpee Broad Jumps",s:"",r:"1km + 80m",rest:"Into next station",muscles:"Full Body, Power, Cardio",notes:"Chest to floor, explosive jump forward. Find rhythm â€” don't sprint then die"},
           {id:"hx-race-m-5",n:"1km Run + Rowing",s:"",r:"1km + 1000m",rest:"Into next station",muscles:"Full Body, Posterior Chain, Cardio",notes:"Drive with legs first, lean back slightly, pull hands to sternum. 24-26 SPM target"},
           {id:"hx-race-m-6",n:"1km Run + Farmers Carry",s:"",r:"1km + 200m",rest:"Into next station",muscles:"Grip, Traps, Core, Legs",notes:"Tall posture, neutral spine. Switch hands at 100m turnaround"},
           {id:"hx-race-m-7",n:"1km Run + Sandbag Lunges",s:"",r:"1km + 100m",rest:"Into next station",muscles:"Quads, Glutes, Core",notes:"Sandbag in front rack or hugged to chest. Back knee close to floor"},
@@ -1342,7 +1342,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       station_strength:{
-        label:"Station Strength", description:"Isolated Hyrox station training — build strength and technique at each exercise",
+        label:"Station Strength", description:"Isolated Hyrox station training â€” build strength and technique at each exercise",
         warmup:[
           {id:"hx-str-wu-1",n:"Row Erg Warm-Up",s:"",r:"3 min easy",rest:"",muscles:"Full Body, Posterior Chain",notes:"Damper at 3. Focus on leg drive sequence"},
           {id:"hx-str-wu-2",n:"Goblet Squat",s:"2",r:"10",rest:"30s",muscles:"Quads, Glutes, Thoracic",notes:"Light KB. Elbows inside knees, tall chest"},
@@ -1364,7 +1364,7 @@ const WORKOUT_LIBRARY = {
         ],
       },
       open_format:{
-        label:"Hyrox Open", description:"Scaled or partner format — accessible Hyrox training for all fitness levels",
+        label:"Hyrox Open", description:"Scaled or partner format â€” accessible Hyrox training for all fitness levels",
         warmup:[
           {id:"hx-open-wu-1",n:"Light Jog",s:"",r:"5 min",rest:"",muscles:"Legs, Cardio",notes:"5 min easy jog to elevate heart rate"},
           {id:"hx-open-wu-2",n:"Glute Bridge",s:"2",r:"15",rest:"20s",muscles:"Glutes, Hamstrings",notes:"Pause at top, squeeze glutes"},
@@ -1374,11 +1374,11 @@ const WORKOUT_LIBRARY = {
           {id:"hx-open-m-1",n:"Run / Row Interval",s:"4",r:"400m each",rest:"2 min",muscles:"Full Legs, Cardio",notes:"Alternate between run and row to simulate race demands at lower intensity"},
           {id:"hx-open-m-2",n:"Light Sled Push",s:"4",r:"20m",rest:"90s",muscles:"Quads, Glutes",notes:"50% race weight. Build confidence with technique"},
           {id:"hx-open-m-3",n:"KB Carry (Farmers)",s:"3",r:"40m",rest:"60s",muscles:"Grip, Core, Traps",notes:"Light to moderate. Walk tall, neutral spine"},
-          {id:"hx-open-m-4",n:"Goblet Squat + Wall Ball Combo",s:"3",r:"10+10",rest:"60s",muscles:"Quads, Shoulders, Glutes",notes:"10 goblet squats into 10 wall balls — mimics race transition fatigue"},
+          {id:"hx-open-m-4",n:"Goblet Squat + Wall Ball Combo",s:"3",r:"10+10",rest:"60s",muscles:"Quads, Shoulders, Glutes",notes:"10 goblet squats into 10 wall balls â€” mimics race transition fatigue"},
           {id:"hx-open-m-5",n:"Walking Lunge (Unloaded)",s:"3",r:"30m",rest:"60s",muscles:"Quads, Glutes",notes:"Learn sandbag lunge mechanics without load first"},
         ],
         cooldown:[
-          {id:"hx-open-cd-1",n:"Full Body Stretch Sequence",s:"",r:"5 min",rest:"",muscles:"Full Body",notes:"Quad, hip flexor, hamstring, shoulder — 45s each"},
+          {id:"hx-open-cd-1",n:"Full Body Stretch Sequence",s:"",r:"5 min",rest:"",muscles:"Full Body",notes:"Quad, hip flexor, hamstring, shoulder â€” 45s each"},
           {id:"hx-open-cd-2",n:"Foam Roll Quads",s:"",r:"90s each",rest:"",muscles:"Quads, IT Band",notes:"Slow passes. Pause on tender spots"},
           {id:"hx-open-cd-3",n:"Box Breathing",s:"",r:"5 rounds",rest:"",muscles:"Nervous System Recovery",notes:"Inhale 4s, hold 4s, exhale 4s, hold 4s"},
         ],
@@ -1387,7 +1387,7 @@ const WORKOUT_LIBRARY = {
   },
 };
 
-// ─── Editable library helpers ─────────────────────────────────────────────────
+// â”€â”€â”€ Editable library helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getLibrary() {
   try {
     const raw = localStorage.getItem("jungle_library_custom");
@@ -1418,8 +1418,8 @@ function resetLibrary() {
   try { localStorage.removeItem("jungle_library_custom"); } catch(_) {}
 }
 
-// ─── SCFG-to-library stage mapping ───────────────────────────────────────────
-// Maps builder stage types → which exercise pool to draw from
+// â”€â”€â”€ SCFG-to-library stage mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Maps builder stage types â†’ which exercise pool to draw from
 const STAGE_LIBRARY_MAP = {
   warmup:   "warmup",
   cooldown: "cooldown",
@@ -1430,8 +1430,8 @@ const STAGE_LIBRARY_MAP = {
   cardio:   "main",
 };
 
-// ─── Smart exercise distributor from library ──────────────────────────────────
-// lib param is optional — falls back to getLibrary() which merges user edits
+// â”€â”€â”€ Smart exercise distributor from library â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// lib param is optional â€” falls back to getLibrary() which merges user edits
 function distributeLibraryExercises(classType, subType, currentStages, lib) {
   const library = lib || getLibrary();
   const cls = library[classType];
@@ -1453,9 +1453,9 @@ function distributeLibraryExercises(classType, subType, currentStages, lib) {
   });
 }
 
-// ─── Class-level stage structure templates ────────────────────────────────────
+// â”€â”€â”€ Class-level stage structure templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Defines the default stage timeline for each class type + sub-type.
-// Each entry is an array of { name, type, dur } — id/exercises/tracks added at apply-time.
+// Each entry is an array of { name, type, dur } â€” id/exercises/tracks added at apply-time.
 const CLASS_STAGE_TEMPLATES = {
   crossfit:{
     wod:[
@@ -1654,7 +1654,7 @@ const CLASS_STAGE_TEMPLATES = {
   },
 };
 
-// Build fresh stages from a class template (empty exercises — ready for library distribute)
+// Build fresh stages from a class template (empty exercises â€” ready for library distribute)
 function buildStagesFromTemplate(classType, subType) {
   const tmpl = CLASS_STAGE_TEMPLATES[classType]?.[subType];
   if (!tmpl) return null;
@@ -1669,11 +1669,11 @@ function cloneTemplateStages(tmpl) {
 const GLOSSARY = {
   "Upper Body": [
     { name:"Atlas Press",         muscles:"Shoulders, Triceps, Upper Traps", diff:"Intermediate", cues:"Drive from shoulder, full lockout overhead, ribs down." },
-    { name:"Serpent Row",         muscles:"Lats, Rhomboids, Biceps",         diff:"Intermediate", cues:"Hinge 45°, row to lower chest, squeeze scapula at top." },
+    { name:"Serpent Row",         muscles:"Lats, Rhomboids, Biceps",         diff:"Intermediate", cues:"Hinge 45Â°, row to lower chest, squeeze scapula at top." },
     { name:"Cobra Push-Up",       muscles:"Chest, Triceps, Serratus",        diff:"Beginner",     cues:"Wide hands, lower slow, explosive push, protract at top." },
     { name:"Renegade Row",        muscles:"Lats, Core, Shoulders",           diff:"Advanced",     cues:"Plank position, minimal hip rotation, row to ribcage." },
-    { name:"Spider Curl",         muscles:"Biceps, Brachialis",              diff:"Beginner",     cues:"Incline bench 45°, arm hangs free, curl to shoulder." },
-    { name:"JM Press",            muscles:"Triceps, Chest",                  diff:"Advanced",     cues:"Bar to nose, elbows 45°, press explosively to lockout." },
+    { name:"Spider Curl",         muscles:"Biceps, Brachialis",              diff:"Beginner",     cues:"Incline bench 45Â°, arm hangs free, curl to shoulder." },
+    { name:"JM Press",            muscles:"Triceps, Chest",                  diff:"Advanced",     cues:"Bar to nose, elbows 45Â°, press explosively to lockout." },
   ],
   "Lower Body": [
     { name:"Primal Squat",        muscles:"Quads, Glutes, Hamstrings",       diff:"Beginner",     cues:"Feet hip-width, chest tall, break parallel, drive through heels." },
@@ -1699,18 +1699,18 @@ const GLOSSARY = {
   ],
   "Mobility & Prehab": [
     { name:"World's Greatest Stretch", muscles:"Full Body Mobility", diff:"Beginner",     cues:"Walking lunge, rotate, hamstring stretch, thoracic extension." },
-    { name:"Hip 90/90 Flow",           muscles:"Hip Mobility, Glutes", diff:"Beginner",   cues:"90° flexion and abduction, alternate sides, explore ROM." },
+    { name:"Hip 90/90 Flow",           muscles:"Hip Mobility, Glutes", diff:"Beginner",   cues:"90Â° flexion and abduction, alternate sides, explore ROM." },
     { name:"Thoracic CAR",             muscles:"Thoracic Spine",       diff:"Intermediate",cues:"Tall kneeling, open up, big circles, drive rotation." },
     { name:"Shoulder CARs",            muscles:"Shoulder Complex",     diff:"Beginner",    cues:"Standing tall, full ROM circles, smooth and controlled." },
     { name:"Hamstring Floss",          muscles:"Hamstrings, Glutes",   diff:"Beginner",    cues:"Standing fold, hamstring tension, gentle oscillation." },
-    { name:"Pigeon Flow",              muscles:"Hip External Rotators, Glutes", diff:"Beginner", cues:"90° hip angle, alternate hip stretch, breathe deep." },
+    { name:"Pigeon Flow",              muscles:"Hip External Rotators, Glutes", diff:"Beginner", cues:"90Â° hip angle, alternate hip stretch, breathe deep." },
   ]
 };
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const CLASS_TYPES = ["HIIT","Strength","Mobility","Circuit","Cardio","Recovery","Open Gym"];
 
-// ─── UI Primitives ────────────────────────────────────────────────────────────
+// â”€â”€â”€ UI Primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const Btn = ({children, onClick, variant="primary", style:s={}, ...p}) => (
   <button onClick={onClick} style={{
     padding:"10px 18px",
@@ -1735,7 +1735,7 @@ const SpBadge = ({children}) => (
   <span style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",background:"var(--green-20)",color:"var(--green)",borderRadius:"6px",fontSize:"12px",fontWeight:"700",border:"1px solid var(--green-40)",transition:"background .3s,color .2s,border-color .3s"}}>{children}</span>
 );
 
-// ─── Logo ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Logo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Option A (default): Leaf + Barbell in a circle
 const JungleLogo = ({size=32}) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1751,7 +1751,7 @@ const JungleLogo = ({size=32}) => (
   </svg>
 );
 
-// ─── StatCard ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ StatCard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function StatCard({icon, label, value, color}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -1764,7 +1764,7 @@ function StatCard({icon, label, value, color}) {
   );
 }
 
-// ─── LoginScreen ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ LoginScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LoginScreen({onLogin, authError}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -1773,24 +1773,24 @@ function LoginScreen({onLogin, authError}) {
       <JungleLogo size={isMobile?60:80}/>
       <h1 style={{marginTop:"20px",fontSize:isMobile?"36px":"56px",fontWeight:"800",letterSpacing:isMobile?"4px":"8px"}}>JUNGLE</h1>
       <p style={{marginTop:"12px",color:T.muted,fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
-      {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>⚠️ {authError}</div>}
+      {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>âš ï¸ {authError}</div>}
       {IS_CONFIGURED ? (
         <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:"var(--green)",color:"var(--on-green)",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
-          🎵 Continue with Spotify
+          ðŸŽµ Continue with Spotify
         </button>
       ) : (
         <div style={{marginTop:"28px",padding:isMobile?"16px":"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,width:isMobile?"92vw":"420px",maxWidth:"100%",textAlign:"left",boxSizing:"border-box"}}>
-          <p style={{fontWeight:"700",marginBottom:"10px"}}>⚙️ Setup Required</p>
+          <p style={{fontWeight:"700",marginBottom:"10px"}}>âš™ï¸ Setup Required</p>
           <p style={{fontSize:"13px",color:T.muted,marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
           <code style={{fontSize:"12px",color:T.accent,background:T.navy,padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
         </div>
       )}
-      <p style={{marginTop:"24px",fontSize:"12px",color:T.muted,padding:"0 8px"}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
+      <p style={{marginTop:"24px",fontSize:"12px",color:T.muted,padding:"0 8px"}}>Spotify Premium required Â· Redirect URI must match your Spotify Dashboard</p>
     </div>
   );
 }
 
-// ─── ProfileModal ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ ProfileModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // F13: Expanded with real class-history stats and recent sessions
 function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBranding={}, onBrandingChange}) {
   if (!profile) return null;
@@ -1799,7 +1799,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
   const isMobilePM = vwPM < 480;
   const [tab, setTab] = useState("profile"); // "profile" | "branding"
 
-  // ── Profile stats ──
+  // â”€â”€ Profile stats â”€â”€
   const totalSessions = sessionHistory.length;
   const totalMinutes  = sessionHistory.reduce((a,s)=>a+(s.durMin||0),0);
   const totalHours    = (totalMinutes/60).toFixed(1);
@@ -1816,7 +1816,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
   const topType = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
   const recent = sessionHistory.slice(0,5);
 
-  // ── Branding draft ──
+  // â”€â”€ Branding draft â”€â”€
   const [draft, setDraft] = useState({
     logo:        gymBranding.logo        || null,
     gymName:     gymBranding.gymName     || "",
@@ -1835,7 +1835,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
     const reader = new FileReader();
     reader.onload = ev => {
       const src = ev.target.result;
-      // Resize to ≤320px before storing
+      // Resize to â‰¤320px before storing
       const tmpImg = new Image();
       tmpImg.onload = () => {
         const maxD = 320, scale = Math.min(1, maxD/tmpImg.width, maxD/tmpImg.height);
@@ -1894,22 +1894,22 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
           </div>
           {/* Tabs */}
           <div style={{display:"flex",gap:"6px"}}>
-            <TabBtn id="profile"  label="👤 Profile"/>
-            <TabBtn id="branding" label="🎨 Gym Branding"/>
+            <TabBtn id="profile"  label="ðŸ‘¤ Profile"/>
+            <TabBtn id="branding" label="ðŸŽ¨ Gym Branding"/>
           </div>
         </div>
 
-        {/* ── PROFILE TAB ── */}
+        {/* â”€â”€ PROFILE TAB â”€â”€ */}
         {tab === "profile" && <>
           {/* Stats */}
           <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
             <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Your Stats</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
               {[
-                {icon:"🏋️",label:"Total Sessions",value:String(totalSessions),color:T.accent},
-                {icon:"⏱️",label:"Total Hours",   value:totalHours+"h",      color:T.green},
-                {icon:"📊",label:"Avg Duration",  value:avgDur+" min",        color:"#8B5CF6"},
-                {icon:"🔥",label:"Day Streak",    value:String(streak),       color:"#F97316"},
+                {icon:"ðŸ‹ï¸",label:"Total Sessions",value:String(totalSessions),color:T.accent},
+                {icon:"â±ï¸",label:"Total Hours",   value:totalHours+"h",      color:T.green},
+                {icon:"ðŸ“Š",label:"Avg Duration",  value:avgDur+" min",        color:"#8B5CF6"},
+                {icon:"ðŸ”¥",label:"Day Streak",    value:String(streak),       color:"#F97316"},
               ].map(s=>(
                 <div key={s.label} style={{padding:"10px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
                   <p style={{fontSize:"18px",fontWeight:"800",color:s.color,lineHeight:"1"}}>{s.value}</p>
@@ -1917,7 +1917,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 </div>
               ))}
             </div>
-            {topType && <p style={{fontSize:"11px",color:T.muted,marginTop:"10px"}}>🏆 Most trained: <span style={{color:SCFG[topType]?.color||T.green,fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
+            {topType && <p style={{fontSize:"11px",color:T.muted,marginTop:"10px"}}>ðŸ† Most trained: <span style={{color:SCFG[topType]?.color||T.green,fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
           </div>
           {/* Recent sessions */}
           <div style={{flex:1,overflowY:"auto",padding:"14px 18px"}}>
@@ -1926,10 +1926,10 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
               ? <p style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"16px 0"}}>No sessions yet. Start one to track your history.</p>
               : recent.map((s,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"9px 0",borderBottom:i<recent.length-1?`1px solid ${T.border}`:"none"}}>
-                  <div style={{width:"36px",height:"36px",borderRadius:"8px",background:T.accent+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:"16px"}}>🏋️</span></div>
+                  <div style={{width:"36px",height:"36px",borderRadius:"8px",background:T.accent+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:"16px"}}>ðŸ‹ï¸</span></div>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||"Workout"}</p>
-                    <p style={{fontSize:"11px",color:T.muted}}>{s.date} · {s.durMin} min · {s.stages} stage{s.stages!==1?"s":""}</p>
+                    <p style={{fontSize:"11px",color:T.muted}}>{s.date} Â· {s.durMin} min Â· {s.stages} stage{s.stages!==1?"s":""}</p>
                   </div>
                 </div>
               ))
@@ -1937,7 +1937,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
           </div>
         </>}
 
-        {/* ── BRANDING TAB ── */}
+        {/* â”€â”€ BRANDING TAB â”€â”€ */}
         {tab === "branding" && (
           <div style={{flex:1,overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:"16px"}}>
 
@@ -1949,14 +1949,14 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 <div style={{width:"80px",height:"80px",borderRadius:"10px",background:T.navy,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
                   {draft.logo
                     ? <img src={draft.logo} style={{width:"100%",height:"100%",objectFit:"contain"}} alt="logo"/>
-                    : <span style={{fontSize:"28px"}}>🏢</span>
+                    : <span style={{fontSize:"28px"}}>ðŸ¢</span>
                   }
                 </div>
                 <div style={{flex:1}}>
                   <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleLogoUpload}/>
                   <button onClick={()=>fileRef.current?.click()}
                     style={{width:"100%",padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",marginBottom:"6px"}}>
-                    {extracting ? "⏳ Extracting colours…" : draft.logo ? "🔄 Change Logo" : "📁 Upload Logo"}
+                    {extracting ? "â³ Extracting coloursâ€¦" : draft.logo ? "ðŸ”„ Change Logo" : "ðŸ“ Upload Logo"}
                   </button>
                   {draft.logo && (
                     <button onClick={()=>setDraft(d=>({...d,logo:null}))}
@@ -1987,7 +1987,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                   <span style={{fontSize:"11px",color:"rgba(255,255,255,0.7)"}}>Primary</span>
                 </div>
               </div>
-              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Auto-extracted from logo — override by clicking the swatch.</p>
+              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Auto-extracted from logo â€” override by clicking the swatch.</p>
             </div>
 
             {/* Secondary colour */}
@@ -2008,18 +2008,18 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
               <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Font</p>
               <Select value={draft.fontFamily} onChange={e=>setDraft(d=>({...d,fontFamily:e.target.value}))}>
                 {GYM_FONTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                <option value="custom">✏️ Custom Google Font…</option>
+                <option value="custom">âœï¸ Custom Google Fontâ€¦</option>
               </Select>
               {draft.fontFamily !== "system" && draft.fontFamily !== "custom" && (
                 <p style={{fontSize:"13px",marginTop:"8px",fontFamily:`'${draft.fontFamily}', sans-serif`,color:T.text,padding:"8px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
-                  The quick brown fox — {draft.fontFamily}
+                  The quick brown fox â€” {draft.fontFamily}
                 </p>
               )}
               {draft.fontFamily === "custom" && (
                 <Input placeholder="e.g. Poppins, Nunito, Space Grotesk" value={draft.customFont}
                   onChange={e=>setDraft(d=>({...d,customFont:e.target.value}))} style={{marginTop:"6px"}}/>
               )}
-              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Loaded from Google Fonts — applied app-wide.</p>
+              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Loaded from Google Fonts â€” applied app-wide.</p>
             </div>
 
 
@@ -2031,7 +2031,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
           {tab === "branding" ? <>
             <button onClick={saveBranding}
               style={{flex:2,padding:"10px",background:saved?"var(--green)":"var(--accent)",color:saved?"var(--on-green)":"var(--on-accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"12px",transition:"background .3s,color .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-              {saved ? <><Check size={13}/> Saved!</> : "💾 Save Branding"}
+              {saved ? <><Check size={13}/> Saved!</> : "ðŸ’¾ Save Branding"}
             </button>
             <button onClick={resetBranding}
               style={{flex:1,padding:"10px",background:T.navy,color:T.muted,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>
@@ -2050,7 +2050,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
   );
 }
 
-// ─── PinScreen ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ PinScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PinScreen({onUnlock}) {
   const vwPin = useWindowWidth();
   const isMobilePin = vwPin < 480;
@@ -2125,7 +2125,7 @@ function PinScreen({onUnlock}) {
               onMouseEnter={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.navy; }}
               onMouseLeave={e=>{ if(k!=="del") e.currentTarget.style.background=DARK.card; }}
             >
-              {k==="del" ? "⌫" : k}
+              {k==="del" ? "âŒ«" : k}
             </button>
           );
         })}
@@ -2146,8 +2146,8 @@ function PinScreen({onUnlock}) {
   );
 }
 
-// ─── TrackItem ────────────────────────────────────────────────────────────────
-// stageType is optional – if provided, shows a mismatch warning on the BPM pill
+// â”€â”€â”€ TrackItem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// stageType is optional â€“ if provided, shows a mismatch warning on the BPM pill
 // BPM is always shown: auto-detected where possible, or "? BPM" click-to-set manually
 function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
   // Initialise from track.bpm or the cache (covers tracks loaded before cache was warmed)
@@ -2185,7 +2185,7 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
         <p style={{fontSize:"13px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.t}</p>
         <p style={{fontSize:"11px",color:T.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.a}</p>
         <div style={{display:"flex",alignItems:"center",gap:"5px",marginTop:"3px"}}>
-          {/* BPM pill — always visible; click to set/edit manually */}
+          {/* BPM pill â€” always visible; click to set/edit manually */}
           {editingBpm ? (
             <span style={{display:"flex",alignItems:"center",gap:"3px"}}>
               <input
@@ -2196,22 +2196,22 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
                 placeholder="BPM"
                 style={{width:"52px",padding:"1px 5px",background:T.card,border:`1px solid ${T.accent}`,borderRadius:"3px",color:T.text,fontSize:"10px",fontWeight:"700",outline:"none"}}
               />
-              <button onClick={saveBpm} style={{padding:"1px 6px",background:"var(--accent)",border:"none",borderRadius:"3px",cursor:"pointer",color:"var(--on-accent)",fontSize:"10px",fontWeight:"700"}}>✓</button>
-              <button onClick={()=>setEditingBpm(false)} style={{padding:"1px 4px",background:"transparent",border:"none",cursor:"pointer",color:T.muted,fontSize:"10px"}}>✕</button>
+              <button onClick={saveBpm} style={{padding:"1px 6px",background:"var(--accent)",border:"none",borderRadius:"3px",cursor:"pointer",color:"var(--on-accent)",fontSize:"10px",fontWeight:"700"}}>âœ“</button>
+              <button onClick={()=>setEditingBpm(false)} style={{padding:"1px 4px",background:"transparent",border:"none",cursor:"pointer",color:T.muted,fontSize:"10px"}}>âœ•</button>
             </span>
           ) : bpm > 0 ? (
             <span
               onClick={()=>{ setBpmInput(String(bpm)); setEditingBpm(true); }}
               title={mismatch && SCFG[stageType]?.bpmMin
-                ? `⚠ Target for this stage: ${SCFG[stageType].bpmMin}–${SCFG[stageType].bpmMax} BPM · Click to edit`
-                : `${bpm} BPM · Click to edit`}
+                ? `âš  Target for this stage: ${SCFG[stageType].bpmMin}â€“${SCFG[stageType].bpmMax} BPM Â· Click to edit`
+                : `${bpm} BPM Â· Click to edit`}
               style={{fontSize:"10px",fontWeight:"700",padding:"1px 6px",borderRadius:"3px",background:bc+"25",color:bc,border:`1px solid ${mismatch?"#F59E0B33":"transparent"}`,cursor:"pointer",userSelect:"none"}}>
-              {mismatch && "⚠ "}{bpm} BPM
+              {mismatch && "âš  "}{bpm} BPM
             </span>
           ) : (
             <span
               onClick={()=>{ setBpmInput(""); setEditingBpm(true); }}
-              title="BPM unknown — click to set manually"
+              title="BPM unknown â€” click to set manually"
               style={{fontSize:"10px",fontWeight:"600",padding:"1px 6px",borderRadius:"3px",background:T.border+"60",color:T.muted,border:`1px dashed ${T.border}`,cursor:"pointer",userSelect:"none"}}>
               ? BPM
             </span>
@@ -2219,14 +2219,14 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
           <span style={{fontSize:"10px",color:T.muted}}>{fmt(track.dur)}</span>
         </div>
       </div>
-      {added && <span style={{fontSize:"10px",color:T.green,fontWeight:"700",flexShrink:0,padding:"2px 8px",background:T.green+"20",borderRadius:"4px"}}>✓ Added</span>}
+      {added && <span style={{fontSize:"10px",color:T.green,fontWeight:"700",flexShrink:0,padding:"2px 8px",background:T.green+"20",borderRadius:"4px"}}>âœ“ Added</span>}
       {onAdd    && !added && <button onClick={onAdd}    title="Add to stage" style={{background:T.green+"20",border:"none",cursor:"pointer",color:T.green,flexShrink:0,padding:"6px 10px",borderRadius:"5px",display:"flex",alignItems:"center",gap:"4px",fontSize:"12px",fontWeight:"700"}}><Plus size={14}/> Add</button>}
       {onRemove && <button onClick={onRemove} title="Remove from stage" style={{background:T.accent+"15",border:"none",cursor:"pointer",color:T.accent,flexShrink:0,padding:"6px 8px",borderRadius:"5px",display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>}
     </div>
   );
 }
 
-// ─── TrackSearch ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ TrackSearch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null}) {
   const [tab,      setTab]      = useState("track"); // "track"|"genre"|"playlist"|"bpm"
   const [results,  setResults]  = useState([]);
@@ -2273,7 +2273,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
 
   const switchTab = (t) => { setTab(t); setResults([]); setError(null); };
 
-  // ── Search helpers ──
+  // â”€â”€ Search helpers â”€â”€
   const withAudioFeatures = async (tracks) => {
     let fmap = {};
     try {
@@ -2316,7 +2316,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     setSelPl(pl); setLoadingTr(true); setPlTracks([]); setPlDenied(false);
     const tr = await apiGetPlaylistTracks(pl.id);
     if (tr === null) {
-      // Scope missing — send user through re-auth popup to get collaborative scope
+      // Scope missing â€” send user through re-auth popup to get collaborative scope
       setLoadingTr(false);
       const win = await openSpotifyAuthPopup();
       if (win) {
@@ -2365,11 +2365,11 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     apiGetPlaylists().then(pls => { setPlaylists(pls); setLoadingPls(false); });
   };
 
-  // ── Sub-components ──
+  // â”€â”€ Sub-components â”€â”€
   const GoBtn = ({onClick, disabled}) => (
     <button onClick={onClick} disabled={disabled||loading}
       style={{flexShrink:0,padding:"8px 14px",background:(disabled||loading)?"var(--border)":"var(--accent)",color:(disabled||loading)?T.muted:"var(--on-accent)",border:"none",borderRadius:"6px",cursor:(disabled||loading)?"not-allowed":"pointer",fontWeight:"700",fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",transition:"background .3s,color .2s"}}>
-      {loading?<Loader size={13}/>:<Search size={13}/>} {loading?"…":"Go"}
+      {loading?<Loader size={13}/>:<Search size={13}/>} {loading?"â€¦":"Go"}
     </button>
   );
 
@@ -2377,7 +2377,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     <div style={{padding:"10px 12px",background:error==="auth"?T.accent+"18":T.navy,border:`1px solid ${error==="auth"?T.accent+"40":T.border}`,borderRadius:"7px",marginBottom:"10px",textAlign:"center"}}>
       {error==="auth"
         ? <><p style={{fontSize:"12px",color:T.accent,fontWeight:"700",marginBottom:"2px"}}>Session expired</p><p style={{fontSize:"11px",color:T.muted}}>Refresh and reconnect.</p></>
-        : <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>Search failed — try again</p>
+        : <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>Search failed â€” try again</p>
       }
     </div>
   );
@@ -2407,22 +2407,22 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     <div>
       {/* Tab bar */}
       <div style={{display:"flex",gap:"4px",marginBottom:"12px"}}>
-        {[["track","🔍 Track"],["genre","🎸 Genre"],["playlist","📋 List"],["bpm","⏱ BPM"]].map(([id,lbl])=>(
+        {[["track","ðŸ” Track"],["genre","ðŸŽ¸ Genre"],["playlist","ðŸ“‹ List"],["bpm","â± BPM"]].map(([id,lbl])=>(
           <button key={id} style={tabStyle(id)} onClick={()=>switchTab(id)}>{lbl}</button>
         ))}
       </div>
 
-      {/* ── Track ── */}
+      {/* â”€â”€ Track â”€â”€ */}
       {tab==="track" && (
         <div>
           <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-            <Input type="text" placeholder="Song, artist, album…" value={q} onChange={e=>setQ(e.target.value)}
+            <Input type="text" placeholder="Song, artist, albumâ€¦" value={q} onChange={e=>setQ(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&runQuery(q)} autoComplete="off"/>
             <GoBtn onClick={()=>runQuery(q)}/>
           </div>
           {stageType && SCFG[stageType]?.bpmMin && results.length>0 && (
             <p style={{fontSize:"10px",color:T.muted,marginBottom:"8px"}}>
-              🎵 Target: <span style={{color:bpmColor((SCFG[stageType].bpmMin+SCFG[stageType].bpmMax)/2),fontWeight:"700"}}>{SCFG[stageType].bpmMin}–{SCFG[stageType].bpmMax} BPM</span>
+              ðŸŽµ Target: <span style={{color:bpmColor((SCFG[stageType].bpmMin+SCFG[stageType].bpmMax)/2),fontWeight:"700"}}>{SCFG[stageType].bpmMin}â€“{SCFG[stageType].bpmMax} BPM</span>
             </p>
           )}
           <ErrorBanner/>
@@ -2430,7 +2430,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
         </div>
       )}
 
-      {/* ── Genre ── */}
+      {/* â”€â”€ Genre â”€â”€ */}
       {tab==="genre" && (
         <div>
           <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"10px"}}>
@@ -2445,7 +2445,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
             ))}
           </div>
           <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-            <Input type="text" placeholder="Filter by artist / title (optional)…" value={genreQ}
+            <Input type="text" placeholder="Filter by artist / title (optional)â€¦" value={genreQ}
               onChange={e=>setGenreQ(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&runQuery(selGenre?`genre:"${selGenre}" ${genreQ}`:genreQ)}/>
             <GoBtn onClick={()=>runQuery(selGenre?`genre:"${selGenre}" ${genreQ}`:genreQ)} disabled={!selGenre&&!genreQ}/>
@@ -2456,7 +2456,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
         </div>
       )}
 
-      {/* ── Playlist ── */}
+      {/* â”€â”€ Playlist â”€â”€ */}
       {tab==="playlist" && (
         <div>
           {!selPl ? (
@@ -2464,7 +2464,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
               {onSmartDistribute && (
                 <div style={{marginBottom:"12px",padding:"12px 14px",background:T.accent+"12",border:`1px solid ${T.accent}30`,borderRadius:"9px",display:"flex",alignItems:"center",gap:"10px"}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:"12px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>⚡ Smart Distribute</p>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>âš¡ Smart Distribute</p>
                     <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.4"}}>Import a playlist and auto-distribute songs across all stages by duration</p>
                   </div>
                   <button onClick={onSmartDistribute}
@@ -2474,7 +2474,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                 </div>
               )}
               <div style={{display:"flex",gap:"6px",marginBottom:"6px"}}>
-                <Input type="text" placeholder="Search Spotify playlists…" value={plSearch}
+                <Input type="text" placeholder="Search Spotify playlistsâ€¦" value={plSearch}
                   onChange={e=>setPlSearch(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&searchSpotifyPlaylists()}/>
                 <button onClick={searchSpotifyPlaylists} disabled={loadingPls||!plSearch.trim()}
@@ -2509,9 +2509,9 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
                                 <p style={{fontSize:"12px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pl.name}</p>
-                                {notMine && <span title="Owned by another user — may not be accessible" style={{fontSize:"9px",fontWeight:"700",color:T.accent,background:T.accent+"20",borderRadius:"3px",padding:"1px 4px",flexShrink:0,whiteSpace:"nowrap"}}>NOT YOURS</span>}
+                                {notMine && <span title="Owned by another user â€” may not be accessible" style={{fontSize:"9px",fontWeight:"700",color:T.accent,background:T.accent+"20",borderRadius:"3px",padding:"1px 4px",flexShrink:0,whiteSpace:"nowrap"}}>NOT YOURS</span>}
                               </div>
-                              <p style={{fontSize:"10px",color:T.muted}}>{count} tracks{pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
+                              <p style={{fontSize:"10px",color:T.muted}}>{count} tracks{pl.owner?.display_name?` Â· ${pl.owner.display_name}`:""}</p>
                             </div>
                             <ChevronRight size={13} color={T.muted}/>
                           </div>
@@ -2536,7 +2536,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                 ? <div style={{textAlign:"center",padding:"24px"}}><Loader size={18} color={T.muted}/></div>
                 : plDenied
                   ? <div style={{textAlign:"center",padding:"20px 16px"}}>
-                      <p style={{fontSize:"22px",marginBottom:"8px"}}>🔒</p>
+                      <p style={{fontSize:"22px",marginBottom:"8px"}}>ðŸ”’</p>
                       <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"6px"}}>Playlist not accessible</p>
                       <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>
                         {typeof plDenied === "string" && plDenied !== "Forbidden"
@@ -2545,7 +2545,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                       </p>
                       <button onClick={()=>{setSelPl(null);setPlTracks([]);setPlDenied(false);}}
                         style={{padding:"7px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
-                        ← Back
+                        â† Back
                       </button>
                     </div>
                   : plTracks.length
@@ -2561,12 +2561,12 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
         </div>
       )}
 
-      {/* ── BPM ── */}
+      {/* â”€â”€ BPM â”€â”€ */}
       {tab==="bpm" && (
         <div>
           <div style={{marginBottom:"12px"}}>
             <p style={{fontSize:"10px",color:T.muted,marginBottom:"10px"}}>
-              Pick a genre to find tracks — BPM shown where available. The BPM range sets a target to help you choose.
+              Pick a genre to find tracks â€” BPM shown where available. The BPM range sets a target to help you choose.
             </p>
             <div style={{display:"flex",gap:"10px",alignItems:"flex-end",marginBottom:"12px"}}>
               <div style={{flex:1}}>
@@ -2574,7 +2574,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                 <Input type="number" value={bpmMin} min="60" max="220"
                   onChange={e=>setBpmMin(parseInt(e.target.value)||80)} style={{textAlign:"center",fontWeight:"700"}}/>
               </div>
-              <span style={{color:T.muted,paddingBottom:"9px"}}>–</span>
+              <span style={{color:T.muted,paddingBottom:"9px"}}>â€“</span>
               <div style={{flex:1}}>
                 <p style={{fontSize:"9px",color:T.muted,marginBottom:"3px"}}>Target Max BPM</p>
                 <Input type="number" value={bpmMax} min="60" max="220"
@@ -2595,7 +2595,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
             </div>
             <button onClick={runBpmSearch} disabled={loading||!bpmSeedGenre}
               style={{width:"100%",padding:"10px",background:(loading||!bpmSeedGenre)?"var(--border)":"var(--accent)",color:(loading||!bpmSeedGenre)?T.muted:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:(loading||!bpmSeedGenre)?"not-allowed":"pointer",fontWeight:"700",fontSize:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-              {loading?<><Loader size={14}/> Searching…</>:<><Search size={14}/> Find {bpmSeedGenre||"genre"} tracks</>}
+              {loading?<><Loader size={14}/> Searchingâ€¦</>:<><Search size={14}/> Find {bpmSeedGenre||"genre"} tracks</>}
             </button>
           </div>
           <ErrorBanner/>
@@ -2606,7 +2606,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
   );
 }
 
-// ─── DashboardScreen ──────────────────────────────────────────────────────────
+// â”€â”€â”€ DashboardScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewAnalytics,
   onViewGlossary, onViewLibrary, onViewMusic, onViewSchedule, onViewMembers, profile, sessionHistory=[], stages=[], djProgress=null}) {
   const vw = useWindowWidth();
@@ -2614,7 +2614,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
   const isTablet  = vw < 768;
   const isSmall   = vw < 900;
 
-  // ── Time-aware greeting ──────────────────────────────────────────────────────
+  // â”€â”€ Time-aware greeting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const now   = new Date();
   const hour  = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -2625,7 +2625,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
   const monNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const dateStr = `${dayNames[now.getDay()]} ${now.getDate()} ${monNames[now.getMonth()]}`;
 
-  // ── Mock today's classes ─────────────────────────────────────────────────────
+  // â”€â”€ Mock today's classes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const todayClasses = [
     { time:"06:00", period:"AM", name:"Sunrise HIIT",        trainer:"Mara",  booked:18, cap:20, bpm:132, color:"#EF4444" },
     { time:"09:30", period:"AM", name:"Flow & Strength",     trainer:"Priya", booked:12, cap:16, bpm:95,  color:"#8B5CF6" },
@@ -2634,7 +2634,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
     { time:"18:30", period:"PM", name:"Strength Lab",        trainer:"Priya", booked:11, cap:16, bpm:96,  color:"#10B981" },
     { time:"20:00", period:"PM", name:"Late HIIT",           trainer:"Dev",   booked:6,  cap:20, bpm:138, color:"#EF4444" },
   ];
-  // Determine "upcoming" — classes after current hour
+  // Determine "upcoming" â€” classes after current hour
   const upcoming = todayClasses.filter(c => {
     const [h,m] = c.time.split(":").map(Number);
     const totalMins = h * 60 + m + (c.period === "PM" && h !== 12 ? 720 : 0);
@@ -2643,46 +2643,46 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
   });
   const showClasses = upcoming.slice(0, 3).length > 0 ? upcoming.slice(0, 3) : todayClasses.slice(0, 3);
 
-  // ── Jungle Intelligence tip (cycles based on time) ───────────────────────────
+  // â”€â”€ Jungle Intelligence tip (cycles based on time) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const tips = [
-    { class: "18:30 Strength Lab",  tip: "fills 22% faster paired with a 90–100 BPM low-end soundtrack. Last 3 runs averaged RPE 6.8 — slightly under target.", action: "Apply to tonight" },
-    { class: "Hyrox Simulation",    tip: "peaks at 94% fill rate on Thursdays. Consider adding a 2nd slot — demand data supports it.", action: "Add slot" },
+    { class: "18:30 Strength Lab",  tip: "fills 22% faster paired with a 90â€“100 BPM low-end soundtrack. Last 3 runs averaged RPE 6.8 â€” slightly under target.", action: "Apply to tonight" },
+    { class: "Hyrox Simulation",    tip: "peaks at 94% fill rate on Thursdays. Consider adding a 2nd slot â€” demand data supports it.", action: "Add slot" },
     { class: "Sunrise HIIT",        tip: "retention is 18% higher when the DJ set starts before members arrive. Auto-DJ can schedule a pre-class warm-up mix.", action: "Schedule mix" },
   ];
   const tipIdx = now.getMinutes() % tips.length;
   const tip = tips[tipIdx];
 
-  // ── Auto-DJ state derived from stages ────────────────────────────────────────
+  // â”€â”€ Auto-DJ state derived from stages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const djTrackCount = stages.reduce((a, s) => a + (s.tracks||[]).length, 0);
   const djBpm = stages[0]?.tracks?.[0]?.bpm || 128;
   const djActive = djProgress?.active || djTrackCount > 0;
 
-  // ── KPI cards data ────────────────────────────────────────────────────────────
+  // â”€â”€ KPI cards data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const kpis = [
-    { label:"CLASS FILL RATE", value:"92%",   trend:"▲ 18% vs last wk", trendUp:true,  sub:null },
-    { label:"AVG RPE",         value:"7.4",   trend:"target band 7–8",  trendUp:null,  sub:null },
-    { label:"RETURN RATE",     value:"86%",   trend:"▲ 4 pts",          trendUp:true,  sub:null },
+    { label:"CLASS FILL RATE", value:"92%",   trend:"â–² 18% vs last wk", trendUp:true,  sub:null },
+    { label:"AVG RPE",         value:"7.4",   trend:"target band 7â€“8",  trendUp:null,  sub:null },
+    { label:"RETURN RATE",     value:"86%",   trend:"â–² 4 pts",          trendUp:true,  sub:null },
     { label:"MEMBER NPS",      value:"71",    trend:"312 responses",    trendUp:null,  sub:null },
   ];
 
-  // ── Fill bar colour ───────────────────────────────────────────────────────────
+  // â”€â”€ Fill bar colour â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fillColor = pct => pct >= 90 ? "#EF4444" : pct >= 70 ? T.accent : T.green;
 
   return (
     <div style={{flex:1, overflowY:"auto", padding:isMobile?"14px":"28px 32px", boxSizing:"border-box"}}>
 
-      {/* ── HEADER ──────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ HEADER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{display:"flex", alignItems:isMobile?"flex-start":"center", justifyContent:"space-between",
         flexDirection:isMobile?"column":"row", gap:"12px", marginBottom:"22px"}}>
         <div>
           <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
-            letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} · {dateStr}</div>
+            letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} Â· {dateStr}</div>
           <h1 style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:isMobile?"20px":"26px",
             fontWeight:"800", color:T.text, margin:0, lineHeight:1.1}}>
-            {greeting}, {first} 👋
+            {greeting}, {first} ðŸ‘‹
           </h1>
           <div style={{fontSize:"13px", color:T.muted, marginTop:"4px"}}>
-            {todayClasses.length} classes today · {upcoming.length} upcoming
+            {todayClasses.length} classes today Â· {upcoming.length} upcoming
           </div>
         </div>
 
@@ -2690,7 +2690,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         <div style={{display:"flex", alignItems:"center", gap:"10px", flexShrink:0}}>
           {!isMobile && (
             <div style={{position:"relative"}}>
-              <input placeholder="Search classes, members…"
+              <input placeholder="Search classes, membersâ€¦"
                 style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"9px",
                   padding:"9px 14px 9px 36px", color:T.text, fontSize:"13px", width:"220px",
                   outline:"none", fontFamily:"'Hanken Grotesk',sans-serif"}}/>
@@ -2709,7 +2709,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         </div>
       </div>
 
-      {/* ── KPI ROW ──────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ KPI ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",
         gap:isMobile?"10px":"14px", marginBottom:"22px"}}>
         {kpis.map((k,i) => (
@@ -2730,12 +2730,12 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         ))}
       </div>
 
-      {/* ── MAIN 2-COL BODY ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ MAIN 2-COL BODY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{display:"grid",
         gridTemplateColumns:isSmall ? "1fr" : "1fr 340px",
         gap:"16px", marginBottom:"22px"}}>
 
-        {/* ── TODAY'S SCHEDULE ────────────────────────────────────────────────── */}
+        {/* â”€â”€ TODAY'S SCHEDULE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px",
           padding:"18px", minWidth:0}}>
           <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px"}}>
@@ -2750,7 +2750,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             <button onClick={onViewSchedule}
               style={{fontSize:"12px", fontWeight:"700", color:T.accent, background:"none",
                 cursor:"pointer", padding:"6px 12px", borderRadius:"8px", border:`1px solid ${T.accent}40`}}>
-              Full schedule →
+              Full schedule â†’
             </button>
           </div>
 
@@ -2789,7 +2789,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                         )}
                       </div>
                       <div style={{fontSize:"11px", color:T.muted, marginBottom:"7px"}}>
-                        {cls.trainer} · {cls.booked}/{cls.cap} booked
+                        {cls.trainer} Â· {cls.booked}/{cls.cap} booked
                       </div>
                       {/* Fill bar */}
                       <div style={{height:"4px", background:T.border, borderRadius:"2px", overflow:"hidden"}}>
@@ -2823,7 +2823,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN ─────────────────────────────────────────────────────── */}
+        {/* â”€â”€ RIGHT COLUMN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div style={{display:"flex", flexDirection:"column", gap:"14px"}}>
 
           {/* Jungle Intelligence */}
@@ -2832,7 +2832,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               background:`linear-gradient(90deg, ${T.accent}, #06B6D4)`}}/>
             <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px"}}>
               <div style={{width:"28px", height:"28px", borderRadius:"8px", background:T.accent+"22",
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🧠</div>
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>ðŸ§ </div>
               <div>
                 <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"12px", fontWeight:"800",
                   color:T.accent, textTransform:"uppercase", letterSpacing:"1px"}}>Jungle Intelligence</div>
@@ -2865,7 +2865,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px"}}>
               <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
                 <div style={{width:"28px", height:"28px", borderRadius:"8px", background:"#8B5CF622",
-                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🎧</div>
+                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>ðŸŽ§</div>
                 <div>
                   <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"12px", fontWeight:"800",
                     color:"#8B5CF6", textTransform:"uppercase", letterSpacing:"1px"}}>AUTO-DJ</div>
@@ -2887,8 +2887,8 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                 </div>
                 <div style={{fontSize:"12px", color:T.muted, lineHeight:"1.5", marginBottom:"12px"}}>
                   {djTrackCount > 0
-                    ? `${djTrackCount} tracks queued · seamless beat-matched transitions`
-                    : "Smart-mixing your playlists · building…"}
+                    ? `${djTrackCount} tracks queued Â· seamless beat-matched transitions`
+                    : "Smart-mixing your playlists Â· buildingâ€¦"}
                 </div>
                 {djProgress?.active && (
                   <div style={{height:"4px", background:T.navy, borderRadius:"2px", overflow:"hidden", marginBottom:"12px"}}>
@@ -2909,7 +2909,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               style={{width:"100%", padding:"9px", background:"transparent",
                 border:`1px solid ${"#8B5CF6"}50`, borderRadius:"8px",
                 color:"#8B5CF6", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
-              Open Music Hub →
+              Open Music Hub â†’
             </button>
           </div>
 
@@ -2926,7 +2926,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         </div>
       </div>
 
-      {/* ── QUICK ACTIONS ─────────────────────────────────────────────────────── */}
+      {/* â”€â”€ QUICK ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{marginBottom:"8px"}}>
         <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
           letterSpacing:"1.2px", marginBottom:"12px"}}>Quick access</div>
@@ -2934,12 +2934,12 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           gridTemplateColumns:isMobile?"repeat(3,1fr)":isTablet?"repeat(3,1fr)":"repeat(6,1fr)",
           gap:"10px"}}>
           {[
-            { icon:"📅", label:"Schedule",  onClick:onViewSchedule  },
-            { icon:"🏗️", label:"Builder",   onClick:onNewSession    },
-            { icon:"🎧", label:"Music Hub", onClick:onViewMusic     },
-            { icon:"📊", label:"Analytics", onClick:onViewAnalytics },
-            { icon:"👥", label:"Members",   onClick:onViewMembers   },
-            { icon:"📚", label:"Library",   onClick:onViewLibrary   },
+            { icon:"ðŸ“…", label:"Schedule",  onClick:onViewSchedule  },
+            { icon:"ðŸ—ï¸", label:"Builder",   onClick:onNewSession    },
+            { icon:"ðŸŽ§", label:"Music Hub", onClick:onViewMusic     },
+            { icon:"ðŸ“Š", label:"Analytics", onClick:onViewAnalytics },
+            { icon:"ðŸ‘¥", label:"Members",   onClick:onViewMembers   },
+            { icon:"ðŸ“š", label:"Library",   onClick:onViewLibrary   },
           ].map(item => (
             <div key={item.label} onClick={item.onClick}
               style={{padding:isMobile?"10px 6px":"14px 10px", background:T.card,
@@ -2954,7 +2954,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         </div>
       </div>
 
-      {/* ── MOBILE CTA ────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ MOBILE CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isMobile && (
         <button onClick={onNewSession}
           style={{width:"100%", padding:"15px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
@@ -2970,7 +2970,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
 }
 
 
-// ─── TemplatesScreen ──────────────────────────────────────────────────────────
+// â”€â”€â”€ TemplatesScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TemplatesScreen({onSelectClassStyle, onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -3002,25 +3002,25 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
           <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
-          <p style={{fontSize:"12px",color:T.muted}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
+          <p style={{fontSize:"12px",color:T.muted}}>Where a class starts â€” pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
         </div>
       </div>
 
       {/* Body */}
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
 
-        {/* ── Left panel: class type grid ── */}
+        {/* â”€â”€ Left panel: class type grid â”€â”€ */}
         <div style={{flex:isMobile?1:"1.5",display:"flex",flexDirection:"column",overflow:"hidden",borderRight:isMobile?"none":`1px solid ${T.border}`}}>
           {/* Panel header */}
           <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>
               <p style={{fontSize:"20px",fontWeight:"700",color:T.text,fontFamily:`'${T.displayFont}',sans-serif`}}>Choose a class type</p>
-              <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
+              <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines Â· {totalStyles}+ ready-made styles</p>
             </div>
             {/* Search */}
             <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"999px",padding:"8px 16px",minWidth:0,flex:"0 0 220px"}}>
               <Search size={14} color={T.muted}/>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates…"
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templatesâ€¦"
                 style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"13px",width:"100%"}}/>
             </div>
           </div>
@@ -3069,7 +3069,7 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
           </div>
         </div>
 
-        {/* ── Right panel: style picker ── (hidden on mobile when no selection) */}
+        {/* â”€â”€ Right panel: style picker â”€â”€ (hidden on mobile when no selection) */}
         {(!isMobile || selClassType) && (
           <div style={{
             width:isMobile?"100%":"380px",flexShrink:0,
@@ -3140,7 +3140,7 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
               </>
             ) : (
               <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"12px"}}>
-                <div style={{fontSize:"40px",opacity:0.3}}>👈</div>
+                <div style={{fontSize:"40px",opacity:0.3}}>ðŸ‘ˆ</div>
                 <p style={{fontSize:"14px",fontWeight:"600",color:T.muted}}>Select a class type</p>
                 <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Pick a discipline on the left to see available styles</p>
               </div>
@@ -3152,8 +3152,8 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
   );
 }
 
-// ─── AnalyticsScreen ──────────────────────────────────────────────────────────
-// ─── IntegrationsScreen ───────────────────────────────────────────────────────
+// â”€â”€â”€ AnalyticsScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ IntegrationsScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function IntegrationsScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -3164,7 +3164,7 @@ function IntegrationsScreen({onBack}) {
       name: "Spotify",
       connected: true,
       iconBg: "#1DB954",
-      detail: "Studio · Premium",
+      detail: "Studio Â· Premium",
       desc: "Powers the Auto-DJ. Pulls BPM & audio analysis, plays from studio Premium account.",
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
@@ -3196,7 +3196,7 @@ function IntegrationsScreen({onBack}) {
       name: "Calendar",
       connected: true,
       iconBg: "#fff",
-      detail: "Google · Outlook",
+      detail: "Google Â· Outlook",
       desc: "Trainer shifts & member bookings sync to Google / Outlook calendars both ways.",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4285F4" strokeWidth="2">
@@ -3209,7 +3209,7 @@ function IntegrationsScreen({onBack}) {
       name: "Stripe",
       connected: true,
       iconBg: "#635BFF",
-      detail: "£48k / mo",
+      detail: "Â£48k / mo",
       desc: "Memberships, drop-ins & retail. Revenue lands in the analytics dashboard live.",
       iconText: "S",
     },
@@ -3238,7 +3238,7 @@ function IntegrationsScreen({onBack}) {
         <div style={{padding:"24px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
           <div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Connected apps</div>
-            <div style={{fontSize:"12px",color:T.muted,marginTop:"3px"}}>6 active · syncs in real time</div>
+            <div style={{fontSize:"12px",color:T.muted,marginTop:"3px"}}>6 active Â· syncs in real time</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:T.accent,padding:"7px 13px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`}}>
             <div style={{width:"7px",height:"7px",borderRadius:"50%",background:T.accent}}/>
@@ -3256,7 +3256,7 @@ function IntegrationsScreen({onBack}) {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
                   </div>
                   <div style={{fontSize:"13px",fontWeight:"600",color:T.muted}}>Browse 40+ integrations</div>
-                  <div style={{fontSize:"11px",color:T.muted,textAlign:"center"}}>Mailchimp · Mindbody · Slack · Zapier · Sonos</div>
+                  <div style={{fontSize:"11px",color:T.muted,textAlign:"center"}}>Mailchimp Â· Mindbody Â· Slack Â· Zapier Â· Sonos</div>
                 </div>
               );
             }
@@ -3271,7 +3271,7 @@ function IntegrationsScreen({onBack}) {
                   <div style={{flex:1}}>
                     <div style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{item.name}</div>
                     <div style={{fontSize:"11px",color:item.connected?T.accent:T.muted}}>
-                      {item.connected ? "● Connected" : "○ Available"}
+                      {item.connected ? "â— Connected" : "â—‹ Available"}
                     </div>
                   </div>
                 </div>
@@ -3315,10 +3315,10 @@ function AnalyticsScreen({onBack}) {
   ];
 
   const kpis = [
-    {label:"Active members",  value:"1,284", delta:"▲ 6.2% vs prev", up:true},
-    {label:"Avg visits / wk", value:"3.4",   delta:"▲ 0.3",           up:true},
+    {label:"Active members",  value:"1,284", delta:"â–² 6.2% vs prev", up:true},
+    {label:"Avg visits / wk", value:"3.4",   delta:"â–² 0.3",           up:true},
     {label:"Churn risk",      value:"47",    delta:"members flagged",  up:false, warn:true},
-    {label:"Revenue / class", value:"£412",  delta:"▲ 9%",            up:true},
+    {label:"Revenue / class", value:"Â£412",  delta:"â–² 9%",            up:true},
   ];
 
   const trainers = [
@@ -3328,9 +3328,9 @@ function AnalyticsScreen({onBack}) {
   ];
 
   const musicImpact = [
-    {rank:1, track:"Pump It — Reso",        stat:"+18% return when played"},
-    {rank:2, track:"Belters — C. Bland",    stat:"+14% return"},
-    {rank:3, track:"Lose Control — T.Swims",stat:"+11% return"},
+    {rank:1, track:"Pump It â€” Reso",        stat:"+18% return when played"},
+    {rank:2, track:"Belters â€” C. Bland",    stat:"+14% return"},
+    {rank:3, track:"Lose Control â€” T.Swims",stat:"+11% return"},
   ];
 
   const bpmByClass = [
@@ -3354,7 +3354,7 @@ function AnalyticsScreen({onBack}) {
           </button>
           <div>
             <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"20px",fontWeight:"700",color:T.text,margin:0}}>Studio analytics</h2>
-            <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Barry's · Shoreditch</div>
+            <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Barry's Â· Shoreditch</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
@@ -3437,7 +3437,7 @@ function AnalyticsScreen({onBack}) {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
             <div>
               <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>RPE distribution</div>
-              <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> · reported exertion · last 12 wks</div>
+              <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> Â· reported exertion Â· last 12 wks</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"flex-end",gap:"10px",height:"90px",marginBottom:"8px"}}>
@@ -3467,7 +3467,7 @@ function AnalyticsScreen({onBack}) {
                 </div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</div>
-                  <div style={{fontSize:"11px",color:T.muted}}>{t.fill} fill · NPS {t.nps}</div>
+                  <div style={{fontSize:"11px",color:T.muted}}>{t.fill} fill Â· NPS {t.nps}</div>
                 </div>
                 <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{t.score}</div>
               </div>
@@ -3516,7 +3516,7 @@ function AnalyticsScreen({onBack}) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
           <div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Churn risk</div>
-            <div style={{fontSize:"11px",color:"#F59E0B",marginTop:"2px"}}>47 members flagged · no visit in 10+ days</div>
+            <div style={{fontSize:"11px",color:"#F59E0B",marginTop:"2px"}}>47 members flagged Â· no visit in 10+ days</div>
           </div>
           <button style={{padding:"7px 14px",background:"#F59E0B20",border:"1px solid #F59E0B50",borderRadius:"7px",cursor:"pointer",color:"#F59E0B",fontSize:"12px",fontWeight:"700"}}>Message all</button>
         </div>
@@ -3533,7 +3533,7 @@ function AnalyticsScreen({onBack}) {
               </div>
               <div style={{flex:1}}>
                 <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{m.name}</div>
-                <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} · {m.missed} missed · {m.type}</div>
+                <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} Â· {m.missed} missed Â· {m.type}</div>
               </div>
               <button style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.text,fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>Contact</button>
             </div>
@@ -3544,7 +3544,7 @@ function AnalyticsScreen({onBack}) {
   );
 }
 
-// ─── GlossaryScreen ───────────────────────────────────────────────────────────
+// â”€â”€â”€ GlossaryScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function GlossaryScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -3569,7 +3569,7 @@ function GlossaryScreen({onBack}) {
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div>
           <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE GLOSSARY</p>
-          <p style={{fontSize:"12px",color:T.muted}}>Coaching reference — every movement with target muscles, difficulty and a one-line cue</p>
+          <p style={{fontSize:"12px",color:T.muted}}>Coaching reference â€” every movement with target muscles, difficulty and a one-line cue</p>
         </div>
       </div>
 
@@ -3585,11 +3585,11 @@ function GlossaryScreen({onBack}) {
             <div style={{display:"flex",alignItems:"center",gap:"10px",flex:1}}>
               <Search size={15} color={T.muted}/>
               <input value={search} onChange={e=>setSearch(e.target.value)}
-                placeholder="Search exercises or muscles…"
+                placeholder="Search exercises or musclesâ€¦"
                 style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14px",width:"100%"}}/>
             </div>
             <span style={{fontSize:"12px",color:T.muted,flexShrink:0,fontWeight:"600"}}>
-              {allGroups.length} groups · {totalMovements} movements
+              {allGroups.length} groups Â· {totalMovements} movements
             </span>
           </div>
 
@@ -3634,7 +3634,7 @@ function GlossaryScreen({onBack}) {
                         }}>
                           <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ex.name}</p>
                           <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>
-                            {ex.muscles.split(/[,·]/).map(m=>m.trim()).join(" · ")}
+                            {ex.muscles.split(/[,Â·]/).map(m=>m.trim()).join(" Â· ")}
                           </p>
                           <span style={{
                             display:"inline-block",fontSize:"10px",fontWeight:"700",
@@ -3658,7 +3658,7 @@ function GlossaryScreen({onBack}) {
   );
 }
 
-// ─── CalendarScreen (Planning & Schedule Board) ───────────────────────────────
+// â”€â”€â”€ CalendarScreen (Planning & Schedule Board) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function CalendarScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -3708,8 +3708,8 @@ function CalendarScreen({onBack}) {
   };
 
   const suggested = [
-    {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
-    {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
+    {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand Â· +34% this slot"},
+    {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 â€” lunchtime demand"},
   ];
 
   const trainers = [
@@ -3720,8 +3720,8 @@ function CalendarScreen({onBack}) {
   ];
 
   const aiTips = [
-    {id:0, text:"Tue 18:00 demand is up 34% — add a second Strength Lab. Likely 90%+ fill.", action:"Add it"},
-    {id:1, text:"Thu 09:00 Mobility under-fills. Try moving to 12:00 — matches lunchtime demand.", action:"Move it"},
+    {id:0, text:"Tue 18:00 demand is up 34% â€” add a second Strength Lab. Likely 90%+ fill.", action:"Add it"},
+    {id:1, text:"Thu 09:00 Mobility under-fills. Try moving to 12:00 â€” matches lunchtime demand.", action:"Move it"},
     {id:2, text:"Mara is near weekly cap (14/16). Shift Fri Burn to Jo to balance load.", action:"Reassign"},
   ];
 
@@ -3737,17 +3737,17 @@ function CalendarScreen({onBack}) {
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
             <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Planning & schedule</h2>
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Shoreditch Â· 3 studios Â· {Object.keys(schedule).length} classes</div>
           </div>
         </div>
         <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
           {/* Week nav */}
           <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden"}}>
-            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>‹</button>
+            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>â€¹</button>
             <span style={{fontSize:"12px",fontWeight:"600",color:T.text,padding:"0 4px"}}>
               {weekOffset===0?"This week":weekOffset===1?"Next week":weekOffset===-1?"Last week":`Week ${weekOffset>0?"+":""}${weekOffset}`}
             </span>
-            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>›</button>
+            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>â€º</button>
           </div>
           <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600"}}>
             Demand heat
@@ -3797,7 +3797,7 @@ function CalendarScreen({onBack}) {
                       boxSizing:"border-box",
                     }}>
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{cls.coach} · {cls.dur}</div>
+                      <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{cls.coach} Â· {cls.dur}</div>
                       <div style={{marginTop:"4px",display:"flex",alignItems:"center",gap:"4px"}}>
                         <div style={{flex:1,height:"3px",background:T.navy,borderRadius:"2px"}}>
                           <div style={{width:`${cls.fill}%`,height:"100%",background:fillColor(cls.fill),borderRadius:"2px"}}/>
@@ -3853,20 +3853,20 @@ function CalendarScreen({onBack}) {
               </div>
             ))}
             {dismissedTips.length===aiTips.length && (
-              <div style={{textAlign:"center",padding:"24px",color:T.muted,fontSize:"13px"}}>All suggestions reviewed ✓</div>
+              <div style={{textAlign:"center",padding:"24px",color:T.muted,fontSize:"13px"}}>All suggestions reviewed âœ“</div>
             )}
           </div>
         </div>
 
         {/* Trainer load */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load · this week</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load Â· this week</div>
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
             {trainers.map((t,i)=>(
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                   <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</span>
-                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":T.muted,fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":T.muted,fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" âš ":""}</span>
                 </div>
                 <div style={{height:"7px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
                   <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
@@ -3877,7 +3877,7 @@ function CalendarScreen({onBack}) {
           </div>
           {trainers.some(t=>t.classes/t.cap>0.85) && (
             <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
-              ⚠ Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
+              âš  Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
             </div>
           )}
         </div>
@@ -3886,7 +3886,7 @@ function CalendarScreen({onBack}) {
   );
 }
 
-// ─── MusicHubScreen ────────────────────────────────────────────────────────────
+// â”€â”€â”€ MusicHubScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, player=null}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -3917,10 +3917,10 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
     apiGetPlaylists().then(pls=>{ setPlaylists((pls||[]).filter(Boolean)); setLoadingPls(false); }).catch(()=>setLoadingPls(false));
   },[]);
 
-  // Member requests (demo — would come from a backend in production)
+  // Member requests (demo â€” would come from a backend in production)
   const [requests, setRequests] = React.useState([
-    {id:1, track:"Titanium — David Guetta", member:"Sam",  votes:24, bpm:126, note:"fits Block B"},
-    {id:2, track:"Levels — Avicii",         member:"Jess", votes:11, bpm:128, note:"cool-down maybe"},
+    {id:1, track:"Titanium â€” David Guetta", member:"Sam",  votes:24, bpm:126, note:"fits Block B"},
+    {id:2, track:"Levels â€” Avicii",         member:"Jess", votes:11, bpm:128, note:"cool-down maybe"},
     {id:3, track:"Somebody That I Used to Know", member:"Alex", votes:7, bpm:122, note:""},
   ]);
 
@@ -3953,13 +3953,13 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
-            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub · Auto-DJ</h2>
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify Premium · {queueTracks.length} tracks queued</div>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub Â· Auto-DJ</h2>
+            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify Premium Â· {queueTracks.length} tracks queued</div>
           </div>
         </div>
         {queueTracks.length > 0 && (
           <div style={{padding:"5px 14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>
-            ● AUTO-DJ READY
+            â— AUTO-DJ READY
           </div>
         )}
       </div>
@@ -4003,7 +4003,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
               </>
             ) : (
               <div style={{textAlign:"center",padding:"20px 0"}}>
-                <div style={{fontSize:"28px",marginBottom:"8px"}}>🎵</div>
+                <div style={{fontSize:"28px",marginBottom:"8px"}}>ðŸŽµ</div>
                 <div style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Nothing playing.<br/>Start a live session to see now-playing info.</div>
               </div>
             )}
@@ -4029,7 +4029,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                     }
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.t}</div>
-                      <div style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.a} · {t.stageName}</div>
+                      <div style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.a} Â· {t.stageName}</div>
                     </div>
                     {t.bpm > 0 && <div style={{fontSize:"11px",fontWeight:"700",color:t.stageColor,flexShrink:0}}>{t.bpm}</div>}
                   </div>
@@ -4060,7 +4060,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                           <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
-                            <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member}{r.bpm?` · ${r.bpm} BPM`:""}{r.note?` · ${r.note}`:""}</div>
+                            <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member}{r.bpm?` Â· ${r.bpm} BPM`:""}{r.note?` Â· ${r.note}`:""}</div>
                           </div>
                         </div>
                         <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
@@ -4076,14 +4076,14 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
           {/* Source playlists */}
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
             <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Your Spotify playlists</div>
-            {loadingPls && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading…</div>}
-            {!loadingPls && playlists.length===0 && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No playlists found — connect Spotify first.</div>}
+            {loadingPls && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loadingâ€¦</div>}
+            {!loadingPls && playlists.length===0 && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No playlists found â€” connect Spotify first.</div>}
             <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"240px",overflowY:"auto"}}>
               {playlists.slice(0,15).map((p,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"7px 9px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
                   {p.images?.[0]?.url
                     ? <img src={p.images[0].url} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                    : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>🎵</div>
+                    : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>ðŸŽµ</div>
                   }
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
@@ -4113,7 +4113,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
           <div style={{marginBottom:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
               <div style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>BPM range</div>
-              <div style={{fontSize:"11px",color:T.accent,fontWeight:"700"}}>{bpmMin}–{bpmMax}</div>
+              <div style={{fontSize:"11px",color:T.accent,fontWeight:"700"}}>{bpmMin}â€“{bpmMax}</div>
             </div>
             <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
               <input type="range" min={60} max={180} value={bpmMin} onChange={e=>setBpmMin(Math.min(Number(e.target.value),bpmMax-5))} style={{flex:1,accentColor:T.accent}}/>
@@ -4132,9 +4132,9 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
             </div>
           </div>
 
-          <Toggle value={followStructure} onChange={setFollowStructure} label="Follow class structure · sync BPM to each stage"/>
-          <Toggle value={takeRequests}    onChange={setTakeRequests}    label="Take requests · members queue tracks"/>
-          <Toggle value={cleanEdits}      onChange={setCleanEdits}      label="Clean / radio edits · no explicit lyrics"/>
+          <Toggle value={followStructure} onChange={setFollowStructure} label="Follow class structure Â· sync BPM to each stage"/>
+          <Toggle value={takeRequests}    onChange={setTakeRequests}    label="Take requests Â· members queue tracks"/>
+          <Toggle value={cleanEdits}      onChange={setCleanEdits}      label="Clean / radio edits Â· no explicit lyrics"/>
         </div>
 
       </div>
@@ -4143,7 +4143,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
 }
 
 
-// ─── MemberScreen ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ MemberScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function MemberScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -4191,17 +4191,17 @@ function MemberScreen({onBack}) {
       {/* Content */}
       <div style={{flex:1,overflowY:"auto",padding:"0"}}>
 
-        {/* ── DISCOVER ── */}
+        {/* â”€â”€ DISCOVER â”€â”€ */}
         {tab==="discover" && (
           <div style={{padding:"20px"}}>
             <div style={{marginBottom:"18px"}}>
-              <div style={{fontSize:"12px",color:T.muted,fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam 👋</div>
+              <div style={{fontSize:"12px",color:T.muted,fontWeight:"600",marginBottom:"2px"}}>TONIGHT Â· 18:30</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam ðŸ‘‹</div>
               <div style={{padding:"14px",background:T.card,border:`1px solid ${T.accent}50`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
-                <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
+                <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT Â· 18:30</div>
                 <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Strength Lab</div>
-                <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
-                <div style={{marginTop:"10px",padding:"6px 12px",background:"var(--accent)",borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",cursor:"pointer"}}>View workout →</div>
+                <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>with Priya Â· 45 min Â· Studio 2</div>
+                <div style={{marginTop:"10px",padding:"6px 12px",background:"var(--accent)",borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",cursor:"pointer"}}>View workout â†’</div>
               </div>
             </div>
 
@@ -4218,7 +4218,7 @@ function MemberScreen({onBack}) {
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>{cls.date} · {cls.coach} · {cls.bpm} BPM</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>{cls.date} Â· {cls.coach} Â· {cls.bpm} BPM</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     <div style={{fontSize:"14px",fontWeight:"800",color:T.accent}}>{cls.match}%</div>
@@ -4230,19 +4230,19 @@ function MemberScreen({onBack}) {
           </div>
         )}
 
-        {/* ── CLASS DETAIL ── */}
+        {/* â”€â”€ CLASS DETAIL â”€â”€ */}
         {tab==="detail" && (
           <div style={{padding:"20px"}}>
-            <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||T.accent}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||T.accent,marginBottom:"8px"}}>{classDetail.type} · {classDetail.dur}</div>
+            <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||T.accent}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||T.accent,marginBottom:"8px"}}>{classDetail.type} Â· {classDetail.dur}</div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:T.text,marginBottom:"4px"}}>{classDetail.name}</div>
             <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
               <div style={{width:"36px",height:"36px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>{classDetail.coach[0]}</div>
               <div>
                 <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{classDetail.coach}</div>
-                <div style={{fontSize:"11px",color:T.muted}}>Lead coach · 4.9 ★</div>
+                <div style={{fontSize:"11px",color:T.muted}}>Lead coach Â· 4.9 â˜…</div>
               </div>
               <div style={{marginLeft:"auto",display:"flex",gap:"12px",fontSize:"11px",color:T.muted}}>
-                <span>RPE 7–8</span>
+                <span>RPE 7â€“8</span>
                 <span>Studio 1</span>
                 <span style={{color:classDetail.spots>0?T.accent:"#EF4444",fontWeight:"700"}}>{classDetail.spots>0?`${classDetail.spots} spots left`:"Full"}</span>
               </div>
@@ -4260,11 +4260,11 @@ function MemberScreen({onBack}) {
 
             <div style={{padding:"12px 14px",background:T.accent+"11",border:`1px solid ${T.accent}30`,borderRadius:"10px",marginBottom:"16px"}}>
               <div style={{fontSize:"12px",fontWeight:"700",color:T.accent,marginBottom:"2px"}}>Auto-DJ soundtrack ready</div>
-              <div style={{fontSize:"11px",color:T.muted}}>House · 52 tracks · beat-matched to every stage</div>
+              <div style={{fontSize:"11px",color:T.muted}}>House Â· 52 tracks Â· beat-matched to every stage</div>
             </div>
 
             {classDetail.booked
-              ? <div style={{width:"100%",padding:"14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:T.accent}}>✓ Booked</div>
+              ? <div style={{width:"100%",padding:"14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:T.accent}}>âœ“ Booked</div>
               : classDetail.waitlist
                 ? <button style={{width:"100%",padding:"14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:T.muted}}>Join waitlist ({classDetail.waitlist} ahead)</button>
                 : <button style={{width:"100%",padding:"14px",background:"var(--accent)",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--on-accent)"}}>Book with ClassPass</button>
@@ -4272,30 +4272,30 @@ function MemberScreen({onBack}) {
           </div>
         )}
 
-        {/* ── LIVE IN CLASS ── */}
+        {/* â”€â”€ LIVE IN CLASS â”€â”€ */}
         {tab==="live" && (
           <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:"20px"}}>
               <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:T.text}}>Sunrise HIIT</div>
-              <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>● LIVE</div>
+              <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>â— LIVE</div>
             </div>
 
             <div style={{padding:"3px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted,marginBottom:"16px"}}>ROUND 3 / 8</div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"72px",fontWeight:"800",color:T.text,lineHeight:"1",marginBottom:"8px"}}>00:42</div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"22px",fontWeight:"700",color:T.accent,marginBottom:"4px"}}>Kettlebell Swings</div>
-            <div style={{fontSize:"13px",color:T.muted,marginBottom:"24px"}}>×20 · 24kg</div>
+            <div style={{fontSize:"13px",color:T.muted,marginBottom:"24px"}}>Ã—20 Â· 24kg</div>
 
             <div style={{padding:"12px 16px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{width:"36px",height:"36px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 3px,#0f1611 3px,#0f1611 6px)",flexShrink:0}}/>
               <div style={{flex:1}}>
-                <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>Pump It — Reso</div>
+                <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>Pump It â€” Reso</div>
                 <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>now playing</div>
               </div>
               <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:T.muted}}> BPM</span></div>
             </div>
 
             <button style={{width:"100%",padding:"12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"12px"}}>
-              🎵 Request a track · 3 in queue
+              ðŸŽµ Request a track Â· 3 in queue
             </button>
 
             <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%"}}>
@@ -4309,7 +4309,7 @@ function MemberScreen({onBack}) {
           </div>
         )}
 
-        {/* ── BOOK / SCHEDULE ── */}
+        {/* â”€â”€ BOOK / SCHEDULE â”€â”€ */}
         {tab==="book" && (
           <div style={{padding:"20px"}}>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Book a class</div>
@@ -4330,7 +4330,7 @@ function MemberScreen({onBack}) {
 
             {/* ClassPass badge */}
             <div style={{padding:"8px 14px",background:"#3B82F622",border:"1px solid #3B82F650",borderRadius:"8px",fontSize:"12px",fontWeight:"600",color:"#3B82F6",marginBottom:"14px",display:"flex",alignItems:"center",gap:"8px"}}>
-              <span style={{fontWeight:"800"}}>CP</span> ClassPass · 7 credits left this month
+              <span style={{fontWeight:"800"}}>CP</span> ClassPass Â· 7 credits left this month
             </div>
 
             {/* Class list */}
@@ -4345,7 +4345,7 @@ function MemberScreen({onBack}) {
                   <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:T.muted,minWidth:"44px"}}>{cls.time}</div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
+                    <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>{cls.coach||""} {cls.coach?"Â·":""} {cls.dur}{cls.spots?` Â· ${cls.spots} left`:""}</div>
                   </div>
                   <button style={{
                     padding:"6px 12px",
@@ -4361,14 +4361,14 @@ function MemberScreen({onBack}) {
           </div>
         )}
 
-        {/* ── PROFILE / DATA ── */}
+        {/* â”€â”€ PROFILE / DATA â”€â”€ */}
         {tab==="profile" && (
           <div style={{padding:"20px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px"}}>
               <div style={{width:"56px",height:"56px",borderRadius:"50%",background:T.accent+"22",border:`2px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",fontWeight:"800",color:T.accent,flexShrink:0}}>SE</div>
               <div>
                 <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>Sam Ellis</div>
-                <div style={{fontSize:"12px",color:T.muted}}>Member since 2024 · Shoreditch</div>
+                <div style={{fontSize:"12px",color:T.muted}}>Member since 2024 Â· Shoreditch</div>
               </div>
             </div>
 
@@ -4399,7 +4399,7 @@ function MemberScreen({onBack}) {
                   <div key={g} style={{padding:"5px 12px",background:T.accent+"22",border:`1px solid ${T.accent}40`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>{g}</div>
                 ))}
               </div>
-              <div style={{fontSize:"12px",color:T.muted}}>128–140 BPM · peak zone</div>
+              <div style={{fontSize:"12px",color:T.muted}}>128â€“140 BPM Â· peak zone</div>
             </div>
           </div>
         )}
@@ -4407,31 +4407,31 @@ function MemberScreen({onBack}) {
 
       {/* Bottom nav */}
       <div style={{borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",flexShrink:0}}>
-        <TabBtn id="discover" label="Discover" icon="🏠"/>
-        <TabBtn id="detail"   label="Classes"  icon="📋"/>
-        <TabBtn id="live"     label="Live"     icon="🎙"/>
-        <TabBtn id="book"     label="Book"     icon="📅"/>
-        <TabBtn id="profile"  label="Profile"  icon="👤"/>
+        <TabBtn id="discover" label="Discover" icon="ðŸ "/>
+        <TabBtn id="detail"   label="Classes"  icon="ðŸ“‹"/>
+        <TabBtn id="live"     label="Live"     icon="ðŸŽ™"/>
+        <TabBtn id="book"     label="Book"     icon="ðŸ“…"/>
+        <TabBtn id="profile"  label="Profile"  icon="ðŸ‘¤"/>
       </div>
     </div>
   );
 }
 
 
-// ─── BrandStudioScreen ────────────────────────────────────────────────────────
+// â”€â”€â”€ BrandStudioScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkinId="canopy", onSkinChange, customSkinTokens=null, onCustomSkinChange}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
 
-  // ── Preset templates ──────────────────────────────────────────────────────────
+  // â”€â”€ Preset templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const presets = [
-    { id:"canopy",  label:"Canopy",  desc:"Natural · Wellness",   accent:"#7BE3A4", bg:"#0A0F0C", preview:["#7BE3A4","#CFF5DE","#0F1611"], fonts:"Space Grotesk · Hanken" },
-    { id:"pulse",   label:"Pulse",   desc:"Electric · HIIT",      accent:"#D6FF3D", bg:"#08090A", preview:["#D6FF3D","#ECFFA3","#101113"], fonts:"Anton · Archivo" },
-    { id:"atelier", label:"Atelier", desc:"Luxury · Editorial",   accent:"#C8A86A", bg:"#0C0C0E", preview:["#C8A86A","#E8D6AE","#131316"], fonts:"Instrument Serif · Manrope" },
+    { id:"canopy",  label:"Canopy",  desc:"Natural Â· Wellness",   accent:"#7BE3A4", bg:"#0A0F0C", preview:["#7BE3A4","#CFF5DE","#0F1611"], fonts:"Space Grotesk Â· Hanken" },
+    { id:"pulse",   label:"Pulse",   desc:"Electric Â· HIIT",      accent:"#D6FF3D", bg:"#08090A", preview:["#D6FF3D","#ECFFA3","#101113"], fonts:"Anton Â· Archivo" },
+    { id:"atelier", label:"Atelier", desc:"Luxury Â· Editorial",   accent:"#C8A86A", bg:"#0C0C0E", preview:["#C8A86A","#E8D6AE","#131316"], fonts:"Instrument Serif Â· Manrope" },
   ];
 
-  // ── Brand generator state ─────────────────────────────────────────────────────
+  // â”€â”€ Brand generator state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [files, setFiles]         = React.useState([]);
   const [logoSrc, setLogoSrc]     = React.useState(gymBranding.logo || null);
   const [palette, setPalette]     = React.useState(null);        // string[] from extractPalette
@@ -4441,7 +4441,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   const [vibe, setVibe]           = React.useState("natural");
   const fileRef                   = React.useRef(null);
 
-  // ── Fine-tune state (draft tokens for the active skin) ───────────────────────
+  // â”€â”€ Fine-tune state (draft tokens for the active skin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const _baseSkin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
   const currentTokens = customSkinTokens
     ? { ..._baseSkin.tokens, ...customSkinTokens }
@@ -4451,10 +4451,10 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   React.useEffect(() => { setDraftTokens(currentTokens); }, [activeSkinId]);
 
   const analyzeSteps = [
-    "Extracting colour palette from logo…",
-    "Deriving background & surface tones…",
-    "Checking accessibility contrast…",
-    "Composing your custom identity…",
+    "Extracting colour palette from logoâ€¦",
+    "Deriving background & surface tonesâ€¦",
+    "Checking accessibility contrastâ€¦",
+    "Composing your custom identityâ€¦",
   ];
 
   const vibes = [
@@ -4549,13 +4549,13 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
         </button>
         <div>
           <h2 style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:isMobile?"17px":"22px",fontWeight:"800",color:T.text,margin:0,letterSpacing:"-0.3px"}}>Brand Studio</h2>
-          <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Upload your brand — Jungle designs the identity, then reskins every surface</div>
+          <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Upload your brand â€” Jungle designs the identity, then reskins every surface</div>
         </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"18px"}}>
 
-        {/* ── LEFT COL ──────────────────────────────────────────────────────── */}
+        {/* â”€â”€ LEFT COL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
 
           {/* 1. PRESET TEMPLATES */}
@@ -4601,9 +4601,9 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
               {logoSrc
                 ? <img src={logoSrc} alt="logo" style={{maxHeight:"60px",maxWidth:"100%",objectFit:"contain",borderRadius:"6px"}}/>
                 : <>
-                    <div style={{fontSize:"24px",marginBottom:"6px"}}>🎨</div>
+                    <div style={{fontSize:"24px",marginBottom:"6px"}}>ðŸŽ¨</div>
                     <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>Drop your logo here</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>PNG, JPG, SVG · click to browse</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>PNG, JPG, SVG Â· click to browse</div>
                   </>
               }
             </div>
@@ -4671,8 +4671,8 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
                   <div>
-                    <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{generatedSkin.fonts.display} · {generatedSkin.fonts.body}</div>
-                    <div style={{fontSize:"10px",color:T.muted}}>Vibe: {generatedSkin.vibe} · {generatedSkin.contrast?.passesAA?"✓ Passes WCAG AA":"⚠ Low contrast"}</div>
+                    <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{generatedSkin.fonts.display} Â· {generatedSkin.fonts.body}</div>
+                    <div style={{fontSize:"10px",color:T.muted}}>Vibe: {generatedSkin.vibe} Â· {generatedSkin.contrast?.passesAA?"âœ“ Passes WCAG AA":"âš  Low contrast"}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:"8px"}}>
@@ -4690,7 +4690,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
           </div>
         </div>
 
-        {/* ── RIGHT COL ─────────────────────────────────────────────────────── */}
+        {/* â”€â”€ RIGHT COL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
 
           {/* 3. FINE-TUNE */}
@@ -4725,7 +4725,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
           {/* 4. LIVE PREVIEW */}
           <div style={sectionStyle}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · updates instantly on reskin</div>
+            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW Â· updates instantly on reskin</div>
             <div style={{background:T.bg,borderRadius:"12px",padding:"16px",border:`1px solid ${T.border}`}}>
               {/* Mini nav */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
@@ -4743,7 +4743,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
               <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px",padding:"12px",marginBottom:"8px"}}>
                 <div style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"5px"}}>NEXT CLASS</div>
                 <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:T.text,marginBottom:"2px"}}>Strength Lab</div>
-                <div style={{fontSize:"11px",color:T.muted}}>with Priya · 18:30 · 45 min</div>
+                <div style={{fontSize:"11px",color:T.muted}}>with Priya Â· 18:30 Â· 45 min</div>
                 <div style={{marginTop:"8px",height:"3px",borderRadius:"2px",background:`linear-gradient(to right, ${T.accent}, ${T.green})`}}/>
               </div>
               {/* Mini schedule rows */}
@@ -4767,7 +4767,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
               <div>
                 <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"5px"}}>Gym name</div>
                 <input value={gymBranding.gymName||""} onChange={e=>onBrandingChange({...gymBranding,gymName:e.target.value})}
-                  placeholder="Your gym name…"
+                  placeholder="Your gym nameâ€¦"
                   style={{width:"100%",padding:"9px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px",boxSizing:"border-box"}}/>
               </div>
               {gymBranding.logo && (
@@ -4834,11 +4834,11 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
     // Check scope from localStorage first (fast path for re-auths)
     const storedScope = localStorage.getItem("sp_scope") || "";
     // Only block if we know for certain that playlist-read-private is absent
-    // (playlist-read-collaborative is a nice-to-have for other users' playlists — don't block own playlists for it)
+    // (playlist-read-collaborative is a nice-to-have for other users' playlists â€” don't block own playlists for it)
     const knownMissing = storedScope.length > 0 && (!storedScope.includes("playlist-read-private") || !storedScope.includes("playlist-modify-public"));
     if (knownMissing) { setMode("scope-error"); setLoading(false); return; }
 
-    // Load playlists normally — own playlists always work with playlist-read-private
+    // Load playlists normally â€” own playlists always work with playlist-read-private
     apiGetPlaylists().then(async pls => {
       setPlaylists(pls);
       setLoading(false);
@@ -4868,7 +4868,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
     setTimeout(onClose, 800);
   };
 
-  // Feature 5: Smart BPM distribution — assigns tracks whose tempo matches each
+  // Feature 5: Smart BPM distribution â€” assigns tracks whose tempo matches each
   // stage's science-backed BPM range; falls back to any remaining track if needed.
   const distributeAcrossStages = async () => {
     setDistributing(true);
@@ -4930,7 +4930,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   const handleGrantAccess = async () => {
     setGrantingAccess(true);
     const popup = await openSpotifyAuthPopup();
-    if (!popup) return; // popup blocked → fell back to full redirect
+    if (!popup) return; // popup blocked â†’ fell back to full redirect
 
     // Listen for the popup to post back after exchanging the code
     const handleMsg = (evt) => {
@@ -4938,7 +4938,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
       if (evt.data?.type !== "spotify_auth_complete") return;
       window.removeEventListener("message", handleMsg);
       setGrantingAccess(false);
-      // Token now saved — reload playlists then auto-open last clicked playlist if any
+      // Token now saved â€” reload playlists then auto-open last clicked playlist if any
       setMode("playlists");
       setLoading(true);
       apiGetPlaylists().then(pls => {
@@ -4963,18 +4963,18 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   // Shared scope-error screen content (used for both proactive and reactive detection)
   const ScopeErrorScreen = () => (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 32px",textAlign:"center",flex:1}}>
-      <p style={{fontSize:"40px",marginBottom:"14px"}}>🔒</p>
+      <p style={{fontSize:"40px",marginBottom:"14px"}}>ðŸ”’</p>
       <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"8px"}}>One-time permission needed</p>
       <p style={{fontSize:"13px",color:T.muted,marginBottom:"8px",maxWidth:"340px",lineHeight:"1.6"}}>
         Jungle needs read access to your Spotify playlist songs.<br/>
-        This is a <strong style={{color:T.text}}>one-time step</strong> — after this, clicking any playlist will show its songs instantly.
+        This is a <strong style={{color:T.text}}>one-time step</strong> â€” after this, clicking any playlist will show its songs instantly.
       </p>
       <p style={{fontSize:"11px",color:T.muted,marginBottom:"28px",opacity:0.7}}>
-        {grantingAccess ? "A Spotify window just opened — approve access there, then come back." : "A small window will open — you'll be back here in seconds."}
+        {grantingAccess ? "A Spotify window just opened â€” approve access there, then come back." : "A small window will open â€” you'll be back here in seconds."}
       </p>
       <button onClick={handleGrantAccess} disabled={grantingAccess}
         style={{padding:"12px 32px",background: grantingAccess ? T.muted : "#1DB954",color:"white",border:"none",borderRadius:"24px",cursor: grantingAccess ? "default" : "pointer",fontWeight:"700",fontSize:"14px",display:"flex",alignItems:"center",gap:"9px",boxShadow: grantingAccess ? "none" : "0 4px 14px #1DB95440",transition:"all 0.2s"}}>
-        <span>🎵</span> {grantingAccess ? "Waiting for Spotify…" : "Grant Playlist Access"}
+        <span>ðŸŽµ</span> {grantingAccess ? "Waiting for Spotifyâ€¦" : "Grant Playlist Access"}
       </button>
     </div>
   );
@@ -4996,7 +4996,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
               </p>
               {mode==="tracks" && !loadingTr && tracks.length > 0 && (
                 <p style={{fontSize:"11px", color:T.muted, marginTop:"1px"}}>
-                  {tracks.length} tracks{totalDurLabel ? ` · ${totalDurLabel}` : ""}
+                  {tracks.length} tracks{totalDurLabel ? ` Â· ${totalDurLabel}` : ""}
                 </p>
               )}
             </div>
@@ -5004,7 +5004,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}><X size={18}/></button>
         </div>
 
-        {/* Stage selector bar — shown in tracks view only */}
+        {/* Stage selector bar â€” shown in tracks view only */}
         {mode==="tracks" && !loadingTr && tracks.length > 0 && (
           <div style={{padding:"10px 16px", borderBottom:`1px solid ${T.border}`, background:T.navy, flexShrink:0, display:"flex", alignItems:"center", gap:"10px"}}>
             <p style={{fontSize:"11px", color:T.muted, whiteSpace:"nowrap", fontWeight:"600"}}>Adding tracks to:</p>
@@ -5018,10 +5018,10 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
         {/* Body */}
         <div style={{flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column"}}>
 
-          {/* ── Scope-error screen (proactive — shown before any playlist click) ── */}
+          {/* â”€â”€ Scope-error screen (proactive â€” shown before any playlist click) â”€â”€ */}
           {mode==="scope-error" && <ScopeErrorScreen/>}
 
-          {/* ── Playlist grid ── */}
+          {/* â”€â”€ Playlist grid â”€â”€ */}
           {mode==="playlists" && (
             loading
               ? <div style={{display:"flex",justifyContent:"center",padding:"40px"}}><Loader size={28} color={T.accent} style={{animation:"spin 1s linear infinite"}}/></div>
@@ -5046,7 +5046,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                           </div>
                           <div style={{padding:"10px"}}>
                             <p style={{fontSize:"12px", fontWeight:"700", color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:"3px"}}>{pl.name}</p>
-                            <p style={{fontSize:"10px", color:T.muted}}>{count} {count===1?"song":"songs"}{notMine&&pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
+                            <p style={{fontSize:"10px", color:T.muted}}>{count} {count===1?"song":"songs"}{notMine&&pl.owner?.display_name?` Â· ${pl.owner.display_name}`:""}</p>
                           </div>
                         </div>
                       );
@@ -5054,21 +5054,21 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                   </div>
           )}
 
-          {/* ── Track list ── */}
+          {/* â”€â”€ Track list â”€â”€ */}
           {mode==="tracks" && (
             loadingTr
               ? <div style={{display:"flex",justifyContent:"center",padding:"40px"}}><Loader size={28} color={T.accent} style={{animation:"spin 1s linear infinite"}}/></div>
               : tracks.length === 0
                 ? <div style={{textAlign:"center",padding:"40px 24px"}}>
                     {accessDenied
-                      ? <><p style={{fontSize:"20px",marginBottom:"8px"}}>🔒</p>
+                      ? <><p style={{fontSize:"20px",marginBottom:"8px"}}>ðŸ”’</p>
                           <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"6px"}}>Playlist not accessible</p>
                           <p style={{fontSize:"12px",color:T.muted,marginBottom:"16px",lineHeight:"1.5"}}>
                             {typeof accessDenied === "string" && accessDenied !== "Forbidden"
                               ? accessDenied
                               : "Spotify only allows track access for playlists you own. To use this playlist, import its songs into one of your own Spotify playlists, then access it from 'My playlists' here."}
                           </p>
-                          <button onClick={()=>{setMode("playlists");setAccessDenied(false);}} style={{padding:"8px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>← Back</button>
+                          <button onClick={()=>{setMode("playlists");setAccessDenied(false);}} style={{padding:"8px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>â† Back</button>
                         </>
                       : <p style={{fontSize:"13px",color:T.muted}}>This playlist has no playable tracks.</p>
                     }
@@ -5091,7 +5091,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                           )}
                           <button onClick={()=>!isAdded&&addOneTrack(t)}
                             style={{flexShrink:0, padding:"6px 14px", background:isAdded?T.green+"20":"#1DB954", color:isAdded?T.green:"white", border:`1px solid ${isAdded?T.green+"60":"transparent"}`, borderRadius:"20px", cursor:isAdded?"default":"pointer", fontSize:"11px", fontWeight:"700", whiteSpace:"nowrap", transition:"all 0.2s"}}>
-                            {isAdded ? "✓ Added" : "+ Add"}
+                            {isAdded ? "âœ“ Added" : "+ Add"}
                           </button>
                         </div>
                       );
@@ -5100,11 +5100,11 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
           )}
         </div>
 
-        {/* Footer — bulk actions (tracks view only) */}
+        {/* Footer â€” bulk actions (tracks view only) */}
         {mode==="tracks" && !loadingTr && tracks.length > 0 && (
           <div style={{padding:"12px 16px", borderTop:`1px solid ${T.border}`, display:"flex", gap:"8px", flexShrink:0, background:T.card}}>
             {bulkAdded
-              ? <p style={{color:T.green, fontWeight:"700", fontSize:"13px", margin:"auto"}}>✓ All tracks added!</p>
+              ? <p style={{color:T.green, fontWeight:"700", fontSize:"13px", margin:"auto"}}>âœ“ All tracks added!</p>
               : <>
                   <button onClick={addAllToStage}
                     style={{flex:1, padding:"10px", background:"var(--accent)", color:"var(--on-accent)", border:"none", borderRadius:"7px", cursor:"pointer", fontSize:"12px", fontWeight:"700"}}>
@@ -5114,7 +5114,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                     <button onClick={distributeAcrossStages} disabled={distributing}
                       style={{flex:1, padding:"10px", background:T.navy, color:distributing?T.muted:T.text, border:`1px solid ${T.border}`, borderRadius:"7px", cursor:distributing?"default":"pointer", fontSize:"12px", fontWeight:"600", transition:"color 0.2s"}}
                       title="Matches each track's BPM to the target range of each stage type, then fills by duration">
-                      {distributing ? "⏳ Fetching BPM…" : "🎯 Smart Distribute by BPM"}
+                      {distributing ? "â³ Fetching BPMâ€¦" : "ðŸŽ¯ Smart Distribute by BPM"}
                     </button>
                   )}
                 </>
@@ -5126,7 +5126,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   );
 }
 
-// ─── DiscoverTab — wger.de ExerciseDB integration ─────────────────────────────
+// â”€â”€â”€ DiscoverTab â€” wger.de ExerciseDB integration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const WGER_CATEGORIES = [
   {id:"",label:"All"},
   {id:"8",label:"Arms"},
@@ -5219,13 +5219,13 @@ function DiscoverTab({ onAddExercise }) {
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:0}}>
       {/* Search bar */}
       <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-        <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Search the wger.de open exercise database · 11,000+ exercises</p>
+        <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Search the wger.de open exercise database Â· 11,000+ exercises</p>
         <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
           <input
             value={query}
             onChange={e=>setQuery(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&search()}
-            placeholder="e.g. squat, deadlift, plank…"
+            placeholder="e.g. squat, deadlift, plankâ€¦"
             style={{flex:1,padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",outline:"none"}}
           />
           <button onClick={search} disabled={loading||(!query.trim()&&!category)}
@@ -5249,7 +5249,7 @@ function DiscoverTab({ onAddExercise }) {
         {error && <p style={{fontSize:"12px",color:T.accent,padding:"20px",textAlign:"center"}}>{error}</p>}
         {!loading && !error && results.length === 0 && (
           <div style={{textAlign:"center",padding:"40px 20px",color:T.muted}}>
-            <p style={{fontSize:"26px",marginBottom:"8px"}}>🏋️</p>
+            <p style={{fontSize:"26px",marginBottom:"8px"}}>ðŸ‹ï¸</p>
             <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Search the exercise database</p>
             <p style={{fontSize:"11px"}}>Type an exercise name or pick a category above, then hit Search</p>
           </div>
@@ -5265,11 +5265,11 @@ function DiscoverTab({ onAddExercise }) {
                 onClick={()=>loadDetail(ex.id)}>
                 {ex.image
                   ? <img src={ex.image} style={{width:"36px",height:"36px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                  : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🏋️</div>
+                  : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>ðŸ‹ï¸</div>
                 }
                 <div style={{flex:1,minWidth:0}}>
                   <p style={{fontSize:"13px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</p>
-                  <p style={{fontSize:"10px",color:T.muted}}>{ex.category}{(ex.muscles||[]).length?` · ${ex.muscles.slice(0,2).join(", ")}`:""}</p>
+                  <p style={{fontSize:"10px",color:T.muted}}>{ex.category}{(ex.muscles||[]).length?` Â· ${ex.muscles.slice(0,2).join(", ")}`:""}</p>
                 </div>
                 <div style={{display:"flex",gap:"5px",alignItems:"center",flexShrink:0}}>
                   {onAddExercise && (
@@ -5285,7 +5285,7 @@ function DiscoverTab({ onAddExercise }) {
               {isOpen && detail && (
                 <div style={{padding:"12px 14px",background:T.card,borderTop:`1px solid ${T.border}`}}>
                   {detail.muscles.length > 0 && (
-                    <p style={{fontSize:"10px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>💪 Primary: {detail.muscles.join(", ")}</p>
+                    <p style={{fontSize:"10px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>ðŸ’ª Primary: {detail.muscles.join(", ")}</p>
                   )}
                   {detail.musclesAux.length > 0 && (
                     <p style={{fontSize:"10px",color:T.muted,marginBottom:"4px"}}>Secondary: {detail.musclesAux.join(", ")}</p>
@@ -5294,7 +5294,7 @@ function DiscoverTab({ onAddExercise }) {
                     <p style={{fontSize:"10px",color:T.muted,marginBottom:"6px"}}>Equipment: {detail.equipment.join(", ")}</p>
                   )}
                   {detail.desc && (
-                    <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"8px"}}>{detail.desc.slice(0,200)}{detail.desc.length>200?"…":""}</p>
+                    <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"8px"}}>{detail.desc.slice(0,200)}{detail.desc.length>200?"â€¦":""}</p>
                   )}
                   {onAddExercise && (
                     <button onClick={()=>handleAdd(ex)}
@@ -5312,7 +5312,7 @@ function DiscoverTab({ onAddExercise }) {
   );
 }
 
-// ─── LibraryBrowserModal ──────────────────────────────────────────────────────
+// â”€â”€â”€ LibraryBrowserModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -5360,9 +5360,9 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
 
   // Discover packs data
   const DISCOVER_PACKS = [
-    {id:"hyrox12",icon:"🏋",title:"12 Days of Hyrox",author:"CrossFit Mile End",stats:"8 stations · 1.2k imports"},
-    {id:"tabata3",icon:"🔥",title:"Tabata Burner Vol. 3",author:"Jungle Editorial",stats:"16 exercises · 940 imports"},
-    {id:"5x5",    icon:"💪",title:"5×5 Strength Base",  author:"Mara K.",         stats:"5 lifts · 2.7k imports"},
+    {id:"hyrox12",icon:"ðŸ‹",title:"12 Days of Hyrox",author:"CrossFit Mile End",stats:"8 stations Â· 1.2k imports"},
+    {id:"tabata3",icon:"ðŸ”¥",title:"Tabata Burner Vol. 3",author:"Jungle Editorial",stats:"16 exercises Â· 940 imports"},
+    {id:"5x5",    icon:"ðŸ’ª",title:"5Ã—5 Strength Base",  author:"Mara K.",         stats:"5 lifts Â· 2.7k imports"},
   ];
   const [importedPacks, setImportedPacks] = useState([]);
 
@@ -5384,21 +5384,21 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         {/* Toast */}
         {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:"var(--accent)",color:"var(--on-accent)",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
 
-        {/* ── Top page header ── */}
+        {/* â”€â”€ Top page header â”€â”€ */}
         <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
           <div>
             <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE LIBRARY</p>
-            <p style={{fontSize:"12px",color:T.muted}}>The studio's movement catalogue — editable per gym, with a Discover feed of community packs</p>
+            <p style={{fontSize:"12px",color:T.muted}}>The studio's movement catalogue â€” editable per gym, with a Discover feed of community packs</p>
           </div>
           <button onClick={onClose} style={{background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",padding:"6px 12px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
             <X size={13}/> Close
           </button>
         </div>
 
-        {/* ── Body: 3 columns (or stacked on mobile) ── */}
+        {/* â”€â”€ Body: 3 columns (or stacked on mobile) â”€â”€ */}
         <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",overflow:"hidden",minHeight:0}}>
 
-          {/* ── LEFT RAIL: class type list ── */}
+          {/* â”€â”€ LEFT RAIL: class type list â”€â”€ */}
           {!isMobile && (
             <div style={{width:"220px",flexShrink:0,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
               <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",padding:"14px 18px 8px"}}>CLASS TYPE</p>
@@ -5431,7 +5431,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
             </div>
           )}
 
-          {/* ── CENTER: library / discover content ── */}
+          {/* â”€â”€ CENTER: library / discover content â”€â”€ */}
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
 
             {/* Center toolbar */}
@@ -5462,13 +5462,13 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                   {/* Search */}
                   <div style={{flex:1,display:"flex",alignItems:"center",gap:"7px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:"120px"}}>
                     <Search size={13} color={T.muted}/>
-                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercises…"
+                    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercisesâ€¦"
                       style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"12px",width:"100%"}}/>
                   </div>
                   {/* Edit toggle */}
                   <button onClick={()=>{setEditMode(v=>!v);setEditingId(null);}}
                     style={{padding:"7px 14px",background:editMode?classColor+"22":T.navy,border:`1px solid ${editMode?classColor:T.border}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:T.muted,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
-                    ✏️ {editMode?"Done":"Edit"}
+                    âœï¸ {editMode?"Done":"Edit"}
                   </button>
                   {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid #EF444440",borderRadius:"8px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
                 </>
@@ -5521,7 +5521,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                 <div style={{flex:1,overflowY:"auto",padding:"12px 18px",display:"flex",flexDirection:"column",gap:"6px"}}>
                   {exercises.length===0 && !editMode && (
                     <div style={{textAlign:"center",padding:"40px",color:T.muted}}>
-                      <p style={{fontSize:"24px",marginBottom:"8px"}}>🔍</p>
+                      <p style={{fontSize:"24px",marginBottom:"8px"}}>ðŸ”</p>
                       <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>No exercises found</p>
                       <p style={{fontSize:"11px"}}>{search?"Try a different search":"No exercises for this stage yet"}</p>
                     </div>
@@ -5562,7 +5562,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                         ) : (
                           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                             {/* Drag handle */}
-                            <div style={{color:T.muted,fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
+                            <div style={{color:T.muted,fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>â ¿</div>
                             {/* Info */}
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontSize:"14px",fontWeight:"600",color:T.text,marginBottom:"2px"}}>{ex.n}</p>
@@ -5573,11 +5573,11 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                               {ex.timing&&ex.timing!=="none" && (
                                 <span style={{fontSize:"10px",padding:"3px 8px",background:classColor+"20",color:classColor,borderRadius:"999px",fontWeight:"700"}}>{ex.timing} work</span>
                               )}
-                              {ex.r && <span style={{fontSize:"10px",color:T.muted}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
+                              {ex.r && <span style={{fontSize:"10px",color:T.muted}}>Ã—{ex.r}{ex.s?` Â· ${ex.s}Ã—`:""}</span>}
                               {editMode && (
                                 <>
-                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>✏️</button>
-                                  <button onClick={()=>deleteEx(ex.id)} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
+                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>âœï¸</button>
+                                  <button onClick={()=>deleteEx(ex.id)} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>ðŸ—‘ï¸</button>
                                 </>
                               )}
                             </div>
@@ -5598,12 +5598,12 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
             )}
           </div>
 
-          {/* ── RIGHT RAIL: Discover packs ── */}
+          {/* â”€â”€ RIGHT RAIL: Discover packs â”€â”€ */}
           {!isMobile && !isTablet && (
             <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
               <div style={{flexShrink:0,padding:"16px 18px 10px"}}>
                 <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px"}}>Discover packs</p>
-                <p style={{fontSize:"11px",color:T.muted}}>Community workouts — one tap to import</p>
+                <p style={{fontSize:"11px",color:T.muted}}>Community workouts â€” one tap to import</p>
               </div>
               <div style={{flex:1,overflowY:"auto",padding:"6px 14px"}}>
                 {DISCOVER_PACKS.map(pack=>(
@@ -5620,7 +5620,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                       <button
                         onClick={()=>setImportedPacks(p=>p.includes(pack.id)?p:[...p,pack.id])}
                         style={{padding:"5px 12px",background:importedPacks.includes(pack.id)?"transparent":T.card,border:`1px solid ${importedPacks.includes(pack.id)?T.muted:classColor}`,borderRadius:"6px",cursor:"pointer",color:importedPacks.includes(pack.id)?T.muted:classColor,fontSize:"11px",fontWeight:"700"}}>
-                        {importedPacks.includes(pack.id)?"✓ Imported":"Import"}
+                        {importedPacks.includes(pack.id)?"âœ“ Imported":"Import"}
                       </button>
                     </div>
                   </div>
@@ -5637,7 +5637,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         {resetConfirm && (
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center"}}>
-              <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
+              <p style={{fontSize:"28px",marginBottom:"8px"}}>âš ï¸</p>
               <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"8px"}}>Reset to Defaults?</p>
               <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
               <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
@@ -5652,7 +5652,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   );
 }
 
-// ─── SpotifyDevicePicker ──────────────────────────────────────────────────────
+// â”€â”€â”€ SpotifyDevicePicker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shows a pill/dropdown to choose between browser player and external devices.
 function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, browserDeviceId, refreshDevices, compact=false }) {
   const [open, setOpen] = React.useState(false);
@@ -5672,13 +5672,13 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
   const label = activeDevice ? activeDevice.name : isBrowser ? "Browser" : "No device";
 
   const deviceIcon = (type) => {
-    if (!type) return "🔊";
+    if (!type) return "ðŸ”Š";
     const t = type.toLowerCase();
-    if (t.includes("computer")) return "💻";
-    if (t.includes("phone") || t.includes("smartphone")) return "📱";
-    if (t.includes("speaker")) return "🔊";
-    if (t.includes("tv") || t.includes("cast")) return "📺";
-    return "🎵";
+    if (t.includes("computer")) return "ðŸ’»";
+    if (t.includes("phone") || t.includes("smartphone")) return "ðŸ“±";
+    if (t.includes("speaker")) return "ðŸ”Š";
+    if (t.includes("tv") || t.includes("cast")) return "ðŸ“º";
+    return "ðŸŽµ";
   };
 
   return (
@@ -5695,7 +5695,7 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
       {open && (
         <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"8px",minWidth:"200px",zIndex:999,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}}>
           <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",padding:"4px 8px 8px"}}>Playback device</div>
-          {loading && <div style={{fontSize:"12px",color:T.muted,padding:"8px",textAlign:"center"}}>Loading devices…</div>}
+          {loading && <div style={{fontSize:"12px",color:T.muted,padding:"8px",textAlign:"center"}}>Loading devicesâ€¦</div>}
           {!loading && devices.length === 0 && (
             <div style={{fontSize:"11px",color:T.muted,padding:"8px",lineHeight:"1.5",textAlign:"center"}}>
               No devices found.<br/>Open Spotify on another device.
@@ -5709,7 +5709,7 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
               <span style={{fontSize:"14px"}}>{deviceIcon(dev.type)}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dev.name}</div>
-                <div style={{fontSize:"10px",color:T.muted}}>{dev.is_active?"▶ Currently active":"Available"}{dev.id===browserDeviceId?" · Browser player":""}</div>
+                <div style={{fontSize:"10px",color:T.muted}}>{dev.is_active?"â–¶ Currently active":"Available"}{dev.id===browserDeviceId?" Â· Browser player":""}</div>
               </div>
               {activeDeviceId===dev.id && <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>}
             </div>
@@ -5717,7 +5717,7 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
           <div style={{borderTop:`1px solid ${T.border}`,marginTop:"6px",paddingTop:"6px"}}>
             <button onClick={async()=>{setLoading(true); await refreshDevices().catch(()=>{}); setLoading(false);}}
               style={{width:"100%",padding:"7px",background:"transparent",border:"none",color:T.muted,fontSize:"11px",cursor:"pointer",fontWeight:"600"}}>
-              ↻ Refresh devices
+              â†» Refresh devices
             </button>
           </div>
         </div>
@@ -5726,7 +5726,7 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
   );
 }
 
-// ─── DjPlaylistModal ──────────────────────────────────────────────────────────
+// â”€â”€â”€ DjPlaylistModal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Full-screen modal for selecting playlists before running Auto-DJ.
 // Used on mobile/tablet where the AutoDjPanel sidebar isn't visible.
 function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
@@ -5751,7 +5751,7 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
       {/* Header */}
       <div style={{flexShrink:0,padding:"16px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:T.text}}>🎧 Auto-DJ</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:T.text}}>ðŸŽ§ Auto-DJ</div>
           <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>Choose source playlists for BPM matching</div>
         </div>
         <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
@@ -5769,7 +5769,7 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
               <div key={i} style={{flexShrink:0,padding:"6px 10px",background:T.card,borderRadius:"8px",border:`1px solid ${T.border}`,minWidth:"80px"}}>
                 <div style={{width:"3px",height:"10px",background:cfg.color,borderRadius:"2px",marginBottom:"4px"}}/>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                <div style={{fontSize:"9px",color:T.muted}}>{cfg.bpmMin}–{cfg.bpmMax}</div>
+                <div style={{fontSize:"9px",color:T.muted}}>{cfg.bpmMin}â€“{cfg.bpmMax}</div>
               </div>
             );
           })}
@@ -5787,7 +5787,7 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
             </button>
           )}
         </div>
-        {loading && <div style={{textAlign:"center",padding:"24px",color:T.muted}}>Loading playlists…</div>}
+        {loading && <div style={{textAlign:"center",padding:"24px",color:T.muted}}>Loading playlistsâ€¦</div>}
         {!loading && playlists.map(pl => (
           <div key={pl.id} onClick={()=>toggle(pl.id)}
             style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",marginBottom:"6px",
@@ -5802,7 +5802,7 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
             </div>
             {pl.images?.[0]?.url
               ? <img src={pl.images[0].url} style={{width:"38px",height:"38px",borderRadius:"7px",objectFit:"cover",flexShrink:0}} alt=""/>
-              : <div style={{width:"38px",height:"38px",borderRadius:"7px",background:"var(--accent-10)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🎵</div>
+              : <div style={{width:"38px",height:"38px",borderRadius:"7px",background:"var(--accent-10)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>ðŸŽµ</div>
             }
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
@@ -5828,14 +5828,14 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
             border:`1px solid ${selected.length===0||djProgress?.active?T.border:"var(--accent)"}`,
             borderRadius:"10px",fontSize:"14px",fontWeight:"800",cursor:selected.length===0||djProgress?.active?"not-allowed":"pointer",
             fontFamily:`'${T.displayFont}',sans-serif`}}>
-          {djProgress?.active ? "⏳ Building set…" : selected.length===0 ? "Select at least one playlist" : `🎧 DJ This Class (${selected.length} playlist${selected.length!==1?"s":""})`}
+          {djProgress?.active ? "â³ Building setâ€¦" : selected.length===0 ? "Select at least one playlist" : `ðŸŽ§ DJ This Class (${selected.length} playlist${selected.length!==1?"s":""})`}
         </button>
       </div>
     </div>
   );
 }
 
-// ─── AutoDjPanel ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ AutoDjPanel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AutoDjPanel({ stages, onDjClass, djProgress }) {
   const [playlists,  setPlaylists]  = React.useState([]);
   const [loading,    setLoading]    = React.useState(false);
@@ -5887,23 +5887,23 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
                   <div style={{width:"3px",height:"20px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
-                    <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{cfg.bpmMin}–{cfg.bpmMax} BPM</div>
+                    <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{cfg.bpmMin}â€“{cfg.bpmMax} BPM</div>
                   </div>
                   {trackCount > 0
-                    ? <div style={{fontSize:"10px",fontWeight:"700",color:cfg.color,flexShrink:0,background:cfg.color+"18",padding:"2px 6px",borderRadius:"4px"}}>{trackCount} ✓</div>
-                    : <div style={{fontSize:"10px",color:T.muted,flexShrink:0}}>–</div>
+                    ? <div style={{fontSize:"10px",fontWeight:"700",color:cfg.color,flexShrink:0,background:cfg.color+"18",padding:"2px 6px",borderRadius:"4px"}}>{trackCount} âœ“</div>
+                    : <div style={{fontSize:"10px",color:T.muted,flexShrink:0}}>â€“</div>
                   }
                 </div>
                 {firstTrack && (
                   <div style={{padding:"5px 10px 7px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"7px"}}>
                     {firstTrack.albumArt
                       ? <img src={firstTrack.albumArt} style={{width:"22px",height:"22px",borderRadius:"3px",objectFit:"cover",flexShrink:0}} alt=""/>
-                      : <div style={{width:"22px",height:"22px",borderRadius:"3px",background:cfg.color+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px"}}>🎵</div>
+                      : <div style={{width:"22px",height:"22px",borderRadius:"3px",background:cfg.color+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px"}}>ðŸŽµ</div>
                     }
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:"10px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstTrack.t||firstTrack.name||""}</div>
                       <div style={{fontSize:"9px",color:T.muted}}>
-                        {firstTrack.a||""}{firstTrack.bpm?` · ${Math.round(firstTrack.bpm)} BPM`:""}
+                        {firstTrack.a||""}{firstTrack.bpm?` Â· ${Math.round(firstTrack.bpm)} BPM`:""}
                         {trackCount>1?` +${trackCount-1} more`:""}
                       </div>
                     </div>
@@ -5925,7 +5925,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
           )}
         </div>
 
-        {loading && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading playlists…</div>}
+        {loading && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading playlistsâ€¦</div>}
         {!loading && playlists.length === 0 && (
           <div style={{fontSize:"11px",color:T.muted,textAlign:"center",padding:"12px 0",lineHeight:"1.5"}}>
             Connect Spotify to load your playlists
@@ -5956,7 +5956,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
                 </div>
                 {pl.images?.[0]?.url
                   ? <img src={pl.images[0].url} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                  : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>🎵</div>
+                  : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>ðŸŽµ</div>
                 }
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
@@ -5993,7 +5993,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
             borderRadius:"9px",cursor:djProgress?.active||selected.length===0?"not-allowed":"pointer",
             fontSize:"13px",fontWeight:"700",transition:"all 0.2s",
           }}>
-          {djProgress?.active ? "⏳ DJ'ing…" : selected.length===0 ? "Select playlists first" : `🎧 DJ This Class (${selected.length} playlist${selected.length!==1?"s":""})`}
+          {djProgress?.active ? "â³ DJ'ingâ€¦" : selected.length===0 ? "Select playlists first" : `ðŸŽ§ DJ This Class (${selected.length} playlist${selected.length!==1?"s":""})`}
         </button>
       </div>
     </div>
@@ -6026,7 +6026,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   }, [stageTrackIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingEx, setEditingEx] = useState(null);
   const [subTab, setSubTab] = useState("exercises"); // "exercises"|"music"|"groups"|"queue"
-  // Pending template change — { classType, subType } — shown when stages have custom exercises
+  // Pending template change â€” { classType, subType } â€” shown when stages have custom exercises
   const [templatePrompt, setTemplatePrompt] = useState(null);
 
   // Class type / sub-type selection
@@ -6056,7 +6056,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       const clsInfo = lib[classType];
       const subInfo = clsInfo?.subTypes?.[subType];
       const total   = distributed.reduce((a, s) => a + (s.exercises?.length||0), 0);
-      setDistributeToast({msg:`✅ ${clsInfo?.icon} ${clsInfo?.label} — ${subInfo?.label||subType} · ${newStages.length} stages · ${total} exercises loaded`});
+      setDistributeToast({msg:`âœ… ${clsInfo?.icon} ${clsInfo?.label} â€” ${subInfo?.label||subType} Â· ${newStages.length} stages Â· ${total} exercises loaded`});
       setTimeout(()=>setDistributeToast(null), 4000);
     }, 50);
   };
@@ -6154,7 +6154,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               </button>
             </div>
             {!isMobile && <div style={{fontSize:"12px",color:T.muted}}>
-              {Math.round(totalDur/60)} min · {stages.length} stages · {WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} · target RPE 7–8
+              {Math.round(totalDur/60)} min Â· {stages.length} stages Â· {WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} Â· target RPE 7â€“8
             </div>}
           </div>
         </div>
@@ -6188,26 +6188,26 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         </>}
         <button onClick={()=>setShowLibraryModal(true)}
           style={{padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
-          📚 {!isMobile && "Browse "}Library
+          ðŸ“š {!isMobile && "Browse "}Library
         </button>
         <button title="Smart Distribute"
           onClick={()=>{
             const lib = getLibrary();
             const allNew = distributeLibraryExercises(selectedClass, selectedSub, stages, lib);
             const filled = allNew.filter(s=>(s.exercises||[]).length>0).length;
-            if (filled === 0) { setDistributeToast({msg:"No exercises found — try a different class or style"}); setTimeout(()=>setDistributeToast(null),3500); return; }
+            if (filled === 0) { setDistributeToast({msg:"No exercises found â€” try a different class or style"}); setTimeout(()=>setDistributeToast(null),3500); return; }
             allNew.forEach((s,i)=>onStageChange(i,s));
             const clsInfo = lib[selectedClass]; const subInfo = clsInfo?.subTypes?.[selectedSub];
             const totalEx = allNew.reduce((a,s)=>a+(s.exercises?.length||0),0);
-            setDistributeToast({msg:`⚡ ${totalEx} exercises across ${filled} stage${filled!==1?"s":""}`});
+            setDistributeToast({msg:`âš¡ ${totalEx} exercises across ${filled} stage${filled!==1?"s":""}`});
             setTimeout(()=>setDistributeToast(null),4000);
           }}
           style={{padding:"5px 10px",background:T.accent+"18",border:`1px solid ${T.accent}50`,borderRadius:"7px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
-          ⚡ {!isMobile && "Smart "}Distribute
+          âš¡ {!isMobile && "Smart "}Distribute
         </button>
         <button onClick={()=>{ if(isMobile||isTablet) setShowDjModal(true); else onDjClass(); }} disabled={djProgress?.active}
           style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?T.border:"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
-          {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
+          {djProgress?.active ? "â³ DJ'ing..." : "ðŸŽ§ DJ This Class"}
         </button>
       </div>
 
@@ -6227,7 +6227,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       {templatePrompt && (
         <div style={{padding:"10px 24px",background:"#F59E0B18",borderBottom:`1px solid #F59E0B50`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",color:T.text,flex:1,minWidth:"200px"}}>
-            <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} template?</span>
+            <span style={{fontWeight:"700",color:"#F59E0B"}}>âš ï¸ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} template?</span>
             {" "}This will replace your current stages.
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
@@ -6262,7 +6262,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   <div style={{width:"3px",height:"26px",borderRadius:"2px",background:cfg.color,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>{s.type} · {fmt(s.dur)}</div>
+                    <div style={{fontSize:"11px",color:T.muted}}>{s.type} Â· {fmt(s.dur)}</div>
                   </div>
                   <span style={{fontSize:"11px",color:T.muted,flexShrink:0}}>{(s.exercises||[]).length} ex</span>
                   <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}>
@@ -6279,7 +6279,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                           <circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>
                         </svg>
                         <div style={{flex:1,fontSize:"13px",color:T.text}}>{ex.n}</div>
-                        <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
+                        <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}Ã—`,ex.r,ex.rest&&`Â· ${ex.rest}`].filter(Boolean).join(" ")}</div>
                       </div>
                     ))}
                     <button onClick={e=>{e.stopPropagation();addEx();}}
@@ -6313,7 +6313,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           {isMobile && (
             <button onClick={onStartSession}
               style={{padding:"14px",background:T.accent,color:T.bg,border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:"700",fontSize:"14px",width:"100%",marginTop:"8px"}}>
-              ▶ Start Session
+              â–¶ Start Session
             </button>
           )}
         </div>
@@ -6375,7 +6375,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                 {stage && (
                   <div style={{flex:1,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",display:"flex",flexDirection:"column",minHeight:0}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-                      <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>TRACKS — {stage.name.toUpperCase()}</div>
+                      <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>TRACKS â€” {stage.name.toUpperCase()}</div>
                       <div style={{fontSize:"11px",color:T.accent}}>{(stage.tracks||[]).length} tracks</div>
                     </div>
                     <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
@@ -6388,7 +6388,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:"12px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.name}</div>
-                            <div style={{fontSize:"11px",color:T.muted}}>{t.artists?.[0]?.name}{t.bpm?` · ${Math.round(t.bpm)} BPM`:""}</div>
+                            <div style={{fontSize:"11px",color:T.muted}}>{t.artists?.[0]?.name}{t.bpm?` Â· ${Math.round(t.bpm)} BPM`:""}</div>
                           </div>
                           <button onClick={()=>onRemoveTrack(selIdx,ti)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"3px",display:"flex"}}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -6396,7 +6396,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                         </div>
                       ))}
                       {(stage.tracks||[]).length === 0 && (
-                        <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No tracks yet — use DJ This Class or add manually</div>
+                        <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No tracks yet â€” use DJ This Class or add manually</div>
                       )}
                     </div>
                     <button onClick={()=>setShowPlaylistModal(true)}
@@ -6418,7 +6418,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {/* Settings tab */}
             {subTab==="settings" && stage && (
               <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
-                <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{stage.name} — Settings</div>
+                <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{stage.name} â€” Settings</div>
                 <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
                   <div>
                     <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
@@ -6470,7 +6470,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   );
 }
 
-// ─── LiveScreen ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ LiveScreen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -6502,7 +6502,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
     return () => { if (player && micMode) player.setVolume(NORMAL_VOL).catch(()=>{}); };
   }, [player, micMode]);
 
-  // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, S=search, M=mic mode, Esc=back
+  // F15: Keyboard shortcuts â€” Space=play/pause, N=next stage, â†/â†’=skip Â±10s, S=search, M=mic mode, Esc=back
   useEffect(() => {
     const onKey = (e) => {
       // Ignore if user is typing in an input/textarea/select
@@ -6532,10 +6532,10 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const playOnDevice = (uris) => {
     if (!uris.length) return;
     if (playDeviceId === deviceId && player) {
-      // Browser SDK device — use REST API to start (handles track queue properly)
+      // Browser SDK device â€” use REST API to start (handles track queue properly)
       apiPlay(playDeviceId, uris).catch(()=>{});
     } else if (playDeviceId) {
-      // External device (desktop app, phone, etc.) — pure REST
+      // External device (desktop app, phone, etc.) â€” pure REST
       apiPlay(playDeviceId, uris).catch(()=>{});
     }
   };
@@ -6597,7 +6597,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
     }
   }, [liveState.idx]);
 
-  // Pause Spotify when navigating away — but NOT when going to Display Mode
+  // Pause Spotify when navigating away â€” but NOT when going to Display Mode
   const goingToDisplayRef = useRef(false);
   const handleDisplayMode = () => { goingToDisplayRef.current = true; onDisplayMode(); };
   useEffect(() => {
@@ -6612,7 +6612,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:isMobile?"flex-start":"center",
       background:"#000", overflowY:"auto", padding:isMobile?"0":"20px", boxSizing:"border-box"
     }}>
-      {/* Tablet bezel — shown on non-mobile */}
+      {/* Tablet bezel â€” shown on non-mobile */}
       <div style={{
         width:"100%", maxWidth:isMobile?"100%":"900px",
         background: isMobile?"transparent":"#111",
@@ -6640,7 +6640,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
               <div>
                 <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{stage?.name||"Session"}</div>
                 <div style={{fontSize:"11px",color:T.muted}}>
-                  {stages.length} stages · {fmt(totalDur)} total
+                  {stages.length} stages Â· {fmt(totalDur)} total
                 </div>
               </div>
             </div>
@@ -6690,7 +6690,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                   {stage?.name||"Complete"}
                 </div>
                 {stage?.exercises?.[0] && (
-                  <div style={{fontSize:"15px",color:T.muted}}>{stage.exercises[0].n}{stage.exercises[0].r?` · ${stage.exercises[0].s||""}×${stage.exercises[0].r}`:""}</div>
+                  <div style={{fontSize:"15px",color:T.muted}}>{stage.exercises[0].n}{stage.exercises[0].r?` Â· ${stage.exercises[0].s||""}Ã—${stage.exercises[0].r}`:""}</div>
                 )}
 
                 {/* Skip timer controls */}
@@ -6734,7 +6734,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 <button onClick={()=>player?.previousTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
                   <SkipBack size={20}/>
                 </button>
-                {/* Play/Pause — large accent button */}
+                {/* Play/Pause â€” large accent button */}
                 <button onClick={handlePlayPause} style={{width:isMobile?"76px":"84px",height:isMobile?"76px":"84px",borderRadius:"50%",background:T.accent,border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 0 40px ${T.accent}40`,flexShrink:0}}>
                   {liveState.playing
                     ? <svg width="30" height="30" viewBox="0 0 24 24" fill={T.bg}><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
@@ -6785,7 +6785,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                     );
                   })}
                   {stages.slice(liveState.idx+1).length === 0 && (
-                    <div style={{fontSize:"12px",color:T.muted,padding:"10px 0"}}>Last stage — session ending soon</div>
+                    <div style={{fontSize:"12px",color:T.muted,padding:"10px 0"}}>Last stage â€” session ending soon</div>
                   )}
                 </div>
 
@@ -6799,7 +6799,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.name}</div>
-                          <div style={{fontSize:"11px",color:T.muted}}>{nowPlaying.artists?.[0]?.name} · now playing</div>
+                          <div style={{fontSize:"11px",color:T.muted}}>{nowPlaying.artists?.[0]?.name} Â· now playing</div>
                         </div>
                         {nowPlaying.bpm && <div style={{textAlign:"center",flexShrink:0}}>
                           <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{Math.round(nowPlaying.bpm)}</div>
@@ -6871,7 +6871,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   );
 }
 
-// ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
+// â”€â”€â”€ OverviewDisplayScreen (pre-class TV overview) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OverviewDisplayScreen({ stages, sessionName, onBack }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -6929,13 +6929,13 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                 display:"flex",alignItems:"center",gap:"6px",padding:"7px 13px",
                 background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",
                 cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0
-              }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
+              }}>â† {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
               <div>
                 <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px",fontFamily:`'${T.displayFont}',sans-serif`}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 <p style={{fontSize:"12px",color:T.muted}}>
-                  {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
+                  {stages.length} stages Â· {fmtDur(totalDur)} Â· {totalTracks} tracks Â· {totalExs} exercises
                 </p>
               </div>
             </div>
@@ -6988,14 +6988,14 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                         <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
                         <span style={{fontSize:"10px",fontWeight:"800",color:cfg.color,
                           textTransform:"uppercase",letterSpacing:"1px"}}>
-                          {cfg.label}{isPeak?" · PEAK":""}
+                          {cfg.label}{isPeak?" Â· PEAK":""}
                         </span>
                       </div>
                       {/* Stage name */}
                       <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px",fontFamily:`'${T.displayFont}',sans-serif`}}>{s.name}</p>
                       {/* Duration + BPM */}
                       <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>
-                        {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
+                        {fmtDur(s.dur)}{cfg.bpmMin ? ` Â· ${cfg.bpmMin}â€“${cfg.bpmMax} BPM` : ""}
                       </p>
                     </div>
 
@@ -7013,7 +7013,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                         }}>
                           <p style={{fontSize:"13px",fontWeight:"700",color:T.text,lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
                           <p style={{fontSize:"11px",color:T.muted}}>
-                            {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
+                            {[ex.s&&`${ex.s}Ã—`,ex.r,ex.rest&&`Â· ${ex.rest} rest`].filter(Boolean).join(" ")||"â€”"}
                           </p>
                         </div>
                       ))}
@@ -7037,7 +7037,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                       {firstTrack ? (
                         <p style={{fontSize:"11px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           <span style={{color:T.text,fontWeight:"600"}}>{firstTrack.t}</span>
-                          {firstTrack.a && <span> — {firstTrack.a}</span>}
+                          {firstTrack.a && <span> â€” {firstTrack.a}</span>}
                           {trList.length>1 && <span style={{color:cfg.color}}> +{trList.length-1}</span>}
                         </p>
                       ) : (
@@ -7055,7 +7055,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
   );
 }
 
-// ─── DisplayScreen (TV mode) ──────────────────────────────────────────────────
+// â”€â”€â”€ DisplayScreen (TV mode) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DISPLAY_PRESETS = [
   { id:"full",    label:"Full",        desc:"Timer + exercises + music" },
   { id:"minimal", label:"Minimal",     desc:"Timer + stage name only"   },
@@ -7144,7 +7144,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     }
   };
 
-  // ── Settings panel ──
+  // â”€â”€ Settings panel â”€â”€
   const SettingsPanel = () => (
     <div style={{position:"absolute",top:"64px",right:isMobile?"8px":"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"20px",width:isMobile?"min(260px,calc(100vw-16px))":"260px",boxShadow:"0 12px 40px rgba(0,0,0,0.5)",boxSizing:"border-box"}}>
       <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Layout Preset</p>
@@ -7172,7 +7172,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     </div>
   );
 
-  // ── Shared stage journey strip (must be declared before preset early-returns) ──
+  // â”€â”€ Shared stage journey strip (must be declared before preset early-returns) â”€â”€
   const StageJourney = ({compact=false}) => (
     <div style={{display:"flex",alignItems:"center",gap:compact?"4px":"6px",overflowX:"auto",paddingBottom:"2px"}}>
       {stages.map((s,i) => {
@@ -7193,17 +7193,17 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
             }}>
               <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"#ffffff50":T.muted,flexShrink:0}}/>
               <span style={{fontSize:compact?"9px":"10px",fontWeight:isCurrent?"800":"600",color:isCurrent?sCfg.color:isPast?T.muted:T.muted,whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
-                {isPast?"✓ ":""}{s.name}
+                {isPast?"âœ“ ":""}{s.name}
               </span>
             </div>
-            {i < stages.length-1 && <span style={{color:T.muted,fontSize:"8px",opacity:0.4,flexShrink:0}}>▶</span>}
+            {i < stages.length-1 && <span style={{color:T.muted,fontSize:"8px",opacity:0.4,flexShrink:0}}>â–¶</span>}
           </div>
         );
       })}
     </div>
   );
 
-  // ── Timer-Only preset ──
+  // â”€â”€ Timer-Only preset â”€â”€
   if (preset === "timer") {
     return (
       <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
@@ -7232,7 +7232,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     );
   }
 
-  // ── Minimal preset ──
+  // â”€â”€ Minimal preset â”€â”€
   if (preset === "minimal") {
     return (
       <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
@@ -7254,7 +7254,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"56px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"28px"}}/>
           <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
-          <p style={{fontSize:"15px",color:T.muted,marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
+          <p style={{fontSize:"15px",color:T.muted,marginBottom:"28px"}}>remaining Â· Stage {liveState.idx+1} of {stages.length}</p>
           <div style={{width:"min(480px,80%)",height:"8px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
@@ -7266,7 +7266,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     );
   }
 
-  // ── Music Focus preset ──
+  // â”€â”€ Music Focus preset â”€â”€
   if (preset === "music") {
     return (
       <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
@@ -7316,7 +7316,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     );
   }
 
-  // ── Full preset (default) ──
+  // â”€â”€ Full preset (default) â”€â”€
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
       {/* TV Header */}
@@ -7347,7 +7347,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       {/* Feature 6: QR code floating panel */}
       {showQR && qrSrc && (
         <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"70px",right:"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"16px",padding:"20px",boxShadow:`0 8px 32px rgba(0,0,0,0.5)`,textAlign:"center",minWidth:"200px"}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>📱 Attendee QR</p>
+          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>ðŸ“± Attendee QR</p>
           <img src={qrSrc} width="200" height="200" style={{borderRadius:"8px",display:"block",margin:"0 auto"}} alt="Attendee QR code" onError={e=>{e.target.style.display="none";}}/>
           <p style={{fontSize:"10px",color:T.muted,marginTop:"10px",lineHeight:"1.5"}}>Scan to see today's<br/>session on your phone</p>
         </div>
@@ -7379,7 +7379,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                 </div>
                 <div>
                   <p style={{fontSize:`${Math.round(18*scaleMult)}px`,fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ivState.exName}</p>
-                  <p style={{fontSize:"13px",color:T.muted}}>Round {ivState.round} of {ivState.totalRounds} · {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}</p>
+                  <p style={{fontSize:"13px",color:T.muted}}>Round {ivState.round} of {ivState.totalRounds} Â· {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}</p>
                 </div>
               </div>
             );
@@ -7388,7 +7388,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           {/* Group splits in display mode */}
           {stage?.groups?.length > 0 && (
             <div style={{marginBottom:"20px"}}>
-              <p style={{fontSize:"13px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>👥 Groups</p>
+              <p style={{fontSize:"13px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>ðŸ‘¥ Groups</p>
               <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(stage.groups.length,3)}, 1fr)`,gap:"12px"}}>
                 {stage.groups.map((grp,gi) => {
                   const gc = grpColor(grp.id);
@@ -7401,7 +7401,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                       </div>
                       {exerciseLabel
                         ? <p style={{fontSize:`${Math.round(20*scaleMult)}px`,fontWeight:"700",color:gc,lineHeight:"1.2"}}>{exerciseLabel}</p>
-                        : <p style={{fontSize:"12px",color:T.muted,fontStyle:"italic"}}>—</p>
+                        : <p style={{fontSize:"12px",color:T.muted,fontStyle:"italic"}}>â€”</p>
                       }
                     </div>
                   );
@@ -7420,7 +7420,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                       <p style={{fontSize:`${Math.round(16*scaleMult)}px`,fontWeight:"700",color:T.text}}>{ex.n}</p>
                       {ex.timing && ex.timing!=="none" && <span style={{fontSize:"10px",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
-                    <p style={{fontSize:"13px",color:T.muted}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
+                    <p style={{fontSize:"13px",color:T.muted}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" Â· ")}</p>
                   </div>
                 ))}
               </div>
@@ -7450,7 +7450,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
             <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
               <Music size={56} color={hasNoTracks ? T.accent+"80" : T.muted} style={{marginBottom:"14px"}}/>
               <p style={{fontSize:"15px",color:hasNoTracks ? T.accent : T.muted,fontWeight:"600",marginBottom:"6px"}}>
-                {hasNoTracks ? "⏸ Music paused" : "No track playing"}
+                {hasNoTracks ? "â¸ Music paused" : "No track playing"}
               </p>
               <p style={{fontSize:"12px",color:T.muted}}>
                 {hasNoTracks ? "No tracks assigned to this stage" : "Add songs in the builder to queue music per stage"}
@@ -7472,7 +7472,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   );
 }
 
-// ─── AttendeeView ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ AttendeeView â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AttendeeView({ data }) {
   const { name = "Workout Session", stages = [] } = data;
   const totalSec = stages.reduce((a, s) => a + (s.dur || 0), 0);
@@ -7489,7 +7489,7 @@ function AttendeeView({ data }) {
           <span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>
         </div>
         <div style={{background:T2.green+"20",color:T2.green,border:`1px solid ${T2.green}40`,borderRadius:"20px",padding:"4px 14px",fontSize:"12px",fontWeight:"700"}}>
-          📋 Attendee View
+          ðŸ“‹ Attendee View
         </div>
       </div>
 
@@ -7539,7 +7539,7 @@ function AttendeeView({ data }) {
                       <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:isMobileAV?"flex-start":"center",flexDirection:isMobileAV?"column":"row",gap:isMobileAV?"2px":"0",padding:"7px 10px",background:T2.navy,borderRadius:"6px"}}>
                         <span style={{fontSize:"13px",fontWeight:"600",color:T2.text}}>{ex.n || "Exercise"}</span>
                         <span style={{fontSize:"11px",color:T2.muted}}>
-                          {[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`].filter(Boolean).join(" · ")}
+                          {[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`].filter(Boolean).join(" Â· ")}
                         </span>
                       </div>
                     ))}
@@ -7555,21 +7555,21 @@ function AttendeeView({ data }) {
 
         {/* Footer note */}
         <div style={{marginTop:"32px",padding:"14px 18px",background:T2.navy,borderRadius:"8px",display:"flex",alignItems:"center",gap:"10px"}}>
-          <span style={{fontSize:"20px"}}>💪</span>
+          <span style={{fontSize:"20px"}}>ðŸ’ª</span>
           <div>
             <p style={{fontSize:"13px",fontWeight:"600",color:T2.text,marginBottom:"2px"}}>Shared by your trainer via Jungle</p>
             <p style={{fontSize:"11px",color:T2.muted}}>This is a read-only view of the workout plan. Your trainer controls the live session.</p>
           </div>
         </div>
-        <p style={{textAlign:"center",fontSize:"11px",color:T2.muted,marginTop:"20px"}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
+        <p style={{textAlign:"center",fontSize:"11px",color:T2.muted,marginTop:"20px"}}>Â© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
       </div>
     </div>
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function App() {
-  // Attendee mode – bypass PIN + Spotify entirely
+  // Attendee mode â€“ bypass PIN + Spotify entirely
   if (ATTENDEE_PAYLOAD) return <AttendeeView data={ATTENDEE_PAYLOAD}/>;
 
   const vw = useWindowWidth();
@@ -7590,7 +7590,7 @@ export default function App() {
     try { localStorage.setItem("jungle_gym_branding", JSON.stringify(gymBranding)); } catch(_) {}
   }, [gymBranding]);
 
-  // ── Active skin ──────────────────────────────────────────────────────────────
+  // â”€â”€ Active skin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [activeSkinId, setActiveSkinId] = useState(() =>
     localStorage.getItem("jungle_active_skin") || "canopy"
   );
@@ -7643,7 +7643,7 @@ export default function App() {
     try { localStorage.setItem("jungle_history", JSON.stringify(updated)); } catch(_) {}
   };
 
-  // ── Resolve active skin tokens ──────────────────────────────────────────────
+  // â”€â”€ Resolve active skin tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const _baseSkin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
   const _resolvedTokens = customSkinTokens
     ? { ..._baseSkin.tokens, ...customSkinTokens }
@@ -7656,7 +7656,7 @@ export default function App() {
   T.bodyFont    = (_baseSkin.fonts.body || "Hanken Grotesk");
   applySkinCSS(_resolvedTokens);
 
-  // ── Inject skin font pair ────────────────────────────────────────────────────
+  // â”€â”€ Inject skin font pair â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const skin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
     const bodyFont = gymBranding?.fontFamily && gymBranding.fontFamily !== "system"
@@ -7688,7 +7688,7 @@ export default function App() {
           if (ls.idx < ss.length-1) {
             return {...ls, idx:ls.idx+1, elapsed:0};
           }
-          // Session complete — stop timer & pause music, save session
+          // Session complete â€” stop timer & pause music, save session
           if (player) player.pause().catch(()=>{});
           clearInterval(iv);
           saveSession();
@@ -7727,7 +7727,7 @@ export default function App() {
     if (!token) { setDjProgress({active:true,message:"Connect Spotify first.",pct:0,done:true}); setTimeout(()=>setDjProgress({active:false,message:"",pct:0,done:false}),3000); return; }
     setDjProgress({active:true, message:"Fetching your Spotify playlists...", pct:5, done:false});
     try {
-      // 1. Get playlists — respect user selection if provided
+      // 1. Get playlists â€” respect user selection if provided
       const pls = await apiGetPlaylists();
       const toScan = selectedPlaylistIds?.length
         ? (pls||[]).filter(p=>selectedPlaylistIds.includes(p.id))
@@ -7748,7 +7748,7 @@ export default function App() {
         allTracks = allTracks.filter(t=>{ if(!t?.id||seen.has(t.id)) return false; seen.add(t.id); return true; });
       }
 
-      // 3. Enrich BPM using Spotify Audio Features (batch 50/req — fast & accurate)
+      // 3. Enrich BPM using Spotify Audio Features (batch 50/req â€” fast & accurate)
       if (allTracks.length) {
         setDjProgress({active:true, message:`Getting BPM for ${allTracks.length} tracks via Spotify...`, pct:30, done:false});
         const enriched = await enrichTracksWithBpm(allTracks);
@@ -7756,7 +7756,7 @@ export default function App() {
         setDjProgress({active:true, message:"BPM analysis complete. Building stage soundtracks...", pct:55, done:false});
       }
 
-      // 4. Fill each stage — with Camelot-aware scoring and key-compatible transitions
+      // 4. Fill each stage â€” with Camelot-aware scoring and key-compatible transitions
       const newStages = [];
       const usedIds = new Set(); // avoid same track in multiple stages
       let globalPrevCamelot = "";
@@ -7794,7 +7794,7 @@ export default function App() {
 
       setStages(newStages);
       const totalAssigned = newStages.reduce((a,s)=>a+s.tracks.length,0);
-      setDjProgress({active:false, message:`✅ Done! ${totalAssigned} tracks assigned across ${stages.length} stages.`, pct:100, done:true});
+      setDjProgress({active:false, message:`âœ… Done! ${totalAssigned} tracks assigned across ${stages.length} stages.`, pct:100, done:true});
     } catch(e) {
       console.error("DJ error:", e);
       setDjProgress({active:false, message:`Error: ${e.message}`, pct:0, done:true});
@@ -7815,7 +7815,7 @@ export default function App() {
     const cls = WORKOUT_LIBRARY[classTypeKey];
     const sub = cls?.subTypes?.[subTypeKey];
     setStages(withExercises);
-    setSessionName(`${cls?.label || classTypeKey} — ${sub?.label || subTypeKey}`);
+    setSessionName(`${cls?.label || classTypeKey} â€” ${sub?.label || subTypeKey}`);
     setClassChoice({classType: classTypeKey, subType: subTypeKey});
     setView("builder");
   };
@@ -7842,8 +7842,8 @@ export default function App() {
   // (The useEffect above will exchange the code, notify the opener, and close)
   if (window.opener && !window.opener.closed && new URLSearchParams(window.location.search).get("code")) {
     return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg,color:T.text,flexDirection:"column",gap:"16px"}}>
-      <div style={{fontSize:"32px"}}>🎵</div>
-      <p style={{fontSize:"15px",fontWeight:"700"}}>Connecting to Spotify…</p>
+      <div style={{fontSize:"32px"}}>ðŸŽµ</div>
+      <p style={{fontSize:"15px",fontWeight:"700"}}>Connecting to Spotifyâ€¦</p>
       <p style={{fontSize:"12px",color:T.muted}}>This window will close automatically.</p>
     </div>;
   }
@@ -7877,7 +7877,7 @@ export default function App() {
 
       {view!=="display"&&view!=="overview-display" && (
       <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
-        {/* Hamburger — left */}
+        {/* Hamburger â€” left */}
         <button onClick={()=>setShowNav(true)} style={{width:"36px",height:"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"5px",background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",padding:"0",flexShrink:0}}>
           <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
           <span style={{display:"block",width:"16px",height:"2px",background:T.text,borderRadius:"2px"}}/>
@@ -7959,7 +7959,7 @@ export default function App() {
         {view==="brand"            && <BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={setActiveSkinId} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
       </div>
 
-      {/* ── Side Nav Drawer ── */}
+      {/* â”€â”€ Side Nav Drawer â”€â”€ */}
       {showNav && (
         <>
           {/* Backdrop */}
@@ -7977,23 +7977,23 @@ export default function App() {
                 <JungleLogo size={22}/>
                 <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
               </div>
-              <button onClick={()=>setShowNav(false)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:"16px",lineHeight:"1"}}>✕</button>
+              <button onClick={()=>setShowNav(false)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontSize:"16px",lineHeight:"1"}}>âœ•</button>
             </div>
 
             {/* Nav items */}
             <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
               {[
-                {key:"dashboard",    label:"Dashboard",    icon:"🏠"},
-                {key:"builder",      label:"Class Builder", icon:"🏗"},
-                {key:"templates",    label:"Templates",    icon:"📋"},
-                {key:"library",      label:"Exercise Library",icon:"📚"},
-                {key:"glossary",     label:"Glossary",     icon:"📖"},
-                {key:"analytics",    label:"Analytics",    icon:"📊"},
-                {key:"music",        label:"Music Hub",    icon:"🎵"},
-                {key:"schedule",     label:"Schedule",     icon:"📅"},
-                {key:"members",      label:"Members",      icon:"👥"},
-                {key:"brand",        label:"Brand Studio", icon:"🎨"},
-                {key:"integrations", label:"Integrations", icon:"🔗"},
+                {key:"dashboard",    label:"Dashboard",    icon:"ðŸ "},
+                {key:"builder",      label:"Class Builder", icon:"ðŸ—"},
+                {key:"templates",    label:"Templates",    icon:"ðŸ“‹"},
+                {key:"library",      label:"Exercise Library",icon:"ðŸ“š"},
+                {key:"glossary",     label:"Glossary",     icon:"ðŸ“–"},
+                {key:"analytics",    label:"Analytics",    icon:"ðŸ“Š"},
+                {key:"music",        label:"Music Hub",    icon:"ðŸŽµ"},
+                {key:"schedule",     label:"Schedule",     icon:"ðŸ“…"},
+                {key:"members",      label:"Members",      icon:"ðŸ‘¥"},
+                {key:"brand",        label:"Brand Studio", icon:"ðŸŽ¨"},
+                {key:"integrations", label:"Integrations", icon:"ðŸ”—"},
               ].map(n=>(
                 <button key={n.key} onClick={()=>{
                   if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
@@ -8022,8 +8022,24 @@ export default function App() {
             {/* Drawer footer */}
             <div style={{borderTop:`1px solid ${T.border}`,padding:"14px 16px",display:"flex",gap:"8px",flexShrink:0}}>
               <button onClick={()=>setDark(!dark)} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                {dark?"☀ Light":"🌙 Dark"}
+                {dark?"â˜€ Light":"ðŸŒ™ Dark"}
               </button>
+              <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                <User size={14}/> Profile
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {showProfile && (
+        <ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={logout} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>
+      )}
+    </div>
+  );
+}
+
+export default App;
               <button onClick={()=>{setShowNav(false);setShowProfile(true);}} style={{flex:1,padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
                 <User size={14}/> Profile
               </button>
