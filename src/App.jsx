@@ -7688,95 +7688,72 @@ export default function App() {
         ? `'${PRESET_SKINS[activeSkinId].fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
         : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif");
 
-  // ── All nav destinations ─────────────────────────────────────────────────
+
   const primaryNav = [
-    {key:"dashboard",  label:"Dashboard",    icon:"🏠"},
-    {key:"builder",    label:"Builder",       icon:"🏋️"},
-    {key:"templates",  label:"Templates",     icon:"📋"},
+    {key:"dashboard",  label:"Dashboard"},
+    {key:"builder",    label:"Builder"},
+    {key:"templates",  label:"Templates"},
   ];
   const allNavItems = [
-    {key:"dashboard",    label:"Dashboard",    icon:"🏠",  group:"Main"},
-    {key:"builder",      label:"Builder",      icon:"🏋️",  group:"Main"},
-    {key:"templates",    label:"Templates",    icon:"📋",  group:"Main"},
-    {key:"analytics",    label:"Analytics",    icon:"📊",  group:"Insights"},
-    {key:"calendar",     label:"Schedule",     icon:"📅",  group:"Insights"},
-    {key:"music",        label:"Music Hub",    icon:"🎵",  group:"Tools"},
-    {key:"library",      label:"Library",      icon:"📚",  group:"Tools"},
-    {key:"glossary",     label:"Glossary",     icon:"📖",  group:"Tools"},
-    {key:"member",       label:"Members",      icon:"👥",  group:"Studio"},
-    {key:"integrations", label:"Integrations", icon:"🔌",  group:"Studio"},
-    {key:"brand-studio", label:"Brand Studio", icon:"🎨",  group:"Studio"},
+    {key:"dashboard",    label:"Dashboard",    icon:"\ud83c\udfe0",  group:"Main"},
+    {key:"builder",      label:"Builder",      icon:"\ud83c\udffb",  group:"Main"},
+    {key:"templates",    label:"Templates",    icon:"\ud83d\udccb",  group:"Main"},
+    {key:"analytics",    label:"Analytics",    icon:"\ud83d\udcca",  group:"Insights"},
+    {key:"calendar",     label:"Schedule",     icon:"\ud83d\udcc5",  group:"Insights"},
+    {key:"music",        label:"Music Hub",    icon:"\ud83c\udfb5",  group:"Tools"},
+    {key:"library",      label:"Library",      icon:"\ud83d\udcda",  group:"Tools"},
+    {key:"glossary",     label:"Glossary",     icon:"\ud83d\udcd6",  group:"Tools"},
+    {key:"member",       label:"Members",      icon:"\ud83d\udc65",  group:"Studio"},
+    {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio"},
+    {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio"},
   ];
-  const [showNav, setShowNav] = useState(false);
+  const [showNav, setShowNav] = React.useState(false);
   const isFullscreen = view==="display"||view==="overview-display";
-
-  const navTo = (key) => {
+  const navGroups = ["Main","Insights","Tools","Studio"];
+  const navTo = key => {
     if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
     if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
-    setView(key);
-    setShowNav(false);
+    setView(key); setShowNav(false);
   };
-
-  // Group nav items for drawer display
-  const navGroups = ["Main","Insights","Tools","Studio"];
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,fontFamily}}>
 
-      {/* Nav Drawer Overlay */}
       {showNav && !isFullscreen && (
         <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
-          {/* Backdrop */}
-          <div onClick={()=>setShowNav(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(2px)"}}/>
-          {/* Drawer */}
+          <div onClick={()=>setShowNav(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
           <div style={{position:"relative",width:"260px",background:T.card,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
-            {/* Drawer header */}
-            <div style={{padding:"20px 20px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                 <JungleLogo size={26}/>
                 <span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
               </div>
-              <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
-                <X size={18}/>
-              </button>
+              <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",borderRadius:"5px"}}><X size={18}/></button>
             </div>
-
-            {/* Spotify badge in drawer */}
             {deviceId && (
-              <div style={{padding:"10px 20px",borderBottom:`1px solid ${T.border}`}}>
-                <span style={{fontSize:"11px",color:T.green,fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
-                  <Wifi size={11}/> Spotify Connected
-                </span>
+              <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.border}`}}>
+                <span style={{fontSize:"11px",color:T.green,fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}><Wifi size={11}/> Spotify Connected</span>
               </div>
             )}
-
-            {/* Nav groups */}
-            {navGroups.map(group => {
-              const items = allNavItems.filter(n=>n.group===group);
-              return (
-                <div key={group} style={{padding:"12px 12px 4px"}}>
-                  <p style={{fontSize:"10px",fontWeight:"700",letterSpacing:"1px",textTransform:"uppercase",color:T.muted,padding:"0 8px 6px"}}>{group}</p>
-                  {items.map(n => (
-                    <button key={n.key} onClick={()=>navTo(n.key)} style={{
-                      width:"100%",display:"flex",alignItems:"center",gap:"10px",
-                      padding:"9px 12px",borderRadius:"8px",border:"none",cursor:"pointer",
-                      background:view===n.key?T.accent+"20":"transparent",
-                      color:view===n.key?T.accent:T.text,
-                      fontSize:"13px",fontWeight:view===n.key?"700":"500",
-                      textAlign:"left",marginBottom:"2px",transition:"background 0.15s",
-                    }}>
-                      <span style={{fontSize:"15px",width:"20px",textAlign:"center"}}>{n.icon}</span>
-                      {n.label}
-                      {view===n.key && <div style={{width:"4px",height:"4px",borderRadius:"50%",background:T.accent,marginLeft:"auto"}}/>}
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
-
-            {/* Share + Logout at bottom */}
+            {navGroups.map(group => (
+              <div key={group} style={{padding:"12px 10px 4px"}}>
+                <p style={{fontSize:"10px",fontWeight:"700",letterSpacing:"1px",textTransform:"uppercase",color:T.muted,padding:"0 8px 6px"}}>{group}</p>
+                {allNavItems.filter(n=>n.group===group).map(n=>(
+                  <button key={n.key} onClick={()=>navTo(n.key)} style={{
+                    width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",
+                    border:"none",cursor:"pointer",background:view===n.key?T.accent+"20":"transparent",
+                    color:view===n.key?T.accent:T.text,fontSize:"13px",fontWeight:view===n.key?"700":"500",
+                    textAlign:"left",marginBottom:"2px",
+                  }}>
+                    <span style={{fontSize:"15px",width:"20px",textAlign:"center"}}>{n.icon}</span>
+                    {n.label}
+                    {view===n.key && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:T.accent,marginLeft:"auto"}}/>}
+                  </button>
+                ))}
+              </div>
+            ))}
             <div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid ${T.border}`}}>
-              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"transparent",color:T.muted,fontSize:"13px",fontWeight:"500",marginBottom:"6px"}}>
+              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"transparent",color:T.muted,fontSize:"13px",fontWeight:"500"}}>
                 <Share2 size={14}/> Share with Class
               </button>
             </div>
@@ -7786,37 +7763,26 @@ export default function App() {
 
       {!isFullscreen && (
         <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
-          {/* Hamburger */}
-          <button onClick={()=>setShowNav(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}} title="Menu">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="2" width="18" height="2" rx="1" fill="currentColor"/><rect y="8" width="18" height="2" rx="1" fill="currentColor"/><rect y="14" width="18" height="2" rx="1" fill="currentColor"/></svg>
+          <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <line x1="1" y1="3" x2="17" y2="3"/><line x1="1" y1="9" x2="17" y2="9"/><line x1="1" y1="15" x2="17" y2="15"/>
+            </svg>
           </button>
-
-          {/* Logo */}
           <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
             {gymBranding?.logo
               ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"30px",maxWidth:"110px",objectFit:"contain"}} alt="gym logo"/>
                   {gymBranding.gymName&&!isMobile&&<span style={{fontSize:"13px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}</>
               : <><JungleLogo size={isMobile?22:26}/>{!isMobile&&<span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>}
           </div>
-
-          {/* Primary nav tabs — desktop only */}
-          {!isMobile && (
+          {!isMobile ? (
             <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"2px"}}>
               {primaryNav.map(n=>(
-                <button key={n.key} onClick={()=>navTo(n.key)} style={{
-                  padding:"7px 14px",background:view===n.key?T.accent+"20":"transparent",
-                  color:view===n.key?T.accent:T.muted,
-                  border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,
-                  borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap",
-                }}>
+                <button key={n.key} onClick={()=>navTo(n.key)} style={{padding:"7px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap"}}>
                   {n.label}
                 </button>
               ))}
             </nav>
-          )}
-          {isMobile && <div style={{flex:1}}/>}
-
-          {/* Right actions */}
+          ) : <div style={{flex:1}}/>}
           <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
             {deviceId&&isMobile&&<Wifi size={13} color={T.green}/>}
@@ -7832,12 +7798,14 @@ export default function App() {
           </div>
         </header>
       )}
+
       {spError&&!isFullscreen&&(
         <div style={{padding:"10px 24px",background:T.accent+"20",borderBottom:`1px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <p style={{fontSize:"13px",color:T.accent,fontWeight:"600"}}>⚠️ {spError}</p>
           <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:T.accent,color:T.bg,border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
         </div>
       )}
+
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {view==="dashboard"&&<DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} onViewMusic={()=>setView("music")} onViewSchedule={()=>setView("calendar")} onViewMembers={()=>setView("member")} profile={profile} sessionHistory={sessionHistory} stages={stages} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")}/>}
@@ -7854,9 +7822,11 @@ export default function App() {
         {view==="integrations"&&<IntegrationsScreen onBack={()=>setView("dashboard")}/>}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
       </div>
+
       {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid ${T.border}`,background:T.card,textAlign:"center"}}>
         <p style={{fontSize:"11px",color:T.muted}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
       </footer>}
+
       {showProfile&&<ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
   );
