@@ -7688,41 +7688,146 @@ export default function App() {
         ? `'${PRESET_SKINS[activeSkinId].fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
         : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif");
 
-  const navItems = [{key:"dashboard",label:"Dashboard"},{key:"builder",label:"Builder"},{key:"templates",label:"Templates"},{key:"analytics",label:"Analytics"}];
+  // ── All nav destinations ─────────────────────────────────────────────────
+  const primaryNav = [
+    {key:"dashboard",  label:"Dashboard",    icon:"🏠"},
+    {key:"builder",    label:"Builder",       icon:"🏋️"},
+    {key:"templates",  label:"Templates",     icon:"📋"},
+  ];
+  const allNavItems = [
+    {key:"dashboard",    label:"Dashboard",    icon:"🏠",  group:"Main"},
+    {key:"builder",      label:"Builder",      icon:"🏋️",  group:"Main"},
+    {key:"templates",    label:"Templates",    icon:"📋",  group:"Main"},
+    {key:"analytics",    label:"Analytics",    icon:"📊",  group:"Insights"},
+    {key:"calendar",     label:"Schedule",     icon:"📅",  group:"Insights"},
+    {key:"music",        label:"Music Hub",    icon:"🎵",  group:"Tools"},
+    {key:"library",      label:"Library",      icon:"📚",  group:"Tools"},
+    {key:"glossary",     label:"Glossary",     icon:"📖",  group:"Tools"},
+    {key:"member",       label:"Members",      icon:"👥",  group:"Studio"},
+    {key:"integrations", label:"Integrations", icon:"🔌",  group:"Studio"},
+    {key:"brand-studio", label:"Brand Studio", icon:"🎨",  group:"Studio"},
+  ];
+  const [showNav, setShowNav] = useState(false);
   const isFullscreen = view==="display"||view==="overview-display";
+
+  const navTo = (key) => {
+    if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
+    if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
+    setView(key);
+    setShowNav(false);
+  };
+
+  // Group nav items for drawer display
+  const navGroups = ["Main","Insights","Tools","Studio"];
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,fontFamily}}>
+
+      {/* Nav Drawer Overlay */}
+      {showNav && !isFullscreen && (
+        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
+          {/* Backdrop */}
+          <div onClick={()=>setShowNav(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(2px)"}}/>
+          {/* Drawer */}
+          <div style={{position:"relative",width:"260px",background:T.card,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
+            {/* Drawer header */}
+            <div style={{padding:"20px 20px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                <JungleLogo size={26}/>
+                <span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
+              </div>
+              <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
+                <X size={18}/>
+              </button>
+            </div>
+
+            {/* Spotify badge in drawer */}
+            {deviceId && (
+              <div style={{padding:"10px 20px",borderBottom:`1px solid ${T.border}`}}>
+                <span style={{fontSize:"11px",color:T.green,fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
+                  <Wifi size={11}/> Spotify Connected
+                </span>
+              </div>
+            )}
+
+            {/* Nav groups */}
+            {navGroups.map(group => {
+              const items = allNavItems.filter(n=>n.group===group);
+              return (
+                <div key={group} style={{padding:"12px 12px 4px"}}>
+                  <p style={{fontSize:"10px",fontWeight:"700",letterSpacing:"1px",textTransform:"uppercase",color:T.muted,padding:"0 8px 6px"}}>{group}</p>
+                  {items.map(n => (
+                    <button key={n.key} onClick={()=>navTo(n.key)} style={{
+                      width:"100%",display:"flex",alignItems:"center",gap:"10px",
+                      padding:"9px 12px",borderRadius:"8px",border:"none",cursor:"pointer",
+                      background:view===n.key?T.accent+"20":"transparent",
+                      color:view===n.key?T.accent:T.text,
+                      fontSize:"13px",fontWeight:view===n.key?"700":"500",
+                      textAlign:"left",marginBottom:"2px",transition:"background 0.15s",
+                    }}>
+                      <span style={{fontSize:"15px",width:"20px",textAlign:"center"}}>{n.icon}</span>
+                      {n.label}
+                      {view===n.key && <div style={{width:"4px",height:"4px",borderRadius:"50%",background:T.accent,marginLeft:"auto"}}/>}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+
+            {/* Share + Logout at bottom */}
+            <div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid ${T.border}`}}>
+              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"transparent",color:T.muted,fontSize:"13px",fontWeight:"500",marginBottom:"6px"}}>
+                <Share2 size={14}/> Share with Class
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!isFullscreen && (
-        <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
+        <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
+          {/* Hamburger */}
+          <button onClick={()=>setShowNav(true)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}} title="Menu">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="2" width="18" height="2" rx="1" fill="currentColor"/><rect y="8" width="18" height="2" rx="1" fill="currentColor"/><rect y="14" width="18" height="2" rx="1" fill="currentColor"/></svg>
+          </button>
+
+          {/* Logo */}
           <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
             {gymBranding?.logo
-              ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"32px",maxWidth:"130px",objectFit:"contain"}} alt="gym logo"/>
-                  {gymBranding.gymName&&!isMobile&&<span style={{fontSize:"14px",fontWeight:"800",letterSpacing:"1px",color:T.text}}>{gymBranding.gymName}</span>}</>
-              : <><JungleLogo size={isMobile?24:30}/>{!isMobile&&<span style={{fontSize:"16px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>}
+              ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"30px",maxWidth:"110px",objectFit:"contain"}} alt="gym logo"/>
+                  {gymBranding.gymName&&!isMobile&&<span style={{fontSize:"13px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}</>
+              : <><JungleLogo size={isMobile?22:26}/>{!isMobile&&<span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>}
           </div>
-          <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"4px",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-            {navItems.map(n=>(
-              <button key={n.key} onClick={()=>{
-                if((view==="live"||view==="display")&&player) player.pause().catch(()=>{});
-                if(view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
-                setView(n.key);
-              }} style={{padding:isMobile?"6px 12px":"8px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"600",whiteSpace:"nowrap",flexShrink:0}}>
-                {n.label}
-              </button>
-            ))}
-          </nav>
-          <div style={{display:"flex",gap:isMobile?"6px":"12px",alignItems:"center",flexShrink:0}}>
+
+          {/* Primary nav tabs — desktop only */}
+          {!isMobile && (
+            <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"2px"}}>
+              {primaryNav.map(n=>(
+                <button key={n.key} onClick={()=>navTo(n.key)} style={{
+                  padding:"7px 14px",background:view===n.key?T.accent+"20":"transparent",
+                  color:view===n.key?T.accent:T.muted,
+                  border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,
+                  borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap",
+                }}>
+                  {n.label}
+                </button>
+              ))}
+            </nav>
+          )}
+          {isMobile && <div style={{flex:1}}/>}
+
+          {/* Right actions */}
+          <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
-            {deviceId&&isMobile&&<Wifi size={14} color={T.green}/>}
+            {deviceId&&isMobile&&<Wifi size={13} color={T.green}/>}
             {!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?T.green+"20":T.navy,color:shareCopied?T.green:T.muted,border:`1px solid ${shareCopied?T.green+"40":T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
               {shareCopied?<Check size={13}/>:<Share2 size={13}/>}{shareCopied?"Copied!":"Share"}
             </button>}
             {isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?T.green:T.muted,padding:"4px",display:"flex"}}>
-              {shareCopied?<Check size={16}/>:<Share2 size={16}/>}
+              {shareCopied?<Check size={15}/>:<Share2 size={15}/>}
             </button>}
-            <button onClick={()=>setShowProfile(true)} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0}}>
-              {profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={16} color={T.muted}/>}
+            <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
+              {profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={T.muted}/>}
             </button>
           </div>
         </header>
