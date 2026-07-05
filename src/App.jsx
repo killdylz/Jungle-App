@@ -24,6 +24,7 @@ const PRESET_SKINS = {
              accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" },
     fonts:{ display:"Space Grotesk", body:"Hanken Grotesk" },
     voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
+    programs:[{name:"Strength",tint:"#A78BFA"},{name:"Endurance",tint:"#34D399"},{name:"Mobility",tint:"#22D3EE"}],
   },
   pulse: {
     name:"Pulse", vibe:"energetic",
@@ -31,6 +32,7 @@ const PRESET_SKINS = {
              accent:"#D6FF3D", green:"#ECFFA3", text:"#F4F5F2", muted:"#8B8F8A" },
     fonts:{ display:"Anton", body:"Archivo" },
     voice:"competitive-measurable", numeralStyle:"tabular", accentBehaviour:"glow", mode:"dark",
+    programs:[{name:"Race",tint:"#FB7185"},{name:"Power",tint:"#FBBF24"},{name:"Engine",tint:"#38BDF8"}],
   },
   atelier: {
     name:"Atelier", vibe:"luxury",
@@ -38,6 +40,7 @@ const PRESET_SKINS = {
              accent:"#C8A86A", green:"#E8D6AE", text:"#ECEAE6", muted:"#908C85" },
     fonts:{ display:"Instrument Serif", body:"Manrope" },
     voice:"technical-considered", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
+    programs:[{name:"Reformer",tint:"#C8A86A"},{name:"Sculpt",tint:"#D4A5A5"},{name:"Flow",tint:"#9FB4C4"}],
   },
 };
 
@@ -104,6 +107,13 @@ const BRAND_COPY = {
   "technical-considered":    { kioskTag:"Move with intent", waitingHead:"Preparing your session", stationCue:"Precision over speed" },
 };
 function brandCopy(voice, slot){ const v = BRAND_COPY[voice] || BRAND_COPY["credible-community"]; return v[slot] || ""; }
+function hexA(hex, a){ const c=hexToRgb(hex); return c ? `rgba(${c[0]},${c[1]},${c[2]},${a})` : hex; }
+// FR-H7: default program sub-tints (decorative only).
+const DEFAULT_PROGRAMS = [ { name:"Strength", tint:"#A78BFA" }, { name:"Conditioning", tint:"#F59E0B" }, { name:"Mobility", tint:"#5BD0C0" } ];
+function ProgramChip({ name, tint }) {
+  const hex = tint || "#7BE3A4";
+  return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:hex,background:hexA(hex,0.14),border:`1px solid ${hexA(hex,0.4)}`,whiteSpace:"nowrap"}}>{name}</span>;
+}
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
 const GROUP_PALETTE  = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"];
@@ -263,6 +273,19 @@ function generateSkinFromPalette(swatches, vibe="natural") {
   };
 }
 
+// FR-H8: a sub-brand is a child theme overriding accent + numeralStyle (often voice), inheriting the rest.
+function resolveSubBrand(parent, overrides={}) {
+  if (!parent) return null;
+  return {
+    ...parent,
+    name: overrides.name || `${parent.name} sub-brand`,
+    parentName: parent.name,
+    isSubBrand: true,
+    tokens: { ...parent.tokens, accent: overrides.accent || parent.tokens.accent, green: overrides.green || parent.tokens.green },
+    numeralStyle: overrides.numeralStyle || parent.numeralStyle,
+    voice: overrides.voice || parent.voice,
+  };
+}
 // FR-H1: one palette -> three independently contrast-clamped themes (one recommended).
 function generateThemes(swatches){
   const pal = (swatches && swatches.length) ? swatches : ["#7BE3A4"];
@@ -272,7 +295,7 @@ function generateThemes(swatches){
   const steel = rgbToHex(...hslToRgb(h, Math.max(0.08, sat*0.35), Math.min(0.74, l+0.06)));
   const mk = (acc, vibe, name, voice, num, glow) => {
     const sk = generateSkinFromPalette([acc], vibe);
-    sk.name = name; sk.mode = "dark"; sk.voice = voice; sk.numeralStyle = num; sk.accentBehaviour = glow;
+    sk.name = name; sk.mode = "dark"; sk.voice = voice; sk.numeralStyle = num; sk.accentBehaviour = glow; sk.programs = DEFAULT_PROGRAMS;
     return sk;
   };
   return [
@@ -4891,6 +4914,12 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
           {/* 3. FINE-TUNE */}
           <div style={sectionStyle}>
             <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>FINE-TUNE TOKENS</div>
+            <div style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Program tints · decorative</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"16px"}}>
+              {((generatedSkin&&generatedSkin.programs)||PRESET_SKINS[activeSkinId]?.programs||DEFAULT_PROGRAMS).map((pg,i)=>(
+                <ProgramChip key={i} name={pg.name} tint={pg.tint}/>
+              ))}
+            </div>
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
               {tokenLabels.map(({key,label})=>(
                 <div key={key} style={{display:"flex",alignItems:"center",gap:"10px"}}>
