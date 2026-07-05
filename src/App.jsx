@@ -23,18 +23,21 @@ const PRESET_SKINS = {
     tokens:{ bg:"#0A0F0C", card:"#0F1611", navy:"#141D17", border:"rgba(255,255,255,.07)",
              accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" },
     fonts:{ display:"Space Grotesk", body:"Hanken Grotesk" },
+    voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
   },
   pulse: {
     name:"Pulse", vibe:"energetic",
     tokens:{ bg:"#08090A", card:"#101113", navy:"#17181B", border:"rgba(255,255,255,.08)",
              accent:"#D6FF3D", green:"#ECFFA3", text:"#F4F5F2", muted:"#8B8F8A" },
     fonts:{ display:"Anton", body:"Archivo" },
+    voice:"competitive-measurable", numeralStyle:"tabular", accentBehaviour:"glow", mode:"dark",
   },
   atelier: {
     name:"Atelier", vibe:"luxury",
     tokens:{ bg:"#0C0C0E", card:"#131316", navy:"#1A1A1E", border:"rgba(255,255,255,.06)",
              accent:"#C8A86A", green:"#E8D6AE", text:"#ECEAE6", muted:"#908C85" },
     fonts:{ display:"Instrument Serif", body:"Manrope" },
+    voice:"technical-considered", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
   },
 };
 
@@ -57,7 +60,7 @@ function injectSkinFonts(skin) {
 }
 
 // ─── Write CSS custom properties onto :root ─────────────────────────────────────
-function applySkinCSS(tokens) {
+function applySkinCSS(tokens, meta={}) {
   const r = document.documentElement.style;
   r.setProperty("--bg",     tokens.bg);
   r.setProperty("--card",   tokens.card);
@@ -81,9 +84,26 @@ function applySkinCSS(tokens) {
   r.setProperty("--accent-40", tokens.accent + "66");
   r.setProperty("--green-20",  tokens.green  + "33");
   r.setProperty("--green-40",  tokens.green  + "66");
+  // FR-H4/H5: behavioural tokens -> CSS vars
+  const glow = meta.accentBehaviour === "glow";
+  r.setProperty("--glow", glow ? `0 0 22px ${tokens.accent}66` : "none");
+  const num = meta.numeralStyle || "proportional";
+  r.setProperty("--num", (num==="tabular"||num==="mono") ? "tabular-nums" : "normal");
+  r.setProperty("--num-font", num==="mono" ? "'Space Mono',ui-monospace,monospace" : "inherit");
   // Body background keeps in sync with skin
   document.body.style.background = tokens.bg;
 }
+
+// FR-H3: microcopy register per voice. Surfaces read copy from here, never hard-code strings.
+const BRAND_COPY = {
+  "systemised-motivational": { kioskTag:"Show up. Do the work.", waitingHead:"Your session starts soon", stationCue:"Lock in" },
+  "earned-disciplined":      { kioskTag:"Earn it.", waitingHead:"Warm up, get ready", stationCue:"Hold the standard" },
+  "joyful-inclusive":        { kioskTag:"Come move with us", waitingHead:"So glad you are here", stationCue:"You have got this" },
+  "competitive-measurable":  { kioskTag:"Beat yesterday", waitingHead:"Next heat loading", stationCue:"Push the pace" },
+  "credible-community":      { kioskTag:"Train together", waitingHead:"Class starting shortly", stationCue:"Find your rhythm" },
+  "technical-considered":    { kioskTag:"Move with intent", waitingHead:"Preparing your session", stationCue:"Precision over speed" },
+};
+function brandCopy(voice, slot){ const v = BRAND_COPY[voice] || BRAND_COPY["credible-community"]; return v[slot] || ""; }
 
 const SPOTIFY_GENRES = ["afrobeat","blues","chill","country","dance","drum-and-bass","dubstep","edm","electronic","folk","funk","gospel","hip-hop","house","indie","jazz","latin","metal","piano","pop","r-n-b","reggae","reggaeton","rock","soul","techno","trap","workout"];
 const GROUP_PALETTE  = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"];
@@ -1792,6 +1812,36 @@ const JungleLogo = ({size=32}) => (
     <rect x="75" y="62" width="12" height="18" rx="2.5" fill={T.accent}/>
   </svg>
 );
+
+// FR-H2: one logo asset, many placements. Uploaded image -> styled wordmark -> monogram tile.
+function BrandLogo({ size=26, showName=false, gymBranding={} }) {
+  const logo = gymBranding && gymBranding.logo;
+  const name = (gymBranding && gymBranding.gymName) || "";
+  const disp = `'${T.displayFont||"Space Grotesk"}',sans-serif`;
+  const wrap = { display:"inline-flex", alignItems:"center", gap:`${Math.round(size*0.32)}px`, minWidth:0 };
+  if (logo) {
+    return (
+      <span style={wrap}>
+        <img src={logo} alt={name||"gym logo"} style={{height:`${size}px`,maxWidth:`${size*4.2}px`,objectFit:"contain",display:"block"}}/>
+        {showName && name && <span style={{fontSize:`${Math.round(size*0.5)}px`,fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{name}</span>}
+      </span>
+    );
+  }
+  if (name) {
+    return (
+      <span style={wrap}>
+        <span style={{width:`${size}px`,height:`${size}px`,borderRadius:`${Math.round(size*0.28)}px`,background:T.accent,color:T.bg,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:disp,fontWeight:"800",fontSize:`${Math.round(size*0.58)}px`,flexShrink:0,lineHeight:1}}>{name.trim().charAt(0).toUpperCase()}</span>
+        {showName && <span style={{fontFamily:disp,fontSize:`${Math.round(size*0.62)}px`,fontWeight:"800",letterSpacing:"1.5px",color:T.text,whiteSpace:"nowrap",textTransform:"uppercase"}}>{name}</span>}
+      </span>
+    );
+  }
+  return (
+    <span style={wrap}>
+      <JungleLogo size={size}/>
+      {showName && <span style={{fontSize:`${Math.round(size*0.6)}px`,fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>}
+    </span>
+  );
+}
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 function StatCard({icon, label, value, color}) {
@@ -7739,7 +7789,7 @@ export default function App() {
     : (PRESET_SKINS[activeSkinId]?.tokens || PRESET_SKINS.canopy.tokens);
   Object.assign(T, skinTokens);
   useEffect(() => {
-    applySkinCSS(skinTokens);
+    applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
     const skin = PRESET_SKINS[activeSkinId];
     if (skin) injectSkinFonts(skin);
     localStorage.setItem("jungle_skin", activeSkinId);
@@ -7995,10 +8045,7 @@ export default function App() {
             </svg>
           </button>
           <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-            {gymBranding?.logo
-              ? <><img src={gymBranding.logo} style={{height:isMobile?"26px":"30px",maxWidth:"110px",objectFit:"contain"}} alt="gym logo"/>
-                  {gymBranding.gymName&&!isMobile&&<span style={{fontSize:"13px",fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{gymBranding.gymName}</span>}</>
-              : <><JungleLogo size={isMobile?22:26}/>{!isMobile&&<span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>}</>}
+            <BrandLogo size={isMobile?22:26} showName={!isMobile} gymBranding={gymBranding}/>
           </div>
           {!isMobile ? (
             <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"2px"}}>

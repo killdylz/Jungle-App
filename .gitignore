@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Planning docs (kept local, not shipped)
+Jungle - Delta & Backlog Breakdown.md
+Jungle - Work Item Tracker.xlsx
