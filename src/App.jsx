@@ -320,6 +320,30 @@ function downloadJson(obj, filename){
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
   } catch(_) {}
 }
+function rampVolume(player, from, to, secs){
+  if(!player) return null;
+  const steps = Math.max(1, Math.round(secs*10));
+  let i=0; player.setVolume(from).catch(()=>{});
+  const iv = setInterval(()=>{ i++; const v = from + (to-from)*(i/steps); player.setVolume(Math.max(0,Math.min(1,v))).catch(()=>{}); if(i>=steps) clearInterval(iv); }, 100);
+  return iv;
+}
+async function fetchExerciseGif(name){
+  const key = (localStorage.getItem("jungle_exdb_key")||"").trim();
+  if (!key) return null;
+  let cache={}; try { cache=JSON.parse(localStorage.getItem("jungle_gif_cache")||"{}"); } catch(_){}
+  const norm = (name||"").toLowerCase().replace(/\(.*?\)/g,"").replace(/[^a-z0-9 ]/g,"").trim();
+  if (!norm) return null;
+  if (Object.prototype.hasOwnProperty.call(cache, norm)) return cache[norm];
+  try {
+    const q = encodeURIComponent(norm.split(" ").slice(0,3).join(" "));
+    const r = await fetch(`https://exercisedb.p.rapidapi.com/exercises/name/${q}?limit=1`, { headers:{ "X-RapidAPI-Key":key, "X-RapidAPI-Host":"exercisedb.p.rapidapi.com" } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const url = Array.isArray(d) && d[0] ? (d[0].gifUrl||null) : null;
+    cache[norm]=url||null; try { localStorage.setItem("jungle_gif_cache", JSON.stringify(cache)); } catch(_){}
+    return url;
+  } catch(_) { return null; }
+}
 
 // ─── Attendee Mode (shareable read-only URL) ─────────────────────────────────
 function getAttendeePayload() {
@@ -3697,6 +3721,11 @@ function CalendarScreen({onBack}) {
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [viewMode, setViewMode] = React.useState("grid"); // "grid" | "heat"
   const [dismissedTips, setDismissedTips] = React.useState([]);
+  // F5: user-created recurring classes
+  const [userClasses, setUserClasses] = React.useState(() => { try { return JSON.parse(localStorage.getItem("jungle_user_classes")||"[]"); } catch(_) { return []; } });
+  React.useEffect(() => { try { localStorage.setItem("jungle_user_classes", JSON.stringify(userClasses)); } catch(_) {} }, [userClasses]);
+  const [showAddClass, setShowAddClass] = React.useState(false);
+  const [addForm, setAddForm] = React.useState({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
 
   const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat"];
   const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
@@ -3706,6 +3735,7 @@ function CalendarScreen({onBack}) {
   baseDate.setDate(baseDate.getDate() + weekOffset * 7);
   const startOfWeek = new Date(baseDate);
   startOfWeek.setDate(baseDate.getDate() - baseDate.getDay() + 1);
+  const weekKey = `${startOfWeek.getFullYear()}-${startOfWeek.getMonth()}-${startOfWeek.getDate()}`;
 
   const dayDates = DAYS.map((d,i)=>{
     const dt = new Date(startOfWeek);
@@ -3738,6 +3768,22 @@ function CalendarScreen({onBack}) {
     "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
   };
 
+  // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
+  const effSchedule = { ...schedule };
+  userClasses.forEach(uc => {
+    const entry = { name:uc.name, coach:uc.coach||"", fill:uc.fill||0, type:uc.type, dur:uc.dur||"45m", custom:true, repeat:uc.repeat };
+    if (uc.repeat === "daily") { DAYS.forEach(d => { effSchedule[`${d}-${uc.slot}`] = entry; }); }
+    else if (uc.repeat === "weekly") { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
+    else if (uc.weekKey === weekKey) { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
+  });
+  const addClass = () => {
+    if (!addForm.name.trim()) return;
+    const uc = { id:`uc${Date.now()}`, ...addForm };
+    if (addForm.repeat === "once") uc.weekKey = weekKey;
+    setUserClasses(list => [...list, uc]);
+    setShowAddClass(false);
+    setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+  };
   const suggested = [
     {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
@@ -3789,8 +3835,37 @@ function CalendarScreen({onBack}) {
           <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"8px",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"600"}}>
             Auto-fill week
           </button>
+          <button onClick={()=>setShowAddClass(true)} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
+            + Add class
+          </button>
         </div>
       </div>
+
+      {/* F5: Add class modal */}
+      {showAddClass && (
+        <div onClick={()=>setShowAddClass(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"22px",width:"min(420px,100%)",boxSizing:"border-box"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+              <div style={{fontSize:"16px",fontWeight:"800",color:T.text}}>Add class</div>
+              <button onClick={()=>setShowAddClass(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><X size={18}/></button>
+            </div>
+            <input autoFocus value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="Class name" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",marginBottom:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"14px"}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
+              <select value={addForm.type} onChange={e=>setAddForm(f=>({...f,type:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{Object.keys(CAT_COLOR).map(t=><option key={t} value={t}>{t}</option>)}</select>
+              <input value={addForm.coach} onChange={e=>setAddForm(f=>({...f,coach:e.target.value}))} placeholder="Coach" style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}/>
+              <select value={addForm.day} onChange={e=>setAddForm(f=>({...f,day:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{DAYS.map(d=><option key={d} value={d}>{d}</option>)}</select>
+              <select value={addForm.slot} onChange={e=>setAddForm(f=>({...f,slot:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{SLOTS.map(sl=><option key={sl} value={sl}>{sl}</option>)}</select>
+            </div>
+            <div style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Repeat</div>
+            <div style={{display:"flex",gap:"6px",marginBottom:"18px"}}>
+              {[["once","This week"],["weekly","Weekly"],["daily","Every day"]].map(([val,lbl])=>(
+                <button key={val} onClick={()=>setAddForm(f=>({...f,repeat:val}))} style={{flex:1,padding:"9px 0",background:addForm.repeat===val?T.accent:"transparent",color:addForm.repeat===val?"var(--on-accent)":T.muted,border:`1px solid ${addForm.repeat===val?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>{lbl}</button>
+              ))}
+            </div>
+            <button onClick={addClass} disabled={!addForm.name.trim()} style={{width:"100%",padding:"12px",background:addForm.name.trim()?"var(--accent)":T.border,color:addForm.name.trim()?"var(--on-accent)":T.muted,border:"none",borderRadius:"9px",cursor:addForm.name.trim()?"pointer":"not-allowed",fontSize:"14px",fontWeight:"700"}}>Add to schedule</button>
+          </div>
+        </div>
+      )}
 
       {/* Schedule grid */}
       <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",overflow:"hidden",marginBottom:"16px"}}>
@@ -3813,7 +3888,7 @@ function CalendarScreen({onBack}) {
             </div>
             {visibleDays.map(day=>{
               const key = `${day}-${slot}`;
-              const cls = schedule[key];
+              const cls = effSchedule[key];
               const sug = suggested.find(s=>s.day===day && s.slot===slot);
               return (
                 <div key={day} style={{padding:"6px",borderLeft:`1px solid ${T.border}`,position:"relative"}}>
@@ -6032,7 +6107,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
 }
 
 
-function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress}) {
+function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange}) {
   const vw = useWindowWidth();
   const isMobile  = vw < 480;
   const isTablet  = vw < 768;
@@ -6056,6 +6131,26 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     }).catch(()=>{});
   }, [stageTrackIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingEx, setEditingEx] = useState(null);
+  // F6: exercise movement previews (ExerciseDB)
+  const [gifState, setGifState] = useState({});
+  const [gifKeyDraft, setGifKeyDraft] = useState("");
+  const openGif = (gkey, name) => {
+    const hasKey = !!(localStorage.getItem("jungle_exdb_key")||"").trim();
+    if (!hasKey) { setGifState(pv=>({...pv,[gkey]:{status:"nokey"}})); return; }
+    setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
+    fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
+  };
+  const toggleGif = (gkey, name) => {
+    if (gifState[gkey]) { setGifState(pv=>{const n={...pv}; delete n[gkey]; return n;}); return; }
+    openGif(gkey, name);
+  };
+  const saveGifKey = (gkey, name) => {
+    const v=(gifKeyDraft||"").trim(); if(!v) return;
+    try { localStorage.setItem("jungle_exdb_key", v); } catch(_){}
+    setGifKeyDraft("");
+    setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
+    fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
+  };
   const [subTab, setSubTab] = useState("exercises"); // "exercises"|"music"|"groups"|"queue"
   // Pending template change — { classType, subType } — shown when stages have custom exercises
   const [templatePrompt, setTemplatePrompt] = useState(null);
@@ -6303,16 +6398,41 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                 {/* Exercise list when expanded */}
                 {isOpen && (s.exercises||[]).length > 0 && (
                   <div style={{padding:"6px 14px 10px"}}>
-                    {(s.exercises||[]).map((ex,ei)=>(
-                      <div key={ei} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 6px",borderBottom:ei<(s.exercises||[]).length-1?`1px solid ${T.border}`:"none"}}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="1.8">
-                          <circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/>
-                          <circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>
-                        </svg>
-                        <div style={{flex:1,fontSize:"13px",color:T.text}}>{ex.n}</div>
-                        <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
+                    {(s.exercises||[]).map((ex,ei)=>{
+                      const gkey = `${s.id}-${ei}`;
+                      const g = gifState[gkey];
+                      return (
+                      <div key={ei}>
+                        <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 6px",borderBottom:ei<(s.exercises||[]).length-1?`1px solid ${T.border}`:"none"}}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="1.8">
+                            <circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/>
+                            <circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>
+                          </svg>
+                          <div style={{flex:1,fontSize:"13px",color:T.text}}>{ex.n}</div>
+                          <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
+                          <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} title="Movement preview" style={{background:"none",border:"none",cursor:"pointer",color:g?T.accent:T.muted,padding:"2px",display:"flex",flexShrink:0}}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                          </button>
+                        </div>
+                        {g && (
+                          <div onClick={ev=>ev.stopPropagation()} style={{padding:"0 6px 6px"}}>
+                            {g.status==="loading" && <div style={{fontSize:"11px",color:T.muted,padding:"6px"}}>Loading preview…</div>}
+                            {g.status==="ok" && <img src={g.url} alt={ex.n} style={{width:"100%",maxWidth:"240px",borderRadius:"8px",display:"block",margin:"4px auto"}} onError={ev=>{ev.target.style.display="none";}}/>}
+                            {g.status==="none" && <div style={{fontSize:"11px",color:T.muted,padding:"6px"}}>No preview found for "{ex.n}".</div>}
+                            {g.status==="nokey" && (
+                              <div style={{padding:"8px",background:T.navy,borderRadius:"8px",margin:"4px 0"}}>
+                                <div style={{fontSize:"11px",color:T.muted,marginBottom:"6px"}}>Paste your ExerciseDB (RapidAPI) key to load movement GIFs:</div>
+                                <div style={{display:"flex",gap:"6px"}}>
+                                  <input value={gifKeyDraft} onChange={e=>setGifKeyDraft(e.target.value)} placeholder="RapidAPI key" style={{flex:1,minWidth:0,padding:"7px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"12px"}}/>
+                                  <button onClick={ev=>{ev.stopPropagation(); saveGifKey(gkey, ex.n);}} style={{padding:"7px 12px",background:T.accent,color:T.bg,border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Save</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                     <button onClick={e=>{e.stopPropagation();addEx();}}
                       style={{marginTop:"8px",width:"100%",padding:"7px",background:"transparent",border:`1px dashed ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -6377,6 +6497,17 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   <div style={{width:"38px",height:"22px",borderRadius:"11px",background:T.accent,position:"relative",flexShrink:0,cursor:"pointer"}}>
                     <div style={{position:"absolute",right:"2px",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:T.bg}}/>
                   </div>
+                </div>
+
+                {/* F4: Crossfade duration */}
+                <div style={{padding:"14px",borderRadius:"12px",background:T.card,border:`1px solid ${T.border}`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Crossfade</div>
+                    <div style={{fontSize:"12px",fontWeight:"700",color:T.accent}}>{(crossfade||0)===0?"Off":`${crossfade}s`}</div>
+                  </div>
+                  <div style={{fontSize:"11px",color:T.muted,marginBottom:"10px"}}>Fade the soundtrack in as each stage begins</div>
+                  <input type="range" min="0" max="12" step="1" value={crossfade||0} onChange={e=>onCrossfadeChange&&onCrossfadeChange(parseInt(e.target.value)||0)} style={{width:"100%",accentColor:T.accent,cursor:"pointer"}}/>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:"9px",color:T.muted,marginTop:"2px"}}><span>Off</span><span>6s</span><span>12s</span></div>
                 </div>
 
                 {/* Energy curve */}
@@ -6518,20 +6649,44 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const [showLiveSearch, setShowLiveSearch] = useState(false);
   const [liveSearchStageIdx, setLiveSearchStageIdx] = useState(liveState.idx);
 
-  // Feature 7: Mic Mode / Volume Ducking
-  // When active, ducks Spotify to 20% so the instructor can speak; restores to 80% on toggle-off.
+  // F3: Mic Mode - auto-duck the music while the instructor is speaking (Web Audio mic detection).
   const NORMAL_VOL = 0.8;
   const DUCKED_VOL = 0.2;
-  const [micMode, setMicMode] = useState(false);
-  const handleMicMode = () => {
-    const next = !micMode;
-    setMicMode(next);
-    if (player) player.setVolume(next ? DUCKED_VOL : NORMAL_VOL).catch(()=>{});
-  };
-  // Restore normal volume on unmount (e.g. leaving Live screen with mic mode on)
+  const [micMode, setMicMode] = useState(false);    // armed
+  const [micActive, setMicActive] = useState(false); // currently ducking (speech detected)
+  const handleMicMode = () => setMicMode(m => !m);
   useEffect(() => {
-    return () => { if (player && micMode) player.setVolume(NORMAL_VOL).catch(()=>{}); };
-  }, [player, micMode]);
+    if (!micMode) { if (player) player.setVolume(NORMAL_VOL).catch(()=>{}); return; }
+    let cancelled=false, stream, ctx, raf, analyser, ducked=false, quiet=0;
+    const THRESH=0.055, RELEASE=18;
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return;
+    navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } }).then(strm => {
+      if (cancelled) { strm.getTracks().forEach(t=>t.stop()); return; }
+      stream=strm;
+      ctx=new (window.AudioContext||window.webkitAudioContext)();
+      analyser=ctx.createAnalyser(); analyser.fftSize=512;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const buf=new Uint8Array(analyser.frequencyBinCount);
+      const loop=()=>{
+        if (cancelled) return;
+        analyser.getByteFrequencyData(buf);
+        let sum=0; for (let k=0;k<buf.length;k++){ const v=buf[k]/255; sum+=v*v; }
+        const rms=Math.sqrt(sum/buf.length);
+        if (rms>THRESH){ quiet=0; if(!ducked){ ducked=true; setMicActive(true); if(player) player.setVolume(DUCKED_VOL).catch(()=>{}); } }
+        else if (ducked){ quiet++; if(quiet>RELEASE){ ducked=false; setMicActive(false); if(player) player.setVolume(NORMAL_VOL).catch(()=>{}); } }
+        raf=requestAnimationFrame(loop);
+      };
+      loop();
+    }).catch(()=>{});
+    return () => {
+      cancelled=true;
+      if (raf) cancelAnimationFrame(raf);
+      if (stream) stream.getTracks().forEach(t=>t.stop());
+      if (ctx && ctx.state!=="closed") ctx.close().catch(()=>{});
+      setMicActive(false);
+      if (player) player.setVolume(NORMAL_VOL).catch(()=>{});
+    };
+  }, [micMode, player]);
 
   // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, S=search, M=mic mode, Esc=back
   useEffect(() => {
@@ -6784,7 +6939,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 )}
                 {/* Mic mode */}
                 {player && (
-                  <button onClick={handleMicMode} title="Mic Mode (M)"
+                  <button onClick={handleMicMode} title={micMode ? (micActive ? "Ducking - mic live" : "Mic Mode armed (M)") : "Mic Mode (M)"}
                     style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":T.muted,animation:micMode?"jg-pulse 1s ease-in-out infinite":"none"}}>
                     <Mic size={16}/>
                   </button>
@@ -7571,6 +7726,8 @@ export default function App() {
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [shareCopied, setShareCopied] = useState(false);
   const [showNav, setShowNav] = React.useState(false);
+  const [crossfade, setCrossfade] = useState(() => { try { return parseInt(localStorage.getItem("jungle_crossfade")||"0")||0; } catch(_) { return 0; } });
+  useEffect(() => { try { localStorage.setItem("jungle_crossfade", String(crossfade)); } catch(_) {} }, [crossfade]);
 
   // ── Skin / Theme ─────────────────────────────────────────────────────────
   const [activeSkinId, setActiveSkinId] = useState(() => localStorage.getItem("jungle_skin") || "canopy");
@@ -7639,6 +7796,8 @@ export default function App() {
   stagesRef.current = stages;
   const liveStateRef = useRef(liveState);
   liveStateRef.current = liveState;
+  const crossfadeRef = useRef(crossfade);
+  crossfadeRef.current = crossfade;
   useEffect(() => {
     if (view!=="live"&&view!=="display"&&view!=="overview-display") return;
     if (!liveState.playing) return;
@@ -7668,6 +7827,7 @@ export default function App() {
     const dev = activeDeviceId||deviceId;
     if (!dev) return;
     apiPlay(dev, uris).catch(()=>{});
+    if (crossfadeRef.current > 0 && player) rampVolume(player, 0, 0.8, crossfadeRef.current);
   }, [view, liveState.playing, liveState.idx]);
 
   // F7: Global Space = play/pause. Prevents Space from clicking whatever button has focus.
@@ -7875,7 +8035,7 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {view==="dashboard"&&<DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} onViewMusic={()=>setView("music")} onViewSchedule={()=>setView("calendar")} onViewMembers={()=>setView("member")} profile={profile} sessionHistory={sessionHistory} stages={stages} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
-        {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress}/>}
+        {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="overview-display"&&<OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
         {view==="live"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
