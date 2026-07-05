@@ -7539,6 +7539,7 @@ export default function App() {
 
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [shareCopied, setShareCopied] = useState(false);
+  const [showNav, setShowNav] = React.useState(false);
 
   // ── Skin / Theme ─────────────────────────────────────────────────────────
   const [activeSkinId, setActiveSkinId] = useState(() => localStorage.getItem("jungle_skin") || "canopy");
@@ -7707,7 +7708,6 @@ export default function App() {
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio"},
   ];
-  const [showNav, setShowNav] = React.useState(false);
   const isFullscreen = view==="display"||view==="overview-display";
   const navGroups = ["Main","Insights","Tools","Studio"];
   const navTo = key => {
