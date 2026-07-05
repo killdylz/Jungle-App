@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload } from "lucide-react";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -308,12 +308,25 @@ async function getToken() {
 }
 function clearTokens() { ["sp_at","sp_ex","sp_rt","pkce_v","sp_scope"].forEach(k=>localStorage.removeItem(k)); }
 
+// Unicode-safe base64 (btoa throws on chars >0xFF: accents, emojis, en-dashes)
+function b64EncodeUnicode(str){ const bytes=new TextEncoder().encode(str); let bin=""; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); }
+function b64DecodeUnicode(b64){ const bin=atob(b64); const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0)); return new TextDecoder().decode(bytes); }
+function downloadJson(obj, filename){
+  try {
+    const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  } catch(_) {}
+}
+
 // ─── Attendee Mode (shareable read-only URL) ─────────────────────────────────
 function getAttendeePayload() {
   try {
     const p = new URLSearchParams(window.location.search);
     if (p.get("mode") !== "attendee") return null;
-    return JSON.parse(atob(p.get("data") || ""));
+    return JSON.parse(b64DecodeUnicode(p.get("data") || ""));
   } catch(_) { return null; }
 }
 const ATTENDEE_PAYLOAD = getAttendeePayload();
@@ -481,19 +494,24 @@ async function apiGetPlaylistTracks(playlistId) {
   const token = await getToken();
   if (!token||!playlistId) return [];
   const tracks = [];
-  let url = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=50&additional_types=track&market=from_token`;
+  const base = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=50&additional_types=track`;
+  let url = `${base}&market=from_token`;
+  let triedNoMarket = false;
   while (url) {
     const r = await fetch(url, { headers:{ Authorization:`Bearer ${token}` } });
     if (!r.ok) {
       const errBody = await r.json().catch(()=>({}));
       const errMsg  = errBody?.error?.message || "";
       if (r.status === 403) {
-        if (errMsg.toLowerCase().includes("insufficient client scope") || errMsg.toLowerCase().includes("scope")) {
-          localStorage.removeItem("sp_scope");
-          return null;
-        }
-        // Spotify API restricts track access to playlists owned by the authenticated user
-        // in development quota mode. This affects playlists owned by other users.
+        const storedScope = localStorage.getItem("sp_scope") || "";
+        // F8: a collaborative playlist often 403s with a GENERIC message when the saved token
+        // predates the playlist-read-collaborative scope. Treat missing scope as a re-auth trigger.
+        const scopeMissing = errMsg.toLowerCase().includes("scope")
+          || (storedScope && !storedScope.includes("playlist-read-collaborative"));
+        if (scopeMissing) { localStorage.removeItem("sp_scope"); return null; }
+        // F8: collaborative/relinked playlists can 403 specifically due to market=from_token — retry once without it.
+        if (!triedNoMarket) { triedNoMarket = true; url = base; continue; }
+        // Still forbidden: Spotify dev-mode quota blocks track access to playlists owned by other users.
         return { denied: true, message: errMsg || "Forbidden" };
       }
       if (r.status === 404) {
@@ -2971,13 +2989,21 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
 
 
 // ─── TemplatesScreen ──────────────────────────────────────────────────────────
-function TemplatesScreen({onSelectClassStyle, onBack}) {
+function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImportTemplate}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
   const [selClassType, setSelClassType] = useState(null);
   const [selStyle, setSelStyle]         = useState(null);
   const [search, setSearch]             = useState("");
+  const fileRef = useRef(null);
+  const handleImportFile = (e) => {
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { try { const data = JSON.parse(reader.result); onImportTemplate && onImportTemplate(data); } catch(_) { alert("Could not read that file - please choose a valid Jungle template JSON."); } };
+    reader.readAsText(f);
+    e.target.value = "";
+  };
   const classTypes = Object.entries(WORKOUT_LIBRARY);
 
   const filteredTypes = search
@@ -3003,6 +3029,11 @@ function TemplatesScreen({onSelectClassStyle, onBack}) {
         <div style={{flex:1,minWidth:0}}>
           <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
           <p style={{fontSize:"12px",color:T.muted}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
+          <input ref={fileRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:"none"}}/>
+          <button onClick={()=>fileRef.current&&fileRef.current.click()} title="Import a Jungle template JSON" style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"600"}}><Upload size={14}/>Import</button>
+          <button onClick={()=>{ if(selClassType&&selStyle) onExportTemplate&&onExportTemplate(selClassType,selStyle); }} disabled={!(selClassType&&selStyle)} title={selClassType&&selStyle?"Export selected style as JSON":"Pick a class type and style first"} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:(selClassType&&selStyle)?T.accent+"20":T.navy,border:`1px solid ${(selClassType&&selStyle)?T.accent+"40":T.border}`,borderRadius:"8px",cursor:(selClassType&&selStyle)?"pointer":"not-allowed",color:(selClassType&&selStyle)?T.accent:T.muted,fontSize:"12px",fontWeight:"600"}}><Download size={14}/>Export</button>
         </div>
       </div>
 
@@ -7099,7 +7130,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           exercises: (s.exercises||[]).map(e => ({ n:e.n, s:e.s, r:e.r, rest:e.rest }))
         }))
       };
-      const encoded = btoa(JSON.stringify(payload));
+      const encoded = b64EncodeUnicode(JSON.stringify(payload));
       return `${window.location.origin}${window.location.pathname}?mode=attendee&data=${encoded}`;
     } catch { return ""; }
   })();
@@ -7606,6 +7637,8 @@ export default function App() {
   // ── Session timer ─────────────────────────────────────────────────────────
   const stagesRef = useRef(stages);
   stagesRef.current = stages;
+  const liveStateRef = useRef(liveState);
+  liveStateRef.current = liveState;
   useEffect(() => {
     if (view!=="live"&&view!=="display"&&view!=="overview-display") return;
     if (!liveState.playing) return;
@@ -7637,6 +7670,23 @@ export default function App() {
     apiPlay(dev, uris).catch(()=>{});
   }, [view, liveState.playing, liveState.idx]);
 
+  // F7: Global Space = play/pause. Prevents Space from clicking whatever button has focus.
+  // Live view is owned by LiveScreen's own handler, so skip it here to avoid a double toggle.
+  useEffect(() => {
+    const onSpace = (e) => {
+      if (e.key !== " " && e.code !== "Space") return;
+      if (view === "live") return;
+      const el = e.target;
+      if (el && (["INPUT","TEXTAREA","SELECT"].includes(el.tagName) || el.isContentEditable)) return;
+      e.preventDefault();
+      const willPlay = !liveStateRef.current.playing;
+      if (player) { willPlay ? player.resume().catch(()=>{}) : player.pause().catch(()=>{}); }
+      setLiveState(ls => ({ ...ls, playing: willPlay }));
+    };
+    window.addEventListener("keydown", onSpace);
+    return () => window.removeEventListener("keydown", onSpace);
+  }, [view, player]);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleAddTrack     = (si, t)        => setStages(ss => { const n=[...ss]; n[si]={...n[si],tracks:[...(n[si].tracks||[]),t]};          return n; });
   const handleRemoveTrack  = (si, ti)       => setStages(ss => { const n=[...ss]; n[si]={...n[si],tracks:n[si].tracks.filter((_,i)=>i!==ti)};  return n; });
@@ -7667,9 +7717,25 @@ export default function App() {
     setStages(withEx); setSessionName(`${cls?.label||ctk} — ${sub?.label||stk}`);
     setClassChoice({classType:ctk,subType:stk}); setView("builder");
   };
+  const handleExportTemplate = (ctk, stk) => {
+    const stageDefs = CLASS_STAGE_TEMPLATES[ctk]?.[stk]||[];
+    const init = stageDefs.map(s=>({...s,id:uid(),exercises:[],tracks:[]}));
+    const withEx = distributeLibraryExercises(ctk, stk, init);
+    const cls = WORKOUT_LIBRARY[ctk]; const sub = cls?.subTypes?.[stk];
+    const data = { jungleTemplate:true, version:1, name:`${cls?.label||ctk} — ${sub?.label||stk}`, classType:ctk, subType:stk, stages:withEx };
+    downloadJson(data, `jungle-template-${ctk}-${stk}.json`);
+  };
+  const handleImportTemplate = (data) => {
+    if(!data || !Array.isArray(data.stages)) { alert("That file isn't a Jungle template (no stages found)."); return; }
+    const imported = data.stages.map(s=>({ ...s, id:uid(), exercises:Array.isArray(s.exercises)?s.exercises:[], tracks:Array.isArray(s.tracks)?s.tracks:[] }));
+    setStages(imported);
+    setSessionName(data.name || "Imported Template");
+    if(data.classType) setClassChoice({classType:data.classType, subType:data.subType||null});
+    setView("builder");
+  };
   const shareWithClass = () => {
     const payload = { name:sessionName, stages:stages.map(s=>({name:s.name,type:s.type,dur:s.dur,exercises:(s.exercises||[]).map(e=>({n:e.n,s:e.s,r:e.r,rest:e.rest}))})) };
-    const url = `${window.location.origin}${window.location.pathname}?mode=attendee&data=${btoa(JSON.stringify(payload))}`;
+    const url = `${window.location.origin}${window.location.pathname}?mode=attendee&data=${b64EncodeUnicode(JSON.stringify(payload))}`;
     navigator.clipboard.writeText(url).then(()=>{setShareCopied(true);setTimeout(()=>setShareCopied(false),2500);}).catch(()=>window.open(url,"_blank"));
   };
 
@@ -7808,7 +7874,7 @@ export default function App() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {view==="dashboard"&&<DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} onViewMusic={()=>setView("music")} onViewSchedule={()=>setView("calendar")} onViewMembers={()=>setView("member")} profile={profile} sessionHistory={sessionHistory} stages={stages} djProgress={djProgress}/>}
-        {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")}/>}
+        {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
         {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="overview-display"&&<OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
