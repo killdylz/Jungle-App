@@ -263,6 +263,25 @@ function generateSkinFromPalette(swatches, vibe="natural") {
   };
 }
 
+// FR-H1: one palette -> three independently contrast-clamped themes (one recommended).
+function generateThemes(swatches){
+  const pal = (swatches && swatches.length) ? swatches : ["#7BE3A4"];
+  const a0 = pal[0];
+  const a1 = pal[1] || a0;
+  const [h,sat,l] = rgbToHsl(...hexToRgb(a0));
+  const steel = rgbToHex(...hslToRgb(h, Math.max(0.08, sat*0.35), Math.min(0.74, l+0.06)));
+  const mk = (acc, vibe, name, voice, num, glow) => {
+    const sk = generateSkinFromPalette([acc], vibe);
+    sk.name = name; sk.mode = "dark"; sk.voice = voice; sk.numeralStyle = num; sk.accentBehaviour = glow;
+    return sk;
+  };
+  return [
+    { ...mk(a0, "natural", "Signature", "credible-community", "proportional", "flat"), recommended:true },
+    mk(a1, "energetic", "Charge", "competitive-measurable", "tabular", "glow"),
+    mk(steel, "bold", "Steel", "technical-considered", "tabular", "flat"),
+  ];
+}
+
 // ─── Responsive hook ──────────────────────────────────────────────────────────
 function useWindowWidth() {
   const [w, setW] = useState(typeof window!=="undefined" ? window.innerWidth : 1024);
@@ -1780,6 +1799,7 @@ const Btn = ({children, onClick, variant="primary", style:s={}, ...p}) => (
     color:variant==="ghost"?"var(--accent)":variant==="green"?"var(--on-green)":"var(--on-accent)",
     border:`1px solid ${variant==="ghost"?"var(--accent)":"transparent"}`,
     borderRadius:"6px",cursor:"pointer",fontSize:"13px",fontWeight:"700",
+    boxShadow:variant==="ghost"?"none":"var(--glow)",
     display:"inline-flex",alignItems:"center",gap:"6px",
     transition:"background .3s ease, color .2s ease, border-color .3s ease",
     ...s}} {...p}>{children}</button>
@@ -4594,6 +4614,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   const [analyzing, setAnalyzing] = React.useState(false);
   const [analyzeStep, setAnalyzeStep] = React.useState(0);
   const [generatedSkin, setGeneratedSkin] = React.useState(null); // full skin object
+  const [generatedThemes, setGeneratedThemes] = React.useState([]);   // FR-H1: 3 options
   const [vibe, setVibe]           = React.useState("natural");
   const fileRef                   = React.useRef(null);
 
@@ -4640,6 +4661,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     setAnalyzing(true);
     setAnalyzeStep(0);
     setGeneratedSkin(null);
+    setGeneratedThemes([]);
 
     const advance = (i) => {
       if (i === 1) {
@@ -4653,8 +4675,9 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
       } else if (i >= analyzeSteps.length) {
         setAnalyzing(false);
         // Generate skin from extracted palette
-        const skin = generateSkinFromPalette(palette || ["#7BE3A4"], vibe);
-        setGeneratedSkin(skin);
+        const themes = generateThemes(palette || ["#7BE3A4"]);
+        setGeneratedThemes(themes);
+        setGeneratedSkin(themes[0]);
       } else {
         setAnalyzeStep(i);
         setTimeout(() => advance(i + 1), 900);
@@ -4820,6 +4843,22 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {generatedSkin && !analyzing && (
               <div style={{background:T.navy,border:`1px solid ${generatedSkin.tokens.accent}50`,borderRadius:"12px",padding:"14px",marginTop:"4px"}}>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>GENERATED IDENTITY</div>
+                {generatedThemes.length>1 && (
+                  <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
+                    {generatedThemes.map((th,i)=>{
+                      const on = generatedSkin && generatedSkin.name===th.name;
+                      return (
+                        <button key={i} onClick={()=>setGeneratedSkin(th)} style={{flex:1,padding:"8px",background:on?th.tokens.accent+"22":T.card,border:`1px solid ${on?th.tokens.accent:T.border}`,borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
+                          <div style={{display:"flex",gap:"3px",marginBottom:"6px"}}>
+                            {[th.tokens.accent,th.tokens.green,th.tokens.card].map((c,j)=><div key={j} style={{flex:1,height:"14px",borderRadius:"3px",background:c}}/>)}
+                          </div>
+                          <div style={{fontSize:"11px",fontWeight:"700",color:on?th.tokens.accent:T.text}}>{th.name}</div>
+                          {th.recommended && <div style={{fontSize:"8px",fontWeight:"700",color:T.accent,letterSpacing:"0.5px"}}>RECOMMENDED</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
                   {[generatedSkin.tokens.accent, generatedSkin.tokens.green, generatedSkin.tokens.card, generatedSkin.tokens.bg].map((c,i)=>(
                     <div key={i} title={c} style={{flex:1,height:"28px",borderRadius:"7px",background:c,border:"1px solid rgba(255,255,255,.1)"}}/>
@@ -4836,7 +4875,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                     style={{flex:1,padding:"10px",background:generatedSkin.tokens.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",fontFamily:`'${displayFont}',sans-serif`}}>
                     Apply to all surfaces
                   </button>
-                  <button onClick={()=>setGeneratedSkin(null)}
+                  <button onClick={()=>{setGeneratedSkin(null);setGeneratedThemes([]);}}
                     style={{padding:"10px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:T.muted}}>
                     Retry
                   </button>
@@ -7457,7 +7496,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:"56px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"tabular-nums",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
           <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:T.muted,marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
           <p style={{fontSize:"13px",color:T.muted,marginTop:"8px",opacity:0.6}}>Stage {liveState.idx+1} of {stages.length}</p>
         </div>
@@ -7489,7 +7528,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
           <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"56px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"28px"}}/>
-          <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"15px",color:T.muted,marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
           <div style={{width:"min(480px,80%)",height:"8px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -7540,7 +7579,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           </div>
           {/* Timer right */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"36px"}}>
-            <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
+            <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
             <p style={{fontSize:"16px",color:T.muted,marginTop:"10px",marginBottom:"28px"}}>remaining</p>
             <div style={{width:"100%",maxWidth:"360px",height:"8px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
               <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -7595,7 +7634,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"64px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"36px",transition:"background 0.5s"}}/>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"tabular-nums",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"16px",color:T.muted,marginBottom:"36px"}}>remaining</p>
           <div style={{width:"100%",height:"8px",background:T.navy,borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -7611,7 +7650,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               <div style={{marginBottom:"28px",background:ivColor+"12",border:`2px solid ${ivColor}`,borderRadius:"16px",padding:"18px 24px",display:"flex",alignItems:"center",gap:"24px"}}>
                 <div>
                   <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"2px",display:"block",marginBottom:"4px"}}>{ivState.phase}</span>
-                  <p style={{fontSize:`${Math.round(64*scaleMult)}px`,fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"tabular-nums"}}>{fmtSec(ivState.phaseRemaining)}</p>
+                  <p style={{fontSize:`${Math.round(64*scaleMult)}px`,fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
                 </div>
                 <div>
                   <p style={{fontSize:`${Math.round(18*scaleMult)}px`,fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ivState.exName}</p>
