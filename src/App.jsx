@@ -1866,13 +1866,13 @@ const Btn = ({children, onClick, variant="primary", style:s={}, ...p}) => (
     ...s}} {...p}>{children}</button>
 );
 const Input = ({style:s={}, ...p}) => (
-  <input style={{padding:"9px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"13px",outline:"none",width:"100%",boxSizing:"border-box",...s}} {...p}/>
+  <input style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",boxSizing:"border-box",...s}} {...p}/>
 );
 const Select = ({children, style:s={}, ...p}) => (
-  <select style={{padding:"9px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"13px",outline:"none",width:"100%",...s}} {...p}>{children}</select>
+  <select style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",...s}} {...p}>{children}</select>
 );
 const Tag = ({children, color, style:s={}}) => (
-  <span style={{display:"inline-block",padding:"3px 9px",background:color||T.navy,color:"white",borderRadius:"4px",fontSize:"11px",fontWeight:"700",...s}}>{children}</span>
+  <span style={{display:"inline-block",padding:"3px 9px",background:color||"var(--navy)",color:"white",borderRadius:"4px",fontSize:"11px",fontWeight:"700",...s}}>{children}</span>
 );
 const SpBadge = ({children}) => (
   <span style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"5px 10px",background:"var(--green-20)",color:"var(--green)",borderRadius:"6px",fontSize:"12px",fontWeight:"700",border:"1px solid var(--green-40)",transition:"background .3s,color .2s,border-color .3s"}}>{children}</span>
@@ -1931,10 +1931,10 @@ function StatCard({icon, label, value, color}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   return (
-    <div style={{padding:isMobile?"12px 10px":"18px",background:T.card,borderRadius:"10px",border:`1px solid ${T.border}`}}>
+    <div style={{padding:isMobile?"12px 10px":"18px",background:"var(--card)",borderRadius:"10px",border:"1px solid var(--border)"}}>
       <div style={{fontSize:isMobile?"18px":"22px",marginBottom:isMobile?"5px":"8px"}}>{icon}</div>
-      <p style={{fontSize:isMobile?"20px":"26px",fontWeight:"800",color:color||T.text,marginBottom:"3px",lineHeight:"1"}}>{value}</p>
-      <p style={{fontSize:"10px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</p>
+      <p style={{fontSize:isMobile?"20px":"26px",fontWeight:"800",color:color||"var(--text)",marginBottom:"3px",lineHeight:"1"}}>{value}</p>
+      <p style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</p>
     </div>
   );
 }
