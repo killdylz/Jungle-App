@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
+import { supabase, supabaseEnabled } from "./supabase.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -6095,6 +6096,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const [subTab, setSubTab] = useState("music"); // avoid auto-opening the exercise library on entry
   const [showSmart, setShowSmart] = useState(false);
   const [smartPrompt, setSmartPrompt] = useState("");
+  const [smartBusy, setSmartBusy] = useState(false);
   // Pending template change — { classType, subType } — shown when stages have custom exercises
   const [templatePrompt, setTemplatePrompt] = useState(null);
 
@@ -6157,6 +6159,26 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     } else {
       applyTemplate(selectedClass, subType);
     }
+  };
+  const runSmartBuild = async () => {
+    const pr = (smartPrompt||"").trim(); if (!pr) return;
+    if (supabaseEnabled && supabase) {
+      setSmartBusy(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("smart-build", { body: { prompt: pr } });
+        if (error) throw error;
+        if (data && data.error) throw new Error(data.error);
+        const built = (data && data.stages || []).map(st => ({ id:uid(), type:st.type||"circuit", name:st.name||"Stage", dur:Math.max(60, Math.round((st.durMin||8)*60)), exercises:(st.exercises||[]).map(e => ({ id:uid(), n:e.n||"Exercise", s:e.s||"", r:e.r||"", rest:e.rest||"" })), tracks:[] }));
+        if (built.length) {
+          onReorderStages(built); onSessionNameChange((data && data.name) || "Smart-built class"); setSelIdx(0);
+          setSmartBusy(false); setShowSmart(false);
+          setDistributeToast({msg:`\u26a1 Built "${(data && data.name)||"your class"}" \u2014 ${built.length} stages`}); setTimeout(()=>setDistributeToast(null),4000);
+          return;
+        }
+      } catch(err) { /* fall back to template matcher */ }
+      setSmartBusy(false);
+    }
+    const pk = smartPickClass(pr); applyTemplate(pk.classType, pk.subType); setShowSmart(false);
   };
   const [musicTargetIdx, setMusicTargetIdx] = useState(0);
   // Keep musicTargetIdx in sync when user clicks a different stage
@@ -6572,8 +6594,8 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             </div>
             <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"8px"}}>Describe it and Jungle builds the stages + exercises:</div>
             <div style={{display:"flex",gap:"8px",marginBottom:"18px"}}>
-              <input autoFocus value={smartPrompt} onChange={e=>setSmartPrompt(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ const pk=smartPickClass(smartPrompt); applyTemplate(pk.classType,pk.subType); setShowSmart(false); } }} placeholder="e.g. 45 min HIIT with a strength finisher" style={{flex:1,minWidth:0,padding:"10px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
-              <button onClick={()=>{ const pk=smartPickClass(smartPrompt); applyTemplate(pk.classType,pk.subType); setShowSmart(false); }} style={{padding:"10px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap"}}>Build</button>
+              <input autoFocus value={smartPrompt} onChange={e=>setSmartPrompt(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ runSmartBuild(); } }} placeholder="e.g. 45 min HIIT with a strength finisher" style={{flex:1,minWidth:0,padding:"10px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+              <button onClick={()=>{ runSmartBuild(); }} style={{padding:"10px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap",opacity:smartBusy?0.6:1}} disabled={smartBusy}>{smartBusy?"Building\u2026":"Build"}</button>
             </div>
             <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Or insert a template</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",maxHeight:"240px",overflowY:"auto"}}>
