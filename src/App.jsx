@@ -47,6 +47,9 @@ const PRESET_SKINS = {
 // ─── Theme object (populated from active skin at render — keeps all T.x refs working) ──
 const DARK = PRESET_SKINS.canopy.tokens;   // fallback reference kept for safety
 const T = { ...PRESET_SKINS.canopy.tokens };
+// FR-A2: theme/brand context so any surface can read the active skin + gym branding.
+const ThemeContext = React.createContext({ skin: null, gymBranding: {} });
+function useTheme(){ return React.useContext(ThemeContext); }
 
 // ─── Inject skin font pair ─────────────────────────────────────────────────────
 function injectSkinFonts(skin) {
@@ -93,6 +96,18 @@ function applySkinCSS(tokens, meta={}) {
   const num = meta.numeralStyle || "proportional";
   r.setProperty("--num", (num==="tabular"||num==="mono") ? "tabular-nums" : "normal");
   r.setProperty("--num-font", num==="mono" ? "'Space Mono',ui-monospace,monospace" : "inherit");
+  // FR-A5: font tokens (display -> headings, body -> shell)
+  if (meta.fonts) {
+    r.setProperty("--display", `'${meta.fonts.display}', sans-serif`);
+    r.setProperty("--body", `'${meta.fonts.body}', sans-serif`);
+    document.body.style.fontFamily = `'${meta.fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+  }
+  // FR-A4: smooth reskin transition (inject once)
+  if (!document.getElementById("jungle-reskin-tx")) {
+    const _tx = document.createElement("style"); _tx.id = "jungle-reskin-tx";
+    _tx.textContent = "#root *{transition:background-color .35s ease,color .35s ease,border-color .35s ease,fill .35s ease;}";
+    document.head.appendChild(_tx);
+  }
   // Body background keeps in sync with skin
   document.body.style.background = tokens.bg;
 }
@@ -180,6 +195,17 @@ function nudgeForContrast(fgHex, bgHex, target=4.5, maxIter=30){
   }
   return rgbToHex(...hslToRgb(h,s,l));
 }
+// FR-H6/D4: direction-aware contrast nudge (darkens ink on light bg, lightens on dark bg).
+function nudgeContrast(fgHex, bgHex, target=4.5, maxIter=40){
+  let [h,s,l]=rgbToHsl(...hexToRgb(fgHex));
+  const [,,bgL]=rgbToHsl(...hexToRgb(bgHex));
+  const dir = bgL > 0.5 ? -0.03 : 0.03;
+  let iter=0;
+  while(wcagContrast(rgbToHex(...hslToRgb(h,s,l)),bgHex)<target && iter<maxIter && l>0.02 && l<0.98){
+    l=Math.max(0,Math.min(1,l+dir));iter++;
+  }
+  return rgbToHex(...hslToRgb(h,s,l));
+}
 
 // ─── Extract colour palette from image ────────────────────────────────────────
 function extractPalette(imgSrc, callback) {
@@ -193,9 +219,11 @@ function extractPalette(imgSrc, callback) {
     ctx.drawImage(img, 0, 0, size, size);
     const { data } = ctx.getImageData(0, 0, size, size);
     const freq = {};
+    let lumaSum = 0, lumaCount = 0;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
       if (a < 128) continue;
+      lumaSum += (0.299*r + 0.587*g + 0.114*b)/255; lumaCount++;
       if (r>230&&g>230&&b>230) continue; // near-white
       if (r<20&&g<20&&b<20) continue;    // near-black
       const [,s,l] = rgbToHsl(r,g,b);
@@ -213,9 +241,9 @@ function extractPalette(imgSrc, callback) {
       .sort((a,b)=>b.score-a.score)
       .slice(0,6)
       .map(x=>x.hex);
-    callback(swatches.length ? swatches : null);
+    callback(swatches.length ? swatches : null, lumaCount ? lumaSum/lumaCount : 0.2);
   };
-  img.onerror = () => callback(null);
+  img.onerror = () => callback(null, 0.2);
   img.src = imgSrc;
 }
 
@@ -225,25 +253,33 @@ function extractDominantColor(imgSrc, callback) {
 }
 
 // ─── Generate a full accessible skin from a palette ───────────────────────────
-function generateSkinFromPalette(swatches, vibe="natural") {
+function generateSkinFromPalette(swatches, vibe="natural", mode="dark") {
   const accent = swatches[0] || "#7BE3A4";
   const [ah,as,al] = rgbToHsl(...hexToRgb(accent));
 
-  // Derive bg: same hue, very dark
-  const bg = rgbToHex(...hslToRgb(ah, Math.min(as*0.6,0.25), 0.06));
-  const card = rgbToHex(...hslToRgb(ah, Math.min(as*0.55,0.22), 0.09));
-  const navy = rgbToHex(...hslToRgb(ah, Math.min(as*0.5,0.20), 0.12));
-
-  // Text: near-white tinted by accent hue
-  let text = rgbToHex(...hslToRgb(ah, 0.08, 0.92));
-  let muted = rgbToHex(...hslToRgb(ah, 0.05, 0.60));
-
-  // Accent-light: lighten + desaturate
-  const green = rgbToHex(...hslToRgb(ah, Math.max(0,as-0.1), Math.min(0.95,al+0.22)));
+  // FR-H6: bg/text polarity from the detected mode
+  let bg, card, navy, text, muted, green, border;
+  if (mode === "light") {
+    bg   = rgbToHex(...hslToRgb(ah, Math.min(as*0.25,0.10), 0.97));
+    card = rgbToHex(...hslToRgb(ah, Math.min(as*0.30,0.12), 0.93));
+    navy = rgbToHex(...hslToRgb(ah, Math.min(as*0.35,0.14), 0.88));
+    text = rgbToHex(...hslToRgb(ah, 0.18, 0.14));
+    muted= rgbToHex(...hslToRgb(ah, 0.12, 0.40));
+    green= rgbToHex(...hslToRgb(ah, Math.max(0,as-0.05), Math.max(0.30, al-0.18)));
+    border = "rgba(0,0,0,.12)";
+  } else {
+    bg   = rgbToHex(...hslToRgb(ah, Math.min(as*0.6,0.25), 0.06));
+    card = rgbToHex(...hslToRgb(ah, Math.min(as*0.55,0.22), 0.09));
+    navy = rgbToHex(...hslToRgb(ah, Math.min(as*0.5,0.20), 0.12));
+    text = rgbToHex(...hslToRgb(ah, 0.08, 0.92));
+    muted= rgbToHex(...hslToRgb(ah, 0.05, 0.60));
+    green= rgbToHex(...hslToRgb(ah, Math.max(0,as-0.1), Math.min(0.95,al+0.22)));
+    border = "rgba(255,255,255,.07)";
+  }
 
   // Accessibility clamp
-  text  = nudgeForContrast(text,  bg, 7.0);
-  muted = nudgeForContrast(muted, bg, 4.5);
+  text  = nudgeContrast(text,  bg, 7.0);
+  muted = nudgeContrast(muted, bg, 4.5);
 
   // Font pair by vibe
   const fontPairs = {
@@ -267,7 +303,8 @@ function generateSkinFromPalette(swatches, vibe="natural") {
     name:"Custom — Generated",
     source:"generated",
     vibe,
-    tokens:{ bg, card, navy, border:"rgba(255,255,255,.07)", accent, green, text, muted },
+    mode,
+    tokens:{ bg, card, navy, border, accent, green, text, muted },
     fonts,
     contrast,
   };
@@ -287,15 +324,16 @@ function resolveSubBrand(parent, overrides={}) {
   };
 }
 // FR-H1: one palette -> three independently contrast-clamped themes (one recommended).
-function generateThemes(swatches){
+function generateThemes(swatches, avgLuma){
   const pal = (swatches && swatches.length) ? swatches : ["#7BE3A4"];
+  const mode = (avgLuma != null && avgLuma >= 0.5) ? "light" : "dark";
   const a0 = pal[0];
   const a1 = pal[1] || a0;
   const [h,sat,l] = rgbToHsl(...hexToRgb(a0));
   const steel = rgbToHex(...hslToRgb(h, Math.max(0.08, sat*0.35), Math.min(0.74, l+0.06)));
   const mk = (acc, vibe, name, voice, num, glow) => {
-    const sk = generateSkinFromPalette([acc], vibe);
-    sk.name = name; sk.mode = "dark"; sk.voice = voice; sk.numeralStyle = num; sk.accentBehaviour = glow; sk.programs = DEFAULT_PROGRAMS;
+    const sk = generateSkinFromPalette([acc], vibe, mode);
+    sk.name = name; sk.mode = mode; sk.voice = voice; sk.numeralStyle = num; sk.accentBehaviour = glow; sk.programs = DEFAULT_PROGRAMS;
     return sk;
   };
   return [
@@ -1857,9 +1895,11 @@ const JungleLogo = ({size=32}) => (
 );
 
 // FR-H2: one logo asset, many placements. Uploaded image -> styled wordmark -> monogram tile.
-function BrandLogo({ size=26, showName=false, gymBranding={} }) {
-  const logo = gymBranding && gymBranding.logo;
-  const name = (gymBranding && gymBranding.gymName) || "";
+function BrandLogo({ size=26, showName=false, gymBranding }) {
+  const _ctx = useTheme();
+  const _gb = (gymBranding && (gymBranding.logo || gymBranding.gymName)) ? gymBranding : (_ctx.gymBranding || {});
+  const logo = _gb && _gb.logo;
+  const name = (_gb && _gb.gymName) || "";
   const disp = `'${T.displayFont||"Space Grotesk"}',sans-serif`;
   const wrap = { display:"inline-flex", alignItems:"center", gap:`${Math.round(size*0.32)}px`, minWidth:0 };
   if (logo) {
@@ -4638,6 +4678,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   const [analyzeStep, setAnalyzeStep] = React.useState(0);
   const [generatedSkin, setGeneratedSkin] = React.useState(null); // full skin object
   const [generatedThemes, setGeneratedThemes] = React.useState([]);   // FR-H1: 3 options
+  const [luma, setLuma] = React.useState(0.2);                        // FR-H6: collateral luminance
   const [vibe, setVibe]           = React.useState("natural");
   const fileRef                   = React.useRef(null);
 
@@ -4689,16 +4730,17 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     const advance = (i) => {
       if (i === 1) {
         // Real palette extraction at step 1
-        extractPalette(logoSrc, (swatches) => {
+        extractPalette(logoSrc, (swatches, lm) => {
           const extracted = swatches || ["#7BE3A4"];
           setPalette(extracted);
+          setLuma(lm!=null?lm:0.2);
           setAnalyzeStep(2);
           setTimeout(() => advance(2), 900);
         });
       } else if (i >= analyzeSteps.length) {
         setAnalyzing(false);
         // Generate skin from extracted palette
-        const themes = generateThemes(palette || ["#7BE3A4"]);
+        const themes = generateThemes(palette || ["#7BE3A4"], luma);
         setGeneratedThemes(themes);
         setGeneratedSkin(themes[0]);
       } else {
@@ -7856,6 +7898,11 @@ export default function App() {
     ? customSkinTokens
     : (PRESET_SKINS[activeSkinId]?.tokens || PRESET_SKINS.canopy.tokens);
   Object.assign(T, skinTokens);
+  const _skinF = (PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy).fonts;
+  T.displayFont = _skinF.display; T.bodyFont = _skinF.body;
+  const activeSkinObj = (activeSkinId === "custom" && customSkinTokens)
+    ? { name:"Custom", source:"custom", tokens: customSkinTokens, fonts: _skinF, voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", programs: DEFAULT_PROGRAMS }
+    : (PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy);
   useEffect(() => {
     applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
     const skin = PRESET_SKINS[activeSkinId];
@@ -8061,6 +8108,7 @@ export default function App() {
   };
 
   return (
+    <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,fontFamily}}>
 
       {showNav && !isFullscreen && (
@@ -8170,5 +8218,6 @@ export default function App() {
 
       {showProfile&&<ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
+    </ThemeContext.Provider>
   );
 }
