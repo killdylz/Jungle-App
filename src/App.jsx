@@ -1906,22 +1906,22 @@ function BrandLogo({ size=26, showName=false, gymBranding }) {
     return (
       <span style={wrap}>
         <img src={logo} alt={name||"gym logo"} style={{height:`${size}px`,maxWidth:`${size*4.2}px`,objectFit:"contain",display:"block"}}/>
-        {showName && name && <span style={{fontSize:`${Math.round(size*0.5)}px`,fontWeight:"800",letterSpacing:"1px",color:T.text,whiteSpace:"nowrap"}}>{name}</span>}
+        {showName && name && <span style={{fontSize:`${Math.round(size*0.5)}px`,fontWeight:"800",letterSpacing:"1px",color:"var(--text)",whiteSpace:"nowrap"}}>{name}</span>}
       </span>
     );
   }
   if (name) {
     return (
       <span style={wrap}>
-        <span style={{width:`${size}px`,height:`${size}px`,borderRadius:`${Math.round(size*0.28)}px`,background:T.accent,color:T.bg,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:disp,fontWeight:"800",fontSize:`${Math.round(size*0.58)}px`,flexShrink:0,lineHeight:1}}>{name.trim().charAt(0).toUpperCase()}</span>
-        {showName && <span style={{fontFamily:disp,fontSize:`${Math.round(size*0.62)}px`,fontWeight:"800",letterSpacing:"1.5px",color:T.text,whiteSpace:"nowrap",textTransform:"uppercase"}}>{name}</span>}
+        <span style={{width:`${size}px`,height:`${size}px`,borderRadius:`${Math.round(size*0.28)}px`,background:T.accent,color:"var(--bg)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:disp,fontWeight:"800",fontSize:`${Math.round(size*0.58)}px`,flexShrink:0,lineHeight:1}}>{name.trim().charAt(0).toUpperCase()}</span>
+        {showName && <span style={{fontFamily:disp,fontSize:`${Math.round(size*0.62)}px`,fontWeight:"800",letterSpacing:"1.5px",color:"var(--text)",whiteSpace:"nowrap",textTransform:"uppercase"}}>{name}</span>}
       </span>
     );
   }
   return (
     <span style={wrap}>
       <JungleLogo size={size}/>
-      {showName && <span style={{fontSize:`${Math.round(size*0.6)}px`,fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>}
+      {showName && <span style={{fontSize:`${Math.round(size*0.6)}px`,fontWeight:"800",letterSpacing:"2px",color:"var(--text)"}}>JUNGLE</span>}
     </span>
   );
 }
@@ -1944,23 +1944,23 @@ function LoginScreen({onLogin, authError}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   return (
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`radial-gradient(ellipse at 50% 20%, ${T.navy} 0%, ${T.bg} 65%)`,color:T.text,padding:isMobile?"20px":"30px",textAlign:"center"}}>
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`radial-gradient(ellipse at 50% 20%, var(--navy) 0%, var(--bg) 65%)`,color:"var(--text)",padding:isMobile?"20px":"30px",textAlign:"center"}}>
       <JungleLogo size={isMobile?60:80}/>
       <h1 style={{marginTop:"20px",fontSize:isMobile?"36px":"56px",fontWeight:"800",letterSpacing:isMobile?"4px":"8px"}}>JUNGLE</h1>
-      <p style={{marginTop:"12px",color:T.muted,fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
+      <p style={{marginTop:"12px",color:"var(--muted)",fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
       {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:T.accent+"20",border:`1px solid ${T.accent}`,borderRadius:"8px",color:T.accent,fontSize:"13px"}}>⚠️ {authError}</div>}
       {IS_CONFIGURED ? (
         <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:"var(--green)",color:"var(--on-green)",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
           🎵 Continue with Spotify
         </button>
       ) : (
-        <div style={{marginTop:"28px",padding:isMobile?"16px":"20px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,width:isMobile?"92vw":"420px",maxWidth:"100%",textAlign:"left",boxSizing:"border-box"}}>
+        <div style={{marginTop:"28px",padding:isMobile?"16px":"20px",background:"var(--card)",borderRadius:"12px",border:`1px solid var(--border)`,width:isMobile?"92vw":"420px",maxWidth:"100%",textAlign:"left",boxSizing:"border-box"}}>
           <p style={{fontWeight:"700",marginBottom:"10px"}}>⚙️ Setup Required</p>
-          <p style={{fontSize:"13px",color:T.muted,marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
-          <code style={{fontSize:"12px",color:T.accent,background:T.navy,padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
+          <p style={{fontSize:"13px",color:"var(--muted)",marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
+          <code style={{fontSize:"12px",color:T.accent,background:"var(--navy)",padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
         </div>
       )}
-      <p style={{marginTop:"24px",fontSize:"12px",color:T.muted,padding:"0 8px"}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
+      <p style={{marginTop:"24px",fontSize:"12px",color:"var(--muted)",padding:"0 8px"}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
     </div>
   );
 }
@@ -2045,7 +2045,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
   const TabBtn = ({id, label}) => (
     <button onClick={()=>setTab(id)} style={{flex:1, padding:"9px", background:tab===id?T.accent+"20":"transparent",
-      color:tab===id?T.accent:T.muted, border:`1px solid ${tab===id?T.accent+"50":T.border}`,
+      color:tab===id?T.accent:"var(--muted)", border:`1px solid ${tab===id?T.accent+"50":"var(--border)"}`,
       borderRadius:"8px", cursor:"pointer", fontSize:"12px", fontWeight:"700"}}>
       {label}
     </button>
@@ -2053,18 +2053,18 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
   return (
     <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.65)",display:"flex",alignItems:isMobilePM?"flex-end":"center",justifyContent:"center",zIndex:1000,padding:isMobilePM?"0":"16px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:isMobilePM?"14px 14px 0 0":"14px",width:"100%",maxWidth:"420px",maxHeight:isMobilePM?"96vh":"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid ${T.border}`}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:isMobilePM?"14px 14px 0 0":"14px",width:"100%",maxWidth:"420px",maxHeight:isMobilePM?"96vh":"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid var(--border)`}}>
 
         {/* Header */}
-        <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+        <div style={{padding:"18px 20px 12px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"14px"}}>
             {profile.images?.[0]?.url
               ? <img src={profile.images[0].url} style={{width:"52px",height:"52px",borderRadius:"50%",border:`2px solid ${T.green}`}} alt="avatar"/>
-              : <div style={{width:"52px",height:"52px",borderRadius:"50%",background:T.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><User size={24} color={T.muted}/></div>
+              : <div style={{width:"52px",height:"52px",borderRadius:"50%",background:"var(--navy)",display:"flex",alignItems:"center",justifyContent:"center"}}><User size={24} color={T.muted}/></div>
             }
             <div style={{flex:1,minWidth:0}}>
-              <p style={{fontSize:"16px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile.display_name||"Spotify User"}</p>
-              <p style={{fontSize:"11px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile.email}</p>
+              <p style={{fontSize:"16px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile.display_name||"Spotify User"}</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile.email}</p>
             </div>
           </div>
           {/* Tabs */}
@@ -2077,8 +2077,8 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
         {/* ── PROFILE TAB ── */}
         {tab === "profile" && <>
           {/* Stats */}
-          <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-            <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Your Stats</p>
+          <div style={{padding:"14px 18px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
+            <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Your Stats</p>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
               {[
                 {icon:"🏋️",label:"Total Sessions",value:String(totalSessions),color:T.accent},
@@ -2086,25 +2086,25 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 {icon:"📊",label:"Avg Duration",  value:avgDur+" min",        color:"#8B5CF6"},
                 {icon:"🔥",label:"Day Streak",    value:String(streak),       color:"#F97316"},
               ].map(s=>(
-                <div key={s.label} style={{padding:"10px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                <div key={s.label} style={{padding:"10px 12px",background:"var(--navy)",borderRadius:"8px",border:`1px solid var(--border)`}}>
                   <p style={{fontSize:"18px",fontWeight:"800",color:s.color,lineHeight:"1"}}>{s.value}</p>
-                  <p style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{s.icon} {s.label}</p>
+                  <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{s.icon} {s.label}</p>
                 </div>
               ))}
             </div>
-            {topType && <p style={{fontSize:"11px",color:T.muted,marginTop:"10px"}}>🏆 Most trained: <span style={{color:SCFG[topType]?.color||T.green,fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
+            {topType && <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"10px"}}>🏆 Most trained: <span style={{color:SCFG[topType]?.color||T.green,fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
           </div>
           {/* Recent sessions */}
           <div style={{flex:1,overflowY:"auto",padding:"14px 18px"}}>
-            <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Recent Sessions</p>
+            <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"10px"}}>Recent Sessions</p>
             {recent.length === 0
-              ? <p style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"16px 0"}}>No sessions yet. Start one to track your history.</p>
+              ? <p style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"16px 0"}}>No sessions yet. Start one to track your history.</p>
               : recent.map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"9px 0",borderBottom:i<recent.length-1?`1px solid ${T.border}`:"none"}}>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"9px 0",borderBottom:i<recent.length-1?`1px solid var(--border)`:"none"}}>
                   <div style={{width:"36px",height:"36px",borderRadius:"8px",background:T.accent+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:"16px"}}>🏋️</span></div>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||"Workout"}</p>
-                    <p style={{fontSize:"11px",color:T.muted}}>{s.date} · {s.durMin} min · {s.stages} stage{s.stages!==1?"s":""}</p>
+                    <p style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||"Workout"}</p>
+                    <p style={{fontSize:"11px",color:"var(--muted)"}}>{s.date} · {s.durMin} min · {s.stages} stage{s.stages!==1?"s":""}</p>
                   </div>
                 </div>
               ))
@@ -2118,10 +2118,10 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
             {/* Gym logo */}
             <div>
-              <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Gym Logo</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Gym Logo</p>
               <div style={{display:"flex",gap:"12px",alignItems:"flex-start"}}>
                 {/* Preview */}
-                <div style={{width:"80px",height:"80px",borderRadius:"10px",background:T.navy,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+                <div style={{width:"80px",height:"80px",borderRadius:"10px",background:"var(--navy)",border:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
                   {draft.logo
                     ? <img src={draft.logo} style={{width:"100%",height:"100%",objectFit:"contain"}} alt="logo"/>
                     : <span style={{fontSize:"28px"}}>🏢</span>
@@ -2130,47 +2130,47 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 <div style={{flex:1}}>
                   <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleLogoUpload}/>
                   <button onClick={()=>fileRef.current?.click()}
-                    style={{width:"100%",padding:"9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",marginBottom:"6px"}}>
+                    style={{width:"100%",padding:"9px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",marginBottom:"6px"}}>
                     {extracting ? "⏳ Extracting colours…" : draft.logo ? "🔄 Change Logo" : "📁 Upload Logo"}
                   </button>
                   {draft.logo && (
                     <button onClick={()=>setDraft(d=>({...d,logo:null}))}
-                      style={{width:"100%",padding:"7px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
+                      style={{width:"100%",padding:"7px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>
                       Remove
                     </button>
                   )}
-                  <p style={{fontSize:"10px",color:T.muted,marginTop:"5px"}}>Logo appears in the header. Dominant colour is auto-extracted.</p>
+                  <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"5px"}}>Logo appears in the header. Dominant colour is auto-extracted.</p>
                 </div>
               </div>
             </div>
 
             {/* Gym name */}
             <div>
-              <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Gym Name</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Gym Name</p>
               <Input value={draft.gymName} onChange={e=>setDraft(d=>({...d,gymName:e.target.value}))} placeholder="e.g. Iron House Fitness"/>
-              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Shown in the header alongside your logo.</p>
+              <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"4px"}}>Shown in the header alongside your logo.</p>
             </div>
 
             {/* Accent colour */}
             <div>
-              <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Accent Colour</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Accent Colour</p>
               <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
                 <input type="color" value={draft.accentColor} onChange={e=>setDraft(d=>({...d,accentColor:e.target.value}))}
-                  style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"none",padding:"2px"}}/>
+                  style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"2px"}}/>
                 <div style={{flex:1,padding:"10px 14px",background:draft.accentColor,borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"white"}}>{draft.accentColor}</span>
                   <span style={{fontSize:"11px",color:"rgba(255,255,255,0.7)"}}>Primary</span>
                 </div>
               </div>
-              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Auto-extracted from logo — override by clicking the swatch.</p>
+              <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"4px"}}>Auto-extracted from logo — override by clicking the swatch.</p>
             </div>
 
             {/* Secondary colour */}
             <div>
-              <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Secondary Colour</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Secondary Colour</p>
               <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
                 <input type="color" value={draft.secondColor} onChange={e=>setDraft(d=>({...d,secondColor:e.target.value}))}
-                  style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"none",padding:"2px"}}/>
+                  style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"2px"}}/>
                 <div style={{flex:1,padding:"10px 14px",background:draft.secondColor,borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"white"}}>{draft.secondColor}</span>
                   <span style={{fontSize:"11px",color:"rgba(255,255,255,0.7)"}}>Secondary</span>
@@ -2180,13 +2180,13 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
             {/* Font */}
             <div>
-              <p style={{fontSize:"11px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Font</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Font</p>
               <Select value={draft.fontFamily} onChange={e=>setDraft(d=>({...d,fontFamily:e.target.value}))}>
                 {GYM_FONTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                 <option value="custom">✏️ Custom Google Font…</option>
               </Select>
               {draft.fontFamily !== "system" && draft.fontFamily !== "custom" && (
-                <p style={{fontSize:"13px",marginTop:"8px",fontFamily:`'${draft.fontFamily}', sans-serif`,color:T.text,padding:"8px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                <p style={{fontSize:"13px",marginTop:"8px",fontFamily:`'${draft.fontFamily}', sans-serif`,color:"var(--text)",padding:"8px 12px",background:"var(--navy)",borderRadius:"8px",border:`1px solid var(--border)`}}>
                   The quick brown fox — {draft.fontFamily}
                 </p>
               )}
@@ -2194,7 +2194,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 <Input placeholder="e.g. Poppins, Nunito, Space Grotesk" value={draft.customFont}
                   onChange={e=>setDraft(d=>({...d,customFont:e.target.value}))} style={{marginTop:"6px"}}/>
               )}
-              <p style={{fontSize:"10px",color:T.muted,marginTop:"4px"}}>Loaded from Google Fonts — applied app-wide.</p>
+              <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"4px"}}>Loaded from Google Fonts — applied app-wide.</p>
             </div>
 
 
@@ -2202,22 +2202,22 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
         )}
 
         {/* Footer */}
-        <div style={{padding:"12px 18px",borderTop:`1px solid ${T.border}`,display:"flex",gap:"8px",flexShrink:0}}>
+        <div style={{padding:"12px 18px",borderTop:`1px solid var(--border)`,display:"flex",gap:"8px",flexShrink:0}}>
           {tab === "branding" ? <>
             <button onClick={saveBranding}
               style={{flex:2,padding:"10px",background:saved?"var(--green)":"var(--accent)",color:saved?"var(--on-green)":"var(--on-accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"12px",transition:"background .3s,color .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
               {saved ? <><Check size={13}/> Saved!</> : "💾 Save Branding"}
             </button>
             <button onClick={resetBranding}
-              style={{flex:1,padding:"10px",background:T.navy,color:T.muted,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>
+              style={{flex:1,padding:"10px",background:"var(--navy)",color:"var(--muted)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>
               Reset
             </button>
-            <button onClick={onClose} style={{flex:1,padding:"10px",background:T.navy,color:T.text,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>Close</button>
+            <button onClick={onClose} style={{flex:1,padding:"10px",background:"var(--navy)",color:"var(--text)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>Close</button>
           </> : <>
             <button onClick={onLogout} style={{flex:1,padding:"10px",background:T.accent+"15",color:T.accent,border:`1px solid ${T.accent}40`,borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
               <LogOut size={13}/> Sign Out
             </button>
-            <button onClick={onClose} style={{flex:1,padding:"10px",background:T.navy,color:T.text,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>Close</button>
+            <button onClick={onClose} style={{flex:1,padding:"10px",background:"var(--navy)",color:"var(--text)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontWeight:"600",fontSize:"12px"}}>Close</button>
           </>}
         </div>
       </div>
@@ -2351,14 +2351,14 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
   const mismatch = stageType && bpm ? bpmMismatch(bpm, stageType) : false;
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:added?T.green+"12":T.navy,borderRadius:"6px",border:`1px solid ${added?T.green+"30":"transparent"}`,transition:"background 0.2s"}}>
+    <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:added?T.green+"12":"var(--navy)",borderRadius:"6px",border:`1px solid ${added?T.green+"30":"transparent"}`,transition:"background 0.2s"}}>
       {track.albumArt
         ? <img src={track.albumArt} style={{width:"40px",height:"40px",borderRadius:"4px",flexShrink:0,objectFit:"cover"}} alt="album"/>
-        : <div style={{width:"40px",height:"40px",borderRadius:"4px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={14} color={T.muted}/></div>
+        : <div style={{width:"40px",height:"40px",borderRadius:"4px",background:"var(--border)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={14} color={T.muted}/></div>
       }
       <div style={{flex:1,minWidth:"0"}}>
-        <p style={{fontSize:"13px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.t}</p>
-        <p style={{fontSize:"11px",color:T.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.a}</p>
+        <p style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.t}</p>
+        <p style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{track.a}</p>
         <div style={{display:"flex",alignItems:"center",gap:"5px",marginTop:"3px"}}>
           {/* BPM pill — always visible; click to set/edit manually */}
           {editingBpm ? (
@@ -2369,10 +2369,10 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
                 onChange={e=>setBpmInput(e.target.value)}
                 onKeyDown={e=>{ if(e.key==="Enter")saveBpm(); if(e.key==="Escape")setEditingBpm(false); }}
                 placeholder="BPM"
-                style={{width:"52px",padding:"1px 5px",background:T.card,border:`1px solid ${T.accent}`,borderRadius:"3px",color:T.text,fontSize:"10px",fontWeight:"700",outline:"none"}}
+                style={{width:"52px",padding:"1px 5px",background:"var(--card)",border:`1px solid ${T.accent}`,borderRadius:"3px",color:"var(--text)",fontSize:"10px",fontWeight:"700",outline:"none"}}
               />
               <button onClick={saveBpm} style={{padding:"1px 6px",background:"var(--accent)",border:"none",borderRadius:"3px",cursor:"pointer",color:"var(--on-accent)",fontSize:"10px",fontWeight:"700"}}>✓</button>
-              <button onClick={()=>setEditingBpm(false)} style={{padding:"1px 4px",background:"transparent",border:"none",cursor:"pointer",color:T.muted,fontSize:"10px"}}>✕</button>
+              <button onClick={()=>setEditingBpm(false)} style={{padding:"1px 4px",background:"transparent",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"10px"}}>✕</button>
             </span>
           ) : bpm > 0 ? (
             <span
@@ -2387,11 +2387,11 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
             <span
               onClick={()=>{ setBpmInput(""); setEditingBpm(true); }}
               title="BPM unknown — click to set manually"
-              style={{fontSize:"10px",fontWeight:"600",padding:"1px 6px",borderRadius:"3px",background:T.border+"60",color:T.muted,border:`1px dashed ${T.border}`,cursor:"pointer",userSelect:"none"}}>
+              style={{fontSize:"10px",fontWeight:"600",padding:"1px 6px",borderRadius:"3px",background:T.border+"60",color:"var(--muted)",border:`1px dashed var(--border)`,cursor:"pointer",userSelect:"none"}}>
               ? BPM
             </span>
           )}
-          <span style={{fontSize:"10px",color:T.muted}}>{fmt(track.dur)}</span>
+          <span style={{fontSize:"10px",color:"var(--muted)"}}>{fmt(track.dur)}</span>
         </div>
       </div>
       {added && <span style={{fontSize:"10px",color:T.green,fontWeight:"700",flexShrink:0,padding:"2px 8px",background:T.green+"20",borderRadius:"4px"}}>✓ Added</span>}
@@ -2549,10 +2549,10 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
   );
 
   const ErrorBanner = () => !error ? null : (
-    <div style={{padding:"10px 12px",background:error==="auth"?T.accent+"18":T.navy,border:`1px solid ${error==="auth"?T.accent+"40":T.border}`,borderRadius:"7px",marginBottom:"10px",textAlign:"center"}}>
+    <div style={{padding:"10px 12px",background:error==="auth"?T.accent+"18":"var(--navy)",border:`1px solid ${error==="auth"?T.accent+"40":"var(--border)"}`,borderRadius:"7px",marginBottom:"10px",textAlign:"center"}}>
       {error==="auth"
-        ? <><p style={{fontSize:"12px",color:T.accent,fontWeight:"700",marginBottom:"2px"}}>Session expired</p><p style={{fontSize:"11px",color:T.muted}}>Refresh and reconnect.</p></>
-        : <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>Search failed — try again</p>
+        ? <><p style={{fontSize:"12px",color:T.accent,fontWeight:"700",marginBottom:"2px"}}>Session expired</p><p style={{fontSize:"11px",color:"var(--muted)"}}>Refresh and reconnect.</p></>
+        : <p style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600"}}>Search failed — try again</p>
       }
     </div>
   );
@@ -2563,7 +2563,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
         <TrackItem key={t.id} track={t} onAdd={addedIds.includes(t.id)?null:()=>onAdd(t)} added={addedIds.includes(t.id)} stageType={stageType}/>
       ))}
       {!results.length && !loading && (
-        <p style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"24px 0"}}>{empty||"No results yet"}</p>
+        <p style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"24px 0"}}>{empty||"No results yet"}</p>
       )}
     </div>
   );
@@ -2573,7 +2573,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
     padding:"7px 4px", fontSize:"11px", fontWeight:"700",
     background: tab===id ? T.accent : T.navy,
     color: tab===id ? "white" : T.muted,
-    border: `1px solid ${tab===id?T.accent:T.border}`,
+    border: `1px solid ${tab===id?T.accent:"var(--border)"}`,
     borderRadius:"7px", cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.15s",
     minHeight:"40px",
   });
@@ -2596,7 +2596,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
             <GoBtn onClick={()=>runQuery(q)}/>
           </div>
           {stageType && SCFG[stageType]?.bpmMin && results.length>0 && (
-            <p style={{fontSize:"10px",color:T.muted,marginBottom:"8px"}}>
+            <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"8px"}}>
               🎵 Target: <span style={{color:bpmColor((SCFG[stageType].bpmMin+SCFG[stageType].bpmMax)/2),fontWeight:"700"}}>{SCFG[stageType].bpmMin}–{SCFG[stageType].bpmMax} BPM</span>
             </p>
           )}
@@ -2613,8 +2613,8 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
               <button key={g} onClick={()=>setSelGenre(g===selGenre?"":g)}
                 style={{padding:"4px 9px",fontSize:"10px",fontWeight:"700",borderRadius:"14px",cursor:"pointer",transition:"all 0.15s",
                   background:selGenre===g?T.accent+"30":"transparent",
-                  color:selGenre===g?T.accent:T.muted,
-                  border:`1px solid ${selGenre===g?T.accent:T.border}`}}>
+                  color:selGenre===g?T.accent:"var(--muted)",
+                  border:`1px solid ${selGenre===g?T.accent:"var(--border)"}`}}>
                 {g}
               </button>
             ))}
@@ -2625,7 +2625,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
               onKeyDown={e=>e.key==="Enter"&&runQuery(selGenre?`genre:"${selGenre}" ${genreQ}`:genreQ)}/>
             <GoBtn onClick={()=>runQuery(selGenre?`genre:"${selGenre}" ${genreQ}`:genreQ)} disabled={!selGenre&&!genreQ}/>
           </div>
-          {!selGenre && <p style={{fontSize:"11px",color:T.muted,textAlign:"center",padding:"10px 0 4px"}}>Pick a genre above to search</p>}
+          {!selGenre && <p style={{fontSize:"11px",color:"var(--muted)",textAlign:"center",padding:"10px 0 4px"}}>Pick a genre above to search</p>}
           <ErrorBanner/>
           <ResultsList/>
         </div>
@@ -2639,8 +2639,8 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
               {onSmartDistribute && (
                 <div style={{marginBottom:"12px",padding:"12px 14px",background:T.accent+"12",border:`1px solid ${T.accent}30`,borderRadius:"9px",display:"flex",alignItems:"center",gap:"10px"}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:"12px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>⚡ Smart Distribute</p>
-                    <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.4"}}>Import a playlist and auto-distribute songs across all stages by duration</p>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>⚡ Smart Distribute</p>
+                    <p style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.4"}}>Import a playlist and auto-distribute songs across all stages by duration</p>
                   </div>
                   <button onClick={onSmartDistribute}
                     style={{flexShrink:0,padding:"7px 14px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap"}}>
@@ -2674,26 +2674,26 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                         const notMine = plSearchActive && myUid && pl.owner?.id && pl.owner.id !== myUid;
                         return (
                           <div key={pl.id} onClick={()=>openPlaylist(pl)}
-                            style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:T.navy,borderRadius:"7px",cursor:"pointer",border:`1px solid ${notMine ? T.accent+"40" : "transparent"}`,transition:"border-color 0.15s",opacity:notMine?0.75:1}}
+                            style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 10px",background:"var(--navy)",borderRadius:"7px",cursor:"pointer",border:`1px solid ${notMine ? T.accent+"40" : "transparent"}`,transition:"border-color 0.15s",opacity:notMine?0.75:1}}
                             onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent+"60"}
                             onMouseLeave={e=>e.currentTarget.style.borderColor=notMine?T.accent+"40":"transparent"}>
                             {imgUrl
                               ? <img src={imgUrl} style={{width:"36px",height:"36px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt="pl"/>
-                              : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={13} color={T.muted}/></div>
+                              : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:"var(--border)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={13} color={T.muted}/></div>
                             }
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
-                                <p style={{fontSize:"12px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pl.name}</p>
+                                <p style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pl.name}</p>
                                 {notMine && <span title="Owned by another user — may not be accessible" style={{fontSize:"9px",fontWeight:"700",color:T.accent,background:T.accent+"20",borderRadius:"3px",padding:"1px 4px",flexShrink:0,whiteSpace:"nowrap"}}>NOT YOURS</span>}
                               </div>
-                              <p style={{fontSize:"10px",color:T.muted}}>{count} tracks{pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
+                              <p style={{fontSize:"10px",color:"var(--muted)"}}>{count} tracks{pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
                             </div>
                             <ChevronRight size={13} color={T.muted}/>
                           </div>
                         );
                       })}
                     </div>
-                  : <p style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"24px 0"}}>
+                  : <p style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"24px 0"}}>
                       {plSearchActive ? `No playlists found for "${plSearch}"` : "Search above or connect Spotify to see your playlists"}
                     </p>
               }
@@ -2702,24 +2702,24 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
             <>
               <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}}>
                 <button onClick={()=>{setSelPl(null);setPlTracks([]);setPlDenied(false);}}
-                  style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center",gap:"4px",fontSize:"12px",fontWeight:"700"}}>
+                  style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",gap:"4px",fontSize:"12px",fontWeight:"700"}}>
                   <ArrowLeft size={14}/> Back
                 </button>
-                <p style={{fontSize:"12px",fontWeight:"700",color:T.text,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{selPl.name}</p>
+                <p style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{selPl.name}</p>
               </div>
               {loadingTr
                 ? <div style={{textAlign:"center",padding:"24px"}}><Loader size={18} color={T.muted}/></div>
                 : plDenied
                   ? <div style={{textAlign:"center",padding:"20px 16px"}}>
                       <p style={{fontSize:"22px",marginBottom:"8px"}}>🔒</p>
-                      <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"6px"}}>Playlist not accessible</p>
-                      <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>
+                      <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"6px"}}>Playlist not accessible</p>
+                      <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"14px"}}>
                         {typeof plDenied === "string" && plDenied !== "Forbidden"
                           ? plDenied
                           : "Spotify only allows track access for playlists you own. To use this playlist, import its songs into one of your own Spotify playlists, then access it from 'My playlists' here."}
                       </p>
                       <button onClick={()=>{setSelPl(null);setPlTracks([]);setPlDenied(false);}}
-                        style={{padding:"7px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
+                        style={{padding:"7px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>
                         ← Back
                       </button>
                     </div>
@@ -2729,7 +2729,7 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
                           <TrackItem key={t.id} track={t} onAdd={addedIds.includes(t.id)?null:()=>onAdd(t)} added={addedIds.includes(t.id)} stageType={stageType}/>
                         ))}
                       </div>
-                    : <p style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"24px 0"}}>No playable tracks</p>
+                    : <p style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"24px 0"}}>No playable tracks</p>
               }
             </>
           )}
@@ -2740,30 +2740,30 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
       {tab==="bpm" && (
         <div>
           <div style={{marginBottom:"12px"}}>
-            <p style={{fontSize:"10px",color:T.muted,marginBottom:"10px"}}>
+            <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"10px"}}>
               Pick a genre to find tracks — BPM shown where available. The BPM range sets a target to help you choose.
             </p>
             <div style={{display:"flex",gap:"10px",alignItems:"flex-end",marginBottom:"12px"}}>
               <div style={{flex:1}}>
-                <p style={{fontSize:"9px",color:T.muted,marginBottom:"3px"}}>Target Min BPM</p>
+                <p style={{fontSize:"9px",color:"var(--muted)",marginBottom:"3px"}}>Target Min BPM</p>
                 <Input type="number" value={bpmMin} min="60" max="220"
                   onChange={e=>setBpmMin(parseInt(e.target.value)||80)} style={{textAlign:"center",fontWeight:"700"}}/>
               </div>
-              <span style={{color:T.muted,paddingBottom:"9px"}}>–</span>
+              <span style={{color:"var(--muted)",paddingBottom:"9px"}}>–</span>
               <div style={{flex:1}}>
-                <p style={{fontSize:"9px",color:T.muted,marginBottom:"3px"}}>Target Max BPM</p>
+                <p style={{fontSize:"9px",color:"var(--muted)",marginBottom:"3px"}}>Target Max BPM</p>
                 <Input type="number" value={bpmMax} min="60" max="220"
                   onChange={e=>setBpmMax(parseInt(e.target.value)||160)} style={{textAlign:"center",fontWeight:"700"}}/>
               </div>
             </div>
-            <p style={{fontSize:"10px",color:T.muted,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px"}}>Genre</p>
+            <p style={{fontSize:"10px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px"}}>Genre</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"12px"}}>
               {["workout","electronic","hip-hop","dance","pop","rock","edm","r-n-b","afrobeat","latin"].map(g=>(
                 <button key={g} onClick={()=>setBpmSeedGenre(g)}
                   style={{padding:"4px 8px",fontSize:"10px",fontWeight:"700",borderRadius:"12px",cursor:"pointer",
                     background:bpmSeedGenre===g?T.accent+"30":"transparent",
-                    color:bpmSeedGenre===g?T.accent:T.muted,
-                    border:`1px solid ${bpmSeedGenre===g?T.accent:T.border}`}}>
+                    color:bpmSeedGenre===g?T.accent:"var(--muted)",
+                    border:`1px solid ${bpmSeedGenre===g?T.accent:"var(--border)"}`}}>
                   {g}
                 </button>
               ))}
@@ -2850,13 +2850,13 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
       <div style={{display:"flex", alignItems:isMobile?"flex-start":"center", justifyContent:"space-between",
         flexDirection:isMobile?"column":"row", gap:"12px", marginBottom:"22px"}}>
         <div>
-          <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+          <div style={{fontSize:"11px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
             letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} · {dateStr}</div>
           <h1 style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:isMobile?"20px":"26px",
-            fontWeight:"800", color:T.text, margin:0, lineHeight:1.1}}>
+            fontWeight:"800", color:"var(--text)", margin:0, lineHeight:1.1}}>
             {greeting}, {first} 👋
           </h1>
-          <div style={{fontSize:"13px", color:T.muted, marginTop:"4px"}}>
+          <div style={{fontSize:"13px", color:"var(--muted)", marginTop:"4px"}}>
             {todayClasses.length} classes today · {upcoming.length} upcoming
           </div>
         </div>
@@ -2866,8 +2866,8 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           {!isMobile && (
             <div style={{position:"relative"}}>
               <input placeholder="Search classes, members…"
-                style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"9px",
-                  padding:"9px 14px 9px 36px", color:T.text, fontSize:"13px", width:"220px",
+                style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"9px",
+                  padding:"9px 14px 9px 36px", color:"var(--text)", fontSize:"13px", width:"220px",
                   outline:"none", fontFamily:"'Hanken Grotesk',sans-serif"}}/>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2"
                 style={{position:"absolute", left:"12px", top:"50%", transform:"translateY(-50%)"}}>
@@ -2888,15 +2888,15 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
       <div style={{display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",
         gap:isMobile?"10px":"14px", marginBottom:"22px"}}>
         {kpis.map((k,i) => (
-          <div key={i} style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"12px",
+          <div key={i} style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"12px",
             padding:isMobile?"12px 14px":"16px 18px", position:"relative", overflow:"hidden"}}>
             {/* accent top bar */}
             <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
               background:[T.accent, "#8B5CF6", "#06B6D4", "#F97316"][i], borderRadius:"3px 3px 0 0"}}/>
-            <div style={{fontSize:"9px", fontWeight:"800", color:T.muted, textTransform:"uppercase",
+            <div style={{fontSize:"9px", fontWeight:"800", color:"var(--muted)", textTransform:"uppercase",
               letterSpacing:"1.2px", marginBottom:"6px"}}>{k.label}</div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:isMobile?"22px":"28px",
-              fontWeight:"800", color:T.text, lineHeight:1, marginBottom:"5px"}}>{k.value}</div>
+              fontWeight:"800", color:"var(--text)", lineHeight:1, marginBottom:"5px"}}>{k.value}</div>
             <div style={{fontSize:"11px", fontWeight:"600",
               color: k.trendUp === true ? T.accent : k.trendUp === false ? "#EF4444" : T.muted}}>
               {k.trend}
@@ -2911,14 +2911,14 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         gap:"16px", marginBottom:"22px"}}>
 
         {/* ── TODAY'S SCHEDULE ────────────────────────────────────────────────── */}
-        <div style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px",
+        <div style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"14px",
           padding:"18px", minWidth:0}}>
           <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px"}}>
             <div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"15px", fontWeight:"700", color:T.text}}>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"15px", fontWeight:"700", color:"var(--text)"}}>
                 Today's schedule
               </div>
-              <div style={{fontSize:"11px", color:T.muted, marginTop:"2px"}}>
+              <div style={{fontSize:"11px", color:"var(--muted)", marginTop:"2px"}}>
                 {showClasses.length} of {todayClasses.length} shown
               </div>
             </div>
@@ -2935,16 +2935,16 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               const isFull  = cls.booked >= cls.cap;
               return (
                 <div key={i} onClick={onNewSession}
-                  style={{padding:"13px 14px", background:T.navy, borderRadius:"10px",
-                    border:`1px solid ${T.border}`, cursor:"pointer", transition:"border-color 0.15s"}}
+                  style={{padding:"13px 14px", background:"var(--navy)", borderRadius:"10px",
+                    border:`1px solid var(--border)`, cursor:"pointer", transition:"border-color 0.15s"}}
                   onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color+"80"}
                   onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                   <div style={{display:"flex", alignItems:"flex-start", gap:"12px"}}>
                     {/* Time */}
                     <div style={{flexShrink:0, textAlign:"center", minWidth:"38px"}}>
                       <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"15px", fontWeight:"700",
-                        color:T.text, lineHeight:1}}>{cls.time}</div>
-                      <div style={{fontSize:"9px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+                        color:"var(--text)", lineHeight:1}}>{cls.time}</div>
+                      <div style={{fontSize:"9px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
                         letterSpacing:"0.8px"}}>{cls.period}</div>
                     </div>
 
@@ -2954,7 +2954,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                     {/* Class info */}
                     <div style={{flex:1, minWidth:0}}>
                       <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"4px", flexWrap:"wrap"}}>
-                        <span style={{fontSize:"13px", fontWeight:"700", color:T.text}}>{cls.name}</span>
+                        <span style={{fontSize:"13px", fontWeight:"700", color:"var(--text)"}}>{cls.name}</span>
                         {isFull && (
                           <span style={{fontSize:"9px", fontWeight:"800", color:"#EF4444",
                             background:"#EF444420", border:"1px solid #EF444440",
@@ -2963,11 +2963,11 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                           </span>
                         )}
                       </div>
-                      <div style={{fontSize:"11px", color:T.muted, marginBottom:"7px"}}>
+                      <div style={{fontSize:"11px", color:"var(--muted)", marginBottom:"7px"}}>
                         {cls.trainer} · {cls.booked}/{cls.cap} booked
                       </div>
                       {/* Fill bar */}
-                      <div style={{height:"4px", background:T.border, borderRadius:"2px", overflow:"hidden"}}>
+                      <div style={{height:"4px", background:"var(--border)", borderRadius:"2px", overflow:"hidden"}}>
                         <div style={{height:"100%", width:`${fillPct}%`, background:fillColor(fillPct),
                           borderRadius:"2px", transition:"width 0.6s ease"}}/>
                       </div>
@@ -2977,7 +2977,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                     <div style={{flexShrink:0, textAlign:"right"}}>
                       <div style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"16px", fontWeight:"800",
                         color:cls.color}}>{cls.bpm}</div>
-                      <div style={{fontSize:"9px", color:T.muted, fontWeight:"600", textTransform:"uppercase"}}>BPM</div>
+                      <div style={{fontSize:"9px", color:"var(--muted)", fontWeight:"600", textTransform:"uppercase"}}>BPM</div>
                     </div>
                   </div>
                 </div>
@@ -2987,8 +2987,8 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             {/* View all remaining */}
             {todayClasses.length > 3 && (
               <button onClick={onViewSchedule}
-                style={{padding:"10px", background:"transparent", border:`1px dashed ${T.border}`,
-                  borderRadius:"10px", color:T.muted, fontSize:"12px", fontWeight:"600", cursor:"pointer",
+                style={{padding:"10px", background:"transparent", border:`1px dashed var(--border)`,
+                  borderRadius:"10px", color:"var(--muted)", fontSize:"12px", fontWeight:"600", cursor:"pointer",
                   transition:"border-color 0.15s"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.accent}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
@@ -3002,7 +3002,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
         <div style={{display:"flex", flexDirection:"column", gap:"14px"}}>
 
           {/* Jungle Intelligence */}
-          <div style={{background:T.card, border:`1px solid ${T.accent}40`, borderRadius:"14px", padding:"18px", position:"relative", overflow:"hidden"}}>
+          <div style={{background:"var(--card)", border:`1px solid ${T.accent}40`, borderRadius:"14px", padding:"18px", position:"relative", overflow:"hidden"}}>
             <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
               background:`linear-gradient(90deg, ${T.accent}, #06B6D4)`}}/>
             <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px"}}>
@@ -3013,7 +3013,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                   color:T.accent, textTransform:"uppercase", letterSpacing:"1px"}}>Jungle Intelligence</div>
               </div>
             </div>
-            <p style={{fontSize:"13px", color:T.text, lineHeight:"1.6", margin:"0 0 14px"}}>
+            <p style={{fontSize:"13px", color:"var(--text)", lineHeight:"1.6", margin:"0 0 14px"}}>
               Your{" "}
               <span style={{fontWeight:"700", color:T.accent}}>{tip.class}</span>
               {" "}{tip.tip}
@@ -3025,8 +3025,8 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
                 {tip.action}
               </button>
               <button onClick={onViewMusic}
-                style={{padding:"9px 14px", background:"transparent", color:T.muted,
-                  border:`1px solid ${T.border}`, borderRadius:"8px", fontSize:"12px",
+                style={{padding:"9px 14px", background:"transparent", color:"var(--muted)",
+                  border:`1px solid var(--border)`, borderRadius:"8px", fontSize:"12px",
                   fontWeight:"700", cursor:"pointer"}}>
                 Tune
               </button>
@@ -3034,7 +3034,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
           </div>
 
           {/* Auto-DJ widget */}
-          <div style={{background:T.card, border:`1px solid ${T.border}`, borderRadius:"14px", padding:"18px",
+          <div style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"14px", padding:"18px",
             position:"relative", overflow:"hidden"}}>
             <div style={{position:"absolute", top:0, left:0, right:0, height:"3px", background:"#8B5CF6"}}/>
             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px"}}>
@@ -3057,23 +3057,23 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
               <>
                 <div style={{display:"flex", alignItems:"baseline", gap:"4px", marginBottom:"6px"}}>
                   <span style={{fontFamily:`'${T.displayFont}',sans-serif`, fontSize:"36px", fontWeight:"800",
-                    color:T.text, lineHeight:1}}>{djBpm > 0 ? djBpm : 128}</span>
+                    color:"var(--text)", lineHeight:1}}>{djBpm > 0 ? djBpm : 128}</span>
                   <span style={{fontSize:"13px", fontWeight:"600", color:"#8B5CF6"}}>BPM</span>
                 </div>
-                <div style={{fontSize:"12px", color:T.muted, lineHeight:"1.5", marginBottom:"12px"}}>
+                <div style={{fontSize:"12px", color:"var(--muted)", lineHeight:"1.5", marginBottom:"12px"}}>
                   {djTrackCount > 0
                     ? `${djTrackCount} tracks queued · seamless beat-matched transitions`
                     : "Smart-mixing your playlists · building…"}
                 </div>
                 {djProgress?.active && (
-                  <div style={{height:"4px", background:T.navy, borderRadius:"2px", overflow:"hidden", marginBottom:"12px"}}>
+                  <div style={{height:"4px", background:"var(--navy)", borderRadius:"2px", overflow:"hidden", marginBottom:"12px"}}>
                     <div style={{height:"100%", width:`${djProgress.pct||0}%`, background:"#8B5CF6",
                       borderRadius:"2px", transition:"width 0.5s ease"}}/>
                   </div>
                 )}
               </>
             ) : (
-              <div style={{fontSize:"12px", color:T.muted, lineHeight:"1.5", marginBottom:"12px"}}>
+              <div style={{fontSize:"12px", color:"var(--muted)", lineHeight:"1.5", marginBottom:"12px"}}>
                 Open the Builder and run{" "}
                 <span style={{color:"#8B5CF6", fontWeight:"700"}}>DJ This Class</span>
                 {" "}to auto-fill your class soundtrack.
@@ -3103,7 +3103,7 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
 
       {/* ── QUICK ACTIONS ─────────────────────────────────────────────────────── */}
       <div style={{marginBottom:"8px"}}>
-        <div style={{fontSize:"11px", fontWeight:"700", color:T.muted, textTransform:"uppercase",
+        <div style={{fontSize:"11px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
           letterSpacing:"1.2px", marginBottom:"12px"}}>Quick access</div>
         <div style={{display:"grid",
           gridTemplateColumns:isMobile?"repeat(3,1fr)":isTablet?"repeat(3,1fr)":"repeat(6,1fr)",
@@ -3117,13 +3117,13 @@ function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewA
             { icon:"📚", label:"Library",   onClick:onViewLibrary   },
           ].map(item => (
             <div key={item.label} onClick={item.onClick}
-              style={{padding:isMobile?"10px 6px":"14px 10px", background:T.card,
-                borderRadius:"10px", border:`1px solid ${T.border}`, cursor:"pointer",
+              style={{padding:isMobile?"10px 6px":"14px 10px", background:"var(--card)",
+                borderRadius:"10px", border:`1px solid var(--border)`, cursor:"pointer",
                 textAlign:"center", transition:"border-color 0.15s, background 0.15s"}}
               onMouseEnter={e=>{ e.currentTarget.style.borderColor=T.accent; e.currentTarget.style.background=T.accent+"0D"; }}
               onMouseLeave={e=>{ e.currentTarget.style.borderColor=T.border; e.currentTarget.style.background=T.card; }}>
               <div style={{fontSize:isMobile?"18px":"22px", marginBottom:"5px"}}>{item.icon}</div>
-              <div style={{fontSize:isMobile?"10px":"12px", fontWeight:"700", color:T.text}}>{item.label}</div>
+              <div style={{fontSize:isMobile?"10px":"12px", fontWeight:"700", color:"var(--text)"}}>{item.label}</div>
             </div>
           ))}
         </div>
@@ -3181,16 +3181,16 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Page header */}
-      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
-          <p style={{fontSize:"12px",color:T.muted}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
+          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
           <input ref={fileRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:"none"}}/>
-          <button onClick={()=>fileRef.current&&fileRef.current.click()} title="Import a Jungle template JSON" style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"600"}}><Upload size={14}/>Import</button>
-          <button onClick={()=>{ if(selClassType&&selStyle) onExportTemplate&&onExportTemplate(selClassType,selStyle); }} disabled={!(selClassType&&selStyle)} title={selClassType&&selStyle?"Export selected style as JSON":"Pick a class type and style first"} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:(selClassType&&selStyle)?T.accent+"20":T.navy,border:`1px solid ${(selClassType&&selStyle)?T.accent+"40":T.border}`,borderRadius:"8px",cursor:(selClassType&&selStyle)?"pointer":"not-allowed",color:(selClassType&&selStyle)?T.accent:T.muted,fontSize:"12px",fontWeight:"600"}}><Download size={14}/>Export</button>
+          <button onClick={()=>fileRef.current&&fileRef.current.click()} title="Import a Jungle template JSON" style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"600"}}><Upload size={14}/>Import</button>
+          <button onClick={()=>{ if(selClassType&&selStyle) onExportTemplate&&onExportTemplate(selClassType,selStyle); }} disabled={!(selClassType&&selStyle)} title={selClassType&&selStyle?"Export selected style as JSON":"Pick a class type and style first"} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:(selClassType&&selStyle)?T.accent+"20":"var(--navy)",border:`1px solid ${(selClassType&&selStyle)?T.accent+"40":"var(--border)"}`,borderRadius:"8px",cursor:(selClassType&&selStyle)?"pointer":"not-allowed",color:(selClassType&&selStyle)?T.accent:"var(--muted)",fontSize:"12px",fontWeight:"600"}}><Download size={14}/>Export</button>
         </div>
       </div>
 
@@ -3198,18 +3198,18 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
 
         {/* ── Left panel: class type grid ── */}
-        <div style={{flex:isMobile?1:"1.5",display:"flex",flexDirection:"column",overflow:"hidden",borderRight:isMobile?"none":`1px solid ${T.border}`}}>
+        <div style={{flex:isMobile?1:"1.5",display:"flex",flexDirection:"column",overflow:"hidden",borderRight:isMobile?"none":`1px solid var(--border)`}}>
           {/* Panel header */}
           <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>
-              <p style={{fontSize:"20px",fontWeight:"700",color:T.text,fontFamily:`'${T.displayFont}',sans-serif`}}>Choose a class type</p>
-              <p style={{fontSize:"12px",color:T.muted}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
+              <p style={{fontSize:"20px",fontWeight:"700",color:"var(--text)",fontFamily:`'${T.displayFont}',sans-serif`}}>Choose a class type</p>
+              <p style={{fontSize:"12px",color:"var(--muted)"}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
             </div>
             {/* Search */}
-            <div style={{display:"flex",alignItems:"center",gap:"8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"999px",padding:"8px 16px",minWidth:0,flex:"0 0 220px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"999px",padding:"8px 16px",minWidth:0,flex:"0 0 220px"}}>
               <Search size={14} color={T.muted}/>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates…"
-                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"13px",width:"100%"}}/>
+                style={{background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:"13px",width:"100%"}}/>
             </div>
           </div>
 
@@ -3223,8 +3223,8 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
                     style={{
                       padding:"18px",borderRadius:"14px",cursor:"pointer",
                       position:"relative",overflow:"hidden",
-                      border:isSelected?`1px solid ${cls.color}`:`1px solid ${T.border}`,
-                      background:isSelected?`linear-gradient(160deg,${T.navy},${T.card})`:`${T.card}`,
+                      border:isSelected?`1px solid ${cls.color}`:`1px solid var(--border)`,
+                      background:isSelected?`linear-gradient(160deg,var(--navy),var(--card))`:`var(--card)`,
                       boxShadow:isSelected?`0 0 0 3px ${cls.color}18`:"none",
                       transition:"border-color 0.2s,box-shadow 0.2s"
                     }}
@@ -3242,13 +3242,13 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
                       fontSize:"20px",marginBottom:"12px",marginTop:"4px"
                     }}>{cls.icon}</div>
 
-                    <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{cls.label}</p>
-                    <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>{cls.description}</p>
+                    <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{cls.label}</p>
+                    <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"14px"}}>{cls.description}</p>
 
                     {/* Footer */}
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <span style={{fontSize:"11px",color:cls.color,fontWeight:"600"}}>{Object.keys(cls.subTypes).length} styles</span>
-                      <ChevronRight size={14} color={isSelected?cls.color:T.muted}/>
+                      <ChevronRight size={14} color={isSelected?cls.color:"var(--muted)"}/>
                     </div>
                   </div>
                 );
@@ -3262,7 +3262,7 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
           <div style={{
             width:isMobile?"100%":"380px",flexShrink:0,
             display:"flex",flexDirection:"column",overflow:"hidden",
-            background:T.card,
+            background:"var(--card)",
             position:isMobile?"fixed":"relative",
             inset:isMobile?"0":undefined,
             zIndex:isMobile?600:undefined
@@ -3270,18 +3270,18 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
             {selCls ? (
               <>
                 {/* Right panel header */}
-                <div style={{flexShrink:0,padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",gap:"14px"}}>
+                <div style={{flexShrink:0,padding:"20px 22px 16px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"flex-start",gap:"14px"}}>
                   <div style={{
                     width:"40px",height:"40px",borderRadius:"11px",flexShrink:0,
                     background:`${selCls.color}20`,
                     display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px"
                   }}>{selCls.icon}</div>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:"16px",fontWeight:"700",color:T.text}}>{selCls.label}</p>
-                    <p style={{fontSize:"12px",color:T.muted}}>Pick a style to pre-fill your class</p>
+                    <p style={{fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>{selCls.label}</p>
+                    <p style={{fontSize:"12px",color:"var(--muted)"}}>Pick a style to pre-fill your class</p>
                   </div>
                   {isMobile && (
-                    <button onClick={()=>setSelClassType(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px"}}><X size={18}/></button>
+                    <button onClick={()=>setSelClassType(null)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px"}}><X size={18}/></button>
                   )}
                 </div>
 
@@ -3294,32 +3294,32 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
                       <div key={subKey} onClick={()=>setSelStyle(subKey)}
                         style={{
                           padding:"16px",borderRadius:"11px",marginBottom:"8px",cursor:"pointer",
-                          border:isSelStyle?`1px solid ${selCls.color}`:`1px solid ${T.border}`,
-                          background:isSelStyle?`linear-gradient(160deg,${T.navy},${T.card})`:"transparent",
+                          border:isSelStyle?`1px solid ${selCls.color}`:`1px solid var(--border)`,
+                          background:isSelStyle?`linear-gradient(160deg,var(--navy),var(--card))`:"transparent",
                           boxShadow:isSelStyle?`0 0 0 3px ${selCls.color}12`:"none",
                           transition:"border-color 0.15s,background 0.15s"
                         }}
                         onMouseEnter={e=>{if(!isSelStyle){e.currentTarget.style.borderColor=selCls.color+"60";}}}
                         onMouseLeave={e=>{if(!isSelStyle){e.currentTarget.style.borderColor=T.border;}}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
-                          <p style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{sub.label}</p>
+                          <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{sub.label}</p>
                           {stageCount>0 && <span style={{fontSize:"10px",padding:"2px 8px",background:`${selCls.color}25`,color:selCls.color,borderRadius:"999px",fontWeight:"700"}}>{stageCount} stages</span>}
                         </div>
-                        <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>{sub.description}</p>
+                        <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>{sub.description}</p>
                       </div>
                     );
                   })}
                 </div>
 
                 {/* Sticky CTA */}
-                <div style={{flexShrink:0,padding:"14px",borderTop:`1px solid ${T.border}`}}>
+                <div style={{flexShrink:0,padding:"14px",borderTop:`1px solid var(--border)`}}>
                   <button
                     disabled={!selStyle}
                     onClick={()=>{ if(selStyle){ onSelectClassStyle(selClassType,selStyle); setSelClassType(null); }}}
                     style={{
                       width:"100%",padding:"14px",borderRadius:"10px",border:"none",cursor:selStyle?"pointer":"not-allowed",
-                      background:selStyle?`linear-gradient(135deg,${selCls.color},${selCls.color}CC)`:`${T.border}`,
-                      color:selStyle?"#fff":T.muted,fontSize:"14px",fontWeight:"700",
+                      background:selStyle?`linear-gradient(135deg,${selCls.color},${selCls.color}CC)`:`var(--border)`,
+                      color:selStyle?"#fff":"var(--muted)",fontSize:"14px",fontWeight:"700",
                       transition:"opacity 0.15s"
                     }}>
                     {selStyle ? `Build from ${selCls.subTypes[selStyle]?.label||selStyle}` : "Select a style above"}
@@ -3329,8 +3329,8 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
             ) : (
               <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"12px"}}>
                 <div style={{fontSize:"40px",opacity:0.3}}>👈</div>
-                <p style={{fontSize:"14px",fontWeight:"600",color:T.muted}}>Select a class type</p>
-                <p style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Pick a discipline on the left to see available styles</p>
+                <p style={{fontSize:"14px",fontWeight:"600",color:"var(--muted)"}}>Select a class type</p>
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>Pick a discipline on the left to see available styles</p>
               </div>
             )}
           </div>
@@ -3414,19 +3414,19 @@ function IntegrationsScreen({onBack}) {
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",boxSizing:"border-box"}}>
       {/* Back */}
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"26px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
-        <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"22px",fontWeight:"700",color:T.text,margin:0}}>Integrations</h2>
+        <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"22px",fontWeight:"700",color:"var(--text)",margin:0}}>Integrations</h2>
       </div>
 
       {/* Card */}
-      <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:"18px",overflow:"hidden",maxWidth:"1200px",margin:"0 auto"}}>
+      <div style={{background:"var(--bg)",border:`1px solid var(--border)`,borderRadius:"18px",overflow:"hidden",maxWidth:"1200px",margin:"0 auto"}}>
         {/* Header row */}
-        <div style={{padding:"24px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
+        <div style={{padding:"24px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
           <div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Connected apps</div>
-            <div style={{fontSize:"12px",color:T.muted,marginTop:"3px"}}>6 active · syncs in real time</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:"var(--text)"}}>Connected apps</div>
+            <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"3px"}}>6 active · syncs in real time</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:T.accent,padding:"7px 13px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid ${T.accent}`}}>
             <div style={{width:"7px",height:"7px",borderRadius:"50%",background:T.accent}}/>
@@ -3439,36 +3439,36 @@ function IntegrationsScreen({onBack}) {
           {integrations.map((item, idx) => {
             if (item.isPlaceholder) {
               return (
-                <div key={idx} style={{border:`1px dashed ${T.border}`,borderRadius:"14px",padding:"18px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",minHeight:"170px",cursor:"pointer"}}>
-                  <div style={{width:"42px",height:"42px",borderRadius:"11px",border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted}}>
+                <div key={idx} style={{border:`1px dashed var(--border)`,borderRadius:"14px",padding:"18px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",minHeight:"170px",cursor:"pointer"}}>
+                  <div style={{width:"42px",height:"42px",borderRadius:"11px",border:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)"}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
                   </div>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:T.muted}}>Browse 40+ integrations</div>
-                  <div style={{fontSize:"11px",color:T.muted,textAlign:"center"}}>Mailchimp · Mindbody · Slack · Zapier · Sonos</div>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--muted)"}}>Browse 40+ integrations</div>
+                  <div style={{fontSize:"11px",color:"var(--muted)",textAlign:"center"}}>Mailchimp · Mindbody · Slack · Zapier · Sonos</div>
                 </div>
               );
             }
             const borderCol = item.connected ? T.accent : T.border;
             return (
-              <div key={idx} style={{background:T.card,border:`1px solid ${borderCol}`,borderRadius:"14px",padding:"18px"}}>
+              <div key={idx} style={{background:"var(--card)",border:`1px solid ${borderCol}`,borderRadius:"14px",padding:"18px"}}>
                 {/* Header row */}
                 <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"13px"}}>
                   <div style={{width:"42px",height:"42px",borderRadius:"11px",background:item.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:`'${T.displayFont}',sans-serif`,fontWeight:"800",color:"#fff",fontSize:item.iconText?.length===1?"18px":"15px"}}>
                     {item.icon || item.iconText}
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text}}>{item.name}</div>
-                    <div style={{fontSize:"11px",color:item.connected?T.accent:T.muted}}>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{item.name}</div>
+                    <div style={{fontSize:"11px",color:item.connected?T.accent:"var(--muted)"}}>
                       {item.connected ? "● Connected" : "○ Available"}
                     </div>
                   </div>
                 </div>
-                <div style={{fontSize:"12px",color:T.muted,lineHeight:"1.5",marginBottom:"14px"}}>{item.desc}</div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:"13px",borderTop:`1px solid ${T.border}`}}>
-                  <span style={{fontSize:"11px",color:T.muted}}>{item.detail}</span>
+                <div style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"14px"}}>{item.desc}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:"13px",borderTop:`1px solid var(--border)`}}>
+                  <span style={{fontSize:"11px",color:"var(--muted)"}}>{item.detail}</span>
                   {/* Toggle */}
-                  <div style={{width:"38px",height:"22px",borderRadius:"11px",background:item.connected?T.accent:T.border,position:"relative",cursor:"pointer",flexShrink:0}}>
-                    <div style={{position:"absolute",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:T.bg,transition:"left 0.2s",[item.connected?"right":"left"]:"2px"}}/>
+                  <div style={{width:"38px",height:"22px",borderRadius:"11px",background:item.connected?T.accent:"var(--border)",position:"relative",cursor:"pointer",flexShrink:0}}>
+                    <div style={{position:"absolute",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:"var(--bg)",transition:"left 0.2s",[item.connected?"right":"left"]:"2px"}}/>
                   </div>
                 </div>
               </div>
@@ -3537,24 +3537,24 @@ function AnalyticsScreen({onBack}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px",flexWrap:"wrap",gap:"12px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
           <div>
-            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"20px",fontWeight:"700",color:T.text,margin:0}}>Studio analytics</h2>
-            <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Barry's · Shoreditch</div>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"18px":"20px",fontWeight:"700",color:"var(--text)",margin:0}}>Studio analytics</h2>
+            <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>Barry's · Shoreditch</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-          <div style={{display:"flex",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden",fontSize:"12px"}}>
+          <div style={{display:"flex",border:`1px solid var(--border)`,borderRadius:"9px",overflow:"hidden",fontSize:"12px"}}>
             {[["4w","4 weeks"],["12w","12 weeks"],["year","Year"]].map(([k,lbl])=>(
               <div key={k} onClick={()=>setTimeFilter(k)}
-                style={{padding:"8px 14px",background:timeFilter===k?T.navy:"transparent",color:timeFilter===k?T.text:T.muted,fontWeight:timeFilter===k?"600":"400",cursor:"pointer"}}>
+                style={{padding:"8px 14px",background:timeFilter===k?T.navy:"transparent",color:timeFilter===k?T.text:"var(--muted)",fontWeight:timeFilter===k?"600":"400",cursor:"pointer"}}>
                 {lbl}
               </div>
             ))}
           </div>
-          <button style={{border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"8px 15px",borderRadius:"9px",cursor:"pointer",display:"flex",alignItems:"center",gap:"7px"}}>
+          <button style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"8px 15px",borderRadius:"9px",cursor:"pointer",display:"flex",alignItems:"center",gap:"7px"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
             Export
           </button>
@@ -3564,9 +3564,9 @@ function AnalyticsScreen({onBack}) {
       {/* KPI row */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${isTablet?2:4},1fr)`,gap:"12px",marginBottom:"18px"}}>
         {kpis.map((k,i)=>(
-          <div key={i} style={{background:T.card,border:`1px solid ${k.warn?"#F59E0B40":T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{fontSize:"10px",letterSpacing:"1px",color:T.muted,fontWeight:"700",textTransform:"uppercase"}}>{k.label}</div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"28px",fontWeight:"700",marginTop:"6px",color:k.warn?"#F59E0B":T.text}}>{k.value}</div>
+          <div key={i} style={{background:"var(--card)",border:`1px solid ${k.warn?"#F59E0B40":"var(--border)"}`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"10px",letterSpacing:"1px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase"}}>{k.label}</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"28px",fontWeight:"700",marginTop:"6px",color:k.warn?"#F59E0B":"var(--text)"}}>{k.value}</div>
             <div style={{fontSize:"12px",marginTop:"3px",color:k.warn?"#F59E0B":k.up?T.accent:"#EF4444"}}>{k.delta}</div>
           </div>
         ))}
@@ -3575,10 +3575,10 @@ function AnalyticsScreen({onBack}) {
       {/* Charts row */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"14px",marginBottom:"14px"}}>
         {/* Attendance chart */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Attendance & fill rate</div>
-            <div style={{fontSize:"11px",color:T.muted,display:"flex",alignItems:"center",gap:"5px"}}>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>Attendance & fill rate</div>
+            <div style={{fontSize:"11px",color:"var(--muted)",display:"flex",alignItems:"center",gap:"5px"}}>
               <span style={{width:"8px",height:"8px",borderRadius:"2px",background:T.accent,display:"inline-block"}}/>Attendance
               <span style={{marginLeft:"8px",width:"8px",height:"8px",borderRadius:"2px",background:"#E0B85B",display:"inline-block"}}/>Fill %
             </div>
@@ -3593,23 +3593,23 @@ function AnalyticsScreen({onBack}) {
                   height:`${(d.val/maxAttn)*90}px`,
                   transition:"height 0.4s",
                 }}/>
-                <p style={{fontSize:"9px",color:T.muted}}>{d.label}</p>
+                <p style={{fontSize:"9px",color:"var(--muted)"}}>{d.label}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Class type distribution */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"16px"}}>Most-booked class types</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"16px"}}>Most-booked class types</div>
           <div style={{display:"flex",flexDirection:"column",gap:"11px"}}>
             {classTypes.map((item,i)=>(
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
-                  <span style={{fontSize:"12px",color:T.text,fontWeight:"600"}}>{item.label}</span>
+                  <span style={{fontSize:"12px",color:"var(--text)",fontWeight:"600"}}>{item.label}</span>
                   <span style={{fontSize:"12px",color:item.color,fontWeight:"700"}}>{item.pct}%</span>
                 </div>
-                <div style={{height:"6px",background:T.navy,borderRadius:"3px",overflow:"hidden"}}>
+                <div style={{height:"6px",background:"var(--navy)",borderRadius:"3px",overflow:"hidden"}}>
                   <div style={{width:`${item.pct}%`,height:"100%",background:item.color,borderRadius:"3px"}}/>
                 </div>
               </div>
@@ -3621,11 +3621,11 @@ function AnalyticsScreen({onBack}) {
       {/* RPE + Trainers row */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"14px",marginBottom:"14px"}}>
         {/* RPE Distribution */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
             <div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>RPE distribution</div>
-              <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> · reported exertion · last 12 wks</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>RPE distribution</div>
+              <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>avg <span style={{color:T.accent,fontWeight:"700"}}>7.4</span> · reported exertion · last 12 wks</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"flex-end",gap:"10px",height:"90px",marginBottom:"8px"}}>
@@ -3638,24 +3638,24 @@ function AnalyticsScreen({onBack}) {
                   height:`${(d.count/maxRpe)*80}px`,
                   transition:"height 0.4s",
                 }}/>
-                <p style={{fontSize:"10px",color:T.muted}}>{d.v}</p>
+                <p style={{fontSize:"10px",color:"var(--muted)"}}>{d.v}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Trainer performance */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer performance</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Trainer performance</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {trainers.map((t,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",background:T.navy,borderRadius:"10px",border:`1px solid ${T.border}`}}>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",background:"var(--navy)",borderRadius:"10px",border:`1px solid var(--border)`}}>
                 <div style={{width:"34px",height:"34px",borderRadius:"50%",background:T.accent+"22",border:`1px solid ${T.accent}40`,display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700",flexShrink:0}}>
                   {t.name.split(" ")[0][0]}{t.name.split(" ")[1]?.[0]||""}
                 </div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</div>
-                  <div style={{fontSize:"11px",color:T.muted}}>{t.fill} fill · NPS {t.nps}</div>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{t.name}</div>
+                  <div style={{fontSize:"11px",color:"var(--muted)"}}>{t.fill} fill · NPS {t.nps}</div>
                 </div>
                 <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{t.score}</div>
               </div>
@@ -3667,14 +3667,14 @@ function AnalyticsScreen({onBack}) {
       {/* Music impact + BPM by class */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.2fr 1fr",gap:"14px",marginBottom:"14px"}}>
         {/* Music that fills rooms */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Music that fills rooms</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Music that fills rooms</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {musicImpact.map((m,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<musicImpact.length-1?`1px solid ${T.border}`:"none"}}>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<musicImpact.length-1?`1px solid var(--border)`:"none"}}>
                 <div style={{width:"24px",height:"24px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"11px",fontWeight:"800",flexShrink:0}}>{m.rank}</div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.track}</div>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.track}</div>
                 </div>
                 <div style={{fontSize:"12px",color:T.accent,fontWeight:"700",whiteSpace:"nowrap"}}>{m.stat}</div>
               </div>
@@ -3683,16 +3683,16 @@ function AnalyticsScreen({onBack}) {
         </div>
 
         {/* Best BPM by class */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Best BPM by class</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Best BPM by class</div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {bpmByClass.map((b,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:"var(--navy)",borderRadius:"8px",border:`1px solid var(--border)`}}>
                 <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                   <div style={{width:"8px",height:"8px",borderRadius:"50%",background:b.color}}/>
-                  <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{b.label}</span>
+                  <span style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{b.label}</span>
                 </div>
-                <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:b.color}}>{b.bpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></span>
+                <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:b.color}}>{b.bpm} <span style={{fontSize:"11px",color:"var(--muted)",fontWeight:"400"}}>BPM</span></span>
               </div>
             ))}
           </div>
@@ -3700,10 +3700,10 @@ function AnalyticsScreen({onBack}) {
       </div>
 
       {/* Churn risk members */}
-      <div style={{background:T.card,border:`1px solid #F59E0B40`,borderRadius:"14px",padding:"18px"}}>
+      <div style={{background:"var(--card)",border:`1px solid #F59E0B40`,borderRadius:"14px",padding:"18px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}>
           <div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Churn risk</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>Churn risk</div>
             <div style={{fontSize:"11px",color:"#F59E0B",marginTop:"2px"}}>47 members flagged · no visit in 10+ days</div>
           </div>
           <button style={{padding:"7px 14px",background:"#F59E0B20",border:"1px solid #F59E0B50",borderRadius:"7px",cursor:"pointer",color:"#F59E0B",fontSize:"12px",fontWeight:"700"}}>Message all</button>
@@ -3715,15 +3715,15 @@ function AnalyticsScreen({onBack}) {
             {name:"Priya K.",  lastSeen:"9d ago",  missed:2, type:"Yoga"},
             {name:"Marcus L.", lastSeen:"14d ago", missed:5, type:"Strength"},
           ].map((m,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px"}}>
+            <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px"}}>
               <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"#F59E0B20",border:"1px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",color:"#F59E0B",fontSize:"11px",fontWeight:"700",flexShrink:0}}>
                 {m.name.split(" ").map(n=>n[0]).join("")}
               </div>
               <div style={{flex:1}}>
-                <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{m.name}</div>
-                <div style={{fontSize:"11px",color:T.muted}}>Last seen {m.lastSeen} · {m.missed} missed · {m.type}</div>
+                <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{m.name}</div>
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>Last seen {m.lastSeen} · {m.missed} missed · {m.type}</div>
               </div>
-              <button style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.text,fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>Contact</button>
+              <button style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--text)",fontSize:"11px",fontWeight:"600",whiteSpace:"nowrap"}}>Contact</button>
             </div>
           ))}
         </div>
@@ -3753,11 +3753,11 @@ function GlossaryScreen({onBack}) {
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Page header bar */}
-      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div>
-          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE GLOSSARY</p>
-          <p style={{fontSize:"12px",color:T.muted}}>Coaching reference — every movement with target muscles, difficulty and a one-line cue</p>
+          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE GLOSSARY</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Coaching reference — every movement with target muscles, difficulty and a one-line cue</p>
         </div>
       </div>
 
@@ -3767,16 +3767,16 @@ function GlossaryScreen({onBack}) {
           {/* Search bar + count */}
           <div style={{
             display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",
+            background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",
             padding:"12px 18px",marginBottom:"20px",gap:"12px"
           }}>
             <div style={{display:"flex",alignItems:"center",gap:"10px",flex:1}}>
               <Search size={15} color={T.muted}/>
               <input value={search} onChange={e=>setSearch(e.target.value)}
                 placeholder="Search exercises or muscles…"
-                style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14px",width:"100%"}}/>
+                style={{background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:"14px",width:"100%"}}/>
             </div>
-            <span style={{fontSize:"12px",color:T.muted,flexShrink:0,fontWeight:"600"}}>
+            <span style={{fontSize:"12px",color:"var(--muted)",flexShrink:0,fontWeight:"600"}}>
               {allGroups.length} groups · {totalMovements} movements
             </span>
           </div>
@@ -3789,17 +3789,17 @@ function GlossaryScreen({onBack}) {
             if (!filtered.length) return null;
             const isOpen = search ? true : !!openGroups[grp];
             return (
-              <div key={grp} style={{marginBottom:"10px",background:T.card,borderRadius:"12px",border:`1px solid ${T.border}`,overflow:"hidden"}}>
+              <div key={grp} style={{marginBottom:"10px",background:"var(--card)",borderRadius:"12px",border:`1px solid var(--border)`,overflow:"hidden"}}>
                 {/* Group header */}
                 <button onClick={()=>toggleGroup(grp)}
                   style={{
                     width:"100%",padding:"15px 20px",background:"none",border:"none",cursor:"pointer",
                     display:"flex",alignItems:"center",justifyContent:"space-between"
                   }}>
-                  <span style={{fontSize:"14px",fontWeight:"700",color:isOpen?T.text:T.muted}}>
-                    {grp} <span style={{fontSize:"12px",fontWeight:"400",color:T.muted,marginLeft:"6px"}}>({filtered.length})</span>
+                  <span style={{fontSize:"14px",fontWeight:"700",color:isOpen?T.text:"var(--muted)"}}>
+                    {grp} <span style={{fontSize:"12px",fontWeight:"400",color:"var(--muted)",marginLeft:"6px"}}>({filtered.length})</span>
                   </span>
-                  <ChevronRight size={16} color={isOpen?T.accent:T.muted}
+                  <ChevronRight size={16} color={isOpen?T.accent:"var(--muted)"}
                     style={{transform:isOpen?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
                 </button>
 
@@ -3809,19 +3809,19 @@ function GlossaryScreen({onBack}) {
                     display:"grid",
                     gridTemplateColumns:isMobile?"1fr":"1fr 1fr",
                     gap:"1px",
-                    borderTop:`1px solid ${T.border}`
+                    borderTop:`1px solid var(--border)`
                   }}>
                     {filtered.map((ex,i) => {
                       const ds = diffStyle(ex.diff);
                       return (
                         <div key={i} style={{
                           padding:"15px 18px",
-                          background:T.card,
-                          borderRight: (!isMobile && i%2===0) ? `1px solid ${T.border}` : "none",
-                          borderBottom: i < filtered.length - (isMobile?1:2) ? `1px solid ${T.border}` : "none"
+                          background:"var(--card)",
+                          borderRight: (!isMobile && i%2===0) ? `1px solid var(--border)` : "none",
+                          borderBottom: i < filtered.length - (isMobile?1:2) ? `1px solid var(--border)` : "none"
                         }}>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ex.name}</p>
-                          <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>
+                          <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{ex.name}</p>
+                          <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>
                             {ex.muscles.split(/[,·]/).map(m=>m.trim()).join(" · ")}
                           </p>
                           <span style={{
@@ -3944,28 +3944,28 @@ function CalendarScreen({onBack}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"18px",flexWrap:"wrap",gap:"10px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
-            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Planning & schedule</h2>
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:"var(--text)",margin:0}}>Planning & schedule</h2>
+            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
           </div>
         </div>
         <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
           {/* Week nav */}
-          <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid ${T.border}`,borderRadius:"9px",overflow:"hidden"}}>
-            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>‹</button>
-            <span style={{fontSize:"12px",fontWeight:"600",color:T.text,padding:"0 4px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid var(--border)`,borderRadius:"9px",overflow:"hidden"}}>
+            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>‹</button>
+            <span style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",padding:"0 4px"}}>
               {weekOffset===0?"This week":weekOffset===1?"Next week":weekOffset===-1?"Last week":`Week ${weekOffset>0?"+":""}${weekOffset}`}
             </span>
-            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:T.muted,fontWeight:"700"}}>›</button>
+            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
           </div>
-          <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600"}}>
+          <button style={{padding:"8px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600"}}>
             Demand heat
           </button>
           <button style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             Publish week
           </button>
-          <button style={{padding:"8px 14px",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"8px",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"600"}}>
+          <button style={{padding:"8px 14px",background:"var(--navy)",border:`1px solid ${T.accent}50`,borderRadius:"8px",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"600"}}>
             Auto-fill week
           </button>
           <button onClick={()=>setShowAddClass(true)} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
@@ -3977,54 +3977,54 @@ function CalendarScreen({onBack}) {
       {/* F5: Add class modal */}
       {showAddClass && (
         <div onClick={()=>setShowAddClass(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"22px",width:"min(420px,100%)",boxSizing:"border-box"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"22px",width:"min(420px,100%)",boxSizing:"border-box"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
-              <div style={{fontSize:"16px",fontWeight:"800",color:T.text}}>Add class</div>
-              <button onClick={()=>setShowAddClass(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><X size={18}/></button>
+              <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)"}}>Add class</div>
+              <button onClick={()=>setShowAddClass(false)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
             </div>
-            <input autoFocus value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="Class name" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",marginBottom:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"14px"}}/>
+            <input autoFocus value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="Class name" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",marginBottom:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"14px"}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
-              <select value={addForm.type} onChange={e=>setAddForm(f=>({...f,type:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{Object.keys(CAT_COLOR).map(t=><option key={t} value={t}>{t}</option>)}</select>
-              <input value={addForm.coach} onChange={e=>setAddForm(f=>({...f,coach:e.target.value}))} placeholder="Coach" style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}/>
-              <select value={addForm.day} onChange={e=>setAddForm(f=>({...f,day:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{DAYS.map(d=><option key={d} value={d}>{d}</option>)}</select>
-              <select value={addForm.slot} onChange={e=>setAddForm(f=>({...f,slot:e.target.value}))} style={{padding:"10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px"}}>{SLOTS.map(sl=><option key={sl} value={sl}>{sl}</option>)}</select>
+              <select value={addForm.type} onChange={e=>setAddForm(f=>({...f,type:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{Object.keys(CAT_COLOR).map(t=><option key={t} value={t}>{t}</option>)}</select>
+              <input value={addForm.coach} onChange={e=>setAddForm(f=>({...f,coach:e.target.value}))} placeholder="Coach" style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+              <select value={addForm.day} onChange={e=>setAddForm(f=>({...f,day:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{DAYS.map(d=><option key={d} value={d}>{d}</option>)}</select>
+              <select value={addForm.slot} onChange={e=>setAddForm(f=>({...f,slot:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{SLOTS.map(sl=><option key={sl} value={sl}>{sl}</option>)}</select>
             </div>
-            <div style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Repeat</div>
+            <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Repeat</div>
             <div style={{display:"flex",gap:"6px",marginBottom:"18px"}}>
               {[["once","This week"],["weekly","Weekly"],["daily","Every day"]].map(([val,lbl])=>(
-                <button key={val} onClick={()=>setAddForm(f=>({...f,repeat:val}))} style={{flex:1,padding:"9px 0",background:addForm.repeat===val?T.accent:"transparent",color:addForm.repeat===val?"var(--on-accent)":T.muted,border:`1px solid ${addForm.repeat===val?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>{lbl}</button>
+                <button key={val} onClick={()=>setAddForm(f=>({...f,repeat:val}))} style={{flex:1,padding:"9px 0",background:addForm.repeat===val?T.accent:"transparent",color:addForm.repeat===val?"var(--on-accent)":"var(--muted)",border:`1px solid ${addForm.repeat===val?T.accent:"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>{lbl}</button>
               ))}
             </div>
-            <button onClick={addClass} disabled={!addForm.name.trim()} style={{width:"100%",padding:"12px",background:addForm.name.trim()?"var(--accent)":T.border,color:addForm.name.trim()?"var(--on-accent)":T.muted,border:"none",borderRadius:"9px",cursor:addForm.name.trim()?"pointer":"not-allowed",fontSize:"14px",fontWeight:"700"}}>Add to schedule</button>
+            <button onClick={addClass} disabled={!addForm.name.trim()} style={{width:"100%",padding:"12px",background:addForm.name.trim()?"var(--accent)":"var(--border)",color:addForm.name.trim()?"var(--on-accent)":"var(--muted)",border:"none",borderRadius:"9px",cursor:addForm.name.trim()?"pointer":"not-allowed",fontSize:"14px",fontWeight:"700"}}>Add to schedule</button>
           </div>
         </div>
       )}
 
       {/* Schedule grid */}
-      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",overflow:"hidden",marginBottom:"16px"}}>
+      <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",overflow:"hidden",marginBottom:"16px"}}>
         {/* Day headers */}
-        <div style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid ${T.border}`}}>
-          <div style={{padding:"10px 12px",background:T.navy}}/>
+        <div style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid var(--border)`}}>
+          <div style={{padding:"10px 12px",background:"var(--navy)"}}/>
           {visibleDays.map((d,i)=>(
-            <div key={d} style={{padding:"10px 8px",background:T.navy,borderLeft:`1px solid ${T.border}`,textAlign:"center"}}>
-              <div style={{fontSize:"11px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{d}</div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{dayDates[i]}</div>
+            <div key={d} style={{padding:"10px 8px",background:"var(--navy)",borderLeft:`1px solid var(--border)`,textAlign:"center"}}>
+              <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{d}</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>{dayDates[i]}</div>
             </div>
           ))}
         </div>
 
         {/* Time slot rows */}
         {SLOTS.map(slot=>(
-          <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid ${T.border}`,minHeight:"80px"}}>
-            <div style={{padding:"10px 12px",background:T.navy+"66",display:"flex",flexDirection:"column",justifyContent:"center",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{slot}</div>
+          <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid var(--border)`,minHeight:"80px"}}>
+            <div style={{padding:"10px 12px",background:T.navy+"66",display:"flex",flexDirection:"column",justifyContent:"center",borderRight:`1px solid var(--border)`}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>{slot}</div>
             </div>
             {visibleDays.map(day=>{
               const key = `${day}-${slot}`;
               const cls = effSchedule[key];
               const sug = suggested.find(s=>s.day===day && s.slot===slot);
               return (
-                <div key={day} style={{padding:"6px",borderLeft:`1px solid ${T.border}`,position:"relative"}}>
+                <div key={day} style={{padding:"6px",borderLeft:`1px solid var(--border)`,position:"relative"}}>
                   {cls && (
                     <div style={{
                       padding:"7px 8px",
@@ -4035,10 +4035,10 @@ function CalendarScreen({onBack}) {
                       height:"calc(100% - 2px)",
                       boxSizing:"border-box",
                     }}>
-                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{cls.coach} · {cls.dur}</div>
+                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
+                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{cls.coach} · {cls.dur}</div>
                       <div style={{marginTop:"4px",display:"flex",alignItems:"center",gap:"4px"}}>
-                        <div style={{flex:1,height:"3px",background:T.navy,borderRadius:"2px"}}>
+                        <div style={{flex:1,height:"3px",background:"var(--navy)",borderRadius:"2px"}}>
                           <div style={{width:`${cls.fill}%`,height:"100%",background:fillColor(cls.fill),borderRadius:"2px"}}/>
                         </div>
                         <span style={{fontSize:"9px",color:fillColor(cls.fill),fontWeight:"700"}}>{cls.fill}%</span>
@@ -4054,14 +4054,14 @@ function CalendarScreen({onBack}) {
                       cursor:"pointer",
                     }}>
                       <div style={{fontSize:"9px",fontWeight:"700",color:T.accent,letterSpacing:"0.5px",textTransform:"uppercase"}}>SUGGESTED</div>
-                      <div style={{fontSize:isMobile?"9px":"10px",fontWeight:"600",color:T.text,marginTop:"1px"}}>{sug.name}</div>
+                      <div style={{fontSize:isMobile?"9px":"10px",fontWeight:"600",color:"var(--text)",marginTop:"1px"}}>{sug.name}</div>
                     </div>
                   )}
                   {!cls && !sug && (
                     <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:0}}
                       onMouseEnter={e=>e.currentTarget.style.opacity="1"}
                       onMouseLeave={e=>e.currentTarget.style.opacity="0"}>
-                      <span style={{fontSize:"18px",color:T.muted}}>+</span>
+                      <span style={{fontSize:"18px",color:"var(--muted)"}}>+</span>
                     </div>
                   )}
                 </div>
@@ -4074,43 +4074,43 @@ function CalendarScreen({onBack}) {
       {/* Bottom: AI tips + Trainer load */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"14px"}}>
         {/* Jungle Intelligence */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"}}>
             <div style={{width:"28px",height:"28px",borderRadius:"8px",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text}}>Jungle Intelligence</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>Jungle Intelligence</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
             {aiTips.filter(t=>!dismissedTips.includes(t.id)).map((tip,i)=>(
-              <div key={tip.id} style={{padding:"12px 14px",background:T.navy,border:`1px solid ${T.accent}30`,borderRadius:"10px",position:"relative"}}>
-                <div style={{fontSize:"12px",color:T.text,lineHeight:"1.5",paddingRight:"20px"}}>{tip.text}</div>
+              <div key={tip.id} style={{padding:"12px 14px",background:"var(--navy)",border:`1px solid ${T.accent}30`,borderRadius:"10px",position:"relative"}}>
+                <div style={{fontSize:"12px",color:"var(--text)",lineHeight:"1.5",paddingRight:"20px"}}>{tip.text}</div>
                 <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
                   <button style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--on-accent)",fontSize:"11px",fontWeight:"700"}}>{tip.action}</button>
-                  <button onClick={()=>setDismissedTips(d=>[...d,tip.id])} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Dismiss</button>
+                  <button onClick={()=>setDismissedTips(d=>[...d,tip.id])} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Dismiss</button>
                 </div>
               </div>
             ))}
             {dismissedTips.length===aiTips.length && (
-              <div style={{textAlign:"center",padding:"24px",color:T.muted,fontSize:"13px"}}>All suggestions reviewed ✓</div>
+              <div style={{textAlign:"center",padding:"24px",color:"var(--muted)",fontSize:"13px"}}>All suggestions reviewed ✓</div>
             )}
           </div>
         </div>
 
         {/* Trainer load */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Trainer load · this week</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Trainer load · this week</div>
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
             {trainers.map((t,i)=>(
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
-                  <span style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{t.name}</span>
-                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":T.muted,fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                  <span style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{t.name}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
                 </div>
-                <div style={{height:"7px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
+                <div style={{height:"7px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
                   <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
                 </div>
-                <div style={{fontSize:"10px",color:T.muted,marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
+                <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
               </div>
             ))}
           </div>
@@ -4173,11 +4173,11 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   const currentBpm = np?.bpm || (stages[currentStageIdx]?.tracks?.[0]?.bpm) || 0;
 
   const Toggle = ({value, onChange, label}) => (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-      <span style={{fontSize:"12px",color:T.text,fontWeight:"600",flex:1,paddingRight:"12px"}}>{label}</span>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid var(--border)`}}>
+      <span style={{fontSize:"12px",color:"var(--text)",fontWeight:"600",flex:1,paddingRight:"12px"}}>{label}</span>
       <div onClick={()=>onChange(!value)} style={{
         width:"38px",height:"20px",borderRadius:"10px",
-        background:value?T.accent:T.navy,border:`1px solid ${value?T.accent:T.border}`,
+        background:value?T.accent:"var(--navy)",border:`1px solid ${value?T.accent:"var(--border)"}`,
         cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0,
       }}>
         <div style={{width:"14px",height:"14px",borderRadius:"50%",background:"white",position:"absolute",top:"2px",left:value?"21px":"2px",transition:"left 0.2s"}}/>
@@ -4190,10 +4190,10 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px",flexWrap:"wrap",gap:"12px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
-            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:T.text,margin:0}}>Music Hub · Auto-DJ</h2>
-            <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>Spotify Premium · {queueTracks.length} tracks queued</div>
+            <h2 style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"20px",fontWeight:"700",color:"var(--text)",margin:0}}>Music Hub · Auto-DJ</h2>
+            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>Spotify Premium · {queueTracks.length} tracks queued</div>
           </div>
         </div>
         {queueTracks.length > 0 && (
@@ -4208,8 +4208,8 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
         {/* Column 1: Now Playing + Queue */}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
           {/* Now playing */}
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Now playing</div>
+          <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Now playing</div>
             {np ? (
               <>
                 <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}}>
@@ -4218,23 +4218,23 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                     : <div style={{width:"52px",height:"52px",borderRadius:"10px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 4px,#0f1611 4px,#0f1611 8px)",flexShrink:0}}/>
                   }
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.t||np.name}</div>
-                    <div style={{fontSize:"12px",color:T.muted,marginTop:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.a||np.artist}</div>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.t||np.name}</div>
+                    <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.a||np.artist}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   {currentBpm > 0
-                    ? <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"32px",fontWeight:"700",color:T.accent}}>{currentBpm} <span style={{fontSize:"11px",color:T.muted,fontWeight:"400"}}>BPM</span></div>
-                    : <div style={{fontSize:"13px",color:T.muted}}>BPM unknown</div>
+                    ? <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"32px",fontWeight:"700",color:T.accent}}>{currentBpm} <span style={{fontSize:"11px",color:"var(--muted)",fontWeight:"400"}}>BPM</span></div>
+                    : <div style={{fontSize:"13px",color:"var(--muted)"}}>BPM unknown</div>
                   }
                   <div style={{display:"flex",gap:"8px"}}>
-                    <button onClick={()=>player?.previousTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
+                    <button onClick={()=>player?.previousTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text)"}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
                     </button>
                     <button onClick={()=>player?.togglePlay?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:"var(--accent)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--on-accent)"}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                     </button>
-                    <button onClick={()=>player?.nextTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>
+                    <button onClick={()=>player?.nextTrack?.()} style={{width:"34px",height:"34px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text)"}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
                     </button>
                   </div>
@@ -4243,32 +4243,32 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
             ) : (
               <div style={{textAlign:"center",padding:"20px 0"}}>
                 <div style={{fontSize:"28px",marginBottom:"8px"}}>🎵</div>
-                <div style={{fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>Nothing playing.<br/>Start a live session to see now-playing info.</div>
+                <div style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>Nothing playing.<br/>Start a live session to see now-playing info.</div>
               </div>
             )}
           </div>
 
           {/* Track queue (from stages) */}
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Stage queue</div>
-              <div style={{fontSize:"11px",color:T.muted}}>{queueTracks.length} tracks</div>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Stage queue</div>
+              <div style={{fontSize:"11px",color:"var(--muted)"}}>{queueTracks.length} tracks</div>
             </div>
             {queueTracks.length === 0 ? (
-              <div style={{textAlign:"center",padding:"16px 0",fontSize:"12px",color:T.muted,lineHeight:"1.5"}}>
+              <div style={{textAlign:"center",padding:"16px 0",fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>
                 No tracks yet.<br/>Run <strong style={{color:T.accent}}>DJ This Class</strong> in the Builder to fill the queue.
               </div>
             ) : (
               <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"300px",overflowY:"auto"}}>
                 {queueTracks.slice(0,30).map((t,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 9px",background:t.isCurrent?T.accent+"14":T.navy,border:`1px solid ${t.isCurrent?T.accent+"50":T.border}`,borderRadius:"8px"}}>
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 9px",background:t.isCurrent?T.accent+"14":"var(--navy)",border:`1px solid ${t.isCurrent?T.accent+"50":"var(--border)"}`,borderRadius:"8px"}}>
                     {t.albumArt
                       ? <img src={t.albumArt} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
                       : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:t.stageColor+"22",flexShrink:0}}/>
                     }
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.t}</div>
-                      <div style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.a} · {t.stageName}</div>
+                      <div style={{fontSize:"11px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.t}</div>
+                      <div style={{fontSize:"10px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.a} · {t.stageName}</div>
                     </div>
                     {t.bpm > 0 && <div style={{fontSize:"11px",fontWeight:"700",color:t.stageColor,flexShrink:0}}>{t.bpm}</div>}
                   </div>
@@ -4280,31 +4280,31 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
 
         {/* Column 2: Member requests + Playlists */}
         <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Member requests</div>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Member requests</div>
               {takeRequests
                 ? <div style={{padding:"3px 9px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:T.accent}}>{requests.length} pending</div>
-                : <div style={{padding:"3px 9px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted}}>Off</div>
+                : <div style={{padding:"3px 9px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"999px",fontSize:"11px",color:"var(--muted)"}}>Off</div>
               }
             </div>
             {!takeRequests
-              ? <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Enable "Take requests" in Mix Controls to allow member track requests.</div>
+              ? <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"12px 0"}}>Enable "Take requests" in Mix Controls to allow member track requests.</div>
               : requests.length===0
-                ? <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No pending requests</div>
+                ? <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"12px 0"}}>No pending requests</div>
                 : <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                     {requests.map(r=>(
-                      <div key={r.id} style={{padding:"10px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
+                      <div key={r.id} style={{padding:"10px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"10px"}}>
                         <div style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
                           <div style={{width:"32px",height:"32px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"13px",fontWeight:"700",color:T.accent,flexShrink:0}}>{r.votes}</div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
-                            <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{r.member}{r.bpm?` · ${r.bpm} BPM`:""}{r.note?` · ${r.note}`:""}</div>
+                            <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.track}</div>
+                            <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"1px"}}>{r.member}{r.bpm?` · ${r.bpm} BPM`:""}{r.note?` · ${r.note}`:""}</div>
                           </div>
                         </div>
                         <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
                           <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{flex:1,padding:"5px",background:T.accent+"22",border:`1px solid ${T.accent}50`,borderRadius:"6px",cursor:"pointer",color:T.accent,fontSize:"11px",fontWeight:"700"}}>Queue it</button>
-                          <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Skip</button>
+                          <button onClick={()=>setRequests(rs=>rs.filter(x=>x.id!==r.id))} style={{padding:"5px 10px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Skip</button>
                         </div>
                       </div>
                     ))}
@@ -4313,20 +4313,20 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
           </div>
 
           {/* Source playlists */}
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Your Spotify playlists</div>
-            {loadingPls && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading…</div>}
-            {!loadingPls && playlists.length===0 && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>No playlists found — connect Spotify first.</div>}
+          <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Your Spotify playlists</div>
+            {loadingPls && <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"12px 0"}}>Loading…</div>}
+            {!loadingPls && playlists.length===0 && <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"12px 0"}}>No playlists found — connect Spotify first.</div>}
             <div style={{display:"flex",flexDirection:"column",gap:"6px",maxHeight:"240px",overflowY:"auto"}}>
               {playlists.slice(0,15).map((p,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"7px 9px",background:T.navy,borderRadius:"8px",border:`1px solid ${T.border}`}}>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"7px 9px",background:"var(--navy)",borderRadius:"8px",border:`1px solid var(--border)`}}>
                   {p.images?.[0]?.url
                     ? <img src={p.images[0].url} style={{width:"28px",height:"28px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
                     : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>🎵</div>
                   }
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
-                    <div style={{fontSize:"10px",color:T.muted}}>{(p.tracks?.total ?? "?")} tracks</div>
+                    <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)"}}>{(p.tracks?.total ?? "?")} tracks</div>
                   </div>
                 </div>
               ))}
@@ -4335,14 +4335,14 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
         </div>
 
         {/* Column 3: Mix controls */}
-        <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"14px",padding:"18px"}}>
-          <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Mix controls</div>
+        <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
+          <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Mix controls</div>
 
           <div style={{marginBottom:"14px"}}>
-            <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"6px"}}>Energy target</div>
+            <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",marginBottom:"6px"}}>Energy target</div>
             <div style={{display:"flex",gap:"5px"}}>
               {["Low","Medium","High","Peak"].map(e=>(
-                <button key={e} onClick={()=>setEnergy(e)} style={{flex:1,padding:"7px 2px",background:energy===e?T.accent:"transparent",border:`1px solid ${energy===e?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:energy===e?"#0A0F0C":T.muted,fontSize:"10px",fontWeight:"700"}}>
+                <button key={e} onClick={()=>setEnergy(e)} style={{flex:1,padding:"7px 2px",background:energy===e?T.accent:"transparent",border:`1px solid ${energy===e?T.accent:"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:energy===e?"#0A0F0C":"var(--muted)",fontSize:"10px",fontWeight:"700"}}>
                   {e}
                 </button>
               ))}
@@ -4351,7 +4351,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
 
           <div style={{marginBottom:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
-              <div style={{fontSize:"11px",color:T.muted,fontWeight:"600"}}>BPM range</div>
+              <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600"}}>BPM range</div>
               <div style={{fontSize:"11px",color:T.accent,fontWeight:"700"}}>{bpmMin}–{bpmMax}</div>
             </div>
             <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
@@ -4361,10 +4361,10 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
           </div>
 
           <div style={{marginBottom:"16px"}}>
-            <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"6px"}}>Transition style</div>
+            <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",marginBottom:"6px"}}>Transition style</div>
             <div style={{display:"flex",gap:"5px"}}>
               {["Beat-match","Cut","Echo"].map(s=>(
-                <button key={s} onClick={()=>setTransition(s)} style={{flex:1,padding:"7px 2px",background:transition===s?T.accent+"22":"transparent",border:`1px solid ${transition===s?T.accent:T.border}`,borderRadius:"7px",cursor:"pointer",color:transition===s?T.accent:T.muted,fontSize:"10px",fontWeight:"700"}}>
+                <button key={s} onClick={()=>setTransition(s)} style={{flex:1,padding:"7px 2px",background:transition===s?T.accent+"22":"transparent",border:`1px solid ${transition===s?T.accent:"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:transition===s?T.accent:"var(--muted)",fontSize:"10px",fontWeight:"700"}}>
                   {s}
                 </button>
               ))}
@@ -4408,7 +4408,7 @@ function MemberScreen({onBack}) {
   const TabBtn = ({id, label, icon}) => (
     <button onClick={()=>setTab(id)} style={{
       flex:1,padding:"10px 4px",background:"none",border:"none",cursor:"pointer",
-      color:tab===id?T.accent:T.muted,
+      color:tab===id?T.accent:"var(--muted)",
       borderTop:`2px solid ${tab===id?T.accent:"transparent"}`,
       fontSize:"11px",fontWeight:"700",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",
     }}>
@@ -4420,10 +4420,10 @@ function MemberScreen({onBack}) {
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 20px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.text,display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
-        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:T.text}}>Member App</div>
-        <div style={{marginLeft:"auto",fontSize:"11px",color:T.muted}}>Sam Ellis</div>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 20px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Member App</div>
+        <div style={{marginLeft:"auto",fontSize:"11px",color:"var(--muted)"}}>Sam Ellis</div>
         <div style={{width:"30px",height:"30px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>SE</div>
       </div>
 
@@ -4434,34 +4434,34 @@ function MemberScreen({onBack}) {
         {tab==="discover" && (
           <div style={{padding:"20px"}}>
             <div style={{marginBottom:"18px"}}>
-              <div style={{fontSize:"12px",color:T.muted,fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:T.text}}>Hey, Sam 👋</div>
-              <div style={{padding:"14px",background:T.card,border:`1px solid ${T.accent}50`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
+              <div style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"20px",fontWeight:"700",color:"var(--text)"}}>Hey, Sam 👋</div>
+              <div style={{padding:"14px",background:"var(--card)",border:`1px solid ${T.accent}50`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
                 <div style={{fontSize:"11px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
-                <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Strength Lab</div>
-                <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
+                <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Strength Lab</div>
+                <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
                 <div style={{marginTop:"10px",padding:"6px 12px",background:"var(--accent)",borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",cursor:"pointer"}}>View workout →</div>
               </div>
             </div>
 
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Recommended for you</div>
+              <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>Recommended for you</div>
               <button style={{background:"none",border:"none",cursor:"pointer",color:T.accent,fontSize:"12px",fontWeight:"700"}}>See all</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
               {upcomingClasses.map((cls,i)=>(
                 <div key={cls.id} onClick={()=>{setSelectedClass(cls);setTab("detail");}}
-                  style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",cursor:"pointer"}}>
+                  style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",cursor:"pointer"}}>
                   <div style={{width:"44px",height:"44px",borderRadius:"10px",background:`${CAT_COLOR[cls.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[cls.type]||T.accent}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:CAT_COLOR[cls.type]||T.accent}}>{cls.date.split(" ")[0][0]+cls.date.split(" ")[0].slice(-2)}</span>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>{cls.date} · {cls.coach} · {cls.bpm} BPM</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.name}</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>{cls.date} · {cls.coach} · {cls.bpm} BPM</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     <div style={{fontSize:"14px",fontWeight:"800",color:T.accent}}>{cls.match}%</div>
-                    <div style={{fontSize:"10px",color:T.muted}}>match</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)"}}>match</div>
                   </div>
                 </div>
               ))}
@@ -4473,25 +4473,25 @@ function MemberScreen({onBack}) {
         {tab==="detail" && (
           <div style={{padding:"20px"}}>
             <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||T.accent}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||T.accent}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||T.accent,marginBottom:"8px"}}>{classDetail.type} · {classDetail.dur}</div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:T.text,marginBottom:"4px"}}>{classDetail.name}</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:"var(--text)",marginBottom:"4px"}}>{classDetail.name}</div>
             <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
               <div style={{width:"36px",height:"36px",borderRadius:"50%",background:T.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent,fontSize:"12px",fontWeight:"700"}}>{classDetail.coach[0]}</div>
               <div>
-                <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{classDetail.coach}</div>
-                <div style={{fontSize:"11px",color:T.muted}}>Lead coach · 4.9 ★</div>
+                <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{classDetail.coach}</div>
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>Lead coach · 4.9 ★</div>
               </div>
-              <div style={{marginLeft:"auto",display:"flex",gap:"12px",fontSize:"11px",color:T.muted}}>
+              <div style={{marginLeft:"auto",display:"flex",gap:"12px",fontSize:"11px",color:"var(--muted)"}}>
                 <span>RPE 7–8</span>
                 <span>Studio 1</span>
                 <span style={{color:classDetail.spots>0?T.accent:"#EF4444",fontWeight:"700"}}>{classDetail.spots>0?`${classDetail.spots} spots left`:"Full"}</span>
               </div>
             </div>
 
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
             <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"16px"}}>
               {stagesPreview.map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px",borderLeft:`3px solid ${s.color}`}}>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:T.text}}>{s.name}</div>
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"10px",borderLeft:`3px solid ${s.color}`}}>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{s.name}</div>
                   <div style={{fontSize:"12px",color:s.color,fontWeight:"700"}}>{s.bpm} BPM</div>
                 </div>
               ))}
@@ -4499,13 +4499,13 @@ function MemberScreen({onBack}) {
 
             <div style={{padding:"12px 14px",background:T.accent+"11",border:`1px solid ${T.accent}30`,borderRadius:"10px",marginBottom:"16px"}}>
               <div style={{fontSize:"12px",fontWeight:"700",color:T.accent,marginBottom:"2px"}}>Auto-DJ soundtrack ready</div>
-              <div style={{fontSize:"11px",color:T.muted}}>House · 52 tracks · beat-matched to every stage</div>
+              <div style={{fontSize:"11px",color:"var(--muted)"}}>House · 52 tracks · beat-matched to every stage</div>
             </div>
 
             {classDetail.booked
               ? <div style={{width:"100%",padding:"14px",background:T.accent+"22",border:`1px solid ${T.accent}60`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:T.accent}}>✓ Booked</div>
               : classDetail.waitlist
-                ? <button style={{width:"100%",padding:"14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:T.muted}}>Join waitlist ({classDetail.waitlist} ahead)</button>
+                ? <button style={{width:"100%",padding:"14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--muted)"}}>Join waitlist ({classDetail.waitlist} ahead)</button>
                 : <button style={{width:"100%",padding:"14px",background:"var(--accent)",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--on-accent)"}}>Book with ClassPass</button>
             }
           </div>
@@ -4515,33 +4515,33 @@ function MemberScreen({onBack}) {
         {tab==="live" && (
           <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:"20px"}}>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:T.text}}>Sunrise HIIT</div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Sunrise HIIT</div>
               <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>● LIVE</div>
             </div>
 
-            <div style={{padding:"3px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",fontSize:"11px",color:T.muted,marginBottom:"16px"}}>ROUND 3 / 8</div>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"72px",fontWeight:"800",color:T.text,lineHeight:"1",marginBottom:"8px"}}>00:42</div>
+            <div style={{padding:"3px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"999px",fontSize:"11px",color:"var(--muted)",marginBottom:"16px"}}>ROUND 3 / 8</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"72px",fontWeight:"800",color:"var(--text)",lineHeight:"1",marginBottom:"8px"}}>00:42</div>
             <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"22px",fontWeight:"700",color:T.accent,marginBottom:"4px"}}>Kettlebell Swings</div>
-            <div style={{fontSize:"13px",color:T.muted,marginBottom:"24px"}}>×20 · 24kg</div>
+            <div style={{fontSize:"13px",color:"var(--muted)",marginBottom:"24px"}}>×20 · 24kg</div>
 
-            <div style={{padding:"12px 16px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
+            <div style={{padding:"12px 16px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
               <div style={{width:"36px",height:"36px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 3px,#0f1611 3px,#0f1611 6px)",flexShrink:0}}/>
               <div style={{flex:1}}>
-                <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>Pump It — Reso</div>
-                <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>now playing</div>
+                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>Pump It — Reso</div>
+                <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>now playing</div>
               </div>
-              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:T.muted}}> BPM</span></div>
+              <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>132<span style={{fontSize:"10px",color:"var(--muted)"}}> BPM</span></div>
             </div>
 
-            <button style={{width:"100%",padding:"12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"12px"}}>
+            <button style={{width:"100%",padding:"12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"12px"}}>
               🎵 Request a track · 3 in queue
             </button>
 
-            <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",width:"100%"}}>
-              <div style={{fontSize:"12px",color:T.muted,marginBottom:"10px"}}>How hard did that feel? Tap to log RPE after the round</div>
+            <div style={{padding:"14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",width:"100%"}}>
+              <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}>How hard did that feel? Tap to log RPE after the round</div>
               <div style={{display:"flex",gap:"6px"}}>
                 {[5,6,7,8,9,10].map(n=>(
-                  <button key={n} style={{flex:1,padding:"8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"13px",fontWeight:"700"}}>{n}</button>
+                  <button key={n} style={{flex:1,padding:"8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"13px",fontWeight:"700"}}>{n}</button>
                 ))}
               </div>
             </div>
@@ -4551,15 +4551,15 @@ function MemberScreen({onBack}) {
         {/* ── BOOK / SCHEDULE ── */}
         {tab==="book" && (
           <div style={{padding:"20px"}}>
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"14px"}}>Book a class</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Book a class</div>
 
             {/* Week strip */}
             <div style={{display:"flex",gap:"8px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px"}}>
               {["MON\n14","TUE\n15","WED\n16","THU\n17","FRI\n18","SAT\n19"].map((d,i)=>(
                 <div key={i} style={{
                   minWidth:"48px",padding:"8px 4px",borderRadius:"10px",textAlign:"center",cursor:"pointer",flexShrink:0,
-                  background:i===1?T.accent:T.card,border:`1px solid ${i===1?T.accent:T.border}`,
-                  color:i===1?"#0A0F0C":T.text,
+                  background:i===1?T.accent:"var(--card)",border:`1px solid ${i===1?T.accent:"var(--border)"}`,
+                  color:i===1?"#0A0F0C":"var(--text)",
                 }}>
                   <div style={{fontSize:"9px",fontWeight:"700",letterSpacing:"0.5px"}}>{d.split("\n")[0]}</div>
                   <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700"}}>{d.split("\n")[1]}</div>
@@ -4580,18 +4580,18 @@ function MemberScreen({onBack}) {
                 {time:"18:30",name:"Strength Lab",coach:"Priya",dur:"45m",spots:8,status:"Book"},
                 {time:"19:30",name:"Spin Ride",dur:"45m",status:"Waitlist 3",full:true},
               ].map((cls,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px"}}>
-                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:T.muted,minWidth:"44px"}}>{cls.time}</div>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"10px"}}>
+                  <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:"var(--muted)",minWidth:"44px"}}>{cls.time}</div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted,marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.name}</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
                   </div>
                   <button style={{
                     padding:"6px 12px",
                     background:cls.status==="Booked"?T.accent+"22":cls.full?T.navy:"transparent",
-                    border:`1px solid ${cls.status==="Booked"?T.accent:T.border}`,
+                    border:`1px solid ${cls.status==="Booked"?T.accent:"var(--border)"}`,
                     borderRadius:"7px",cursor:"pointer",
-                    color:cls.status==="Booked"?T.accent:T.text,
+                    color:cls.status==="Booked"?T.accent:"var(--text)",
                     fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap",
                   }}>{cls.status}</button>
                 </div>
@@ -4606,46 +4606,46 @@ function MemberScreen({onBack}) {
             <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px"}}>
               <div style={{width:"56px",height:"56px",borderRadius:"50%",background:T.accent+"22",border:`2px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",fontWeight:"800",color:T.accent,flexShrink:0}}>SE</div>
               <div>
-                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>Sam Ellis</div>
-                <div style={{fontSize:"12px",color:T.muted}}>Member since 2024 · Shoreditch</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>Sam Ellis</div>
+                <div style={{fontSize:"12px",color:"var(--muted)"}}>Member since 2024 · Shoreditch</div>
               </div>
             </div>
 
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"20px"}}>
               {[{val:"128",label:"classes"},{val:"7.6",label:"avg RPE"},{val:"12wk",label:"streak"}].map((s,i)=>(
-                <div key={i} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",textAlign:"center"}}>
+                <div key={i} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",textAlign:"center"}}>
                   <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"24px",fontWeight:"800",color:T.accent}}>{s.val}</div>
-                  <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>{s.label}</div>
+                  <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{s.label}</div>
                 </div>
               ))}
             </div>
 
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
             <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"20px"}}>
               {[{type:"HIIT",n:48,color:"#F59E0B"},{type:"Strength",n:36,color:"#8B5CF6"},{type:"Hyrox",n:24,color:"#22D3A6"}].map((c,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"8px"}}>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"8px"}}>
                   <div style={{width:"8px",height:"8px",borderRadius:"50%",background:c.color}}/>
-                  <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:T.text}}>{c.type}</span>
+                  <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{c.type}</span>
                   <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"700",color:c.color}}>{c.n}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
-            <div style={{padding:"14px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px"}}>
+            <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
+            <div style={{padding:"14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px"}}>
               <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
                 {["House","Drum & Bass","Hip-hop"].map(g=>(
                   <div key={g} style={{padding:"5px 12px",background:T.accent+"22",border:`1px solid ${T.accent}40`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:T.accent}}>{g}</div>
                 ))}
               </div>
-              <div style={{fontSize:"12px",color:T.muted}}>128–140 BPM · peak zone</div>
+              <div style={{fontSize:"12px",color:"var(--muted)"}}>128–140 BPM · peak zone</div>
             </div>
           </div>
         )}
       </div>
 
       {/* Bottom nav */}
-      <div style={{borderTop:`1px solid ${T.border}`,background:T.card,display:"flex",flexShrink:0}}>
+      <div style={{borderTop:`1px solid var(--border)`,background:"var(--card)",display:"flex",flexShrink:0}}>
         <TabBtn id="discover" label="Discover" icon="🏠"/>
         <TabBtn id="detail"   label="Classes"  icon="📋"/>
         <TabBtn id="live"     label="Live"     icon="🎙"/>
@@ -4780,7 +4780,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   };
 
   const sectionStyle = {
-    background:T.card, border:`1px solid ${T.border}`, borderRadius:"16px", padding:"20px",
+    background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"16px", padding:"20px",
   };
   const displayFont = (_baseSkin.fonts?.display || "Space Grotesk");
 
@@ -4788,12 +4788,12 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"28px",boxSizing:"border-box"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"24px"}}>
-        <button onClick={onBack} style={{background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:T.text,display:"flex"}}>
+        <button onClick={onBack} style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:"var(--text)",display:"flex"}}>
           <ArrowLeft size={16}/>
         </button>
         <div>
-          <h2 style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:isMobile?"17px":"22px",fontWeight:"800",color:T.text,margin:0,letterSpacing:"-0.3px"}}>Brand Studio</h2>
-          <div style={{fontSize:"12px",color:T.muted,marginTop:"2px"}}>Upload your brand — Jungle designs the identity, then reskins every surface</div>
+          <h2 style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:isMobile?"17px":"22px",fontWeight:"800",color:"var(--text)",margin:0,letterSpacing:"-0.3px"}}>Brand Studio</h2>
+          <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>Upload your brand — Jungle designs the identity, then reskins every surface</div>
         </div>
       </div>
 
@@ -4824,9 +4824,9 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                         <div key={i} style={{flex:1,height:"22px",borderRadius:"5px",background:c,border:"1px solid rgba(255,255,255,.08)"}}/>
                       ))}
                     </div>
-                    <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"13px",fontWeight:"800",color:active?p.accent:T.text,marginBottom:"2px"}}>{p.label}</div>
-                    <div style={{fontSize:"10px",color:T.muted,lineHeight:"1.4"}}>{p.desc}</div>
-                    <div style={{fontSize:"9px",color:T.muted,marginTop:"5px",opacity:0.7}}>{p.fonts}</div>
+                    <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"13px",fontWeight:"800",color:active?p.accent:"var(--text)",marginBottom:"2px"}}>{p.label}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.4"}}>{p.desc}</div>
+                    <div style={{fontSize:"9px",color:"var(--muted)",marginTop:"5px",opacity:0.7}}>{p.fonts}</div>
                     {active && <div style={{marginTop:"8px",fontSize:"9px",fontWeight:"700",color:p.accent,display:"flex",alignItems:"center",gap:"3px"}}><Check size={10}/> ACTIVE</div>}
                   </div>
                 );
@@ -4841,13 +4841,13 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {/* Logo upload */}
             <div
               onClick={()=>fileRef.current?.click()}
-              style={{border:`1px dashed ${logoSrc?T.accent:T.border}`,borderRadius:"12px",padding:"18px",textAlign:"center",cursor:"pointer",marginBottom:"12px",background:logoSrc?`${T.accent}08`:T.navy,transition:"all .2s"}}>
+              style={{border:`1px dashed ${logoSrc?T.accent:"var(--border)"}`,borderRadius:"12px",padding:"18px",textAlign:"center",cursor:"pointer",marginBottom:"12px",background:logoSrc?`${T.accent}08`:"var(--navy)",transition:"all .2s"}}>
               {logoSrc
                 ? <img src={logoSrc} alt="logo" style={{maxHeight:"60px",maxWidth:"100%",objectFit:"contain",borderRadius:"6px"}}/>
                 : <>
                     <div style={{fontSize:"24px",marginBottom:"6px"}}>🎨</div>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>Drop your logo here</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>PNG, JPG, SVG · click to browse</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>Drop your logo here</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>PNG, JPG, SVG · click to browse</div>
                   </>
               }
             </div>
@@ -4855,14 +4855,14 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
             {/* Vibe selector */}
             <div style={{marginBottom:"12px"}}>
-              <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"7px"}}>Brand vibe</div>
+              <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",marginBottom:"7px"}}>Brand vibe</div>
               <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
                 {vibes.map(v=>(
                   <button key={v.id} onClick={()=>setVibe(v.id)}
                     style={{padding:"5px 11px",borderRadius:"999px",fontSize:"11px",fontWeight:"600",cursor:"pointer",
-                      background:vibe===v.id?T.accent:T.navy,
-                      color:vibe===v.id?"#0A0F0C":T.muted,
-                      border:`1px solid ${vibe===v.id?T.accent:T.border}`,transition:"all .15s"}}>
+                      background:vibe===v.id?T.accent:"var(--navy)",
+                      color:vibe===v.id?"#0A0F0C":"var(--muted)",
+                      border:`1px solid ${vibe===v.id?T.accent:"var(--border)"}`,transition:"all .15s"}}>
                     {v.label}
                   </button>
                 ))}
@@ -4872,7 +4872,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {/* Extracted palette preview */}
             {palette && (
               <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-                <div style={{fontSize:"10px",color:T.muted,fontWeight:"600",marginRight:"4px",lineHeight:"24px"}}>Extracted:</div>
+                <div style={{fontSize:"10px",color:"var(--muted)",fontWeight:"600",marginRight:"4px",lineHeight:"24px"}}>Extracted:</div>
                 {palette.map((c,i)=>(
                   <div key={i} title={c} style={{width:"24px",height:"24px",borderRadius:"6px",background:c,border:"1px solid rgba(255,255,255,.12)",cursor:"default"}}/>
                 ))}
@@ -4882,7 +4882,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {/* Analyze button */}
             {!analyzing && !generatedSkin && (
               <button onClick={runAnalysis} disabled={!logoSrc}
-                style={{width:"100%",padding:"12px",background:logoSrc?T.accent:"rgba(255,255,255,.06)",border:"none",borderRadius:"10px",cursor:logoSrc?"pointer":"not-allowed",fontSize:"13px",fontWeight:"700",color:logoSrc?"#0A0F0C":T.muted,fontFamily:`'${displayFont}',sans-serif`,transition:"all .2s"}}>
+                style={{width:"100%",padding:"12px",background:logoSrc?T.accent:"rgba(255,255,255,.06)",border:"none",borderRadius:"10px",cursor:logoSrc?"pointer":"not-allowed",fontSize:"13px",fontWeight:"700",color:logoSrc?"#0A0F0C":"var(--muted)",fontFamily:`'${displayFont}',sans-serif`,transition:"all .2s"}}>
                 Analyse & generate identity
               </button>
             )}
@@ -4893,12 +4893,12 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 {analyzeSteps.map((s,i)=>(
                   <div key={i} style={{display:"flex",alignItems:"center",gap:"9px"}}>
                     <div style={{width:"18px",height:"18px",borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
-                      background:i<analyzeStep?T.accent:i===analyzeStep?`${T.accent}20`:T.navy,
-                      border:`1px solid ${i<=analyzeStep?T.accent:T.border}`}}>
+                      background:i<analyzeStep?T.accent:i===analyzeStep?`${T.accent}20`:"var(--navy)",
+                      border:`1px solid ${i<=analyzeStep?T.accent:"var(--border)"}`}}>
                       {i<analyzeStep && <Check size={10} color="#0A0F0C" strokeWidth={3}/>}
                       {i===analyzeStep && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:T.accent}}/>}
                     </div>
-                    <span style={{fontSize:"12px",color:i<=analyzeStep?T.text:T.muted}}>{s}</span>
+                    <span style={{fontSize:"12px",color:i<=analyzeStep?T.text:"var(--muted)"}}>{s}</span>
                   </div>
                 ))}
               </div>
@@ -4906,18 +4906,18 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
             {/* Generated result */}
             {generatedSkin && !analyzing && (
-              <div style={{background:T.navy,border:`1px solid ${generatedSkin.tokens.accent}50`,borderRadius:"12px",padding:"14px",marginTop:"4px"}}>
+              <div style={{background:"var(--navy)",border:`1px solid ${generatedSkin.tokens.accent}50`,borderRadius:"12px",padding:"14px",marginTop:"4px"}}>
                 <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>GENERATED IDENTITY</div>
                 {generatedThemes.length>1 && (
                   <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
                     {generatedThemes.map((th,i)=>{
                       const on = generatedSkin && generatedSkin.name===th.name;
                       return (
-                        <button key={i} onClick={()=>setGeneratedSkin(th)} style={{flex:1,padding:"8px",background:on?th.tokens.accent+"22":T.card,border:`1px solid ${on?th.tokens.accent:T.border}`,borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
+                        <button key={i} onClick={()=>setGeneratedSkin(th)} style={{flex:1,padding:"8px",background:on?th.tokens.accent+"22":"var(--card)",border:`1px solid ${on?th.tokens.accent:"var(--border)"}`,borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
                           <div style={{display:"flex",gap:"3px",marginBottom:"6px"}}>
                             {[th.tokens.accent,th.tokens.green,th.tokens.card].map((c,j)=><div key={j} style={{flex:1,height:"14px",borderRadius:"3px",background:c}}/>)}
                           </div>
-                          <div style={{fontSize:"11px",fontWeight:"700",color:on?th.tokens.accent:T.text}}>{th.name}</div>
+                          <div style={{fontSize:"11px",fontWeight:"700",color:on?th.tokens.accent:"var(--text)"}}>{th.name}</div>
                           {th.recommended && <div style={{fontSize:"8px",fontWeight:"700",color:T.accent,letterSpacing:"0.5px"}}>RECOMMENDED</div>}
                         </button>
                       );
@@ -4931,8 +4931,8 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
                   <div>
-                    <div style={{fontSize:"12px",fontWeight:"700",color:T.text}}>{generatedSkin.fonts.display} · {generatedSkin.fonts.body}</div>
-                    <div style={{fontSize:"10px",color:T.muted}}>Vibe: {generatedSkin.vibe} · {generatedSkin.contrast?.passesAA?"✓ Passes WCAG AA":"⚠ Low contrast"}</div>
+                    <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>{generatedSkin.fonts.display} · {generatedSkin.fonts.body}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)"}}>Vibe: {generatedSkin.vibe} · {generatedSkin.contrast?.passesAA?"✓ Passes WCAG AA":"⚠ Low contrast"}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:"8px"}}>
@@ -4941,7 +4941,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                     Apply to all surfaces
                   </button>
                   <button onClick={()=>{setGeneratedSkin(null);setGeneratedThemes([]);}}
-                    style={{padding:"10px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:T.muted}}>
+                    style={{padding:"10px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:"var(--muted)"}}>
                     Retry
                   </button>
                 </div>
@@ -4956,7 +4956,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
           {/* 3. FINE-TUNE */}
           <div style={sectionStyle}>
             <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>FINE-TUNE TOKENS</div>
-            <div style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Program tints · decorative</div>
+            <div style={{fontSize:"9px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Program tints · decorative</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"16px"}}>
               {((generatedSkin&&generatedSkin.programs)||PRESET_SKINS[activeSkinId]?.programs||DEFAULT_PROGRAMS).map((pg,i)=>(
                 <ProgramChip key={i} name={pg.name} tint={pg.tint}/>
@@ -4967,10 +4967,10 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 <div key={key} style={{display:"flex",alignItems:"center",gap:"10px"}}>
                   <input type="color" value={draftTokens[key]?.startsWith("rgba")?T.card:draftTokens[key]||"#000000"}
                     onChange={e=>setDraftTokens(d=>({...d,[key]:e.target.value}))}
-                    style={{width:"30px",height:"30px",borderRadius:"6px",border:`1px solid ${T.border}`,cursor:"pointer",background:"none",padding:"1px"}}/>
+                    style={{width:"30px",height:"30px",borderRadius:"6px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"1px"}}/>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:"12px",fontWeight:"600",color:T.text}}>{label}</div>
-                    <div style={{fontSize:"10px",color:T.muted,fontFamily:"monospace"}}>{draftTokens[key]}</div>
+                    <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)"}}>{label}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)",fontFamily:"monospace"}}>{draftTokens[key]}</div>
                   </div>
                   {(key==="text"||key==="muted")&&contrastBadge(draftTokens[key],draftTokens.bg)}
                   {key==="accent"&&contrastBadge(draftTokens[key],draftTokens.bg)}
@@ -4983,7 +4983,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 Save custom tokens
               </button>
               <button onClick={()=>{setDraftTokens({..._baseSkin.tokens});onCustomSkinChange(null);}}
-                style={{padding:"10px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:T.muted}}>
+                style={{padding:"10px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:"var(--muted)"}}>
                 Reset
               </button>
             </div>
@@ -4991,8 +4991,8 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
           {/* 4. LIVE PREVIEW */}
           <div style={sectionStyle}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · updates instantly on reskin</div>
-            <div style={{background:T.bg,borderRadius:"12px",padding:"16px",border:`1px solid ${T.border}`}}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · updates instantly on reskin</div>
+            <div style={{background:"var(--bg)",borderRadius:"12px",padding:"16px",border:`1px solid var(--border)`}}>
               {/* Mini nav */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
                 <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:T.accent,letterSpacing:"2px"}}>JUNGLE</div>
@@ -5000,21 +5000,21 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                   {[["FILL","92%"],["RPE","7.4"],["NPS","71"]].map(([l,v])=>(
                     <div key={l} style={{textAlign:"center"}}>
                       <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"14px",fontWeight:"800",color:T.accent}}>{v}</div>
-                      <div style={{fontSize:"9px",color:T.muted,fontWeight:"700"}}>{l}</div>
+                      <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700"}}>{l}</div>
                     </div>
                   ))}
                 </div>
               </div>
               {/* Mini class card */}
-              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"10px",padding:"12px",marginBottom:"8px"}}>
-                <div style={{fontSize:"9px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"5px"}}>NEXT CLASS</div>
-                <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:T.text,marginBottom:"2px"}}>Strength Lab</div>
-                <div style={{fontSize:"11px",color:T.muted}}>with Priya · 18:30 · 45 min</div>
+              <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"10px",padding:"12px",marginBottom:"8px"}}>
+                <div style={{fontSize:"9px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"5px"}}>NEXT CLASS</div>
+                <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:"var(--text)",marginBottom:"2px"}}>Strength Lab</div>
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>with Priya · 18:30 · 45 min</div>
                 <div style={{marginTop:"8px",height:"3px",borderRadius:"2px",background:`linear-gradient(to right, ${T.accent}, ${T.green})`}}/>
               </div>
               {/* Mini schedule rows */}
               {["06:00  Sunrise HIIT","12:15  Hyrox Sim","18:30  Strength Lab"].map((c,i)=>(
-                <div key={i} style={{fontSize:"11px",color:i===0?T.text:T.muted,padding:"5px 0",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between"}}>
+                <div key={i} style={{fontSize:"11px",color:i===0?T.text:"var(--muted)",padding:"5px 0",borderBottom:`1px solid var(--border)`,display:"flex",justifyContent:"space-between"}}>
                   <span>{c}</span>
                   {i===0&&<span style={{fontSize:"9px",padding:"2px 6px",background:`${T.accent}18`,color:T.accent,borderRadius:"4px",fontWeight:"700"}}>LIVE</span>}
                 </div>
@@ -5031,16 +5031,16 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             <div style={{fontSize:"10px",fontWeight:"700",color:T.accent,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>GYM IDENTITY</div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
               <div>
-                <div style={{fontSize:"11px",color:T.muted,fontWeight:"600",marginBottom:"5px"}}>Gym name</div>
+                <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",marginBottom:"5px"}}>Gym name</div>
                 <input value={gymBranding.gymName||""} onChange={e=>onBrandingChange({...gymBranding,gymName:e.target.value})}
                   placeholder="Your gym name…"
-                  style={{width:"100%",padding:"9px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",color:T.text,fontSize:"13px",boxSizing:"border-box"}}/>
+                  style={{width:"100%",padding:"9px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px",boxSizing:"border-box"}}/>
               </div>
               {gymBranding.logo && (
                 <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                  <img src={gymBranding.logo} style={{height:"36px",maxWidth:"80px",objectFit:"contain",borderRadius:"6px",border:`1px solid ${T.border}`}} alt="logo"/>
+                  <img src={gymBranding.logo} style={{height:"36px",maxWidth:"80px",objectFit:"contain",borderRadius:"6px",border:`1px solid var(--border)`}} alt="logo"/>
                   <button onClick={()=>onBrandingChange({...gymBranding,logo:null})}
-                    style={{padding:"6px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>
+                    style={{padding:"6px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>
                     Remove
                   </button>
                 </div>
@@ -5189,7 +5189,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   };
 
   const overlay = { position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:isMobile?"flex-end":"center", justifyContent:"center" };
-  const modal   = { background:T.card, border:`1px solid ${T.border}`, borderRadius:isMobile?"14px 14px 0 0":"14px", width:isMobile?"100%":"680px", maxWidth:isMobile?"100%":"95vw", maxHeight:isMobile?"92vh":"82vh", display:"flex", flexDirection:"column", overflow:"hidden" };
+  const modal   = { background:"var(--card)", border:`1px solid var(--border)`, borderRadius:isMobile?"14px 14px 0 0":"14px", width:isMobile?"100%":"680px", maxWidth:isMobile?"100%":"95vw", maxHeight:isMobile?"92vh":"82vh", display:"flex", flexDirection:"column", overflow:"hidden" };
 
   const [grantingAccess, setGrantingAccess] = useState(false);
 
@@ -5230,12 +5230,12 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   const ScopeErrorScreen = () => (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 32px",textAlign:"center",flex:1}}>
       <p style={{fontSize:"40px",marginBottom:"14px"}}>🔒</p>
-      <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"8px"}}>One-time permission needed</p>
-      <p style={{fontSize:"13px",color:T.muted,marginBottom:"8px",maxWidth:"340px",lineHeight:"1.6"}}>
+      <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"8px"}}>One-time permission needed</p>
+      <p style={{fontSize:"13px",color:"var(--muted)",marginBottom:"8px",maxWidth:"340px",lineHeight:"1.6"}}>
         Jungle needs read access to your Spotify playlist songs.<br/>
-        This is a <strong style={{color:T.text}}>one-time step</strong> — after this, clicking any playlist will show its songs instantly.
+        This is a <strong style={{color:"var(--text)"}}>one-time step</strong> — after this, clicking any playlist will show its songs instantly.
       </p>
-      <p style={{fontSize:"11px",color:T.muted,marginBottom:"28px",opacity:0.7}}>
+      <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"28px",opacity:0.7}}>
         {grantingAccess ? "A Spotify window just opened — approve access there, then come back." : "A small window will open — you'll be back here in seconds."}
       </p>
       <button onClick={handleGrantAccess} disabled={grantingAccess}
@@ -5249,33 +5249,33 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
     <div style={overlay} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={modal}>
         {/* Header */}
-        <div style={{padding:"16px 20px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0}}>
+        <div style={{padding:"16px 20px", borderBottom:`1px solid var(--border)`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0}}>
           <div style={{display:"flex", alignItems:"center", gap:"10px", minWidth:0}}>
             {mode==="tracks" && (
-              <button onClick={()=>setMode("playlists")} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}>
+              <button onClick={()=>setMode("playlists")} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
                 <ArrowLeft size={18}/>
               </button>
             )}
             <div style={{minWidth:0}}>
-              <p style={{fontSize:"15px", fontWeight:"700", color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+              <p style={{fontSize:"15px", fontWeight:"700", color:"var(--text)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                 {mode==="tracks" ? selPl?.name : "My Spotify Playlists"}
               </p>
               {mode==="tracks" && !loadingTr && tracks.length > 0 && (
-                <p style={{fontSize:"11px", color:T.muted, marginTop:"1px"}}>
+                <p style={{fontSize:"11px", color:"var(--muted)", marginTop:"1px"}}>
                   {tracks.length} tracks{totalDurLabel ? ` · ${totalDurLabel}` : ""}
                 </p>
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}><X size={18}/></button>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}><X size={18}/></button>
         </div>
 
         {/* Stage selector bar — shown in tracks view only */}
         {mode==="tracks" && !loadingTr && tracks.length > 0 && (
-          <div style={{padding:"10px 16px", borderBottom:`1px solid ${T.border}`, background:T.navy, flexShrink:0, display:"flex", alignItems:"center", gap:"10px"}}>
-            <p style={{fontSize:"11px", color:T.muted, whiteSpace:"nowrap", fontWeight:"600"}}>Adding tracks to:</p>
+          <div style={{padding:"10px 16px", borderBottom:`1px solid var(--border)`, background:"var(--navy)", flexShrink:0, display:"flex", alignItems:"center", gap:"10px"}}>
+            <p style={{fontSize:"11px", color:"var(--muted)", whiteSpace:"nowrap", fontWeight:"600"}}>Adding tracks to:</p>
             <select value={targetIdx} onChange={e=>{ setTargetIdx(Number(e.target.value)); setAddedSet(new Set()); }}
-              style={{flex:1, background:T.card, color:T.text, border:`1px solid ${T.border}`, borderRadius:"6px", padding:"6px 10px", fontSize:"12px", fontWeight:"600", cursor:"pointer"}}>
+              style={{flex:1, background:"var(--card)", color:"var(--text)", border:`1px solid var(--border)`, borderRadius:"6px", padding:"6px 10px", fontSize:"12px", fontWeight:"600", cursor:"pointer"}}>
               {stages.map((s,i) => <option key={i} value={i}>{s.name}</option>)}
             </select>
           </div>
@@ -5292,7 +5292,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
             loading
               ? <div style={{display:"flex",justifyContent:"center",padding:"40px"}}><Loader size={28} color={T.accent} style={{animation:"spin 1s linear infinite"}}/></div>
               : playlists.length === 0
-                ? <p style={{textAlign:"center",color:T.muted,padding:"40px",fontSize:"13px"}}>No playlists found on your Spotify account.</p>
+                ? <p style={{textAlign:"center",color:"var(--muted)",padding:"40px",fontSize:"13px"}}>No playlists found on your Spotify account.</p>
                 : <div style={{display:"grid", gridTemplateColumns:isMobile?"repeat(2,1fr)":isTablet?"repeat(2,1fr)":"repeat(3,1fr)", gap:"10px"}}>
                     {(playlists || []).filter(Boolean).map(pl => {
                       const count = pl.tracks?.total ?? pl.items?.total ?? 0;
@@ -5300,19 +5300,19 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                       const notMine = myUid && pl.owner?.id && pl.owner.id !== myUid;
                       return (
                         <div key={pl.id} onClick={()=>openPlaylist(pl)}
-                          style={{background:T.navy, border:`1px solid ${notMine?T.accent+"30":T.border}`, borderRadius:"10px", cursor:"pointer", overflow:"hidden", transition:"border-color 0.15s, transform 0.12s", opacity:notMine?0.8:1}}
+                          style={{background:"var(--navy)", border:`1px solid ${notMine?T.accent+"30":"var(--border)"}`, borderRadius:"10px", cursor:"pointer", overflow:"hidden", transition:"border-color 0.15s, transform 0.12s", opacity:notMine?0.8:1}}
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.accent; e.currentTarget.style.transform="scale(1.02)";}}
-                          onMouseLeave={e=>{e.currentTarget.style.borderColor=notMine?T.accent+"30":T.border; e.currentTarget.style.transform="scale(1)";}}>
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor=notMine?T.accent+"30":"var(--border)"; e.currentTarget.style.transform="scale(1)";}}>
                           <div style={{position:"relative"}}>
                             {pl.images?.[0]?.url
                               ? <img src={pl.images[0].url} style={{width:"100%", aspectRatio:"1", objectFit:"cover"}} alt={pl.name}/>
-                              : <div style={{width:"100%", aspectRatio:"1", background:T.card, display:"flex", alignItems:"center", justifyContent:"center"}}><Music size={32} color={T.muted}/></div>
+                              : <div style={{width:"100%", aspectRatio:"1", background:"var(--card)", display:"flex", alignItems:"center", justifyContent:"center"}}><Music size={32} color={T.muted}/></div>
                             }
                             {notMine && <span style={{position:"absolute",top:"6px",right:"6px",fontSize:"9px",fontWeight:"700",color:T.accent,background:T.bg+"dd",borderRadius:"3px",padding:"2px 5px",backdropFilter:"blur(4px)"}}>NOT YOURS</span>}
                           </div>
                           <div style={{padding:"10px"}}>
-                            <p style={{fontSize:"12px", fontWeight:"700", color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:"3px"}}>{pl.name}</p>
-                            <p style={{fontSize:"10px", color:T.muted}}>{count} {count===1?"song":"songs"}{notMine&&pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
+                            <p style={{fontSize:"12px", fontWeight:"700", color:"var(--text)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:"3px"}}>{pl.name}</p>
+                            <p style={{fontSize:"10px", color:"var(--muted)"}}>{count} {count===1?"song":"songs"}{notMine&&pl.owner?.display_name?` · ${pl.owner.display_name}`:""}</p>
                           </div>
                         </div>
                       );
@@ -5328,32 +5328,32 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                 ? <div style={{textAlign:"center",padding:"40px 24px"}}>
                     {accessDenied
                       ? <><p style={{fontSize:"20px",marginBottom:"8px"}}>🔒</p>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"6px"}}>Playlist not accessible</p>
-                          <p style={{fontSize:"12px",color:T.muted,marginBottom:"16px",lineHeight:"1.5"}}>
+                          <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"6px"}}>Playlist not accessible</p>
+                          <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"16px",lineHeight:"1.5"}}>
                             {typeof accessDenied === "string" && accessDenied !== "Forbidden"
                               ? accessDenied
                               : "Spotify only allows track access for playlists you own. To use this playlist, import its songs into one of your own Spotify playlists, then access it from 'My playlists' here."}
                           </p>
-                          <button onClick={()=>{setMode("playlists");setAccessDenied(false);}} style={{padding:"8px 18px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>← Back</button>
+                          <button onClick={()=>{setMode("playlists");setAccessDenied(false);}} style={{padding:"8px 18px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>← Back</button>
                         </>
-                      : <p style={{fontSize:"13px",color:T.muted}}>This playlist has no playable tracks.</p>
+                      : <p style={{fontSize:"13px",color:"var(--muted)"}}>This playlist has no playable tracks.</p>
                     }
                   </div>
                 : <div>
                     {tracks.map((t) => {
                       const isAdded = addedSet.has(t.id);
                       return (
-                        <div key={t.id} style={{display:"flex", alignItems:"center", gap:"10px", padding:"8px 10px", borderRadius:"8px", marginBottom:"3px", background:isAdded?T.green+"10":T.navy, border:`1px solid ${isAdded?T.green+"40":"transparent"}`, transition:"background 0.2s"}}>
+                        <div key={t.id} style={{display:"flex", alignItems:"center", gap:"10px", padding:"8px 10px", borderRadius:"8px", marginBottom:"3px", background:isAdded?T.green+"10":"var(--navy)", border:`1px solid ${isAdded?T.green+"40":"transparent"}`, transition:"background 0.2s"}}>
                           {t.album?.images?.[0]?.url
                             ? <img src={t.album.images[0].url} style={{width:"40px",height:"40px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                            : <div style={{width:"40px",height:"40px",background:T.card,borderRadius:"5px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={16} color={T.muted}/></div>
+                            : <div style={{width:"40px",height:"40px",background:"var(--card)",borderRadius:"5px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={16} color={T.muted}/></div>
                           }
                           <div style={{flex:1, minWidth:0}}>
-                            <p style={{fontSize:"12px",fontWeight:"600",color:isAdded?T.green:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</p>
-                            <p style={{fontSize:"11px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.artists?.map(a=>a.name).join(", ")}</p>
+                            <p style={{fontSize:"12px",fontWeight:"600",color:isAdded?T.green:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</p>
+                            <p style={{fontSize:"11px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.artists?.map(a=>a.name).join(", ")}</p>
                           </div>
                           {t.duration_ms > 0 && (
-                            <span style={{fontSize:"10px",color:T.muted,flexShrink:0}}>{fmtMs(t.duration_ms)}</span>
+                            <span style={{fontSize:"10px",color:"var(--muted)",flexShrink:0}}>{fmtMs(t.duration_ms)}</span>
                           )}
                           <button onClick={()=>!isAdded&&addOneTrack(t)}
                             style={{flexShrink:0, padding:"6px 14px", background:isAdded?T.green+"20":"#1DB954", color:isAdded?T.green:"white", border:`1px solid ${isAdded?T.green+"60":"transparent"}`, borderRadius:"20px", cursor:isAdded?"default":"pointer", fontSize:"11px", fontWeight:"700", whiteSpace:"nowrap", transition:"all 0.2s"}}>
@@ -5368,7 +5368,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
 
         {/* Footer — bulk actions (tracks view only) */}
         {mode==="tracks" && !loadingTr && tracks.length > 0 && (
-          <div style={{padding:"12px 16px", borderTop:`1px solid ${T.border}`, display:"flex", gap:"8px", flexShrink:0, background:T.card}}>
+          <div style={{padding:"12px 16px", borderTop:`1px solid var(--border)`, display:"flex", gap:"8px", flexShrink:0, background:"var(--card)"}}>
             {bulkAdded
               ? <p style={{color:T.green, fontWeight:"700", fontSize:"13px", margin:"auto"}}>✓ All tracks added!</p>
               : <>
@@ -5378,7 +5378,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
                   </button>
                   {stages.length > 1 && (
                     <button onClick={distributeAcrossStages} disabled={distributing}
-                      style={{flex:1, padding:"10px", background:T.navy, color:distributing?T.muted:T.text, border:`1px solid ${T.border}`, borderRadius:"7px", cursor:distributing?"default":"pointer", fontSize:"12px", fontWeight:"600", transition:"color 0.2s"}}
+                      style={{flex:1, padding:"10px", background:"var(--navy)", color:distributing?T.muted:"var(--text)", border:`1px solid var(--border)`, borderRadius:"7px", cursor:distributing?"default":"pointer", fontSize:"12px", fontWeight:"600", transition:"color 0.2s"}}
                       title="Matches each track's BPM to the target range of each stage type, then fills by duration">
                       {distributing ? "⏳ Fetching BPM…" : "🎯 Smart Distribute by BPM"}
                     </button>
@@ -5484,15 +5484,15 @@ function DiscoverTab({ onAddExercise }) {
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:0}}>
       {/* Search bar */}
-      <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-        <p style={{fontSize:"11px",color:T.muted,marginBottom:"8px"}}>Search the wger.de open exercise database · 11,000+ exercises</p>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
+        <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>Search the wger.de open exercise database · 11,000+ exercises</p>
         <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
           <input
             value={query}
             onChange={e=>setQuery(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&search()}
             placeholder="e.g. squat, deadlift, plank…"
-            style={{flex:1,padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",outline:"none"}}
+            style={{flex:1,padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"12px",outline:"none"}}
           />
           <button onClick={search} disabled={loading||(!query.trim()&&!category)}
             style={{padding:"8px 16px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",opacity:(loading||(!query.trim()&&!category))?0.5:1}}>
@@ -5503,7 +5503,7 @@ function DiscoverTab({ onAddExercise }) {
         <div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>
           {WGER_CATEGORIES.map(c=>(
             <button key={c.id} onClick={()=>{ setCategory(c.id); }}
-              style={{padding:"3px 10px",borderRadius:"12px",border:`1px solid ${category===c.id?T.accent:T.border}`,background:category===c.id?T.accent+"22":"transparent",color:category===c.id?T.accent:T.muted,fontSize:"10px",fontWeight:"700",cursor:"pointer",transition:"all 0.12s"}}>
+              style={{padding:"3px 10px",borderRadius:"12px",border:`1px solid ${category===c.id?T.accent:"var(--border)"}`,background:category===c.id?T.accent+"22":"transparent",color:category===c.id?T.accent:"var(--muted)",fontSize:"10px",fontWeight:"700",cursor:"pointer",transition:"all 0.12s"}}>
               {c.label}
             </button>
           ))}
@@ -5514,9 +5514,9 @@ function DiscoverTab({ onAddExercise }) {
       <div style={{flex:1,overflowY:"auto",padding:"10px 14px"}}>
         {error && <p style={{fontSize:"12px",color:T.accent,padding:"20px",textAlign:"center"}}>{error}</p>}
         {!loading && !error && results.length === 0 && (
-          <div style={{textAlign:"center",padding:"40px 20px",color:T.muted}}>
+          <div style={{textAlign:"center",padding:"40px 20px",color:"var(--muted)"}}>
             <p style={{fontSize:"26px",marginBottom:"8px"}}>🏋️</p>
-            <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>Search the exercise database</p>
+            <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Search the exercise database</p>
             <p style={{fontSize:"11px"}}>Type an exercise name or pick a category above, then hit Search</p>
           </div>
         )}
@@ -5525,17 +5525,17 @@ function DiscoverTab({ onAddExercise }) {
           const isLoading = loadingDt === ex.id;
           const isAdded  = addedIds.has(ex.id);
           return (
-            <div key={ex.id} style={{marginBottom:"7px",borderRadius:"10px",border:`1px solid ${isOpen?T.accent+"60":T.border}`,overflow:"hidden",transition:"border-color 0.15s"}}>
+            <div key={ex.id} style={{marginBottom:"7px",borderRadius:"10px",border:`1px solid ${isOpen?T.accent+"60":"var(--border)"}`,overflow:"hidden",transition:"border-color 0.15s"}}>
               {/* Exercise row */}
-              <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 13px",background:T.navy,cursor:"pointer"}}
+              <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 13px",background:"var(--navy)",cursor:"pointer"}}
                 onClick={()=>loadDetail(ex.id)}>
                 {ex.image
                   ? <img src={ex.image} style={{width:"36px",height:"36px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                  : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:T.border,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🏋️</div>
+                  : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:"var(--border)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🏋️</div>
                 }
                 <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:"13px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</p>
-                  <p style={{fontSize:"10px",color:T.muted}}>{ex.category}{(ex.muscles||[]).length?` · ${ex.muscles.slice(0,2).join(", ")}`:""}</p>
+                  <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</p>
+                  <p style={{fontSize:"10px",color:"var(--muted)"}}>{ex.category}{(ex.muscles||[]).length?` · ${ex.muscles.slice(0,2).join(", ")}`:""}</p>
                 </div>
                 <div style={{display:"flex",gap:"5px",alignItems:"center",flexShrink:0}}>
                   {onAddExercise && (
@@ -5549,18 +5549,18 @@ function DiscoverTab({ onAddExercise }) {
               </div>
               {/* Expanded detail */}
               {isOpen && detail && (
-                <div style={{padding:"12px 14px",background:T.card,borderTop:`1px solid ${T.border}`}}>
+                <div style={{padding:"12px 14px",background:"var(--card)",borderTop:`1px solid var(--border)`}}>
                   {detail.muscles.length > 0 && (
                     <p style={{fontSize:"10px",color:T.accent,fontWeight:"700",marginBottom:"4px"}}>💪 Primary: {detail.muscles.join(", ")}</p>
                   )}
                   {detail.musclesAux.length > 0 && (
-                    <p style={{fontSize:"10px",color:T.muted,marginBottom:"4px"}}>Secondary: {detail.musclesAux.join(", ")}</p>
+                    <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"4px"}}>Secondary: {detail.musclesAux.join(", ")}</p>
                   )}
                   {detail.equipment.length > 0 && (
-                    <p style={{fontSize:"10px",color:T.muted,marginBottom:"6px"}}>Equipment: {detail.equipment.join(", ")}</p>
+                    <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"6px"}}>Equipment: {detail.equipment.join(", ")}</p>
                   )}
                   {detail.desc && (
-                    <p style={{fontSize:"11px",color:T.muted,lineHeight:"1.5",marginBottom:"8px"}}>{detail.desc.slice(0,200)}{detail.desc.length>200?"…":""}</p>
+                    <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"8px"}}>{detail.desc.slice(0,200)}{detail.desc.length>200?"…":""}</p>
                   )}
                   {onAddExercise && (
                     <button onClick={()=>handleAdd(ex)}
@@ -5639,8 +5639,8 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
       onClick={e=>e.target===e.currentTarget&&onClose()}>
 
       <div style={{
-        background:T.card,borderRadius:isMobile?"14px 14px 0 0":"18px",
-        border:`1px solid ${T.border}`,
+        background:"var(--card)",borderRadius:isMobile?"14px 14px 0 0":"18px",
+        border:`1px solid var(--border)`,
         width:"100%",maxWidth:isTablet?"700px":"1200px",
         height:isMobile?"96vh":"88vh",
         display:"flex",flexDirection:"column",overflow:"hidden",position:"relative",
@@ -5651,12 +5651,12 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:"var(--accent)",color:"var(--on-accent)",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
 
         {/* ── Top page header ── */}
-        <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+        <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
           <div>
-            <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE LIBRARY</p>
-            <p style={{fontSize:"12px",color:T.muted}}>The studio's movement catalogue — editable per gym, with a Discover feed of community packs</p>
+            <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE LIBRARY</p>
+            <p style={{fontSize:"12px",color:"var(--muted)"}}>The studio's movement catalogue — editable per gym, with a Discover feed of community packs</p>
           </div>
-          <button onClick={onClose} style={{background:"none",border:`1px solid ${T.border}`,borderRadius:"8px",padding:"6px 12px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+          <button onClick={onClose} style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"6px 12px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
             <X size={13}/> Close
           </button>
         </div>
@@ -5666,8 +5666,8 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
 
           {/* ── LEFT RAIL: class type list ── */}
           {!isMobile && (
-            <div style={{width:"220px",flexShrink:0,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-              <p style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1.5px",padding:"14px 18px 8px"}}>CLASS TYPE</p>
+            <div style={{width:"220px",flexShrink:0,borderRight:`1px solid var(--border)`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+              <p style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",padding:"14px 18px 8px"}}>CLASS TYPE</p>
               <div style={{flex:1,overflowY:"auto"}}>
                 {classKeys.map(k=>{
                   const c = libData[k];
@@ -5683,14 +5683,14 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                         transition:"background 0.15s"
                       }}>
                       <div style={{width:"9px",height:"9px",borderRadius:"3px",flexShrink:0,background:c.color}}/>
-                      <span style={{flex:1,fontSize:"13px",fontWeight:isActive?"700":"500",color:isActive?T.text:T.muted}}>{c.label}</span>
-                      <span style={{fontSize:"11px",color:T.muted}}>{totalCount}</span>
+                      <span style={{flex:1,fontSize:"13px",fontWeight:isActive?"700":"500",color:isActive?T.text:"var(--muted)"}}>{c.label}</span>
+                      <span style={{fontSize:"11px",color:"var(--muted)"}}>{totalCount}</span>
                     </button>
                   );
                 })}
               </div>
-              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid ${T.border}`}}>
-                <button style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
+              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
+                <button style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
                   <Plus size={13}/> New class type
                 </button>
               </div>
@@ -5701,22 +5701,22 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
 
             {/* Center toolbar */}
-            <div style={{flexShrink:0,padding:isMobile?"10px 14px":"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+            <div style={{flexShrink:0,padding:isMobile?"10px 14px":"12px 18px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
               {/* Mobile: class type select */}
               {isMobile && (
                 <select value={selClass} onChange={e=>setSelClass(e.target.value)}
-                  style={{padding:"5px 8px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"12px",cursor:"pointer"}}>
+                  style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"12px",cursor:"pointer"}}>
                   {classKeys.map(k=><option key={k} value={k}>{libData[k].icon} {libData[k].label}</option>)}
                 </select>
               )}
 
               {/* My Library / Discover segmented toggle */}
-              <div style={{display:"flex",gap:"3px",background:T.navy,borderRadius:"8px",padding:"3px",flexShrink:0}}>
+              <div style={{display:"flex",gap:"3px",background:"var(--navy)",borderRadius:"8px",padding:"3px",flexShrink:0}}>
                 {[["library","My Library"],["discover","Discover"]].map(([id,lbl])=>(
                   <button key={id} onClick={()=>setMainTab(id)}
                     style={{padding:"5px 14px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",
                       background:mainTab===id?T.card:"transparent",
-                      color:mainTab===id?T.text:T.muted,
+                      color:mainTab===id?T.text:"var(--muted)",
                       boxShadow:mainTab===id?"0 1px 4px rgba(0,0,0,.3)":"none",transition:"all 0.15s"}}>
                     {lbl}
                   </button>
@@ -5726,14 +5726,14 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
               {mainTab==="library" && (
                 <>
                   {/* Search */}
-                  <div style={{flex:1,display:"flex",alignItems:"center",gap:"7px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"8px",padding:"7px 12px",minWidth:"120px"}}>
+                  <div style={{flex:1,display:"flex",alignItems:"center",gap:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px 12px",minWidth:"120px"}}>
                     <Search size={13} color={T.muted}/>
                     <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search exercises…"
-                      style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"12px",width:"100%"}}/>
+                      style={{background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:"12px",width:"100%"}}/>
                   </div>
                   {/* Edit toggle */}
                   <button onClick={()=>{setEditMode(v=>!v);setEditingId(null);}}
-                    style={{padding:"7px 14px",background:editMode?classColor+"22":T.navy,border:`1px solid ${editMode?classColor:T.border}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:T.muted,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
+                    style={{padding:"7px 14px",background:editMode?classColor+"22":"var(--navy)",border:`1px solid ${editMode?classColor:"var(--border)"}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:"var(--muted)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
                     ✏️ {editMode?"Done":"Edit"}
                   </button>
                   {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid #EF444440",borderRadius:"8px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
@@ -5746,7 +5746,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
             ) : (
               <>
                 {/* Sub-type filter chips */}
-                <div style={{flexShrink:0,padding:"8px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"6px",overflowX:"auto",WebkitOverflowScrolling:"touch",alignItems:"center"}}>
+                <div style={{flexShrink:0,padding:"8px 18px",borderBottom:`1px solid var(--border)`,display:"flex",gap:"6px",overflowX:"auto",WebkitOverflowScrolling:"touch",alignItems:"center"}}>
                   {subKeys.map(sk=>{
                     const s = cls.subTypes[sk];
                     const isActive = selSub===sk;
@@ -5754,8 +5754,8 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                       <button key={sk} onClick={()=>{setSelSub(sk);setEditingId(null);}}
                         style={{flexShrink:0,padding:"5px 14px",borderRadius:"999px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",whiteSpace:"nowrap",
                           background:isActive?classColor:"transparent",
-                          color:isActive?"#fff":T.muted,
-                          outline:isActive?"none":`1px solid ${T.border}`,
+                          color:isActive?"#fff":"var(--muted)",
+                          outline:isActive?"none":`1px solid var(--border)`,
                           transition:"background 0.15s"}}>
                         {s.label}
                       </button>
@@ -5764,7 +5764,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                 </div>
 
                 {/* Stage tabs */}
-                <div style={{flexShrink:0,padding:"0 18px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:"0",alignItems:"center"}}>
+                <div style={{flexShrink:0,padding:"0 18px",borderBottom:`1px solid var(--border)`,display:"flex",gap:"0",alignItems:"center"}}>
                   {[["warmup","Warm-up"],["main","Main set"],["cooldown","Cool-down"]].map(([stage,lbl])=>{
                     const cnt = (sub?.[stage]||[]).length;
                     const isActive = selStage===stage;
@@ -5773,7 +5773,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                         style={{
                           padding:"12px 16px",background:"none",border:"none",cursor:"pointer",
                           fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap",
-                          color:isActive?classColor:T.muted,
+                          color:isActive?classColor:"var(--muted)",
                           borderBottom:isActive?`2px solid ${classColor}`:"2px solid transparent",
                           transition:"color 0.15s,border-color 0.15s"
                         }}>
@@ -5786,9 +5786,9 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                 {/* Exercise list */}
                 <div style={{flex:1,overflowY:"auto",padding:"12px 18px",display:"flex",flexDirection:"column",gap:"6px"}}>
                   {exercises.length===0 && !editMode && (
-                    <div style={{textAlign:"center",padding:"40px",color:T.muted}}>
+                    <div style={{textAlign:"center",padding:"40px",color:"var(--muted)"}}>
                       <p style={{fontSize:"24px",marginBottom:"8px"}}>🔍</p>
-                      <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>No exercises found</p>
+                      <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>No exercises found</p>
                       <p style={{fontSize:"11px"}}>{search?"Try a different search":"No exercises for this stage yet"}</p>
                     </div>
                   )}
@@ -5797,52 +5797,52 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                     const isEditing = editMode && editingId===ex.id;
                     return (
                       <div key={ex.id} style={{
-                        background:isEditing?classColor+"12":T.navy,
-                        border:`1px solid ${isEditing?classColor+"60":T.border}`,
+                        background:isEditing?classColor+"12":"var(--navy)",
+                        border:`1px solid ${isEditing?classColor+"60":"var(--border)"}`,
                         borderRadius:"10px",padding:"12px 14px",
                         transition:"border-color 0.15s,background 0.15s"
                       }}>
                         {isEditing ? (
                           <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                             <input value={draftEx.n||""} onChange={e=>setDraftEx(d=>({...d,n:e.target.value}))} placeholder="Exercise name *"
-                              style={{padding:"6px 10px",background:T.card,border:`1px solid ${classColor}60`,borderRadius:"6px",color:T.text,fontSize:"13px",fontWeight:"700",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                              style={{padding:"6px 10px",background:"var(--card)",border:`1px solid ${classColor}60`,borderRadius:"6px",color:"var(--text)",fontSize:"13px",fontWeight:"700",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                             <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
                               {[["s","Sets","60px"],["r","Reps / Duration","110px"],["rest","Rest","80px"]].map(([f,p,w])=>(
                                 <input key={f} value={draftEx[f]||""} onChange={e=>setDraftEx(d=>({...d,[f]:e.target.value}))} placeholder={p}
-                                  style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:w,boxSizing:"border-box"}}/>
+                                  style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",outline:"none",width:w,boxSizing:"border-box"}}/>
                               ))}
                               <select value={draftEx.timing||"none"} onChange={e=>setDraftEx(d=>({...d,timing:e.target.value}))}
-                                style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",cursor:"pointer"}}>
+                                style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",cursor:"pointer"}}>
                                 {["none","emom","tabata","amrap","for time"].map(t=><option key={t} value={t}>{t}</option>)}
                               </select>
                             </div>
                             <input value={draftEx.muscles||""} onChange={e=>setDraftEx(d=>({...d,muscles:e.target.value}))} placeholder="Muscles targeted"
-                              style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                              style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                             <textarea value={draftEx.notes||""} onChange={e=>setDraftEx(d=>({...d,notes:e.target.value}))} placeholder="Coaching notes (optional)" rows={2}
-                              style={{padding:"5px 8px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"11px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
+                              style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
                             <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
-                              <button onClick={cancelEdit} style={{padding:"5px 14px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Cancel</button>
+                              <button onClick={cancelEdit} style={{padding:"5px 14px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Cancel</button>
                               <button onClick={saveEdit} disabled={!draftEx.n?.trim()} style={{padding:"5px 14px",background:classColor,border:"none",borderRadius:"6px",cursor:"pointer",color:"#fff",fontSize:"11px",fontWeight:"700",opacity:!draftEx.n?.trim()?0.5:1}}>Save Exercise</button>
                             </div>
                           </div>
                         ) : (
                           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                             {/* Drag handle */}
-                            <div style={{color:T.muted,fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
+                            <div style={{color:"var(--muted)",fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
                             {/* Info */}
                             <div style={{flex:1,minWidth:0}}>
-                              <p style={{fontSize:"14px",fontWeight:"600",color:T.text,marginBottom:"2px"}}>{ex.n}</p>
-                              {ex.muscles && <p style={{fontSize:"11px",color:T.muted}}>{ex.muscles}</p>}
+                              <p style={{fontSize:"14px",fontWeight:"600",color:"var(--text)",marginBottom:"2px"}}>{ex.n}</p>
+                              {ex.muscles && <p style={{fontSize:"11px",color:"var(--muted)"}}>{ex.muscles}</p>}
                             </div>
                             {/* Tags */}
                             <div style={{display:"flex",gap:"5px",flexShrink:0,alignItems:"center"}}>
                               {ex.timing&&ex.timing!=="none" && (
                                 <span style={{fontSize:"10px",padding:"3px 8px",background:classColor+"20",color:classColor,borderRadius:"999px",fontWeight:"700"}}>{ex.timing} work</span>
                               )}
-                              {ex.r && <span style={{fontSize:"10px",color:T.muted}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
+                              {ex.r && <span style={{fontSize:"10px",color:"var(--muted)"}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
                               {editMode && (
                                 <>
-                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>✏️</button>
+                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>✏️</button>
                                   <button onClick={()=>deleteEx(ex.id)} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
                                 </>
                               )}
@@ -5866,34 +5866,34 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
 
           {/* ── RIGHT RAIL: Discover packs ── */}
           {!isMobile && !isTablet && (
-            <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid var(--border)`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
               <div style={{flexShrink:0,padding:"16px 18px 10px"}}>
-                <p style={{fontSize:"14px",fontWeight:"700",color:T.text,marginBottom:"3px"}}>Discover packs</p>
-                <p style={{fontSize:"11px",color:T.muted}}>Community workouts — one tap to import</p>
+                <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>Discover packs</p>
+                <p style={{fontSize:"11px",color:"var(--muted)"}}>Community workouts — one tap to import</p>
               </div>
               <div style={{flex:1,overflowY:"auto",padding:"6px 14px"}}>
                 {DISCOVER_PACKS.map(pack=>(
-                  <div key={pack.id} style={{background:T.navy,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",marginBottom:"10px"}}>
+                  <div key={pack.id} style={{background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",marginBottom:"10px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
                       <div style={{width:"36px",height:"36px",borderRadius:"9px",background:classColor+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:0}}>{pack.icon}</div>
                       <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>{pack.title}</p>
-                        <p style={{fontSize:"11px",color:T.muted}}>by {pack.author}</p>
+                        <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>{pack.title}</p>
+                        <p style={{fontSize:"11px",color:"var(--muted)"}}>by {pack.author}</p>
                       </div>
                     </div>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <span style={{fontSize:"11px",color:T.muted}}>{pack.stats}</span>
+                      <span style={{fontSize:"11px",color:"var(--muted)"}}>{pack.stats}</span>
                       <button
                         onClick={()=>setImportedPacks(p=>p.includes(pack.id)?p:[...p,pack.id])}
-                        style={{padding:"5px 12px",background:importedPacks.includes(pack.id)?"transparent":T.card,border:`1px solid ${importedPacks.includes(pack.id)?T.muted:classColor}`,borderRadius:"6px",cursor:"pointer",color:importedPacks.includes(pack.id)?T.muted:classColor,fontSize:"11px",fontWeight:"700"}}>
+                        style={{padding:"5px 12px",background:importedPacks.includes(pack.id)?"transparent":"var(--card)",border:`1px solid ${importedPacks.includes(pack.id)?T.muted:classColor}`,borderRadius:"6px",cursor:"pointer",color:importedPacks.includes(pack.id)?T.muted:classColor,fontSize:"11px",fontWeight:"700"}}>
                         {importedPacks.includes(pack.id)?"✓ Imported":"Import"}
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
-              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid ${T.border}`}}>
-                <p style={{fontSize:"10px",color:T.muted,lineHeight:"1.5"}}>Every imported exercise keeps its BPM hints, so the Auto-DJ scores it automatically.</p>
+              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
+                <p style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.5"}}>Every imported exercise keeps its BPM hints, so the Auto-DJ scores it automatically.</p>
               </div>
             </div>
           )}
@@ -5902,12 +5902,12 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         {/* Reset overlay */}
         {resetConfirm && (
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
-            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center"}}>
+            <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center"}}>
               <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
-              <p style={{fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"8px"}}>Reset to Defaults?</p>
-              <p style={{fontSize:"12px",color:T.muted,marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
+              <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"8px"}}>Reset to Defaults?</p>
+              <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
               <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
-                <button onClick={()=>setResetConfirm(false)} style={{padding:"8px 20px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px"}}>Cancel</button>
+                <button onClick={()=>setResetConfirm(false)} style={{padding:"8px 20px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>Cancel</button>
                 <button onClick={handleReset} style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
               </div>
             </div>
@@ -5952,18 +5952,18 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
       <button onClick={handleOpen}
         title="Choose playback device"
         style={{display:"flex",alignItems:"center",gap:"5px",padding:compact?"5px 9px":"6px 12px",
-          background:T.navy,border:`1px solid ${T.border}`,borderRadius:"999px",
-          fontSize:"11px",fontWeight:"600",color:T.text,cursor:"pointer",whiteSpace:"nowrap"}}>
+          background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"999px",
+          fontSize:"11px",fontWeight:"600",color:"var(--text)",cursor:"pointer",whiteSpace:"nowrap"}}>
         <span style={{fontSize:"12px"}}>{deviceIcon(activeDevice?.type)}</span>
         {!compact && <span style={{maxWidth:"90px",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</span>}
         <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke={T.muted} strokeWidth="1.5" strokeLinecap="round"/></svg>
       </button>
       {open && (
-        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"8px",minWidth:"200px",zIndex:999,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}}>
-          <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",padding:"4px 8px 8px"}}>Playback device</div>
-          {loading && <div style={{fontSize:"12px",color:T.muted,padding:"8px",textAlign:"center"}}>Loading devices…</div>}
+        <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"8px",minWidth:"200px",zIndex:999,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}}>
+          <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",padding:"4px 8px 8px"}}>Playback device</div>
+          {loading && <div style={{fontSize:"12px",color:"var(--muted)",padding:"8px",textAlign:"center"}}>Loading devices…</div>}
           {!loading && devices.length === 0 && (
-            <div style={{fontSize:"11px",color:T.muted,padding:"8px",lineHeight:"1.5",textAlign:"center"}}>
+            <div style={{fontSize:"11px",color:"var(--muted)",padding:"8px",lineHeight:"1.5",textAlign:"center"}}>
               No devices found.<br/>Open Spotify on another device.
             </div>
           )}
@@ -5974,15 +5974,15 @@ function SpotifyDevicePicker({ devices, activeDeviceId, setActiveDeviceId, brows
                 border:`1px solid ${activeDeviceId===dev.id?"var(--accent-30)":"transparent"}`,marginBottom:"2px"}}>
               <span style={{fontSize:"14px"}}>{deviceIcon(dev.type)}</span>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dev.name}</div>
-                <div style={{fontSize:"10px",color:T.muted}}>{dev.is_active?"▶ Currently active":"Available"}{dev.id===browserDeviceId?" · Browser player":""}</div>
+                <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dev.name}</div>
+                <div style={{fontSize:"10px",color:"var(--muted)"}}>{dev.is_active?"▶ Currently active":"Available"}{dev.id===browserDeviceId?" · Browser player":""}</div>
               </div>
               {activeDeviceId===dev.id && <div style={{width:"6px",height:"6px",borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>}
             </div>
           ))}
-          <div style={{borderTop:`1px solid ${T.border}`,marginTop:"6px",paddingTop:"6px"}}>
+          <div style={{borderTop:`1px solid var(--border)`,marginTop:"6px",paddingTop:"6px"}}>
             <button onClick={async()=>{setLoading(true); await refreshDevices().catch(()=>{}); setLoading(false);}}
-              style={{width:"100%",padding:"7px",background:"transparent",border:"none",color:T.muted,fontSize:"11px",cursor:"pointer",fontWeight:"600"}}>
+              style={{width:"100%",padding:"7px",background:"transparent",border:"none",color:"var(--muted)",fontSize:"11px",cursor:"pointer",fontWeight:"600"}}>
               ↻ Refresh devices
             </button>
           </div>
@@ -6015,27 +6015,27 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:2000,display:"flex",flexDirection:"column"}}>
       {/* Header */}
-      <div style={{flexShrink:0,padding:"16px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{flexShrink:0,padding:"16px 20px",borderBottom:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:T.text}}>🎧 Auto-DJ</div>
-          <div style={{fontSize:"11px",color:T.muted,marginTop:"2px"}}>Choose source playlists for BPM matching</div>
+          <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"16px",fontWeight:"800",color:"var(--text)"}}>🎧 Auto-DJ</div>
+          <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>Choose source playlists for BPM matching</div>
         </div>
-        <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
+        <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex"}}>
           <X size={20}/>
         </button>
       </div>
 
       {/* Stage targets */}
-      <div style={{flexShrink:0,padding:"14px 20px",borderBottom:`1px solid ${T.border}`,background:T.navy}}>
-        <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Stage BPM targets</div>
+      <div style={{flexShrink:0,padding:"14px 20px",borderBottom:`1px solid var(--border)`,background:"var(--navy)"}}>
+        <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Stage BPM targets</div>
         <div style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"4px"}}>
           {stages.map((s,i)=>{
             const cfg = SCFG[s.type]||{bpmMin:100,bpmMax:140,color:T.accent};
             return (
-              <div key={i} style={{flexShrink:0,padding:"6px 10px",background:T.card,borderRadius:"8px",border:`1px solid ${T.border}`,minWidth:"80px"}}>
+              <div key={i} style={{flexShrink:0,padding:"6px 10px",background:"var(--card)",borderRadius:"8px",border:`1px solid var(--border)`,minWidth:"80px"}}>
                 <div style={{width:"3px",height:"10px",background:cfg.color,borderRadius:"2px",marginBottom:"4px"}}/>
-                <div style={{fontSize:"10px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                <div style={{fontSize:"9px",color:T.muted}}>{cfg.bpmMin}–{cfg.bpmMax}</div>
+                <div style={{fontSize:"10px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                <div style={{fontSize:"9px",color:"var(--muted)"}}>{cfg.bpmMin}–{cfg.bpmMax}</div>
               </div>
             );
           })}
@@ -6045,7 +6045,7 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
       {/* Playlist list */}
       <div style={{flex:1,overflowY:"auto",padding:"14px 20px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-          <div style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Your playlists</div>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Your playlists</div>
           {playlists.length > 0 && (
             <button onClick={()=>setSelected(selected.length===playlists.length?[]:[...playlists.map(p=>p.id)])}
               style={{fontSize:"11px",fontWeight:"700",color:"var(--accent)",background:"none",border:"none",cursor:"pointer"}}>
@@ -6053,16 +6053,16 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
             </button>
           )}
         </div>
-        {loading && <div style={{textAlign:"center",padding:"24px",color:T.muted}}>Loading playlists…</div>}
+        {loading && <div style={{textAlign:"center",padding:"24px",color:"var(--muted)"}}>Loading playlists…</div>}
         {!loading && playlists.map(pl => (
           <div key={pl.id} onClick={()=>toggle(pl.id)}
             style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 12px",marginBottom:"6px",
-              background:selected.includes(pl.id)?"var(--accent-10)":T.card,
-              border:`1px solid ${selected.includes(pl.id)?"var(--accent-30)":T.border}`,
+              background:selected.includes(pl.id)?"var(--accent-10)":"var(--card)",
+              border:`1px solid ${selected.includes(pl.id)?"var(--accent-30)":"var(--border)"}`,
               borderRadius:"10px",cursor:"pointer",transition:"all 0.12s"}}>
             <div style={{width:"16px",height:"16px",borderRadius:"4px",flexShrink:0,
               background:selected.includes(pl.id)?"var(--accent)":"transparent",
-              border:`2px solid ${selected.includes(pl.id)?"var(--accent)":T.muted}`,
+              border:`2px solid ${selected.includes(pl.id)?"var(--accent)":"var(--muted)"}`,
               display:"flex",alignItems:"center",justifyContent:"center"}}>
               {selected.includes(pl.id) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="var(--on-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </div>
@@ -6071,19 +6071,19 @@ function DjPlaylistModal({ stages, onDjClass, djProgress, onClose }) {
               : <div style={{width:"38px",height:"38px",borderRadius:"7px",background:"var(--accent-10)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🎵</div>
             }
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:"13px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
-              <div style={{fontSize:"11px",color:T.muted}}>{pl.tracks?.total ?? "?"} tracks</div>
+              <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
+              <div style={{fontSize:"11px",color:"var(--muted)"}}>{pl.tracks?.total ?? "?"} tracks</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Footer CTA */}
-      <div style={{flexShrink:0,padding:"16px 20px",borderTop:`1px solid ${T.border}`,background:T.card}}>
+      <div style={{flexShrink:0,padding:"16px 20px",borderTop:`1px solid var(--border)`,background:"var(--card)"}}>
         {djProgress?.active && (
           <div style={{marginBottom:"10px"}}>
-            <div style={{fontSize:"11px",color:T.muted,marginBottom:"4px"}}>{djProgress.message}</div>
-            <div style={{height:"4px",background:T.navy,borderRadius:"2px",overflow:"hidden"}}>
+            <div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"4px"}}>{djProgress.message}</div>
+            <div style={{height:"4px",background:"var(--navy)",borderRadius:"2px",overflow:"hidden"}}>
               <div style={{height:"100%",width:`${djProgress.pct||0}%`,background:"var(--accent)",borderRadius:"2px",transition:"width .5s ease"}}/>
             </div>
           </div>
@@ -6131,16 +6131,16 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
   const run = () => onDjClass(selected.length ? selected : null);
 
   return (
-    <div style={{width:"300px",display:"flex",flexDirection:"column",flexShrink:0,borderLeft:`1px solid ${T.border}`,background:T.card,overflow:"hidden"}}>
+    <div style={{width:"300px",display:"flex",flexDirection:"column",flexShrink:0,borderLeft:`1px solid var(--border)`,background:"var(--card)",overflow:"hidden"}}>
       {/* Header */}
-      <div style={{padding:"16px 18px 12px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:T.text,marginBottom:"2px"}}>Auto-DJ</div>
-        <div style={{fontSize:"11px",color:T.muted}}>Spotify BPM-matched per stage</div>
+      <div style={{padding:"16px 18px 12px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
+        <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>Auto-DJ</div>
+        <div style={{fontSize:"11px",color:"var(--muted)"}}>Spotify BPM-matched per stage</div>
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:"14px"}}>
         {/* Stage BPM targets */}
-        <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Stage BPM targets</div>
+        <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Stage BPM targets</div>
         <div style={{display:"flex",flexDirection:"column",gap:"7px",marginBottom:"16px"}}>
           {stages.map((s,i)=>{
             const cfg = SCFG[s.type] || {bpmMin:100,bpmMax:140,color:T.accent};
@@ -6148,27 +6148,27 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
             const trackCount = tracks.length;
             const firstTrack = tracks[0];
             return (
-              <div key={i} style={{background:T.navy,borderRadius:"8px",border:`1px solid ${trackCount>0?cfg.color+"40":T.border}`,overflow:"hidden",marginBottom:"2px"}}>
+              <div key={i} style={{background:"var(--navy)",borderRadius:"8px",border:`1px solid ${trackCount>0?cfg.color+"40":"var(--border)"}`,overflow:"hidden",marginBottom:"2px"}}>
                 <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"7px 10px"}}>
                   <div style={{width:"3px",height:"20px",background:cfg.color,borderRadius:"2px",flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
-                    <div style={{fontSize:"10px",color:T.muted,marginTop:"1px"}}>{cfg.bpmMin}–{cfg.bpmMax} BPM</div>
+                    <div style={{fontSize:"11px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"1px"}}>{cfg.bpmMin}–{cfg.bpmMax} BPM</div>
                   </div>
                   {trackCount > 0
                     ? <div style={{fontSize:"10px",fontWeight:"700",color:cfg.color,flexShrink:0,background:cfg.color+"18",padding:"2px 6px",borderRadius:"4px"}}>{trackCount} ✓</div>
-                    : <div style={{fontSize:"10px",color:T.muted,flexShrink:0}}>–</div>
+                    : <div style={{fontSize:"10px",color:"var(--muted)",flexShrink:0}}>–</div>
                   }
                 </div>
                 {firstTrack && (
-                  <div style={{padding:"5px 10px 7px",borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"7px"}}>
+                  <div style={{padding:"5px 10px 7px",borderTop:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"7px"}}>
                     {firstTrack.albumArt
                       ? <img src={firstTrack.albumArt} style={{width:"22px",height:"22px",borderRadius:"3px",objectFit:"cover",flexShrink:0}} alt=""/>
                       : <div style={{width:"22px",height:"22px",borderRadius:"3px",background:cfg.color+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"9px"}}>🎵</div>
                     }
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"10px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstTrack.t||firstTrack.name||""}</div>
-                      <div style={{fontSize:"9px",color:T.muted}}>
+                      <div style={{fontSize:"10px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstTrack.t||firstTrack.name||""}</div>
+                      <div style={{fontSize:"9px",color:"var(--muted)"}}>
                         {firstTrack.a||""}{firstTrack.bpm?` · ${Math.round(firstTrack.bpm)} BPM`:""}
                         {trackCount>1?` +${trackCount-1} more`:""}
                       </div>
@@ -6182,7 +6182,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
 
         {/* Playlist picker */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-          <div style={{fontSize:"10px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px"}}>Source playlists</div>
+          <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Source playlists</div>
           {playlists.length > 0 && (
             <button onClick={()=>setSelected(selected.length===playlists.length?[]:[...playlists.map(p=>p.id)])}
               style={{fontSize:"10px",fontWeight:"700",color:T.accent,background:"none",border:"none",cursor:"pointer",padding:0}}>
@@ -6191,9 +6191,9 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
           )}
         </div>
 
-        {loading && <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"12px 0"}}>Loading playlists…</div>}
+        {loading && <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"12px 0"}}>Loading playlists…</div>}
         {!loading && playlists.length === 0 && (
-          <div style={{fontSize:"11px",color:T.muted,textAlign:"center",padding:"12px 0",lineHeight:"1.5"}}>
+          <div style={{fontSize:"11px",color:"var(--muted)",textAlign:"center",padding:"12px 0",lineHeight:"1.5"}}>
             Connect Spotify to load your playlists
           </div>
         )}
@@ -6203,15 +6203,15 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
               <div key={pl.id} onClick={()=>toggle(pl.id)} style={{
                 display:"flex",alignItems:"center",gap:"9px",
                 padding:"7px 10px",
-                background:selected.includes(pl.id)?T.accent+"14":T.navy,
-                border:`1px solid ${selected.includes(pl.id)?T.accent+"50":T.border}`,
+                background:selected.includes(pl.id)?T.accent+"14":"var(--navy)",
+                border:`1px solid ${selected.includes(pl.id)?T.accent+"50":"var(--border)"}`,
                 borderRadius:"8px",cursor:"pointer",transition:"all 0.15s",
               }}>
                 {/* Checkbox */}
                 <div style={{
                   width:"14px",height:"14px",borderRadius:"3px",flexShrink:0,
                   background:selected.includes(pl.id)?T.accent:"transparent",
-                  border:`1.5px solid ${selected.includes(pl.id)?T.accent:T.muted}`,
+                  border:`1.5px solid ${selected.includes(pl.id)?T.accent:"var(--muted)"}`,
                   display:"flex",alignItems:"center",justifyContent:"center",
                 }}>
                   {selected.includes(pl.id) && (
@@ -6225,13 +6225,13 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
                   : <div style={{width:"28px",height:"28px",borderRadius:"5px",background:T.accent+"22",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>🎵</div>
                 }
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:"11px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
-                  <div style={{fontSize:"10px",color:T.muted}}>{pl.tracks?.total ?? "?"} tracks</div>
+                  <div style={{fontSize:"11px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</div>
+                  <div style={{fontSize:"10px",color:"var(--muted)"}}>{pl.tracks?.total ?? "?"} tracks</div>
                 </div>
               </div>
             ))}
             {playlists.length > 20 && (
-              <div style={{fontSize:"10px",color:T.muted,textAlign:"center",padding:"4px"}}>{playlists.length - 20} more playlists not shown</div>
+              <div style={{fontSize:"10px",color:"var(--muted)",textAlign:"center",padding:"4px"}}>{playlists.length - 20} more playlists not shown</div>
             )}
           </div>
         )}
@@ -6239,11 +6239,11 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
         {/* Progress bar when running */}
         {djProgress?.active && (
           <div style={{marginBottom:"12px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:T.muted,marginBottom:"5px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:"var(--muted)",marginBottom:"5px"}}>
               <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{djProgress.message}</span>
               <span style={{flexShrink:0,marginLeft:"6px"}}>{djProgress.pct}%</span>
             </div>
-            <div style={{height:"4px",background:T.navy,borderRadius:"2px",overflow:"hidden"}}>
+            <div style={{height:"4px",background:"var(--navy)",borderRadius:"2px",overflow:"hidden"}}>
               <div style={{height:"100%",width:`${djProgress.pct}%`,background:T.accent,borderRadius:"2px",transition:"width 0.5s ease"}}/>
             </div>
           </div>
@@ -6254,7 +6254,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
           style={{
             width:"100%",padding:"12px",
             background:djProgress?.active||selected.length===0?"transparent":T.accent,
-            color:djProgress?.active||selected.length===0?T.muted:T.bg,
+            color:djProgress?.active||selected.length===0?T.muted:"var(--bg)",
             border:`1px solid ${djProgress?.active||selected.length===0?T.border:T.accent}`,
             borderRadius:"9px",cursor:djProgress?.active||selected.length===0?"not-allowed":"pointer",
             fontSize:"13px",fontWeight:"700",transition:"all 0.2s",
@@ -6423,23 +6423,23 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const handleDragEnd = () => { setDragOver(null); dragIdx.current = null; };
 
   return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:T.bg}}>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:"var(--bg)"}}>
 
       {/* TOP BAR */}
-      <div style={{height:"84px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,background:T.card,gap:"12px"}}>
+      <div style={{height:"84px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,background:"var(--card)",gap:"12px"}}>
         {/* Left: back + session name */}
         <div style={{display:"flex",alignItems:"center",gap:"14px",minWidth:0,flex:1}}>
-          <button onClick={()=>onOverviewDisplay()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
+          <button onClick={()=>onOverviewDisplay()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <div style={{minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
-              <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"21px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
-              <button onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"2px",display:"flex",flexShrink:0}}>
+              <span style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"16px":"21px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
+              <button onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
-            {!isMobile && <div style={{fontSize:"12px",color:T.muted}}>
+            {!isMobile && <div style={{fontSize:"12px",color:"var(--muted)"}}>
               {Math.round(totalDur/60)} min · {stages.length} stages · {WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} · target RPE 7–8
             </div>}
           </div>
@@ -6447,11 +6447,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         {/* Right: action buttons */}
         {!isMobile && (
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
-            <button onClick={onOverviewDisplay} style={{border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
+            <button onClick={onOverviewDisplay} style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
               Preview on TV
             </button>
             <button onClick={()=>{ onStartSession(); }}
-              style={{border:"none",background:T.accent,color:T.bg,fontWeight:"700",fontSize:"13px",padding:"9px 17px",borderRadius:"9px",cursor:"pointer"}}>
+              style={{border:"none",background:T.accent,color:"var(--bg)",fontWeight:"700",fontSize:"13px",padding:"9px 17px",borderRadius:"9px",cursor:"pointer"}}>
               Add to schedule
             </button>
           </div>
@@ -6459,21 +6459,21 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       </div>
 
       {/* Class type selector + DJ row */}
-      <div style={{padding:isMobile?"8px 14px":"12px 24px",borderBottom:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-        {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
+      <div style={{padding:isMobile?"8px 14px":"12px 24px",borderBottom:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+        {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
         <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)}
-          style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
           {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
         </select>
         {selectedSubKeys.length > 0 && <>
-          {!isMobile && <span style={{fontSize:"10px",color:T.muted,fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
+          {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
           <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)}
-            style={{padding:"5px 8px",background:T.navy,border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:T.text,fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||T.border}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
         <button onClick={()=>setShowLibraryModal(true)}
-          style={{padding:"5px 10px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
+          style={{padding:"5px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           📚 {!isMobile && "Browse "}Library
         </button>
         <button title="Smart Distribute"
@@ -6499,11 +6499,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
       {/* DJ progress bar */}
       {djProgress?.active && (
-        <div style={{padding:"8px 24px",display:"flex",flexDirection:"column",gap:"4px",background:T.card,borderBottom:`1px solid ${T.border}`}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:T.muted}}>
+        <div style={{padding:"8px 24px",display:"flex",flexDirection:"column",gap:"4px",background:"var(--card)",borderBottom:`1px solid var(--border)`}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:"12px",color:"var(--muted)"}}>
             <span>{djProgress.message}</span><span>{djProgress.pct}%</span>
           </div>
-          <div style={{height:"4px",background:T.border,borderRadius:"2px"}}>
+          <div style={{height:"4px",background:"var(--border)",borderRadius:"2px"}}>
             <div style={{height:"100%",width:`${djProgress.pct}%`,background:T.green,borderRadius:"2px",transition:"width 0.5s ease"}}/>
           </div>
         </div>
@@ -6512,20 +6512,20 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       {/* Template change banner */}
       {templatePrompt && (
         <div style={{padding:"10px 24px",background:"#F59E0B18",borderBottom:`1px solid #F59E0B50`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
-          <span style={{fontSize:"11px",color:T.text,flex:1,minWidth:"200px"}}>
+          <span style={{fontSize:"11px",color:"var(--text)",flex:1,minWidth:"200px"}}>
             <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} template?</span>
             {" "}This will replace your current stages.
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
-            <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:"6px",cursor:"pointer",color:T.muted,fontSize:"11px"}}>Keep Current</button>
-            <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType)} style={{padding:"5px 12px",background:T.accent,border:"none",borderRadius:"6px",cursor:"pointer",color:T.bg,fontSize:"11px",fontWeight:"700"}}>Apply</button>
+            <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Keep Current</button>
+            <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType)} style={{padding:"5px 12px",background:T.accent,border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--bg)",fontSize:"11px",fontWeight:"700"}}>Apply</button>
           </div>
         </div>
       )}
 
       {/* Distribute toast */}
       {distributeToast && (
-        <div style={{position:"fixed",bottom:"80px",left:"50%",transform:"translateX(-50%)",background:T.navy,border:`1px solid ${T.accent}50`,borderRadius:"10px",padding:"12px 20px",color:T.text,fontSize:"13px",fontWeight:"600",zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",pointerEvents:"none",whiteSpace:"nowrap"}}>
+        <div style={{position:"fixed",bottom:"80px",left:"50%",transform:"translateX(-50%)",background:"var(--navy)",border:`1px solid ${T.accent}50`,borderRadius:"10px",padding:"12px 20px",color:"var(--text)",fontSize:"13px",fontWeight:"600",zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",pointerEvents:"none",whiteSpace:"nowrap"}}>
           {distributeToast.msg}
         </div>
       )}
@@ -6534,7 +6534,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       <div style={{flex:1,display:"flex",overflow:"hidden"}}>
 
         {/* LEFT COLUMN: Stage list */}
-        <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid ${T.border}`,minWidth:0,overflowY:"auto",padding:"20px 24px",gap:"12px"}}>
+        <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid var(--border)`,minWidth:0,overflowY:"auto",padding:"20px 24px",gap:"12px"}}>
           {stages.map((s, i) => {
             const cfg = SCFG[s.type] || SCFG.circuit;
             const isOpen = selIdx === i;
@@ -6542,16 +6542,16 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               <div key={s.id}
                 draggable onDragStart={e=>handleDragStart(e,i)} onDragOver={e=>handleDragOver(e,i)} onDrop={e=>handleDrop(e,i)} onDragEnd={handleDragEnd}
                 onClick={()=>setSelIdx(i)}
-                style={{border:`1px solid ${isOpen?T.accent:T.border}`,borderRadius:"14px",overflow:"hidden",background:T.card,cursor:"pointer",boxShadow:isOpen?`0 0 0 1px ${T.accent}20`:undefined,opacity:dragOver===i?0.6:1,transition:"opacity 0.15s"}}>
+                style={{border:`1px solid ${isOpen?T.accent:"var(--border)"}`,borderRadius:"14px",overflow:"hidden",background:"var(--card)",cursor:"pointer",boxShadow:isOpen?`0 0 0 1px ${T.accent}20`:undefined,opacity:dragOver===i?0.6:1,transition:"opacity 0.15s"}}>
                 {/* Stage header */}
-                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"13px 16px",background:isOpen?"transparent":T.navy}}>
+                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"13px 16px",background:isOpen?"transparent":"var(--navy)"}}>
                   <div style={{width:"3px",height:"26px",borderRadius:"2px",background:cfg.color,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>{s.type} · {fmt(s.dur)}</div>
+                    <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>{s.type} · {fmt(s.dur)}</div>
                   </div>
-                  <span style={{fontSize:"11px",color:T.muted,flexShrink:0}}>{(s.exercises||[]).length} ex</span>
-                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",flexShrink:0}}>
+                  <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0}}>{(s.exercises||[]).length} ex</span>
+                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
@@ -6563,28 +6563,28 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                       const g = gifState[gkey];
                       return (
                       <div key={ei}>
-                        <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 6px",borderBottom:ei<(s.exercises||[]).length-1?`1px solid ${T.border}`:"none"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 6px",borderBottom:ei<(s.exercises||[]).length-1?`1px solid var(--border)`:"none"}}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="1.8">
                             <circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/>
                             <circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>
                           </svg>
-                          <div style={{flex:1,fontSize:"13px",color:T.text}}>{ex.n}</div>
-                          <div style={{fontSize:"12px",color:T.muted}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
-                          <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} title="Movement preview" style={{background:"none",border:"none",cursor:"pointer",color:g?T.accent:T.muted,padding:"2px",display:"flex",flexShrink:0}}>
+                          <div style={{flex:1,fontSize:"13px",color:"var(--text)"}}>{ex.n}</div>
+                          <div style={{fontSize:"12px",color:"var(--muted)"}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
+                          <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} title="Movement preview" style={{background:"none",border:"none",cursor:"pointer",color:g?T.accent:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                           </button>
                         </div>
                         {g && (
                           <div onClick={ev=>ev.stopPropagation()} style={{padding:"0 6px 6px"}}>
-                            {g.status==="loading" && <div style={{fontSize:"11px",color:T.muted,padding:"6px"}}>Loading preview…</div>}
+                            {g.status==="loading" && <div style={{fontSize:"11px",color:"var(--muted)",padding:"6px"}}>Loading preview…</div>}
                             {g.status==="ok" && <img src={g.url} alt={ex.n} style={{width:"100%",maxWidth:"240px",borderRadius:"8px",display:"block",margin:"4px auto"}} onError={ev=>{ev.target.style.display="none";}}/>}
-                            {g.status==="none" && <div style={{fontSize:"11px",color:T.muted,padding:"6px"}}>No preview found for "{ex.n}".</div>}
+                            {g.status==="none" && <div style={{fontSize:"11px",color:"var(--muted)",padding:"6px"}}>No preview found for "{ex.n}".</div>}
                             {g.status==="nokey" && (
-                              <div style={{padding:"8px",background:T.navy,borderRadius:"8px",margin:"4px 0"}}>
-                                <div style={{fontSize:"11px",color:T.muted,marginBottom:"6px"}}>Paste your ExerciseDB (RapidAPI) key to load movement GIFs:</div>
+                              <div style={{padding:"8px",background:"var(--navy)",borderRadius:"8px",margin:"4px 0"}}>
+                                <div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"6px"}}>Paste your ExerciseDB (RapidAPI) key to load movement GIFs:</div>
                                 <div style={{display:"flex",gap:"6px"}}>
-                                  <input value={gifKeyDraft} onChange={e=>setGifKeyDraft(e.target.value)} placeholder="RapidAPI key" style={{flex:1,minWidth:0,padding:"7px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"6px",color:T.text,fontSize:"12px"}}/>
-                                  <button onClick={ev=>{ev.stopPropagation(); saveGifKey(gkey, ex.n);}} style={{padding:"7px 12px",background:T.accent,color:T.bg,border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Save</button>
+                                  <input value={gifKeyDraft} onChange={e=>setGifKeyDraft(e.target.value)} placeholder="RapidAPI key" style={{flex:1,minWidth:0,padding:"7px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"12px"}}/>
+                                  <button onClick={ev=>{ev.stopPropagation(); saveGifKey(gkey, ex.n);}} style={{padding:"7px 12px",background:T.accent,color:"var(--bg)",border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Save</button>
                                 </div>
                               </div>
                             )}
@@ -6594,7 +6594,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                       );
                     })}
                     <button onClick={e=>{e.stopPropagation();addEx();}}
-                      style={{marginTop:"8px",width:"100%",padding:"7px",background:"transparent",border:`1px dashed ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                      style={{marginTop:"8px",width:"100%",padding:"7px",background:"transparent",border:`1px dashed var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
                       Add exercise
                     </button>
@@ -6603,7 +6603,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                 {isOpen && (s.exercises||[]).length === 0 && (
                   <div style={{padding:"10px 14px"}}>
                     <button onClick={e=>{e.stopPropagation();addEx();}}
-                      style={{width:"100%",padding:"10px",background:"transparent",border:`1px dashed ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                      style={{width:"100%",padding:"10px",background:"transparent",border:`1px dashed var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
                       Add exercise
                     </button>
@@ -6615,7 +6615,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
           {/* Add stage button */}
           <button onClick={onAddStage}
-            style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"9px",padding:"11px",border:`1px dashed ${T.border}`,borderRadius:"11px",color:T.muted,fontSize:"13px",fontWeight:"600",background:"transparent",cursor:"pointer",width:"100%"}}>
+            style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"9px",padding:"11px",border:`1px dashed var(--border)`,borderRadius:"11px",color:"var(--muted)",fontSize:"13px",fontWeight:"600",background:"transparent",cursor:"pointer",width:"100%"}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
             Add stage
           </button>
@@ -6623,7 +6623,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           {/* Mobile: start session button */}
           {isMobile && (
             <button onClick={onStartSession}
-              style={{padding:"14px",background:T.accent,color:T.bg,border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:"700",fontSize:"14px",width:"100%",marginTop:"8px"}}>
+              style={{padding:"14px",background:T.accent,color:"var(--bg)",border:"none",borderRadius:"10px",cursor:"pointer",fontWeight:"700",fontSize:"14px",width:"100%",marginTop:"8px"}}>
               ▶ Start Session
             </button>
           )}
@@ -6631,12 +6631,12 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
         {/* CENTER COLUMN: Tabs panel (hidden on mobile) */}
         {!isMobile && (
-          <div style={{flex:1,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid ${T.border}`,minWidth:0,overflow:"hidden"}}>
+          <div style={{flex:1,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid var(--border)`,minWidth:0,overflow:"hidden"}}>
             {/* Tabs */}
-            <div style={{height:"56px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-end",padding:"0 22px",gap:"22px",flexShrink:0,background:T.card}}>
+            <div style={{height:"56px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"flex-end",padding:"0 22px",gap:"22px",flexShrink:0,background:"var(--card)"}}>
               {["Soundtrack","Exercise Library","Settings"].map(tab=>(
                 <button key={tab} onClick={()=>setSubTab(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")}
-                  style={{paddingBottom:"14px",fontWeight:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?"700":"600",color:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?T.accent:T.muted,background:"none",border:"none",borderBottom:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?`2px solid ${T.accent}`:"2px solid transparent",cursor:"pointer",fontSize:"14px",whiteSpace:"nowrap"}}>
+                  style={{paddingBottom:"14px",fontWeight:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?"700":"600",color:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?T.accent:"var(--muted)",background:"none",border:"none",borderBottom:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?`2px solid ${T.accent}`:"2px solid transparent",cursor:"pointer",fontSize:"14px",whiteSpace:"nowrap"}}>
                   {tab}
                 </button>
               ))}
@@ -6646,46 +6646,46 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {subTab==="music" && (
               <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
                 {/* Match music toggle */}
-                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px",borderRadius:"12px",background:`linear-gradient(160deg,${T.navy},${T.card})`,border:`1px solid ${T.accent}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px",borderRadius:"12px",background:`linear-gradient(160deg,var(--navy),var(--card))`,border:`1px solid ${T.accent}`}}>
                   <div style={{width:"34px",height:"34px",borderRadius:"9px",background:"rgba(123,227,164,.14)",display:"flex",alignItems:"center",justifyContent:"center",color:T.accent}}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="7" cy="18" r="2.5"/><circle cx="18" cy="16" r="2.5"/><path d="M9.5 18V6l11-2v10"/></svg>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Match music to structure</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>BPM follows each stage's intensity</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>Match music to structure</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>BPM follows each stage's intensity</div>
                   </div>
                   <div style={{width:"38px",height:"22px",borderRadius:"11px",background:T.accent,position:"relative",flexShrink:0,cursor:"pointer"}}>
-                    <div style={{position:"absolute",right:"2px",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:T.bg}}/>
+                    <div style={{position:"absolute",right:"2px",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:"var(--bg)"}}/>
                   </div>
                 </div>
 
                 {/* F4: Crossfade duration */}
-                <div style={{padding:"14px",borderRadius:"12px",background:T.card,border:`1px solid ${T.border}`}}>
+                <div style={{padding:"14px",borderRadius:"12px",background:"var(--card)",border:`1px solid var(--border)`}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:T.text}}>Crossfade</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>Crossfade</div>
                     <div style={{fontSize:"12px",fontWeight:"700",color:T.accent}}>{(crossfade||0)===0?"Off":`${crossfade}s`}</div>
                   </div>
-                  <div style={{fontSize:"11px",color:T.muted,marginBottom:"10px"}}>Fade the soundtrack in as each stage begins</div>
+                  <div style={{fontSize:"11px",color:"var(--muted)",marginBottom:"10px"}}>Fade the soundtrack in as each stage begins</div>
                   <input type="range" min="0" max="12" step="1" value={crossfade||0} onChange={e=>onCrossfadeChange&&onCrossfadeChange(parseInt(e.target.value)||0)} style={{width:"100%",accentColor:T.accent,cursor:"pointer"}}/>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:"9px",color:T.muted,marginTop:"2px"}}><span>Off</span><span>6s</span><span>12s</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:"9px",color:"var(--muted)",marginTop:"2px"}}><span>Off</span><span>6s</span><span>12s</span></div>
                 </div>
 
                 {/* Energy curve */}
                 <div>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-                    <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>ENERGY CURVE</div>
-                    <div style={{fontSize:"11px",color:T.muted}}>peak intensity</div>
+                    <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:"var(--text)"}}>ENERGY CURVE</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>peak intensity</div>
                   </div>
-                  <div style={{position:"relative",height:"100px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",overflow:"hidden"}}>
+                  <div style={{position:"relative",height:"100px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",overflow:"hidden"}}>
                     <svg width="100%" height="100" viewBox="0 0 400 100" preserveAspectRatio="none" style={{display:"block"}}>
                       <defs><linearGradient id="eg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={T.accent} stopOpacity="0.4"/><stop offset="1" stopColor={T.accent} stopOpacity="0"/></linearGradient></defs>
                       <path d="M0,80 C40,72 70,60 120,54 C170,48 180,32 220,26 C260,20 280,10 320,10 C360,10 380,20 400,24 L400,100 L0,100 Z" fill="url(#eg2)"/>
                       <path d="M0,80 C40,72 70,60 120,54 C170,48 180,32 220,26 C260,20 280,10 320,10 C360,10 380,20 400,24" fill="none" stroke={T.accent} strokeWidth="2.5"/>
                     </svg>
                     {/* Stage labels */}
-                    <div style={{position:"absolute",left:0,right:0,bottom:0,display:"flex",fontSize:"9px",color:T.muted,textAlign:"center",borderTop:`1px solid ${T.border}`}}>
+                    <div style={{position:"absolute",left:0,right:0,bottom:0,display:"flex",fontSize:"9px",color:"var(--muted)",textAlign:"center",borderTop:`1px solid var(--border)`}}>
                       {stages.slice(0,4).map((s,i)=>(
-                        <div key={i} style={{flex:1,padding:"4px 0",borderRight:i<Math.min(stages.length,4)-1?`1px solid ${T.border}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:i===selIdx?T.accent:T.muted,fontWeight:i===selIdx?"700":"400"}}>
+                        <div key={i} style={{flex:1,padding:"4px 0",borderRight:i<Math.min(stages.length,4)-1?`1px solid var(--border)`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:i===selIdx?T.accent:"var(--muted)",fontWeight:i===selIdx?"700":"400"}}>
                           {s.name.slice(0,6).toUpperCase()}
                         </div>
                       ))}
@@ -6695,9 +6695,9 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
                 {/* Track list */}
                 {stage && (
-                  <div style={{flex:1,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"14px",display:"flex",flexDirection:"column",minHeight:0}}>
+                  <div style={{flex:1,background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",display:"flex",flexDirection:"column",minHeight:0}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
-                      <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.text}}>TRACKS — {stage.name.toUpperCase()}</div>
+                      <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:"var(--text)"}}>TRACKS — {stage.name.toUpperCase()}</div>
                       <div style={{fontSize:"11px",color:T.accent}}>{(stage.tracks||[]).length} tracks</div>
                     </div>
                     <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
@@ -6709,20 +6709,20 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                             {t.album?.images?.[0]?.url && <img src={t.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:"12px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.name}</div>
-                            <div style={{fontSize:"11px",color:T.muted}}>{t.artists?.[0]?.name}{t.bpm?` · ${Math.round(t.bpm)} BPM`:""}</div>
+                            <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.name}</div>
+                            <div style={{fontSize:"11px",color:"var(--muted)"}}>{t.artists?.[0]?.name}{t.bpm?` · ${Math.round(t.bpm)} BPM`:""}</div>
                           </div>
-                          <button onClick={()=>onRemoveTrack(selIdx,ti)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"3px",display:"flex"}}>
+                          <button onClick={()=>onRemoveTrack(selIdx,ti)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"3px",display:"flex"}}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                           </button>
                         </div>
                       ))}
                       {(stage.tracks||[]).length === 0 && (
-                        <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"20px 0"}}>No tracks yet — use DJ This Class or add manually</div>
+                        <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"20px 0"}}>No tracks yet — use DJ This Class or add manually</div>
                       )}
                     </div>
                     <button onClick={()=>setShowPlaylistModal(true)}
-                      style={{marginTop:"10px",border:`1px solid ${T.border}`,background:"transparent",color:T.text,fontWeight:"600",fontSize:"13px",padding:"10px",borderRadius:"9px",cursor:"pointer"}}>
+                      style={{marginTop:"10px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"10px",borderRadius:"9px",cursor:"pointer"}}>
                       + Add tracks
                     </button>
                   </div>
@@ -6740,23 +6740,23 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {/* Settings tab */}
             {subTab==="settings" && stage && (
               <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
-                <div style={{fontSize:"13px",fontWeight:"700",color:T.text,marginBottom:"4px"}}>{stage.name} — Settings</div>
+                <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{stage.name} — Settings</div>
                 <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
                   <div>
-                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
+                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
                     <input value={stage.name} onChange={e=>onStageChange(selIdx,{...stage,name:e.target.value})}
-                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                      style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div>
-                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
+                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
                     <input type="number" min="1" max="60" value={Math.round(stage.dur/60)}
                       onChange={e=>onStageChange(selIdx,{...stage,dur:parseInt(e.target.value||"1")*60})}
-                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                      style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div>
-                    <label style={{fontSize:"11px",color:T.muted,fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
+                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
                     <select value={stage.type} onChange={e=>onStageChange(selIdx,{...stage,type:e.target.value})}
-                      style={{width:"100%",padding:"8px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",color:T.text,fontSize:"13px",marginTop:"5px",outline:"none",cursor:"pointer",boxSizing:"border-box"}}>
+                      style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",cursor:"pointer",boxSizing:"border-box"}}>
                       {Object.entries(SCFG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
@@ -6964,7 +6964,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
         background: isMobile?"transparent":"#111",
         borderRadius: isMobile?"0":"34px",
         padding: isMobile?"0":"16px",
-        border: isMobile?"none":`1px solid ${T.border}`,
+        border: isMobile?"none":`1px solid var(--border)`,
         boxShadow: isMobile?"none":"0 30px 80px rgba(0,0,0,.5)",
         display:"flex", flexDirection:"column",
         minHeight: isMobile?"100vh":"auto",
@@ -6978,14 +6978,14 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
           flex:1,
         }}>
           {/* HEADER */}
-          <div style={{height:"64px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
+          <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-              <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
+              <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               </button>
               <div>
-                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{stage?.name||"Session"}</div>
-                <div style={{fontSize:"11px",color:T.muted}}>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>{stage?.name||"Session"}</div>
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>
                   {stages.length} stages · {fmt(totalDur)} total
                 </div>
               </div>
@@ -7002,13 +7002,13 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
               />
               {/* ELAPSED */}
               <div style={{textAlign:"center",flexShrink:0}}>
-                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>ELAPSED</div>
-                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>{fmt(liveState.elapsed)}</div>
+                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:"var(--muted)",fontWeight:"600"}}>ELAPSED</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>{fmt(liveState.elapsed)}</div>
               </div>
               {/* ROUND */}
               <div style={{textAlign:"center",flexShrink:0}}>
-                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:T.muted,fontWeight:"600"}}>STAGE</div>
-                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.text}}>
+                <div style={{fontSize:"10px",letterSpacing:"1.5px",color:"var(--muted)",fontWeight:"600"}}>STAGE</div>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>
                   <span style={{color:T.accent}}>{liveState.idx+1}</span>/{stages.length}
                 </div>
               </div>
@@ -7018,7 +7018,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
           {/* BODY */}
           <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",minHeight:0,overflow:"hidden"}}>
             {/* MAIN CONTROL: big stage display */}
-            <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid ${T.border}`,minWidth:0}}>
+            <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid var(--border)`,minWidth:0}}>
               {/* Stage type + name */}
               <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",padding:"24px",position:"relative"}}>
                 {/* WORK/REST phase label */}
@@ -7032,18 +7032,18 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 </div>
 
                 {/* Stage name */}
-                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"22px":"28px",fontWeight:"700",color:T.text,textAlign:"center",marginTop:"4px"}}>
+                <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:isMobile?"22px":"28px",fontWeight:"700",color:"var(--text)",textAlign:"center",marginTop:"4px"}}>
                   {stage?.name||"Complete"}
                 </div>
                 {stage?.exercises?.[0] && (
-                  <div style={{fontSize:"15px",color:T.muted}}>{stage.exercises[0].n}{stage.exercises[0].r?` · ${stage.exercises[0].s||""}×${stage.exercises[0].r}`:""}</div>
+                  <div style={{fontSize:"15px",color:"var(--muted)"}}>{stage.exercises[0].n}{stage.exercises[0].r?` · ${stage.exercises[0].s||""}×${stage.exercises[0].r}`:""}</div>
                 )}
 
                 {/* Skip timer controls */}
                 <div style={{display:"flex",gap:"8px",alignItems:"center",marginTop:"12px"}}>
                   {[-30,-10,10,30].map(s=>(
                     <button key={s} onClick={()=>onSkipTimer(s)}
-                      style={{padding:isMobile?"10px 14px":"7px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"700",minHeight:"40px"}}>
+                      style={{padding:isMobile?"10px 14px":"7px 12px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"700",minHeight:"40px"}}>
                       {s>0?"+":""}{s}s
                     </button>
                   ))}
@@ -7059,10 +7059,10 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                     <div style={{marginTop:"12px",background:`${ivColor}15`,border:`2px solid ${ivColor}`,borderRadius:"12px",padding:"12px 16px",textAlign:"center",width:"100%",maxWidth:"300px"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",marginBottom:"6px"}}>
                         <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"1.5px",padding:"2px 6px",background:`${ivColor}25`,borderRadius:"4px"}}>{ivState.phase}</span>
-                        <span style={{fontSize:"11px",color:T.muted}}>{ivState.exName}</span>
+                        <span style={{fontSize:"11px",color:"var(--muted)"}}>{ivState.exName}</span>
                       </div>
                       <p style={{fontSize:"40px",fontWeight:"900",color:ivColor,lineHeight:"1",margin:"0 0 3px"}}>{fmtSec(ivState.phaseRemaining)}</p>
-                      <p style={{fontSize:"11px",color:T.muted}}>Round {ivState.round} of {ivState.totalRounds}</p>
+                      <p style={{fontSize:"11px",color:"var(--muted)"}}>Round {ivState.round} of {ivState.totalRounds}</p>
                     </div>
                   );
                 })()}
@@ -7072,12 +7072,12 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMobile?"16px":"18px",padding:"0 24px 20px",flexShrink:0}}>
                 {/* Prev stage */}
                 {liveState.idx > 0 && (
-                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill={T.text}><path d="M11 19V5l-8 7 8 7Zm9 0V5l-8 7 8 7Z"/></svg>
                   </button>
                 )}
                 {/* Skip back track */}
-                <button onClick={()=>player?.previousTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                <button onClick={()=>player?.previousTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                   <SkipBack size={20}/>
                 </button>
                 {/* Play/Pause — large accent button */}
@@ -7088,26 +7088,26 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                   }
                 </button>
                 {/* Skip forward track */}
-                <button onClick={()=>player?.nextTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                <button onClick={()=>player?.nextTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                   <SkipForward size={20}/>
                 </button>
                 {/* Next stage */}
                 {liveState.idx < stages.length - 1 && (
-                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid ${T.border}`,background:T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.text}}>
+                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill={T.text}><path d="M13 5v14l8-7-8-7ZM4 5v14l8-7L4 5Z"/></svg>
                   </button>
                 )}
                 {/* Mic mode */}
                 {player && (
                   <button onClick={handleMicMode} title={micMode ? (micActive ? "Ducking - mic live" : "Mic Mode armed (M)") : "Mic Mode (M)"}
-                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":T.card,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":T.muted,animation:micMode?"jg-pulse 1s ease-in-out infinite":"none"}}>
+                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",animation:micMode?"jg-pulse 1s ease-in-out infinite":"none"}}>
                     <Mic size={16}/>
                   </button>
                 )}
               </div>
 
               {/* Progress bar */}
-              <div style={{height:"4px",background:T.navy,flexShrink:0,position:"relative"}}>
+              <div style={{height:"4px",background:"var(--navy)",flexShrink:0,position:"relative"}}>
                 <div style={{position:"absolute",left:0,top:0,bottom:0,background:cfg.color,width:`${progress*100}%`,transition:"width 0.8s linear",borderRadius:"0 2px 2px 0"}}/>
               </div>
             </div>
@@ -7116,27 +7116,27 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
             {!isMobile && (
               <div style={{width:"380px",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
                 {/* UP NEXT */}
-                <div style={{flex:1,padding:"18px 20px",display:"flex",flexDirection:"column",gap:"10px",overflow:"hidden",borderBottom:`1px solid ${T.border}`}}>
-                  <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:T.muted}}>UP NEXT</div>
+                <div style={{flex:1,padding:"18px 20px",display:"flex",flexDirection:"column",gap:"10px",overflow:"hidden",borderBottom:`1px solid var(--border)`}}>
+                  <div style={{fontSize:"12px",fontWeight:"700",letterSpacing:"0.5px",color:"var(--muted)"}}>UP NEXT</div>
                   {stages.slice(liveState.idx+1, liveState.idx+4).map((s,i)=>{
                     const sCfg = SCFG[s.type]||SCFG.circuit;
                     return (
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 13px",borderRadius:"11px",background:i===0?T.card:T.navy,border:`1px solid ${i===0?T.border:T.border}`}}>
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 13px",borderRadius:"11px",background:i===0?T.card:"var(--navy)",border:`1px solid ${i===0?T.border:"var(--border)"}`}}>
                         <span style={{fontSize:"11px",fontWeight:"700",color:sCfg.color,background:`${sCfg.color}18`,padding:"3px 8px",borderRadius:"5px",flexShrink:0}}>{sCfg.label}</span>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:"14px",fontWeight:"600",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                          <div style={{fontSize:"11px",color:T.muted}}>{fmt(s.dur)}</div>
+                          <div style={{fontSize:"14px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                          <div style={{fontSize:"11px",color:"var(--muted)"}}>{fmt(s.dur)}</div>
                         </div>
                       </div>
                     );
                   })}
                   {stages.slice(liveState.idx+1).length === 0 && (
-                    <div style={{fontSize:"12px",color:T.muted,padding:"10px 0"}}>Last stage — session ending soon</div>
+                    <div style={{fontSize:"12px",color:"var(--muted)",padding:"10px 0"}}>Last stage — session ending soon</div>
                   )}
                 </div>
 
                 {/* MUSIC panel */}
-                <div style={{padding:"16px 20px",background:T.card,flexShrink:0}}>
+                <div style={{padding:"16px 20px",background:"var(--card)",flexShrink:0}}>
                   {nowPlaying ? (
                     <>
                       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
@@ -7144,28 +7144,28 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                           {nowPlaying.album?.images?.[0]?.url && <img src={nowPlaying.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:"14px",fontWeight:"700",color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.name}</div>
-                          <div style={{fontSize:"11px",color:T.muted}}>{nowPlaying.artists?.[0]?.name} · now playing</div>
+                          <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.name}</div>
+                          <div style={{fontSize:"11px",color:"var(--muted)"}}>{nowPlaying.artists?.[0]?.name} · now playing</div>
                         </div>
                         {nowPlaying.bpm && <div style={{textAlign:"center",flexShrink:0}}>
                           <div style={{fontFamily:`'${T.displayFont}',sans-serif`,fontSize:"18px",fontWeight:"700",color:T.accent}}>{Math.round(nowPlaying.bpm)}</div>
-                          <div style={{fontSize:"9px",color:T.muted,letterSpacing:"1px"}}>BPM</div>
+                          <div style={{fontSize:"9px",color:"var(--muted)",letterSpacing:"1px"}}>BPM</div>
                         </div>}
                       </div>
                       <div style={{display:"flex",gap:"8px"}}>
-                        <button onClick={()=>player?.previousTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:T.navy,border:`1px solid ${T.border}`,fontSize:"12px",fontWeight:"600",color:T.text,cursor:"pointer"}}>
+                        <button onClick={()=>player?.previousTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:"var(--navy)",border:`1px solid var(--border)`,fontSize:"12px",fontWeight:"600",color:"var(--text)",cursor:"pointer"}}>
                           <SkipBack size={13}/> Prev
                         </button>
-                        <button onClick={handleMicMode} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:micMode?"#EF444420":T.navy,border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,fontSize:"12px",fontWeight:"600",color:micMode?"#EF4444":T.muted,cursor:"pointer"}}>
+                        <button onClick={handleMicMode} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:micMode?"#EF444420":"var(--navy)",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,fontSize:"12px",fontWeight:"600",color:micMode?"#EF4444":"var(--muted)",cursor:"pointer"}}>
                           <Mic size={13}/> Mic {micMode?"ON":"Mode"}
                         </button>
-                        <button onClick={()=>player?.nextTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:T.navy,border:`1px solid ${T.border}`,fontSize:"12px",fontWeight:"600",color:T.text,cursor:"pointer"}}>
+                        <button onClick={()=>player?.nextTrack()} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",padding:"10px",borderRadius:"9px",background:"var(--navy)",border:`1px solid var(--border)`,fontSize:"12px",fontWeight:"600",color:"var(--text)",cursor:"pointer"}}>
                           <SkipForward size={13}/> Next
                         </button>
                       </div>
                     </>
                   ) : (
-                    <div style={{fontSize:"12px",color:T.muted,textAlign:"center",padding:"8px 0"}}>No music playing</div>
+                    <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"8px 0"}}>No music playing</div>
                   )}
                 </div>
               </div>
@@ -7174,18 +7174,18 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
 
           {/* Mobile: compact music strip */}
           {isMobile && nowPlaying && (
-            <div style={{flexShrink:0,borderTop:`1px solid ${T.border}`,background:T.card,padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px"}}>
+            <div style={{flexShrink:0,borderTop:`1px solid var(--border)`,background:"var(--card)",padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px"}}>
               {nowPlaying.album?.images?.[0]?.url && (
                 <img src={nowPlaying.album.images[0].url} style={{width:"40px",height:"40px",borderRadius:"6px",objectFit:"cover",flexShrink:0}} alt="album"/>
               )}
               <div style={{flex:1,minWidth:0}}>
-                <p style={{fontSize:"12px",fontWeight:"700",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
-                <p style={{fontSize:"10px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
+                <p style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
+                <p style={{fontSize:"10px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
               </div>
-              <button onClick={handleMicMode} style={{background:"none",border:"none",cursor:"pointer",color:micMode?"#EF4444":T.muted,padding:"6px",display:"flex"}}>
+              <button onClick={handleMicMode} style={{background:"none",border:"none",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",padding:"6px",display:"flex"}}>
                 <Mic size={18}/>
               </button>
-              <button onClick={handleDisplayMode} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex"}}>
+              <button onClick={handleDisplayMode} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex"}}>
                 <Monitor size={18}/>
               </button>
             </div>
@@ -7196,10 +7196,10 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       {/* Live search overlay */}
       {showLiveSearch && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-          <div style={{background:T.card,borderRadius:"16px",padding:"24px",width:"100%",maxWidth:"480px",border:`1px solid ${T.border}`}}>
+          <div style={{background:"var(--card)",borderRadius:"16px",padding:"24px",width:"100%",maxWidth:"480px",border:`1px solid var(--border)`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
-              <div style={{fontSize:"16px",fontWeight:"700",color:T.text}}>Add track to stage</div>
-              <button onClick={()=>setShowLiveSearch(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex"}}>
+              <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Add track to stage</div>
+              <button onClick={()=>setShowLiveSearch(false)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
               </button>
             </div>
@@ -7261,26 +7261,26 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
       }}>
 
         {/* Inner screen */}
-        <div style={{flex:1,background:`radial-gradient(120% 90% at 50% 0%,rgba(123,227,164,.06),transparent),${T.bg}`,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,background:`radial-gradient(120% 90% at 50% 0%,rgba(123,227,164,.06),transparent),var(--bg)`,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
           {/* Header row */}
           <div style={{
             flexShrink:0,padding:isMobile?"16px":"22px 26px",
-            borderBottom:`1px solid ${T.border}`,
+            borderBottom:`1px solid var(--border)`,
             display:"flex",alignItems:isMobile?"flex-start":"center",
             justifyContent:"space-between",flexDirection:isMobile?"column":"row",gap:"12px"
           }}>
             <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
               <button onClick={onBack} style={{
                 display:"flex",alignItems:"center",gap:"6px",padding:"7px 13px",
-                background:"transparent",border:`1px solid ${T.border}`,borderRadius:"8px",
-                cursor:"pointer",color:T.muted,fontSize:"12px",fontWeight:"600",flexShrink:0
+                background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
+                cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",flexShrink:0
               }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
               <div>
-                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:T.text,lineHeight:1,marginBottom:"4px",fontFamily:`'${T.displayFont}',sans-serif`}}>
+                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:`'${T.displayFont}',sans-serif`}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
-                <p style={{fontSize:"12px",color:T.muted}}>
+                <p style={{fontSize:"12px",color:"var(--muted)"}}>
                   {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
                 </p>
               </div>
@@ -7323,7 +7323,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                   <div key={s.id} style={{
                     borderRadius:"14px",overflow:"hidden",display:"flex",flexDirection:"column",
                     border:isPeak?`2px solid ${cfg.color}`:`2px solid ${cfg.color}40`,
-                    background:isPeak?`linear-gradient(160deg,${T.navy},${T.card})`:`${T.card}`,
+                    background:isPeak?`linear-gradient(160deg,var(--navy),var(--card))`:`var(--card)`,
                     boxShadow:isPeak?`0 0 0 3px ${cfg.color}18`:"none"
                   }}>
 
@@ -7338,9 +7338,9 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                         </span>
                       </div>
                       {/* Stage name */}
-                      <p style={{fontSize:"16px",fontWeight:"800",color:T.text,lineHeight:1.2,marginBottom:"6px",fontFamily:`'${T.displayFont}',sans-serif`}}>{s.name}</p>
+                      <p style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:`'${T.displayFont}',sans-serif`}}>{s.name}</p>
                       {/* Duration + BPM */}
-                      <p style={{fontSize:"12px",color:T.muted,fontWeight:"600"}}>
+                      <p style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600"}}>
                         {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
                       </p>
                     </div>
@@ -7348,7 +7348,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                     {/* Body */}
                     <div style={{flex:1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:"7px"}}>
                       {exList.length===0 && trList.length===0 && grpList.length===0 && (
-                        <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>No content added yet</p>
+                        <p style={{fontSize:"11px",color:"var(--muted)",fontStyle:"italic"}}>No content added yet</p>
                       )}
 
                       {/* Exercises */}
@@ -7357,8 +7357,8 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                           paddingLeft:"10px",borderLeft:`3px solid ${cfg.color}`,
                           marginBottom:"4px"
                         }}>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:T.text,lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
-                          <p style={{fontSize:"11px",color:T.muted}}>
+                          <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
+                          <p style={{fontSize:"11px",color:"var(--muted)"}}>
                             {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
                           </p>
                         </div>
@@ -7368,7 +7368,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                       {grpList.map((g,gi)=>(
                         <div key={g.id} style={{display:"flex",alignItems:"center",gap:"7px"}}>
                           <div style={{width:"8px",height:"8px",borderRadius:"50%",flexShrink:0,background:grpColor(g.id)}}/>
-                          <p style={{fontSize:"12px",fontWeight:"600",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</p>
+                          <p style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</p>
                         </div>
                       ))}
                     </div>
@@ -7381,13 +7381,13 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                     }}>
                       <Music size={12} color={cfg.color} style={{flexShrink:0}}/>
                       {firstTrack ? (
-                        <p style={{fontSize:"11px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          <span style={{color:T.text,fontWeight:"600"}}>{firstTrack.t}</span>
+                        <p style={{fontSize:"11px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          <span style={{color:"var(--text)",fontWeight:"600"}}>{firstTrack.t}</span>
                           {firstTrack.a && <span> — {firstTrack.a}</span>}
                           {trList.length>1 && <span style={{color:cfg.color}}> +{trList.length-1}</span>}
                         </p>
                       ) : (
-                        <p style={{fontSize:"11px",color:T.muted,fontStyle:"italic"}}>No tracks</p>
+                        <p style={{fontSize:"11px",color:"var(--muted)",fontStyle:"italic"}}>No tracks</p>
                       )}
                     </div>
                   </div>
@@ -7494,25 +7494,25 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
 
   // ── Settings panel ──
   const SettingsPanel = () => (
-    <div style={{position:"absolute",top:"64px",right:isMobile?"8px":"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"20px",width:isMobile?"min(260px,calc(100vw-16px))":"260px",boxShadow:"0 12px 40px rgba(0,0,0,0.5)",boxSizing:"border-box"}}>
-      <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Layout Preset</p>
+    <div style={{position:"absolute",top:"64px",right:isMobile?"8px":"20px",zIndex:200,background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"20px",width:isMobile?"min(260px,calc(100vw-16px))":"260px",boxShadow:"0 12px 40px rgba(0,0,0,0.5)",boxSizing:"border-box"}}>
+      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Layout Preset</p>
       <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"18px"}}>
         {DISPLAY_PRESETS.map(p => (
           <button key={p.id} onClick={()=>setPreset(p.id)}
-            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:preset===p.id?T.accent+"20":T.navy,border:`1px solid ${preset===p.id?T.accent+"60":T.border}`,borderRadius:"7px",cursor:"pointer",textAlign:"left"}}>
+            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:preset===p.id?T.accent+"20":"var(--navy)",border:`1px solid ${preset===p.id?T.accent+"60":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",textAlign:"left"}}>
             <div>
-              <p style={{fontSize:"13px",fontWeight:"700",color:preset===p.id?T.accent:T.text,marginBottom:"1px"}}>{p.label}</p>
-              <p style={{fontSize:"10px",color:T.muted}}>{p.desc}</p>
+              <p style={{fontSize:"13px",fontWeight:"700",color:preset===p.id?T.accent:"var(--text)",marginBottom:"1px"}}>{p.label}</p>
+              <p style={{fontSize:"10px",color:"var(--muted)"}}>{p.desc}</p>
             </div>
             {preset===p.id && <div style={{width:"7px",height:"7px",borderRadius:"50%",background:T.accent}}/>}
           </button>
         ))}
       </div>
-      <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Font Size</p>
+      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Font Size</p>
       <div style={{display:"flex",gap:"6px"}}>
         {FONT_SCALES.map(f => (
           <button key={f.id} onClick={()=>setFontScale(f.id)}
-            style={{flex:1,padding:"8px 0",background:fontScale===f.id?T.accent:"transparent",color:fontScale===f.id?"white":T.muted,border:`1px solid ${fontScale===f.id?T.accent:T.border}`,borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
+            style={{flex:1,padding:"8px 0",background:fontScale===f.id?T.accent:"transparent",color:fontScale===f.id?"white":"var(--muted)",border:`1px solid ${fontScale===f.id?T.accent:"var(--border)"}`,borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>
             {f.label}
           </button>
         ))}
@@ -7534,17 +7534,17 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               padding:compact?"3px 8px":"5px 12px",
               borderRadius:"20px",
               background:isCurrent?sCfg.color+"30":isPast?T.border+"60":"transparent",
-              border:`1.5px solid ${isCurrent?sCfg.color:isPast?T.muted+"40":T.border}`,
+              border:`1.5px solid ${isCurrent?sCfg.color:isPast?T.muted+"40":"var(--border)"}`,
               display:"flex",alignItems:"center",gap:"5px",
               opacity:isFuture?0.45:1,
               transition:"all 0.3s",
             }}>
-              <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"#ffffff50":T.muted,flexShrink:0}}/>
-              <span style={{fontSize:compact?"9px":"10px",fontWeight:isCurrent?"800":"600",color:isCurrent?sCfg.color:isPast?T.muted:T.muted,whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
+              <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"#ffffff50":"var(--muted)",flexShrink:0}}/>
+              <span style={{fontSize:compact?"9px":"10px",fontWeight:isCurrent?"800":"600",color:isCurrent?sCfg.color:isPast?T.muted:"var(--muted)",whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
                 {isPast?"✓ ":""}{s.name}
               </span>
             </div>
-            {i < stages.length-1 && <span style={{color:T.muted,fontSize:"8px",opacity:0.4,flexShrink:0}}>▶</span>}
+            {i < stages.length-1 && <span style={{color:"var(--muted)",fontSize:"8px",opacity:0.4,flexShrink:0}}>▶</span>}
           </div>
         );
       })}
@@ -7560,21 +7560,21 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
             <StageJourney compact={true}/>
           </div>
           <div style={{display:"flex",gap:"8px",flexShrink:0}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"8px",background:T.card+"80",border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,display:"flex"}}>
+            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"8px",background:T.card+"80",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
-            <button onClick={onBack} style={{padding:"8px 14px",background:T.card+"80",border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px"}}><ArrowLeft size={13}/> Back</button>
+            <button onClick={onBack} style={{padding:"8px 14px",background:T.card+"80",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px"}}><ArrowLeft size={13}/> Back</button>
           </div>
         </div>
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:"56px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
           <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
-          <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:T.muted,marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
-          <p style={{fontSize:"13px",color:T.muted,marginTop:"8px",opacity:0.6}}>Stage {liveState.idx+1} of {stages.length}</p>
+          <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:"var(--muted)",marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
+          <p style={{fontSize:"13px",color:"var(--muted)",marginTop:"8px",opacity:0.6}}>Stage {liveState.idx+1} of {stages.length}</p>
         </div>
         <div style={{height:"6px",display:"flex",overflow:"hidden"}}>
-          {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||T.border; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:T.navy}}/>; })}
+          {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||T.border; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:"var(--navy)"}}/>; })}
         </div>
       </div>
     );
@@ -7583,33 +7583,33 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   // ── Minimal preset ──
   if (preset === "minimal") {
     return (
-      <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
+      <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
         <div style={{padding:"12px 20px",display:"flex",alignItems:"center",gap:"12px"}}>
           <BrandLogo size={24}/>
-          {stationCue && <span style={{fontSize:"11px",fontWeight:"700",color:T.muted,letterSpacing:"1px",textTransform:"uppercase",flexShrink:0}}>{stationCue}</span>}
+          {stationCue && <span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",textTransform:"uppercase",flexShrink:0}}>{stationCue}</span>}
           <div style={{flex:1,overflow:"hidden"}}>
             <StageJourney compact={true}/>
           </div>
           <div style={{display:"flex",gap:"8px",flexShrink:0}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,display:"flex"}}>
+            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
-            <button onClick={onBack} style={{padding:"7px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
+            <button onClick={onBack} style={{padding:"7px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
           </div>
         </div>
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
+          <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"56px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"28px"}}/>
           <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
-          <p style={{fontSize:"15px",color:T.muted,marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
-          <div style={{width:"min(480px,80%)",height:"8px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
+          <p style={{fontSize:"15px",color:"var(--muted)",marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
+          <div style={{width:"min(480px,80%)",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
         </div>
         <div style={{height:"5px",display:"flex",overflow:"hidden"}}>
-          {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||T.border; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:T.navy}}/>; })}
+          {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||T.border; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:"var(--navy)"}}/>; })}
         </div>
       </div>
     );
@@ -7618,46 +7618,46 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   // ── Music Focus preset ──
   if (preset === "music") {
     return (
-      <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
-        <div style={{padding:"14px 20px",background:T.card,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
+        <div style={{padding:"14px 20px",background:"var(--card)",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
             <BrandLogo size={28} showName/>
           </div>
           <Tag color={cfg.color}>{stage?.name}</Tag>
           <div style={{display:"flex",gap:"10px"}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.muted,display:"flex"}}>
+            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
-            <button onClick={onBack} style={{padding:"7px 12px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
+            <button onClick={onBack} style={{padding:"7px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
           </div>
         </div>
         {showSettings && <SettingsPanel/>}
         <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
         <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",gap:"0",overflow:isMobile?"auto":"hidden"}}>
           {/* Album art left */}
-          <div style={{flex:isMobile?"0 0 auto":"0 0 420px",padding:isMobile?"20px 24px":"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:T.card,borderRight:isMobile?"none":`1px solid ${T.border}`,borderBottom:isMobile?`1px solid ${T.border}`:"none"}}>
+          <div style={{flex:isMobile?"0 0 auto":"0 0 420px",padding:isMobile?"20px 24px":"36px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"var(--card)",borderRight:isMobile?"none":`1px solid var(--border)`,borderBottom:isMobile?`1px solid var(--border)`:"none"}}>
             {nowPlaying?.album?.images?.[0]?.url
               ? <img src={nowPlaying.album.images[0].url} style={{width:"100%",maxWidth:"340px",aspectRatio:"1",borderRadius:"16px",objectFit:"cover",boxShadow:`0 16px 64px ${cfg.color}60`}} alt="album"/>
-              : <div style={{width:"300px",height:"300px",background:T.navy,borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={80} color={T.border}/></div>
+              : <div style={{width:"300px",height:"300px",background:"var(--navy)",borderRadius:"16px",display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={80} color={T.border}/></div>
             }
             {nowPlaying && <>
-              <p style={{fontSize:"20px",fontWeight:"700",color:T.text,marginTop:"20px",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{nowPlaying.name}</p>
-              <p style={{fontSize:"14px",color:T.muted,marginTop:"4px"}}>{nowPlaying.artists?.[0]?.name}</p>
+              <p style={{fontSize:"20px",fontWeight:"700",color:"var(--text)",marginTop:"20px",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{nowPlaying.name}</p>
+              <p style={{fontSize:"14px",color:"var(--muted)",marginTop:"4px"}}>{nowPlaying.artists?.[0]?.name}</p>
               <div style={{display:"flex",gap:"22px",alignItems:"center",marginTop:"20px"}}>
-                <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><SkipBack size={28}/></button>
+                <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><SkipBack size={28}/></button>
                 <button onClick={handlePlayPause} style={{width:"60px",height:"60px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>{liveState.playing?<Pause size={24}/>:<Play size={24}/>}</button>
-                <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}><SkipForward size={28}/></button>
+                <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><SkipForward size={28}/></button>
               </div>
             </>}
           </div>
           {/* Timer right */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"36px"}}>
             <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
-            <p style={{fontSize:"16px",color:T.muted,marginTop:"10px",marginBottom:"28px"}}>remaining</p>
-            <div style={{width:"100%",maxWidth:"360px",height:"8px",background:T.navy,borderRadius:"4px",overflow:"hidden"}}>
+            <p style={{fontSize:"16px",color:"var(--muted)",marginTop:"10px",marginBottom:"28px"}}>remaining</p>
+            <div style={{width:"100%",maxWidth:"360px",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
               <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
             </div>
-            <p style={{fontSize:"13px",color:T.muted,marginTop:"14px"}}>Stage {liveState.idx+1} of {stages.length}</p>
+            <p style={{fontSize:"13px",color:"var(--muted)",marginTop:"14px"}}>Stage {liveState.idx+1} of {stages.length}</p>
           </div>
         </div>
       </div>
@@ -7666,9 +7666,9 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
 
   // ── Full preset (default) ──
   return (
-    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
       {/* TV Header */}
-      <div style={{padding:"14px 28px",background:T.card,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"16px"}}>
+      <div style={{padding:"14px 28px",background:"var(--card)",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"16px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}>
           <BrandLogo size={36} showName/>
         </div>
@@ -7679,36 +7679,36 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
           {/* Feature 6: QR code toggle */}
           <button onClick={e=>{e.stopPropagation();setShowQR(s=>!s);setShowSettings(false);}} title="Show attendee QR code"
-            style={{padding:"8px",background:showQR?"#10B98120":T.navy,border:`1px solid ${showQR?"#10B98140":T.border}`,borderRadius:"7px",cursor:"pointer",color:showQR?"#10B981":T.muted,display:"flex"}}>
+            style={{padding:"8px",background:showQR?"#10B98120":"var(--navy)",border:`1px solid ${showQR?"#10B98140":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showQR?"#10B981":"var(--muted)",display:"flex"}}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="6" y="6" width="1" height="1"/><rect x="17" y="6" width="1" height="1"/><rect x="6" y="17" width="1" height="1"/><path d="M14 14h1v1h-1zM14 17h1v1h-1zM17 14h1v1h-1zM17 17h1v1h-1zM20 14v1M14 20h1M17 20v1M20 17h1"/></svg>
           </button>
           {/* Settings gear */}
-          <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);setShowQR(false);}} style={{padding:"8px",background:showSettings?T.accent+"20":T.navy,border:`1px solid ${showSettings?T.accent+"40":T.border}`,borderRadius:"7px",cursor:"pointer",color:showSettings?T.accent:T.muted,display:"flex"}}>
+          <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);setShowQR(false);}} style={{padding:"8px",background:showSettings?T.accent+"20":"var(--navy)",border:`1px solid ${showSettings?T.accent+"40":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showSettings?T.accent:"var(--muted)",display:"flex"}}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </button>
-          <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",background:T.navy,border:`1px solid ${T.border}`,borderRadius:"7px",cursor:"pointer",color:T.text,fontSize:"13px",fontWeight:"700"}}><ArrowLeft size={14}/> Back</button>
+          <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"13px",fontWeight:"700"}}><ArrowLeft size={14}/> Back</button>
         </div>
       </div>
 
       {showSettings && <SettingsPanel/>}
       {/* Feature 6: QR code floating panel */}
       {showQR && qrSrc && (
-        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"70px",right:"20px",zIndex:200,background:T.card,border:`1px solid ${T.border}`,borderRadius:"16px",padding:"20px",boxShadow:`0 8px 32px rgba(0,0,0,0.5)`,textAlign:"center",minWidth:"200px"}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>📱 Attendee QR</p>
+        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"70px",right:"20px",zIndex:200,background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"16px",padding:"20px",boxShadow:`0 8px 32px rgba(0,0,0,0.5)`,textAlign:"center",minWidth:"200px"}}>
+          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>📱 Attendee QR</p>
           <img src={qrSrc} width="200" height="200" style={{borderRadius:"8px",display:"block",margin:"0 auto"}} alt="Attendee QR code" onError={e=>{e.target.style.display="none";}}/>
-          <p style={{fontSize:"10px",color:T.muted,marginTop:"10px",lineHeight:"1.5"}}>Scan to see today's<br/>session on your phone</p>
+          <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.5"}}>Scan to see today's<br/>session on your phone</p>
         </div>
       )}
 
       <div style={{flex:1,display:"flex"}}>
         {/* LEFT: Stage info */}
         <div style={{flex:1,padding:"44px 52px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-          <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:T.text,marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
+          <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"64px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"36px",transition:"background 0.5s"}}/>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
           <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
-          <p style={{fontSize:"16px",color:T.muted,marginBottom:"36px"}}>remaining</p>
-          <div style={{width:"100%",height:"8px",background:T.navy,borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
+          <p style={{fontSize:"16px",color:"var(--muted)",marginBottom:"36px"}}>remaining</p>
+          <div style={{width:"100%",height:"8px",background:"var(--navy)",borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
 
@@ -7725,8 +7725,8 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                   <p style={{fontSize:`${Math.round(64*scaleMult)}px`,fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
                 </div>
                 <div>
-                  <p style={{fontSize:`${Math.round(18*scaleMult)}px`,fontWeight:"700",color:T.text,marginBottom:"4px"}}>{ivState.exName}</p>
-                  <p style={{fontSize:"13px",color:T.muted}}>Round {ivState.round} of {ivState.totalRounds} · {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}</p>
+                  <p style={{fontSize:`${Math.round(18*scaleMult)}px`,fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{ivState.exName}</p>
+                  <p style={{fontSize:"13px",color:"var(--muted)"}}>Round {ivState.round} of {ivState.totalRounds} · {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}</p>
                 </div>
               </div>
             );
@@ -7735,20 +7735,20 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           {/* Group splits in display mode */}
           {stage?.groups?.length > 0 && (
             <div style={{marginBottom:"20px"}}>
-              <p style={{fontSize:"13px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>👥 Groups</p>
+              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>👥 Groups</p>
               <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(stage.groups.length,3)}, 1fr)`,gap:"12px"}}>
                 {stage.groups.map((grp,gi) => {
                   const gc = grpColor(grp.id);
                   const exerciseLabel = grp.exercise==="__custom__" ? (grp.customEx||"") : (grp.exercise||"");
                   return (
-                    <div key={grp.id} style={{padding:"18px 20px",background:T.card,border:`2px solid ${gc}`,borderRadius:"12px",boxShadow:`0 0 20px ${gc}30`}}>
+                    <div key={grp.id} style={{padding:"18px 20px",background:"var(--card)",border:`2px solid ${gc}`,borderRadius:"12px",boxShadow:`0 0 20px ${gc}30`}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
                         <div style={{width:"12px",height:"12px",borderRadius:"50%",background:gc,flexShrink:0}}/>
-                        <p style={{fontSize:`${Math.round(14*scaleMult)}px`,fontWeight:"800",color:T.text}}>{grp.name}</p>
+                        <p style={{fontSize:`${Math.round(14*scaleMult)}px`,fontWeight:"800",color:"var(--text)"}}>{grp.name}</p>
                       </div>
                       {exerciseLabel
                         ? <p style={{fontSize:`${Math.round(20*scaleMult)}px`,fontWeight:"700",color:gc,lineHeight:"1.2"}}>{exerciseLabel}</p>
-                        : <p style={{fontSize:"12px",color:T.muted,fontStyle:"italic"}}>—</p>
+                        : <p style={{fontSize:"12px",color:"var(--muted)",fontStyle:"italic"}}>—</p>
                       }
                     </div>
                   );
@@ -7759,15 +7759,15 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
 
           {stage?.exercises?.length > 0 && (
             <div>
-              <p style={{fontSize:"13px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Exercises</p>
+              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Exercises</p>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
                 {stage.exercises.map((ex,i) => (
-                  <div key={i} style={{padding:"14px 18px",background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${cfg.color}`,borderRadius:"8px"}}>
+                  <div key={i} style={{padding:"14px 18px",background:"var(--card)",border:`1px solid var(--border)`,borderLeft:`3px solid ${cfg.color}`,borderRadius:"8px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"3px"}}>
-                      <p style={{fontSize:`${Math.round(16*scaleMult)}px`,fontWeight:"700",color:T.text}}>{ex.n}</p>
+                      <p style={{fontSize:`${Math.round(16*scaleMult)}px`,fontWeight:"700",color:"var(--text)"}}>{ex.n}</p>
                       {ex.timing && ex.timing!=="none" && <span style={{fontSize:"10px",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
-                    <p style={{fontSize:"13px",color:T.muted}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
+                    <p style={{fontSize:"13px",color:"var(--muted)"}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
                   </div>
                 ))}
               </div>
@@ -7776,21 +7776,21 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         </div>
 
         {/* RIGHT: Spotify */}
-        <div style={{flex:"0 0 320px",background:T.card,borderLeft:`1px solid ${T.border}`,padding:"44px 28px",display:"flex",flexDirection:"column"}}>
-          <p style={{fontSize:"12px",fontWeight:"700",color:T.muted,textTransform:"uppercase",letterSpacing:"1px",marginBottom:"20px"}}>Now Playing</p>
+        <div style={{flex:"0 0 320px",background:"var(--card)",borderLeft:`1px solid var(--border)`,padding:"44px 28px",display:"flex",flexDirection:"column"}}>
+          <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"20px"}}>Now Playing</p>
           {nowPlaying ? (
             <>
               {nowPlaying.album?.images?.[0]?.url && (
                 <img src={nowPlaying.album.images[0].url} style={{width:"100%",aspectRatio:"1",borderRadius:"12px",marginBottom:"20px",objectFit:"cover",boxShadow:`0 8px 32px ${cfg.color}40`}} alt="album"/>
               )}
-              <p style={{fontSize:"18px",fontWeight:"700",color:T.text,marginBottom:"5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
-              <p style={{fontSize:"14px",color:T.muted,marginBottom:"28px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
+              <p style={{fontSize:"18px",fontWeight:"700",color:"var(--text)",marginBottom:"5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
+              <p style={{fontSize:"14px",color:"var(--muted)",marginBottom:"28px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
               <div style={{display:"flex",justifyContent:"center",gap:"22px",alignItems:"center"}}>
-                <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipBack size={26}/></button>
+                <button onClick={()=>player?.previousTrack()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"8px"}}><SkipBack size={26}/></button>
                 <button onClick={handlePlayPause} style={{width:"64px",height:"64px",borderRadius:"50%",background:T.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"white"}}>
                   {liveState.playing ? <Pause size={26}/> : <Play size={26}/>}
                 </button>
-                <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"8px"}}><SkipForward size={26}/></button>
+                <button onClick={()=>player?.nextTrack()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"8px"}}><SkipForward size={26}/></button>
               </div>
             </>
           ) : (
@@ -7799,17 +7799,17 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               <p style={{fontSize:"15px",color:hasNoTracks ? T.accent : T.muted,fontWeight:"600",marginBottom:"6px"}}>
                 {hasNoTracks ? "⏸ Music paused" : "No track playing"}
               </p>
-              <p style={{fontSize:"12px",color:T.muted}}>
+              <p style={{fontSize:"12px",color:"var(--muted)"}}>
                 {hasNoTracks ? "No tracks assigned to this stage" : "Add songs in the builder to queue music per stage"}
               </p>
             </div>
           )}
-          <div style={{marginTop:"auto",paddingTop:"24px",borderTop:`1px solid ${T.border}`}}>
-            <p style={{fontSize:"11px",color:T.muted,marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage Progress</p>
+          <div style={{marginTop:"auto",paddingTop:"24px",borderTop:`1px solid var(--border)`}}>
+            <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage Progress</p>
             <div style={{display:"flex",height:"6px",borderRadius:"3px",overflow:"hidden",gap:"2px"}}>
               {stages.map((s,i) => {
                 const c = SCFG[s.type]?.color||T.border;
-                return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:T.navy}}/>;
+                return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,height:"100%",background:i<liveState.idx?c+"80":i===liveState.idx?c:"var(--navy)"}}/>;
               })}
             </div>
           </div>
@@ -8066,10 +8066,10 @@ export default function App() {
   };
 
   if (window.opener&&!window.opener.closed&&new URLSearchParams(window.location.search).get("code")) {
-    return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg,color:T.text,flexDirection:"column",gap:"16px"}}>
+    return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--text)",flexDirection:"column",gap:"16px"}}>
       <div style={{fontSize:"32px"}}>🎵</div>
       <p style={{fontSize:"15px",fontWeight:"700"}}>Connecting to Spotify…</p>
-      <p style={{fontSize:"12px",color:T.muted}}>This window will close automatically.</p>
+      <p style={{fontSize:"12px",color:"var(--muted)"}}>This window will close automatically.</p>
     </div>;
   }
   if (!pinUnlocked) return <PinScreen onUnlock={()=>setPinUnlocked(true)}/>;
@@ -8110,31 +8110,31 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
-    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:T.bg,color:T.text,fontFamily}}>
+    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
 
       {showNav && !isFullscreen && (
         <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
           <div onClick={()=>setShowNav(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
-          <div style={{position:"relative",width:"260px",background:T.card,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
-            <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{position:"relative",width:"260px",background:"var(--card)",borderRight:`1px solid var(--border)`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
+            <div style={{padding:"18px 20px 12px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                 <BrandLogo size={26} showName/>
               </div>
-              <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",borderRadius:"5px"}}><X size={18}/></button>
+              <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",borderRadius:"5px"}}><X size={18}/></button>
             </div>
             {deviceId && (
-              <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{padding:"8px 20px",borderBottom:`1px solid var(--border)`}}>
                 <span style={{fontSize:"11px",color:T.green,fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}><Wifi size={11}/> Spotify Connected</span>
               </div>
             )}
             {navGroups.map(group => (
               <div key={group} style={{padding:"12px 10px 4px"}}>
-                <p style={{fontSize:"10px",fontWeight:"700",letterSpacing:"1px",textTransform:"uppercase",color:T.muted,padding:"0 8px 6px"}}>{group}</p>
+                <p style={{fontSize:"10px",fontWeight:"700",letterSpacing:"1px",textTransform:"uppercase",color:"var(--muted)",padding:"0 8px 6px"}}>{group}</p>
                 {allNavItems.filter(n=>n.group===group).map(n=>(
                   <button key={n.key} onClick={()=>navTo(n.key)} style={{
                     width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",
                     border:"none",cursor:"pointer",background:view===n.key?T.accent+"20":"transparent",
-                    color:view===n.key?T.accent:T.text,fontSize:"13px",fontWeight:view===n.key?"700":"500",
+                    color:view===n.key?T.accent:"var(--text)",fontSize:"13px",fontWeight:view===n.key?"700":"500",
                     textAlign:"left",marginBottom:"2px",
                   }}>
                     <span style={{fontSize:"15px",width:"20px",textAlign:"center"}}>{n.icon}</span>
@@ -8144,8 +8144,8 @@ export default function App() {
                 ))}
               </div>
             ))}
-            <div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid ${T.border}`}}>
-              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid ${T.border}`,cursor:"pointer",background:"transparent",color:T.muted,fontSize:"13px",fontWeight:"500"}}>
+            <div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid var(--border)`}}>
+              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"transparent",color:"var(--muted)",fontSize:"13px",fontWeight:"500"}}>
                 <Share2 size={14}/> Share with Class
               </button>
             </div>
@@ -8154,8 +8154,8 @@ export default function App() {
       )}
 
       {!isFullscreen && (
-        <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid ${T.border}`,background:T.card,position:"sticky",top:0,zIndex:100}}>
-          <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
+        <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid var(--border)`,background:"var(--card)",position:"sticky",top:0,zIndex:100}}>
+          <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <line x1="1" y1="3" x2="17" y2="3"/><line x1="1" y1="9" x2="17" y2="9"/><line x1="1" y1="15" x2="17" y2="15"/>
             </svg>
@@ -8166,7 +8166,7 @@ export default function App() {
           {!isMobile ? (
             <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"2px"}}>
               {primaryNav.map(n=>(
-                <button key={n.key} onClick={()=>navTo(n.key)} style={{padding:"7px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:T.muted,border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap"}}>
+                <button key={n.key} onClick={()=>navTo(n.key)} style={{padding:"7px 14px",background:view===n.key?T.accent+"20":"transparent",color:view===n.key?T.accent:"var(--muted)",border:`1px solid ${view===n.key?T.accent+"40":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap"}}>
                   {n.label}
                 </button>
               ))}
@@ -8175,13 +8175,13 @@ export default function App() {
           <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
             {deviceId&&isMobile&&<Wifi size={13} color={T.green}/>}
-            {!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?T.green+"20":T.navy,color:shareCopied?T.green:T.muted,border:`1px solid ${shareCopied?T.green+"40":T.border}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
+            {!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?T.green+"20":"var(--navy)",color:shareCopied?T.green:"var(--muted)",border:`1px solid ${shareCopied?T.green+"40":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
               {shareCopied?<Check size={13}/>:<Share2 size={13}/>}{shareCopied?"Copied!":"Share"}
             </button>}
-            {isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?T.green:T.muted,padding:"4px",display:"flex"}}>
+            {isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?T.green:"var(--muted)",padding:"4px",display:"flex"}}>
               {shareCopied?<Check size={15}/>:<Share2 size={15}/>}
             </button>}
-            <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:T.navy,border:`1px solid ${T.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
+            <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
               {profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={T.muted}/>}
             </button>
           </div>
@@ -8191,7 +8191,7 @@ export default function App() {
       {spError&&!isFullscreen&&(
         <div style={{padding:"10px 24px",background:T.accent+"20",borderBottom:`1px solid ${T.accent}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <p style={{fontSize:"13px",color:T.accent,fontWeight:"600"}}>⚠️ {spError}</p>
-          <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:T.accent,color:T.bg,border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
+          <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:T.accent,color:"var(--bg)",border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
         </div>
       )}
 
@@ -8212,8 +8212,8 @@ export default function App() {
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
       </div>
 
-      {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid ${T.border}`,background:T.card,textAlign:"center"}}>
-        <p style={{fontSize:"11px",color:T.muted}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
+      {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid var(--border)`,background:"var(--card)",textAlign:"center"}}>
+        <p style={{fontSize:"11px",color:"var(--muted)"}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
       </footer>}
 
       {showProfile&&<ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
