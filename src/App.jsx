@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -2782,370 +2782,150 @@ function TrackSearch({onAdd, addedIds=[], stageType=null, onSmartDistribute=null
 }
 
 // ─── DashboardScreen ──────────────────────────────────────────────────────────
-function DashboardScreen({onNewSession, onViewTemplates, onViewCalendar, onViewAnalytics,
-  onViewGlossary, onViewLibrary, onViewMusic, onViewSchedule, onViewMembers, profile, sessionHistory=[], stages=[], djProgress=null}) {
+function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionHistory=[], stages=[], sessionName="", nowPlaying=null, djProgress=null}) {
   const vw = useWindowWidth();
-  const isMobile  = vw < 480;
-  const isTablet  = vw < 768;
-  const isSmall   = vw < 900;
-
-  // ── Time-aware greeting ──────────────────────────────────────────────────────
-  const now   = new Date();
-  const hour  = now.getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const isMobile = vw < 480;
+  const isNarrow = vw < 1000;
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
   const first = profile?.display_name?.split(" ")?.[0] || "Coach";
-  const gymName = "Jungle Gym";
+  const dayN=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const monN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dateStr = `${dayN[now.getDay()]} ${now.getDate()} ${monN[now.getMonth()]}`;
 
-  const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const monNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const dateStr = `${dayNames[now.getDay()]} ${now.getDate()} ${monNames[now.getMonth()]}`;
+  const parseD = s => new Date(s.ts || s.date || 0);
+  const sow = new Date(now); sow.setHours(0,0,0,0); sow.setDate(now.getDate() - ((now.getDay()+6)%7));
+  const sessionsWeek = sessionHistory.filter(s=>parseD(s)>=sow).length;
+  const monthMins = sessionHistory.filter(s=>{const d=parseD(s);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((a,s)=>a+(s.durMin||0),0);
+  let streak=0; { const days=new Set(sessionHistory.map(s=>parseD(s).toDateString())); let d=new Date(now); for(let i=0;i<400;i++){ if(days.has(d.toDateString())) streak++; else if(i>0) break; d.setDate(d.getDate()-1);} }
+  const stats = [
+    {label:"Sessions this week", value:String(sessionsWeek), Icon:Layers},
+    {label:"Hours this month", value:(monthMins/60).toFixed(1), Icon:Clock},
+    {label:"Day streak", value:String(streak), Icon:Zap},
+    {label:"Active members", value:"248", Icon:Users},
+  ];
 
-  // ── Mock today's classes ─────────────────────────────────────────────────────
+  const totalStages = stages.length;
+  const totalMin = Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60);
+  const hasDraft = totalStages>0;
+
   const todayClasses = [
-    { time:"06:00", period:"AM", name:"Sunrise HIIT",        trainer:"Mara",  booked:18, cap:20, bpm:132, color:"#EF4444" },
-    { time:"09:30", period:"AM", name:"Flow & Strength",     trainer:"Priya", booked:12, cap:16, bpm:95,  color:"#8B5CF6" },
-    { time:"12:15", period:"PM", name:"Hyrox Simulation",    trainer:"Dev",   booked:24, cap:24, bpm:140, color:"#F97316" },
-    { time:"14:00", period:"PM", name:"Core & Conditioning", trainer:"Mara",  booked:8,  cap:16, bpm:110, color:"#06B6D4" },
-    { time:"18:30", period:"PM", name:"Strength Lab",        trainer:"Priya", booked:11, cap:16, bpm:96,  color:"#10B981" },
-    { time:"20:00", period:"PM", name:"Late HIIT",           trainer:"Dev",   booked:6,  cap:20, bpm:138, color:"#EF4444" },
+    { time:"06:00", name:"Sunrise HIIT",        studio:"Studio A", booked:18, cap:20, color:"#EF4444" },
+    { time:"09:30", name:"Flow & Strength",     studio:"Studio B", booked:12, cap:16, color:"#8B5CF6" },
+    { time:"12:15", name:"Hyrox Simulation",    studio:"Studio A", booked:24, cap:24, color:"#F97316" },
+    { time:"18:30", name:"Strength Lab",        studio:"Studio B", booked:11, cap:16, color:"#10B981" },
   ];
-  // Determine "upcoming" — classes after current hour
-  const upcoming = todayClasses.filter(c => {
-    const [h,m] = c.time.split(":").map(Number);
-    const totalMins = h * 60 + m + (c.period === "PM" && h !== 12 ? 720 : 0);
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    return totalMins >= nowMins;
-  });
-  const showClasses = upcoming.slice(0, 3).length > 0 ? upcoming.slice(0, 3) : todayClasses.slice(0, 3);
+  const recent = sessionHistory.slice(0,3);
+  const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
 
-  // ── Jungle Intelligence tip (cycles based on time) ───────────────────────────
-  const tips = [
-    { class: "18:30 Strength Lab",  tip: "fills 22% faster paired with a 90–100 BPM low-end soundtrack. Last 3 runs averaged RPE 6.8 — slightly under target.", action: "Apply to tonight" },
-    { class: "Hyrox Simulation",    tip: "peaks at 94% fill rate on Thursdays. Consider adding a 2nd slot — demand data supports it.", action: "Add slot" },
-    { class: "Sunrise HIIT",        tip: "retention is 18% higher when the DJ set starts before members arrive. Auto-DJ can schedule a pre-class warm-up mix.", action: "Schedule mix" },
-  ];
-  const tipIdx = now.getMinutes() % tips.length;
-  const tip = tips[tipIdx];
-
-  // ── Auto-DJ state derived from stages ────────────────────────────────────────
-  const djTrackCount = stages.reduce((a, s) => a + (s.tracks||[]).length, 0);
-  const djBpm = stages[0]?.tracks?.[0]?.bpm || 128;
-  const djActive = djProgress?.active || djTrackCount > 0;
-
-  // ── KPI cards data ────────────────────────────────────────────────────────────
-  const kpis = [
-    { label:"CLASS FILL RATE", value:"92%",   trend:"▲ 18% vs last wk", trendUp:true,  sub:null },
-    { label:"AVG RPE",         value:"7.4",   trend:"target band 7–8",  trendUp:null,  sub:null },
-    { label:"RETURN RATE",     value:"86%",   trend:"▲ 4 pts",          trendUp:true,  sub:null },
-    { label:"MEMBER NPS",      value:"71",    trend:"312 responses",    trendUp:null,  sub:null },
+  const nav = [
+    {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
+    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers},{k:"templates",l:"Templates",Icon:LayoutGrid},{k:"library",l:"Exercise Library",Icon:BookOpen},{k:"glossary",l:"Glossary",Icon:List}]},
+    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
+    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
+    {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
   ];
 
-  // ── Fill bar colour ───────────────────────────────────────────────────────────
-  const fillColor = pct => pct >= 90 ? "#EF4444" : pct >= 70 ? "var(--accent)" : "var(--green)";
+  const card = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px"};
+  const navBtn = (on) => ({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
 
   return (
-    <div style={{flex:1, overflowY:"auto", padding:isMobile?"14px":"28px 32px", boxSizing:"border-box"}}>
-
-      {/* ── HEADER ──────────────────────────────────────────────────────────── */}
-      <div style={{display:"flex", alignItems:isMobile?"flex-start":"center", justifyContent:"space-between",
-        flexDirection:isMobile?"column":"row", gap:"12px", marginBottom:"22px"}}>
-        <div>
-          <div style={{fontSize:"11px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
-            letterSpacing:"1.2px", marginBottom:"4px"}}>{gymName} · {dateStr}</div>
-          <h1 style={{fontFamily:"var(--display)", fontSize:isMobile?"20px":"26px",
-            fontWeight:"800", color:"var(--text)", margin:0, lineHeight:1.1}}>
-            {greeting}, {first} 👋
-          </h1>
-          <div style={{fontSize:"13px", color:"var(--muted)", marginTop:"4px"}}>
-            {todayClasses.length} classes today · {upcoming.length} upcoming
-          </div>
-        </div>
-
-        {/* Search + Spotify badge */}
-        <div style={{display:"flex", alignItems:"center", gap:"10px", flexShrink:0}}>
-          {!isMobile && (
-            <div style={{position:"relative"}}>
-              <input placeholder="Search classes, members…"
-                style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"9px",
-                  padding:"9px 14px 9px 36px", color:"var(--text)", fontSize:"13px", width:"220px",
-                  outline:"none", fontFamily:"'Hanken Grotesk',sans-serif"}}/>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={"var(--muted)"} strokeWidth="2"
-                style={{position:"absolute", left:"12px", top:"50%", transform:"translateY(-50%)"}}>
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-            </div>
-          )}
-          <div style={{padding:"7px 12px", background:"#1DB95422", border:"1px solid #1DB95450",
-            borderRadius:"999px", fontSize:"11px", fontWeight:"700", color:"#1DB954",
-            display:"flex", alignItems:"center", gap:"6px", flexShrink:0}}>
-            <div style={{width:"6px", height:"6px", borderRadius:"50%", background:"#1DB954"}}/>
-            Spotify linked
-          </div>
-        </div>
-      </div>
-
-      {/* ── KPI ROW ──────────────────────────────────────────────────────────── */}
-      <div style={{display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",
-        gap:isMobile?"10px":"14px", marginBottom:"22px"}}>
-        {kpis.map((k,i) => (
-          <div key={i} style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"12px",
-            padding:isMobile?"12px 14px":"16px 18px", position:"relative", overflow:"hidden"}}>
-            {/* accent top bar */}
-            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
-              background:["var(--accent)", "#8B5CF6", "#06B6D4", "#F97316"][i], borderRadius:"3px 3px 0 0"}}/>
-            <div style={{fontSize:"9px", fontWeight:"800", color:"var(--muted)", textTransform:"uppercase",
-              letterSpacing:"1.2px", marginBottom:"6px"}}>{k.label}</div>
-            <div style={{fontFamily:"var(--display)", fontSize:isMobile?"22px":"28px",
-              fontWeight:"800", color:"var(--text)", lineHeight:1, marginBottom:"5px"}}>{k.value}</div>
-            <div style={{fontSize:"11px", fontWeight:"600",
-              color: k.trendUp === true ? "var(--accent)" : k.trendUp === false ? "#EF4444" : "var(--muted)"}}>
-              {k.trend}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── MAIN 2-COL BODY ─────────────────────────────────────────────────── */}
-      <div style={{display:"grid",
-        gridTemplateColumns:isSmall ? "1fr" : "1fr 340px",
-        gap:"16px", marginBottom:"22px"}}>
-
-        {/* ── TODAY'S SCHEDULE ────────────────────────────────────────────────── */}
-        <div style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"14px",
-          padding:"18px", minWidth:0}}>
-          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"16px"}}>
-            <div>
-              <div style={{fontFamily:"var(--display)", fontSize:"15px", fontWeight:"700", color:"var(--text)"}}>
-                Today's schedule
+    <div style={{flex:1,display:"flex",minHeight:0,background:"var(--bg)"}}>
+      {!isMobile && (
+        <aside style={{width:"238px",flexShrink:0,background:"var(--card)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column"}}>
+          <div style={{padding:"18px 18px 14px",borderBottom:"1px solid var(--border)"}}><BrandLogo size={26} showName/></div>
+          <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
+            {nav.map(g=>(
+              <div key={g.group} style={{marginBottom:"8px"}}>
+                <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",padding:"8px 10px 4px"}}>{g.group}</div>
+                {g.items.map(it=>(
+                  <button key={it.k} onClick={()=>onNavigate(it.k)} style={navBtn(it.k==="dashboard")}><it.Icon size={16}/> {it.l}</button>
+                ))}
               </div>
-              <div style={{fontSize:"11px", color:"var(--muted)", marginTop:"2px"}}>
-                {showClasses.length} of {todayClasses.length} shown
-              </div>
-            </div>
-            <button onClick={onViewSchedule}
-              style={{fontSize:"12px", fontWeight:"700", color:"var(--accent)", background:"none",
-                cursor:"pointer", padding:"6px 12px", borderRadius:"8px", border:`1px solid color-mix(in srgb, var(--accent) 25%, transparent)`}}>
-              Full schedule →
-            </button>
+            ))}
           </div>
-
-          <div style={{display:"flex", flexDirection:"column", gap:"10px"}}>
-            {showClasses.map((cls, i) => {
-              const fillPct = Math.round((cls.booked / cls.cap) * 100);
-              const isFull  = cls.booked >= cls.cap;
-              return (
-                <div key={i} onClick={onNewSession}
-                  style={{padding:"13px 14px", background:"var(--navy)", borderRadius:"10px",
-                    border:`1px solid var(--border)`, cursor:"pointer", transition:"border-color 0.15s"}}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor=cls.color+"80"}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-                  <div style={{display:"flex", alignItems:"flex-start", gap:"12px"}}>
-                    {/* Time */}
-                    <div style={{flexShrink:0, textAlign:"center", minWidth:"38px"}}>
-                      <div style={{fontFamily:"var(--display)", fontSize:"15px", fontWeight:"700",
-                        color:"var(--text)", lineHeight:1}}>{cls.time}</div>
-                      <div style={{fontSize:"9px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
-                        letterSpacing:"0.8px"}}>{cls.period}</div>
-                    </div>
-
-                    {/* Colour dot */}
-                    <div style={{width:"3px", height:"42px", background:cls.color, borderRadius:"2px", flexShrink:0, marginTop:"2px"}}/>
-
-                    {/* Class info */}
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"4px", flexWrap:"wrap"}}>
-                        <span style={{fontSize:"13px", fontWeight:"700", color:"var(--text)"}}>{cls.name}</span>
-                        {isFull && (
-                          <span style={{fontSize:"9px", fontWeight:"800", color:"#EF4444",
-                            background:"#EF444420", border:"1px solid #EF444440",
-                            borderRadius:"4px", padding:"2px 6px", textTransform:"uppercase", letterSpacing:"0.8px"}}>
-                            FULL
-                          </span>
-                        )}
-                      </div>
-                      <div style={{fontSize:"11px", color:"var(--muted)", marginBottom:"7px"}}>
-                        {cls.trainer} · {cls.booked}/{cls.cap} booked
-                      </div>
-                      {/* Fill bar */}
-                      <div style={{height:"4px", background:"var(--border)", borderRadius:"2px", overflow:"hidden"}}>
-                        <div style={{height:"100%", width:`${fillPct}%`, background:fillColor(fillPct),
-                          borderRadius:"2px", transition:"width 0.6s ease"}}/>
-                      </div>
-                    </div>
-
-                    {/* BPM badge */}
-                    <div style={{flexShrink:0, textAlign:"right"}}>
-                      <div style={{fontFamily:"var(--display)", fontSize:"16px", fontWeight:"800",
-                        color:cls.color}}>{cls.bpm}</div>
-                      <div style={{fontSize:"9px", color:"var(--muted)", fontWeight:"600", textTransform:"uppercase"}}>BPM</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* View all remaining */}
-            {todayClasses.length > 3 && (
-              <button onClick={onViewSchedule}
-                style={{padding:"10px", background:"transparent", border:`1px dashed var(--border)`,
-                  borderRadius:"10px", color:"var(--muted)", fontSize:"12px", fontWeight:"600", cursor:"pointer",
-                  transition:"border-color 0.15s"}}
-                onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent)"}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-                + {todayClasses.length - 3} more classes today
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN ─────────────────────────────────────────────────────── */}
-        <div style={{display:"flex", flexDirection:"column", gap:"14px"}}>
-
-          {/* Jungle Intelligence */}
-          <div style={{background:"var(--card)", border:`1px solid color-mix(in srgb, var(--accent) 25%, transparent)`, borderRadius:"14px", padding:"18px", position:"relative", overflow:"hidden"}}>
-            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px",
-              background:`linear-gradient(90deg, var(--accent), #06B6D4)`}}/>
-            <div style={{display:"flex", alignItems:"center", gap:"8px", marginBottom:"12px"}}>
-              <div style={{width:"28px", height:"28px", borderRadius:"8px", background:"color-mix(in srgb, var(--accent) 13%, transparent)",
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🧠</div>
-              <div>
-                <div style={{fontFamily:"var(--display)", fontSize:"12px", fontWeight:"800",
-                  color:"var(--accent)", textTransform:"uppercase", letterSpacing:"1px"}}>Jungle Intelligence</div>
-              </div>
-            </div>
-            <p style={{fontSize:"13px", color:"var(--text)", lineHeight:"1.6", margin:"0 0 14px"}}>
-              Your{" "}
-              <span style={{fontWeight:"700", color:"var(--accent)"}}>{tip.class}</span>
-              {" "}{tip.tip}
-            </p>
-            <div style={{display:"flex", gap:"8px"}}>
-              <button onClick={onNewSession}
-                style={{flex:1, padding:"9px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
-                  borderRadius:"8px", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
-                {tip.action}
-              </button>
-              <button onClick={onViewMusic}
-                style={{padding:"9px 14px", background:"transparent", color:"var(--muted)",
-                  border:`1px solid var(--border)`, borderRadius:"8px", fontSize:"12px",
-                  fontWeight:"700", cursor:"pointer"}}>
-                Tune
-              </button>
-            </div>
-          </div>
-
-          {/* Auto-DJ widget */}
-          <div style={{background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"14px", padding:"18px",
-            position:"relative", overflow:"hidden"}}>
-            <div style={{position:"absolute", top:0, left:0, right:0, height:"3px", background:"#8B5CF6"}}/>
-            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"12px"}}>
-              <div style={{display:"flex", alignItems:"center", gap:"8px"}}>
-                <div style={{width:"28px", height:"28px", borderRadius:"8px", background:"#8B5CF622",
-                  display:"flex", alignItems:"center", justifyContent:"center", fontSize:"14px"}}>🎧</div>
-                <div>
-                  <div style={{fontFamily:"var(--display)", fontSize:"12px", fontWeight:"800",
-                    color:"#8B5CF6", textTransform:"uppercase", letterSpacing:"1px"}}>AUTO-DJ</div>
-                </div>
-              </div>
-              <div style={{padding:"3px 10px", background: djActive ? "#8B5CF622" : "var(--navy)",
-                border:`1px solid ${djActive ? "#8B5CF650" : "var(--border)"}`, borderRadius:"999px",
-                fontSize:"10px", fontWeight:"700", color: djActive ? "#8B5CF6" : "var(--muted)"}}>
-                {djActive ? (djProgress?.active ? "Building set" : "Ready") : "Idle"}
-              </div>
-            </div>
-
-            {djActive ? (
-              <>
-                <div style={{display:"flex", alignItems:"baseline", gap:"4px", marginBottom:"6px"}}>
-                  <span style={{fontFamily:"var(--display)", fontSize:"36px", fontWeight:"800",
-                    color:"var(--text)", lineHeight:1}}>{djBpm > 0 ? djBpm : 128}</span>
-                  <span style={{fontSize:"13px", fontWeight:"600", color:"#8B5CF6"}}>BPM</span>
-                </div>
-                <div style={{fontSize:"12px", color:"var(--muted)", lineHeight:"1.5", marginBottom:"12px"}}>
-                  {djTrackCount > 0
-                    ? `${djTrackCount} tracks queued · seamless beat-matched transitions`
-                    : "Smart-mixing your playlists · building…"}
-                </div>
-                {djProgress?.active && (
-                  <div style={{height:"4px", background:"var(--navy)", borderRadius:"2px", overflow:"hidden", marginBottom:"12px"}}>
-                    <div style={{height:"100%", width:`${djProgress.pct||0}%`, background:"#8B5CF6",
-                      borderRadius:"2px", transition:"width 0.5s ease"}}/>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{fontSize:"12px", color:"var(--muted)", lineHeight:"1.5", marginBottom:"12px"}}>
-                Open the Builder and run{" "}
-                <span style={{color:"#8B5CF6", fontWeight:"700"}}>DJ This Class</span>
-                {" "}to auto-fill your class soundtrack.
-              </div>
-            )}
-
-            <button onClick={onViewMusic}
-              style={{width:"100%", padding:"9px", background:"transparent",
-                border:`1px solid ${"#8B5CF6"}50`, borderRadius:"8px",
-                color:"#8B5CF6", fontSize:"12px", fontWeight:"700", cursor:"pointer"}}>
-              Open Music Hub →
-            </button>
-          </div>
-
-          {/* Start session CTA (desktop right-col) */}
-          {!isSmall && (
-            <button onClick={onNewSession}
-              style={{width:"100%", padding:"14px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
-                borderRadius:"12px", fontSize:"14px", fontWeight:"800", cursor:"pointer",
-                fontFamily:"var(--display)", display:"flex", alignItems:"center",
-                justifyContent:"center", gap:"8px"}}>
-              <Plus size={16}/> New Class Session
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── QUICK ACTIONS ─────────────────────────────────────────────────────── */}
-      <div style={{marginBottom:"8px"}}>
-        <div style={{fontSize:"11px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase",
-          letterSpacing:"1.2px", marginBottom:"12px"}}>Quick access</div>
-        <div style={{display:"grid",
-          gridTemplateColumns:isMobile?"repeat(3,1fr)":isTablet?"repeat(3,1fr)":"repeat(6,1fr)",
-          gap:"10px"}}>
-          {[
-            { icon:"📅", label:"Schedule",  onClick:onViewSchedule  },
-            { icon:"🏗️", label:"Builder",   onClick:onNewSession    },
-            { icon:"🎧", label:"Music Hub", onClick:onViewMusic     },
-            { icon:"📊", label:"Analytics", onClick:onViewAnalytics },
-            { icon:"👥", label:"Members",   onClick:onViewMembers   },
-            { icon:"📚", label:"Library",   onClick:onViewLibrary   },
-          ].map(item => (
-            <div key={item.label} onClick={item.onClick}
-              style={{padding:isMobile?"10px 6px":"14px 10px", background:"var(--card)",
-                borderRadius:"10px", border:`1px solid var(--border)`, cursor:"pointer",
-                textAlign:"center", transition:"border-color 0.15s, background 0.15s"}}
-              onMouseEnter={e=>{ e.currentTarget.style.borderColor="var(--accent)"; e.currentTarget.style.background="color-mix(in srgb, var(--accent) 5%, transparent)"; }}
-              onMouseLeave={e=>{ e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.background="var(--card)"; }}>
-              <div style={{fontSize:isMobile?"18px":"22px", marginBottom:"5px"}}>{item.icon}</div>
-              <div style={{fontSize:isMobile?"10px":"12px", fontWeight:"700", color:"var(--text)"}}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── MOBILE CTA ────────────────────────────────────────────────────────── */}
-      {isMobile && (
-        <button onClick={onNewSession}
-          style={{width:"100%", padding:"15px", background:"var(--accent)", color:"var(--on-accent)", border:"none",
-            borderRadius:"12px", fontSize:"15px", fontWeight:"800", cursor:"pointer", marginTop:"16px",
-            fontFamily:"var(--display)", display:"flex", alignItems:"center",
-            justifyContent:"center", gap:"8px"}}>
-          <Plus size={17}/> New Class Session
-        </button>
+          <button onClick={onProfile} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 16px",borderTop:"1px solid var(--border)",background:"transparent",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--accent)",color:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",flexShrink:0,overflow:"hidden"}}>{profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:first[0]}</div>
+            <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{first}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>View profile</div></div>
+          </button>
+        </aside>
       )}
 
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflowY:"auto"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile?"14px 16px":"18px 28px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+          <div><div style={{fontSize:isMobile?"18px":"22px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Dashboard</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{dateStr}</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"999px",background:"var(--navy)",border:"1px solid var(--border)"}}><Search size={13} color="var(--muted)"/><span style={{fontSize:"12px",color:"var(--muted)"}}>Search</span></div>
+          </div>
+        </div>
+
+        <div style={{padding:isMobile?"16px":"24px 28px",display:"flex",flexDirection:"column",gap:isMobile?"14px":"20px"}}>
+          <div style={{...card,padding:isMobile?"18px":"26px",display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:"18px",background:"linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), var(--card))"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:"12px",fontWeight:"700",color:"var(--accent)",letterSpacing:"1px",marginBottom:"6px"}}>{greeting.toUpperCase()}, {first.toUpperCase()}</div>
+              <div style={{fontSize:isMobile?"22px":"28px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)",marginBottom:"4px"}}>{hasDraft ? (sessionName||"Today's class") : "Start today's first class"}</div>
+              <div style={{fontSize:"13px",color:"var(--muted)",marginBottom:"14px"}}>{hasDraft ? `${totalStages} stage${totalStages!==1?"s":""} · ${totalMin} min planned` : "Build a class from a template or from scratch"}</div>
+              {hasDraft && <div style={{height:"8px",borderRadius:"4px",background:"var(--navy)",overflow:"hidden",marginBottom:"16px",maxWidth:"420px"}}><div style={{height:"100%",width:`${Math.min(100,totalStages*20)}%`,background:"var(--accent)"}}/></div>}
+              <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+                <button onClick={()=>onNavigate("builder")} style={{padding:"11px 20px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"14px",boxShadow:"var(--glow)"}}>{hasDraft?"Resume building":"New class"}</button>
+                <button onClick={()=>onNavigate("templates")} style={{padding:"11px 20px",background:"var(--navy)",color:"var(--text)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"14px"}}>{hasDraft?"New class":"Browse templates"}</button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:isMobile?"10px":"14px"}}>
+            {stats.map((s,i)=>(
+              <div key={i} style={{...card,padding:isMobile?"14px":"18px"}}>
+                <s.Icon size={18} color="var(--accent)"/>
+                <div style={{fontSize:isMobile?"22px":"28px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)",fontVariantNumeric:"var(--num)",margin:"8px 0 2px"}}>{s.value}</div>
+                <div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px"}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isNarrow?"1fr":"1.4fr 1fr",gap:isMobile?"14px":"20px"}}>
+            <div style={{...card,padding:"18px"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>Today's classes</div><button onClick={()=>onNavigate("calendar")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Calendar →</button></div>
+              {todayClasses.map((c,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
+                  <div style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
+                  <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",width:"48px",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.time}</div>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{c.studio}</div></div>
+                  <div style={{fontSize:"12px",fontWeight:"700",color:c.booked>=c.cap?"var(--accent)":"var(--muted)",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.booked}/{c.cap}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:isMobile?"14px":"20px"}}>
+              <div style={{...card,padding:"18px"}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",marginBottom:"12px"}}>AUTO-DJ</div>
+                {npName ? (
+                  <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+                    <div style={{width:"46px",height:"46px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,var(--navy),var(--navy) 6px,var(--card) 6px,var(--card) 12px)",flexShrink:0}}/>
+                    <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npName}</div><div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npArtist}</div></div>
+                  </div>
+                ) : (
+                  <div style={{fontSize:"12px",color:"var(--muted)"}}>Auto-DJ idle — <button onClick={()=>onNavigate("music")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontWeight:"700",fontSize:"12px",padding:0}}>open Music</button></div>
+                )}
+              </div>
+              <div style={{...card,padding:"18px",flex:1}}>
+                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",marginBottom:"12px"}}>RECENT SESSIONS</div>
+                {recent.length===0 && <div style={{fontSize:"12px",color:"var(--muted)"}}>No sessions yet — your finished classes show here.</div>}
+                {recent.map((s,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",borderBottom:i<recent.length-1?"1px solid var(--border)":"none"}}>
+                    <div style={{width:"7px",height:"7px",borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name||"Session"}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{s.date} · {s.durMin||0} min</div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
-
-
-// ─── TemplatesScreen ──────────────────────────────────────────────────────────
 function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImportTemplate}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -8152,7 +7932,7 @@ export default function App() {
         </div>
       )}
 
-      {!isFullscreen && (
+      {!isFullscreen && !(view==="dashboard" && !isMobile) && (
         <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid var(--border)`,background:"var(--card)",position:"sticky",top:0,zIndex:100}}>
           <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -8195,7 +7975,7 @@ export default function App() {
       )}
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        {view==="dashboard"&&<DashboardScreen onNewSession={()=>setView("builder")} onViewTemplates={()=>setView("templates")} onViewCalendar={()=>setView("calendar")} onViewAnalytics={()=>setView("analytics")} onViewGlossary={()=>setView("glossary")} onViewLibrary={()=>setView("library")} onViewMusic={()=>setView("music")} onViewSchedule={()=>setView("calendar")} onViewMembers={()=>setView("member")} profile={profile} sessionHistory={sessionHistory} stages={stages} djProgress={djProgress}/>}
+        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={profile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
         {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
