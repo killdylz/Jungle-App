@@ -7419,6 +7419,8 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
+  const { skin } = useTheme();
+  const stationCue = brandCopy(skin && skin.voice, "stationCue");
   const stage = stages[liveState.idx];
   const dur = stage?.dur||1;
   const remaining = Math.max(0, dur - liveState.elapsed);
@@ -7583,7 +7585,8 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
     return (
       <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
         <div style={{padding:"12px 20px",display:"flex",alignItems:"center",gap:"12px"}}>
-          <JungleLogo size={24}/>
+          <BrandLogo size={24}/>
+          {stationCue && <span style={{fontSize:"11px",fontWeight:"700",color:T.muted,letterSpacing:"1px",textTransform:"uppercase",flexShrink:0}}>{stationCue}</span>}
           <div style={{flex:1,overflow:"hidden"}}>
             <StageJourney compact={true}/>
           </div>
@@ -7618,8 +7621,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
         <div style={{padding:"14px 20px",background:T.card,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-            <JungleLogo size={28}/>
-            <span style={{fontSize:"14px",fontWeight:"800",letterSpacing:"2px"}}>JUNGLE</span>
+            <BrandLogo size={28} showName/>
           </div>
           <Tag color={cfg.color}>{stage?.name}</Tag>
           <div style={{display:"flex",gap:"10px"}}>
@@ -7668,8 +7670,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       {/* TV Header */}
       <div style={{padding:"14px 28px",background:T.card,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"16px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}>
-          <JungleLogo size={36}/>
-          <span style={{fontSize:"20px",fontWeight:"800",letterSpacing:"3px"}}>JUNGLE</span>
+          <BrandLogo size={36} showName/>
         </div>
         {/* Stage journey in header */}
         <div style={{flex:1,overflow:"hidden"}}>
@@ -8117,8 +8118,7 @@ export default function App() {
           <div style={{position:"relative",width:"260px",background:T.card,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
             <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                <JungleLogo size={26}/>
-                <span style={{fontSize:"15px",fontWeight:"800",letterSpacing:"2px",color:T.text}}>JUNGLE</span>
+                <BrandLogo size={26} showName/>
               </div>
               <button onClick={()=>setShowNav(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:"4px",display:"flex",borderRadius:"5px"}}><X size={18}/></button>
             </div>
