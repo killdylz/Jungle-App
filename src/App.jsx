@@ -795,6 +795,9 @@ const SCFG = {
   warmup:   { label:"Warm-Up",        color:"#F59E0B", bpmMin:80,  bpmMax:110 },
   circuit:  { label:"Circuit",        color:"#EF4444", bpmMin:110, bpmMax:130 },
   strength: { label:"Strength",       color:"#8B5CF6", bpmMin:110, bpmMax:130 },
+  engine:   { label:"Engine",         color:"#06B6D4", bpmMin:130, bpmMax:160 },
+  power:    { label:"Power",          color:"#F59E0B", bpmMin:120, bpmMax:150 },
+  core:     { label:"Core",           color:"#10B981", bpmMin:90,  bpmMax:120 },
   cardio:   { label:"Cardio Blast",   color:"#F97316", bpmMin:120, bpmMax:150 },
   recovery: { label:"Active Recovery",color:"#06B6D4", bpmMin:80,  bpmMax:100 },
   stretch:  { label:"Stretch",        color:"#10B981", bpmMin:60,  bpmMax:90  },
@@ -2822,7 +2825,7 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
   const nav = [
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers},{k:"templates",l:"Templates",Icon:LayoutGrid},{k:"library",l:"Exercise Library",Icon:BookOpen},{k:"glossary",l:"Glossary",Icon:List}]},
-    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
+    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"floor-live",l:"Floor TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
   ];
@@ -7195,6 +7198,120 @@ const FONT_SCALES = [
   { id:"xl", label:"XL", mult:1.85 },
 ];
 
+function buildFloorLayout(stages){
+  const demo = [
+    {type:"strength", move:"Trap-Bar Deadlift", load:"70% 1RM", target:"8 reps",  hrZone:"Z3"},
+    {type:"engine",   move:"Ski Erg",           load:"Damper 6",target:"250 m",   hrZone:"Z4"},
+    {type:"power",    move:"Box Jump Over",     load:'24"',     target:"10 reps", hrZone:"Z4"},
+    {type:"core",     move:"Weighted Sit-Up",   load:"10 kg",   target:"15 reps", hrZone:"Z2"},
+  ];
+  const base = (stages&&stages.length>=2) ? stages.slice(0,4) : null;
+  const src = base ? base.map((s,i)=>({ type:s.type||demo[i%4].type, move:(s.exercises&&s.exercises[0]&&s.exercises[0].n)||demo[i%4].move, load:demo[i%4].load, target:(s.exercises&&s.exercises[0]&&s.exercises[0].r)||demo[i%4].target, hrZone:demo[i%4].hrZone })) : demo;
+  const names=["Alex","Sam","Priya","Dev","Mara","Jo","Kai","Noa","Ivy","Ben","Zoe","Tom"];
+  return src.map((st,i)=>({ id:"st"+i, type:st.type, label:(SCFG[st.type]||SCFG.circuit).label, move:st.move, load:st.load, target:st.target, hrZone:st.hrZone, headcount:3+((i*2)%4), order:i, isStart:i===0, isFinish:i===src.length-1, members:names.slice(i*3,i*3+3).map((n,j)=>({id:i+"-"+j,name:n})) }));
+}
+
+function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0}, nowPlaying=null, onBack }){
+  const vw = useWindowWidth(); const isMobile = vw < 700;
+  const reduce = (typeof window!=="undefined" && window.matchMedia) ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
+  const [meName, setMeName] = useState("");
+  const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
+  useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
+  const elapsed = liveState.elapsed||0;
+  const rotateEverySec = 180;
+  const rotateRemaining = rotateEverySec - (elapsed % rotateEverySec);
+  const spotlight = Math.floor(elapsed/6) % floor.length;
+  const roundLen=45, restLen=15, cycle=roundLen+restLen;
+  const inCycle = elapsed % cycle;
+  const phase = inCycle < roundLen ? "WORK" : "REST";
+  const phaseRemaining = phase==="WORK" ? roundLen-inCycle : cycle-inCycle;
+  const rounds = 8; const currentRound = Math.min(rounds, Math.floor(elapsed/cycle)+1);
+  const norm=s=>(s||"").trim().toLowerCase();
+  const myIdx = meName ? floor.findIndex(st=>st.members.some(m=>norm(m.name)===norm(meName))) : -1;
+  const cue = !meName ? null : (myIdx<0 ? "not" : (myIdx===spotlight ? "up" : "hold"));
+  const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(Math.max(0,s)%60)).padStart(2,"0")}`;
+  const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
+  const panel = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"16px"};
+
+  return (
+    <div style={{flex:1,minHeight:"100vh",background:"var(--bg)",color:"var(--text)",padding:isMobile?"12px":"20px",display:"flex",flexDirection:"column",gap:"14px",overflowY:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+          <BrandLogo size={24} showName/>
+          <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"2px"}}>STUDIO FLOOR · LIVE</div>
+        </div>
+        <button onClick={onBack} style={{padding:"8px 14px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px"}}><ArrowLeft size={13}/> Exit</button>
+      </div>
+
+      <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"20px",flexWrap:"wrap",background:"linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), var(--card))"}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:"14px"}}>
+          <div style={{fontSize:isMobile?"18px":"24px",fontWeight:"800",letterSpacing:"2px",color:phase==="WORK"?"var(--accent)":"var(--muted)"}}>{phase}</div>
+          <div style={{fontFamily:"var(--display)",fontSize:isMobile?"54px":"84px",fontWeight:"900",lineHeight:"0.9",color:phase==="WORK"?"var(--text)":"var(--muted)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(phaseRemaining)}</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px",alignItems:"flex-end"}}>
+          <div style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)"}}>ROUND <span style={{color:"var(--text)"}}>{currentRound}</span>/{rounds}</div>
+          <div style={{display:"flex",gap:"4px"}}>{Array.from({length:rounds}).map((_,i)=><div key={i} style={{width:"14px",height:"6px",borderRadius:"3px",background:i<currentRound?"var(--accent)":"var(--navy)"}}/>)}</div>
+          <div style={{fontSize:"12px",color:"var(--muted)"}}>Elapsed {fmt(elapsed)}</div>
+        </div>
+      </div>
+
+      {cue && (
+        <div style={{...panel,padding:"12px 16px",borderColor:cue==="up"?"var(--accent)":"var(--border)",background:cue==="up"?"color-mix(in srgb, var(--accent) 16%, transparent)":"var(--card)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontSize:"14px",fontWeight:"800",color:cue==="up"?"var(--accent)":"var(--text)"}}>{cue==="up"?`${meName.toUpperCase()} — YOU'RE UP`:cue==="hold"?`${meName} — hold, your station is next`:`"${meName}" is not on the floor`}</div>
+          <button onClick={()=>setMeName("")} style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer"}}><X size={16}/></button>
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${floor.length},1fr)`,gap:"12px"}}>
+        {floor.map((st,i)=>{ const c=(SCFG[st.type]||SCFG.circuit).color; const on=i===spotlight; const isMe=myIdx===i;
+          return (
+          <div key={st.id} style={{background:"var(--card)",border:`2px solid ${on?c:"var(--border)"}`,borderRadius:"14px",padding:"14px",position:"relative",transition:reduce?"none":"transform .3s, box-shadow .3s",transform:on&&!reduce?"scale(1.02)":"none",boxShadow:on?`0 0 24px ${c}55`:"none"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"9px",height:"9px",borderRadius:"50%",background:c}}/><span style={{fontSize:"12px",fontWeight:"800",color:c,letterSpacing:"1px"}}>{st.label.toUpperCase()}</span></div>
+              {st.isStart&&<span style={{fontSize:"9px",fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
+              {st.isFinish&&<span style={{fontSize:"9px",fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
+            </div>
+            <div style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"20px",fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
+            <div style={{display:"flex",gap:"10px",flexWrap:"wrap",fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}><span>{st.load}</span><span>·</span><span>{st.target}</span><span>·</span><span>{st.hrZone}</span></div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
+              {st.members.map(m=>{ const me=norm(m.name)===norm(meName); return <span key={m.id} style={{fontSize:"10px",fontWeight:"700",padding:"2px 7px",borderRadius:"999px",background:me?c:"var(--navy)",color:me?"var(--bg)":"var(--muted)"}}>{m.name}</span>; })}
+              <span style={{fontSize:"10px",color:"var(--muted)",padding:"2px 4px"}}>+{Math.max(0,st.headcount-st.members.length)}</span>
+            </div>
+            {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:"9px",fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
+          </div>
+        );})}
+      </div>
+
+      <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"center",gap:"18px",flexWrap:"wrap"}}>
+        <div style={{fontSize:"12px",fontWeight:"800",color:"var(--muted)",letterSpacing:"2px"}}>THE LOOP</div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"var(--text)"}}>Rotate in <span style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"800",color:"var(--accent)",fontVariantNumeric:"var(--num)"}}>{fmt(rotateRemaining)}</span></div>
+        <div style={{fontSize:"12px",color:"var(--muted)"}}>clockwise · {floor.length} stations</div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"12px"}}>
+        <div style={panel}>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>NOW PLAYING</div>
+          {npName ? <div><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>{npName}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{npArtist}</div></div> : <div style={{fontSize:"12px",color:"var(--muted)"}}>No track playing.</div>}
+        </div>
+        <div style={panel}>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>WORKOUT OF THE WEEK</div>
+          <div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>The Gauntlet</div>
+          <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>4 rounds for time · best today 12:40 · 9 attempts</div>
+        </div>
+        <div style={panel}>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>OUTPUT · avg watts</div>
+          <div style={{fontSize:"12px",color:"var(--muted)"}}>Connect a wearable/erg feed to show live output.</div>
+        </div>
+      </div>
+
+      <div style={{...panel,padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px"}}>
+        <span style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)"}}>Find me:</span>
+        <input value={meName} onChange={e=>setMeName(e.target.value)} placeholder="Type your name" style={{flex:1,maxWidth:"260px",padding:"8px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+      </div>
+    </div>
+  );
+}
+
 function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, nowPlaying, onPlayPause}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -7744,7 +7861,7 @@ export default function App() {
   const crossfadeRef = useRef(crossfade);
   crossfadeRef.current = crossfade;
   useEffect(() => {
-    if (view!=="live"&&view!=="display"&&view!=="overview-display") return;
+    if (view!=="live"&&view!=="display"&&view!=="overview-display"&&view!=="floor-live") return;
     if (!liveState.playing) return;
     const iv = setInterval(() => {
       setLiveState(ls => {
@@ -7879,7 +7996,7 @@ export default function App() {
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio"},
   ];
-  const isFullscreen = view==="display"||view==="overview-display";
+  const isFullscreen = view==="display"||view==="overview-display"||view==="floor-live";
   const navGroups = ["Main","Insights","Tools","Studio"];
   const navTo = key => {
     if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
@@ -7982,6 +8099,7 @@ export default function App() {
         {view==="overview-display"&&<OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
         {view==="live"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
         {view==="display"&&<DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
+        {view==="floor-live"&&<FloorLiveScreen stages={stages} liveState={liveState} nowPlaying={nowPlaying} onBack={()=>setView(liveState.playing?"live":"dashboard")}/>}
         {view==="analytics"&&<AnalyticsScreen onBack={()=>setView("dashboard")}/>}
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
