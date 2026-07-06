@@ -804,6 +804,38 @@ const SCFG = {
   cooldown: { label:"Cool-Down",      color:"#3B82F6", bpmMin:80,  bpmMax:100 },
 };
 
+// Shared class schedule store (Calendar + Dashboard read the same data)
+const CLASS_COLORS = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
+const BASE_SCHEDULE = {
+  "Mon-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:96, type:"HIIT", dur:"45m"},
+  "Mon-09:00": {name:"Flow Yoga",    coach:"Priya",fill:64, type:"Yoga", dur:"50m"},
+  "Mon-18:00": {name:"Hyrox Sim",    coach:"Dev",  fill:92, type:"Hyrox",dur:"60m"},
+  "Tue-06:00": {name:"Strength Lab", coach:"Mara", fill:100,type:"Strength",dur:"45m"},
+  "Tue-09:00": {name:"Sunrise HIIT", coach:"Mara", fill:88, type:"HIIT", dur:"45m"},
+  "Tue-18:00": {name:"Spin Ride",    coach:"Dev",  fill:71, type:"Spin", dur:"45m"},
+  "Tue-19:30": {name:"Boxing",       coach:"Jo",   fill:55, type:"Boxing",dur:"45m"},
+  "Wed-06:00": {name:"Sunrise HIIT", coach:"Jo",   fill:90, type:"HIIT", dur:"45m"},
+  "Wed-09:00": {name:"Mobility",     coach:"Priya",fill:58, type:"Mobility",dur:"45m"},
+  "Wed-12:00": {name:"Hyrox Sim",    coach:"Dev",  fill:94, type:"Hyrox",dur:"60m"},
+  "Wed-18:00": {name:"Strength Lab", coach:"Mara", fill:98, type:"Strength",dur:"45m"},
+  "Thu-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:86, type:"HIIT", dur:"45m"},
+  "Thu-18:00": {name:"Hyrox Sim",    coach:"Dev",  fill:89, type:"Hyrox",dur:"60m"},
+  "Thu-19:30": {name:"Recovery",     coach:"Jo",   fill:52, type:"Yoga", dur:"45m"},
+  "Fri-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:91, type:"HIIT", dur:"45m"},
+  "Fri-09:00": {name:"Flow Yoga",    coach:"Priya",fill:61, type:"Yoga", dur:"50m"},
+  "Fri-12:00": {name:"Hyrox Sim",    coach:"Dev",  fill:95, type:"Hyrox",dur:"60m"},
+  "Fri-18:00": {name:"Friday Burn",  coach:"Mara", fill:100,type:"Circuit",dur:"45m"},
+  "Sat-09:00": {name:"Strength Lab", coach:"Dev",  fill:82, type:"Strength",dur:"50m"},
+  "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
+};
+function getUserClasses(){ try { return JSON.parse(localStorage.getItem("jungle_user_classes")||"[]"); } catch(_){ return []; } }
+function getDayClasses(dayAbbrev){
+  const out = [];
+  Object.entries(BASE_SCHEDULE).forEach(([k,v])=>{ const parts=k.split("-"); if(parts[0]===dayAbbrev) out.push({time:parts[1],name:v.name,coach:v.coach,type:v.type,dur:v.dur,fill:v.fill,color:CLASS_COLORS[v.type]||"#8AA294"}); });
+  getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
+  return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
+}
+
 // F9: BPM colour-coding: blue=slow, green=moderate, orange=fast, red=intense
 function bpmColor(bpm) {
   if (!bpm) return "var(--muted)";
@@ -2813,12 +2845,8 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
   const totalMin = Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60);
   const hasDraft = totalStages>0;
 
-  const todayClasses = [
-    { time:"06:00", name:"Sunrise HIIT",        studio:"Studio A", booked:18, cap:20, color:"#EF4444" },
-    { time:"09:30", name:"Flow & Strength",     studio:"Studio B", booked:12, cap:16, color:"#8B5CF6" },
-    { time:"12:15", name:"Hyrox Simulation",    studio:"Studio A", booked:24, cap:24, color:"#F97316" },
-    { time:"18:30", name:"Strength Lab",        studio:"Studio B", booked:11, cap:16, color:"#10B981" },
-  ];
+  const todayAbbrev = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][now.getDay()];
+  const todayClasses = getDayClasses(todayAbbrev).slice(0,5);
   const recent = sessionHistory.slice(0,3);
   const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
 
@@ -2890,12 +2918,13 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
           <div style={{display:"grid",gridTemplateColumns:isNarrow?"1fr":"1.4fr 1fr",gap:isMobile?"14px":"20px"}}>
             <div style={{...card,padding:"18px"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>Today's classes</div><button onClick={()=>onNavigate("calendar")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Calendar →</button></div>
+              {todayClasses.length===0 && <div style={{fontSize:"12px",color:"var(--muted)",padding:"8px 0"}}>No classes scheduled today.</div>}
               {todayClasses.map((c,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
                   <div style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
                   <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",width:"48px",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.time}</div>
-                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{c.studio}</div></div>
-                  <div style={{fontSize:"12px",fontWeight:"700",color:c.booked>=c.cap?"var(--accent)":"var(--muted)",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.booked}/{c.cap}</div>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{c.coach}{c.dur?" · "+c.dur:""}</div></div>
+                  <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.fill||0}%</div>
                 </div>
               ))}
             </div>
@@ -3661,28 +3690,7 @@ function CalendarScreen({onBack}) {
 
   const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
 
-  const schedule = {
-    "Mon-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:96, type:"HIIT", dur:"45m"},
-    "Mon-09:00": {name:"Flow Yoga",    coach:"Priya",fill:64, type:"Yoga", dur:"50m"},
-    "Mon-18:00": {name:"Hyrox Sim",   coach:"Dev",  fill:92, type:"Hyrox",dur:"60m"},
-    "Tue-06:00": {name:"Strength Lab", coach:"Mara", fill:100,type:"Strength",dur:"45m"},
-    "Tue-09:00": {name:"Sunrise HIIT", coach:"Mara", fill:88, type:"HIIT", dur:"45m"},
-    "Tue-18:00": {name:"Spin Ride",    coach:"Dev",  fill:71, type:"Spin", dur:"45m"},
-    "Tue-19:30": {name:"Boxing",       coach:"Jo",   fill:55, type:"Boxing",dur:"45m"},
-    "Wed-06:00": {name:"Sunrise HIIT", coach:"Jo",   fill:90, type:"HIIT", dur:"45m"},
-    "Wed-09:00": {name:"Mobility",     coach:"Priya",fill:58, type:"Mobility",dur:"45m"},
-    "Wed-12:00": {name:"Hyrox Sim",   coach:"Dev",  fill:94, type:"Hyrox",dur:"60m"},
-    "Wed-18:00": {name:"Strength Lab", coach:"Mara", fill:98, type:"Strength",dur:"45m"},
-    "Thu-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:86, type:"HIIT", dur:"45m"},
-    "Thu-18:00": {name:"Hyrox Sim",   coach:"Dev",  fill:89, type:"Hyrox",dur:"60m"},
-    "Thu-19:30": {name:"Recovery",     coach:"Jo",   fill:52, type:"Yoga", dur:"45m"},
-    "Fri-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:91, type:"HIIT", dur:"45m"},
-    "Fri-09:00": {name:"Flow Yoga",    coach:"Priya",fill:61, type:"Yoga", dur:"50m"},
-    "Fri-12:00": {name:"Hyrox Sim",   coach:"Dev",  fill:95, type:"Hyrox",dur:"60m"},
-    "Fri-18:00": {name:"Friday Burn",  coach:"Mara", fill:100,type:"Circuit",dur:"45m"},
-    "Sat-09:00": {name:"Strength Lab", coach:"Dev",  fill:82, type:"Strength",dur:"50m"},
-    "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
-  };
+  const schedule = BASE_SCHEDULE;
 
   // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
   const effSchedule = { ...schedule };
