@@ -835,6 +835,16 @@ function getDayClasses(dayAbbrev){
   getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
   return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
 }
+// Smart class picker: match an NLP prompt (or studio default) to a WORKOUT_LIBRARY class.
+function smartPickClass(prompt){
+  const keys = Object.keys(WORKOUT_LIBRARY);
+  const pr = (prompt||"").toLowerCase();
+  let hit = pr && keys.find(k => pr.includes(k.toLowerCase()) || pr.includes((WORKOUT_LIBRARY[k].label||"").toLowerCase()));
+  if(!hit && pr){ hit = keys.find(k => (WORKOUT_LIBRARY[k].label||"").toLowerCase().split(/[^a-z]+/).some(w=>w.length>2 && pr.includes(w))); }
+  const classType = hit || keys[0];
+  const subType = Object.keys(WORKOUT_LIBRARY[classType]?.subTypes||{})[0] || null;
+  return { classType, subType };
+}
 
 // F9: BPM colour-coding: blue=slow, green=moderate, orange=fast, red=intense
 function bpmColor(bpm) {
@@ -2863,26 +2873,6 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
 
   return (
     <div style={{flex:1,display:"flex",minHeight:0,background:"var(--bg)"}}>
-      {!isMobile && (
-        <aside style={{width:"238px",flexShrink:0,background:"var(--card)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column"}}>
-          <div style={{padding:"18px 18px 14px",borderBottom:"1px solid var(--border)"}}><BrandLogo size={26} showName/></div>
-          <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
-            {nav.map(g=>(
-              <div key={g.group} style={{marginBottom:"8px"}}>
-                <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",padding:"8px 10px 4px"}}>{g.group}</div>
-                {g.items.map(it=>(
-                  <button key={it.k} onClick={()=>onNavigate(it.k)} style={navBtn(it.k==="dashboard")}><it.Icon size={16}/> {it.l}</button>
-                ))}
-              </div>
-            ))}
-          </div>
-          <button onClick={onProfile} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 16px",borderTop:"1px solid var(--border)",background:"transparent",border:"none",cursor:"pointer",textAlign:"left"}}>
-            <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--accent)",color:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",flexShrink:0,overflow:"hidden"}}>{profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:first[0]}</div>
-            <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{first}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>View profile</div></div>
-          </button>
-        </aside>
-      )}
-
       <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflowY:"auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:isMobile?"14px 16px":"18px 28px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
           <div><div style={{fontSize:isMobile?"18px":"22px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Dashboard</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{dateStr}</div></div>
@@ -6102,7 +6092,9 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
     fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
   };
-  const [subTab, setSubTab] = useState("exercises"); // "exercises"|"music"|"groups"|"queue"
+  const [subTab, setSubTab] = useState("music"); // avoid auto-opening the exercise library on entry
+  const [showSmart, setShowSmart] = useState(false);
+  const [smartPrompt, setSmartPrompt] = useState("");
   // Pending template change — { classType, subType } — shown when stages have custom exercises
   const [templatePrompt, setTemplatePrompt] = useState(null);
 
@@ -6286,6 +6278,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?"var(--border)":"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
           {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
         </button>
+        <button onClick={()=>setShowSmart(true)} style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0,boxShadow:"var(--glow)"}}>⚡ {isMobile?"Build":"Build for me"}</button>
       </div>
 
       {/* DJ progress bar */}
@@ -6569,6 +6562,29 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           onClose={()=>setShowPlaylistModal(false)}
           onSelectTrack={t=>{ onAddTrack(selIdx, t); setShowPlaylistModal(false); }}
         />
+      )}
+      {showSmart && (
+        <div onClick={()=>setShowSmart(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"22px",width:"min(480px,100%)",boxSizing:"border-box"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+              <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Build a class</div>
+              <button onClick={()=>setShowSmart(false)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
+            </div>
+            <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"8px"}}>Describe it and Jungle builds the stages + exercises:</div>
+            <div style={{display:"flex",gap:"8px",marginBottom:"18px"}}>
+              <input autoFocus value={smartPrompt} onChange={e=>setSmartPrompt(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ const pk=smartPickClass(smartPrompt); applyTemplate(pk.classType,pk.subType); setShowSmart(false); } }} placeholder="e.g. 45 min HIIT with a strength finisher" style={{flex:1,minWidth:0,padding:"10px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+              <button onClick={()=>{ const pk=smartPickClass(smartPrompt); applyTemplate(pk.classType,pk.subType); setShowSmart(false); }} style={{padding:"10px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap"}}>Build</button>
+            </div>
+            <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Or insert a template</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",maxHeight:"240px",overflowY:"auto"}}>
+              {Object.entries(WORKOUT_LIBRARY).map(([k,cls])=>(
+                <button key={k} onClick={()=>{ const sub=Object.keys(cls.subTypes||{})[0]||null; applyTemplate(k,sub); setShowSmart(false); }} style={{display:"flex",alignItems:"center",gap:"8px",padding:"10px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
+                  <span style={{fontSize:"18px"}}>{cls.icon}</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
       {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
       {showDjModal && (
@@ -7780,6 +7796,35 @@ async function runDjOrchestrator(stages, selectedPlaylistIds, setStages, setDjPr
   setTimeout(() => setDjProgress(null), 3000);
 }
 
+function AppSidebar({ view, onNavigate, onProfile, profile }){
+  const nav = [
+    {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
+    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers},{k:"templates",l:"Templates",Icon:LayoutGrid},{k:"library",l:"Exercise Library",Icon:BookOpen},{k:"glossary",l:"Glossary",Icon:List}]},
+    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"floor-live",l:"Floor TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
+    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
+    {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
+  ];
+  const first = profile?.display_name?.split(" ")?.[0] || "Coach";
+  const navBtn=(on)=>({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
+  return (
+    <aside style={{width:"238px",flexShrink:0,background:"var(--card)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0}}>
+      <div style={{padding:"18px 18px 14px",borderBottom:"1px solid var(--border)"}}><BrandLogo size={26} showName/></div>
+      <div style={{flex:1,overflowY:"auto",padding:"10px 12px"}}>
+        {nav.map(g=>(
+          <div key={g.group} style={{marginBottom:"8px"}}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",padding:"8px 10px 4px"}}>{g.group}</div>
+            {g.items.map(it=>(<button key={it.k} onClick={()=>onNavigate(it.k)} style={navBtn(view===it.k)}><it.Icon size={16}/> {it.l}</button>))}
+          </div>
+        ))}
+      </div>
+      <button onClick={onProfile} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 16px",borderTop:"1px solid var(--border)",background:"transparent",border:"none",cursor:"pointer",textAlign:"left"}}>
+        <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--accent)",color:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",flexShrink:0,overflow:"hidden"}}>{profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:first[0]}</div>
+        <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{first}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>View profile</div></div>
+      </button>
+    </aside>
+  );
+}
+
 export default function App() {
   if (ATTENDEE_PAYLOAD) return <AttendeeView data={ATTENDEE_PAYLOAD}/>;
 
@@ -8014,7 +8059,9 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
-    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
+    <div style={{display:"flex",flexDirection:"row",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
+      {!isFullscreen && !isMobile && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={profile}/>}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:"100vh"}}>
 
       {showNav && !isFullscreen && (
         <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
@@ -8057,25 +8104,17 @@ export default function App() {
         </div>
       )}
 
-      {!isFullscreen && !(view==="dashboard" && !isMobile) && (
+      {!isFullscreen && (
         <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid var(--border)`,background:"var(--card)",position:"sticky",top:0,zIndex:100}}>
-          <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
+          {isMobile && <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <line x1="1" y1="3" x2="17" y2="3"/><line x1="1" y1="9" x2="17" y2="9"/><line x1="1" y1="15" x2="17" y2="15"/>
             </svg>
-          </button>
-          <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-            <BrandLogo size={isMobile?22:26} showName={!isMobile} gymBranding={gymBranding}/>
-          </div>
-          {!isMobile ? (
-            <nav style={{flex:1,display:"flex",justifyContent:"center",gap:"2px"}}>
-              {primaryNav.map(n=>(
-                <button key={n.key} onClick={()=>navTo(n.key)} style={{padding:"7px 14px",background:view===n.key?"color-mix(in srgb, var(--accent) 13%, transparent)":"transparent",color:view===n.key?"var(--accent)":"var(--muted)",border:`1px solid ${view===n.key?"color-mix(in srgb, var(--accent) 25%, transparent)":"transparent"}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",whiteSpace:"nowrap"}}>
-                  {n.label}
-                </button>
-              ))}
-            </nav>
-          ) : <div style={{flex:1}}/>}
+          </button>}
+          {isMobile && <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
+            <BrandLogo size={22} showName={false} gymBranding={gymBranding}/>
+          </div>}
+          <div style={{flex:1}}/>
           <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
             {deviceId&&isMobile&&<Wifi size={13} color={"var(--green)"}/>}
@@ -8122,6 +8161,7 @@ export default function App() {
       </footer>}
 
       {showProfile&&<ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
+    </div>
     </div>
     </ThemeContext.Provider>
   );
