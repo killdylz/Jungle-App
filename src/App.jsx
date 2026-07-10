@@ -4440,6 +4440,22 @@ function MemberScreen({onBack}) {
 
 
 // ─── BrandStudioScreen ────────────────────────────────────────────────────────
+// Smart brand recommendation: gym archetype -> curated accent + vibe + suggested preset.
+const GYM_ARCHETYPES = [
+  { label:"HIIT / Bootcamp",     kw:["hiit","bootcamp","conditioning","sweat","burn"], accent:"#FF5A3C", vibe:"energetic", preset:"pulse",   note:"High-intensity - a hot, punchy accent that reads across a dark room." },
+  { label:"HYROX / Functional",  kw:["hyrox","functional","engine","race","competitive","erg"], accent:"#D6FF3D", vibe:"energetic", preset:"pulse",   note:"Race energy - electric lime with tabular numerals and accent glow." },
+  { label:"Strength / CrossFit", kw:["strength","crossfit","power","barbell","lift","heavy"], accent:"#F5A623", vibe:"bold", preset:"pulse",   note:"Heavy and industrial - a bold amber-steel accent." },
+  { label:"Boutique / Wellness", kw:["boutique","wellness","holistic","yoga","flow","calm","natural","mindful"], accent:"#7BE3A4", vibe:"natural", preset:"canopy",  note:"Calm and natural - soft sage green over gentle surfaces." },
+  { label:"Luxury / Reformer",   kw:["luxury","reformer","pilates","premium","editorial","refined"], accent:"#C8A86A", vibe:"luxury", preset:"atelier", note:"Quiet luxury - warm gold on near-black with a serif display face." },
+  { label:"Spin / Rhythm",       kw:["spin","rhythm","cycle","ride","dance","beat"], accent:"#A855F7", vibe:"energetic", preset:"pulse",   note:"Nightclub energy - a vivid violet with an accent glow." },
+  { label:"Boxing / Combat",     kw:["boxing","combat","mma","fight","muay","kick"], accent:"#EF4444", vibe:"bold", preset:"pulse",   note:"Combat grit - a bold red on a dark canvas." },
+  { label:"Recovery / Mobility", kw:["recovery","mobility","stretch","restore","sauna","reset"], accent:"#5BD0C0", vibe:"calm", preset:"canopy",  note:"Restorative - a cool teal, low-contrast and easy on the eyes." },
+];
+function recommendArchetype(text){
+  const t=(text||"").toLowerCase();
+  if(t){ const hit=GYM_ARCHETYPES.find(a=>a.kw.some(k=>t.includes(k))); if(hit) return hit; }
+  return null;
+}
 function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkinId="canopy", onSkinChange, customSkinTokens=null, onCustomSkinChange}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -4471,6 +4487,9 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     : { ..._baseSkin.tokens };
 
   const [draftTokens, setDraftTokens] = React.useState(currentTokens);
+  const [recPrompt, setRecPrompt] = React.useState("");
+  const [recNote, setRecNote] = React.useState(null);
+  const [recBusy, setRecBusy] = React.useState(false);
   React.useEffect(() => { setDraftTokens(currentTokens); }, [activeSkinId]);
 
   const analyzeSteps = [
@@ -4539,6 +4558,41 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     onSkinChange("canopy");
     onCustomSkinChange(generatedSkin.tokens);
     if (logoSrc) onBrandingChange({ ...gymBranding, logo: logoSrc });
+  };
+  const applyRecommendation = (arch) => {
+    if(!arch) return;
+    const mode = arch.mode === "light" ? "light" : "dark";
+    const skin = generateSkinFromPalette([arch.accent], arch.vibe, mode);
+    setDraftTokens({ ...skin.tokens });
+    setRecNote({ label:arch.label, preset:arch.preset, note:arch.note });
+  };
+  // LLM-first: ask the smart-build function (task:"brand") for a bespoke scheme,
+  // falling back to the offline curated matcher on any error or when Supabase is off.
+  const runRecommend = async () => {
+    const pr = (recPrompt||"").trim();
+    const curated = () => applyRecommendation(recommendArchetype(pr) || GYM_ARCHETYPES[0]);
+    if (pr && supabaseEnabled && supabase) {
+      setRecBusy(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("smart-build", { body: { prompt: pr, task: "brand" } });
+        if (error) throw error;
+        if (data && data.error) throw new Error(data.error);
+        if (data && data.accent) {
+          applyRecommendation({
+            label: data.name || "Custom recommendation",
+            accent: data.accent,
+            vibe: data.vibe || "natural",
+            mode: data.mode,
+            preset: data.preset || "canopy",
+            note: data.note || "",
+          });
+          setRecBusy(false);
+          return;
+        }
+      } catch (err) { /* fall back to curated matcher */ }
+      setRecBusy(false);
+    }
+    curated();
   };
 
   const tokenLabels = [
@@ -4734,6 +4788,28 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
         {/* ── RIGHT COL ─────────────────────────────────────────────────────── */}
         <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+
+          {/* Smart recommendation */}
+          <div style={sectionStyle}>
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"10px"}}>SMART RECOMMENDATION</div>
+            <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}>Describe your gym or pick a type - I will suggest a contrast-safe scheme that drops straight into the swatches below.</div>
+            <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
+              <input value={recPrompt} onChange={e=>setRecPrompt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!recBusy&&runRecommend()} disabled={recBusy} placeholder="e.g. high-intensity hyrox gym, industrial" style={{flex:1,minWidth:0,padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+              <button onClick={runRecommend} disabled={recBusy} style={{padding:"9px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:recBusy?"default":"pointer",opacity:recBusy?0.7:1,fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap"}}>{recBusy?"Thinking…":"Recommend"}</button>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
+              {GYM_ARCHETYPES.map(a=>(
+                <button key={a.label} onClick={()=>{ setRecPrompt(a.label); applyRecommendation(a); }} style={{display:"flex",alignItems:"center",gap:"6px",padding:"5px 10px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"999px",cursor:"pointer",fontSize:"11px",fontWeight:"600",color:"var(--muted)"}}>
+                  <span style={{width:"10px",height:"10px",borderRadius:"50%",background:a.accent,flexShrink:0}}/>{a.label}
+                </button>
+              ))}
+            </div>
+            {recNote && (
+              <div style={{padding:"10px 12px",background:"color-mix(in srgb, var(--accent) 10%, transparent)",border:"1px solid color-mix(in srgb, var(--accent) 25%, transparent)",borderRadius:"9px",fontSize:"12px",color:"var(--text)",lineHeight:"1.5"}}>
+                <b>{recNote.label}</b> - {recNote.note} <span style={{color:"var(--muted)"}}>Applied to the swatches below (based on the {recNote.preset.charAt(0).toUpperCase()+recNote.preset.slice(1)} preset). Tweak, then Save.</span>
+              </div>
+            )}
+          </div>
 
           {/* 3. FINE-TUNE */}
           <div style={sectionStyle}>
