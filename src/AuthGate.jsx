@@ -56,34 +56,55 @@ export default function AuthGate({ children }) {
   // Supabase not configured → app behaves exactly as before.
   if (!supabaseEnabled) return children;
 
-  const [state, setState] = useState({ loading: true, session: null, membership: null, gym: null, profile: null });
+  const [state, setState] = useState({ loading: true, error: null, session: null, membership: null, gym: null, profile: null });
+  const [retry, setRetry] = useState(0);
 
-  useEffect(() => {
+  // withTimeout: never let a stalled Supabase call hang the whole app.
+  const withTimeout = (p, ms, label) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out — server unreachable`)), ms)),
+  ]);
+
+  const load = () => {
     let alive = true;
     const resolve = async (session) => {
-      if (!session) { if (alive) setState({ loading: false, session: null, membership: null, gym: null, profile: null }); return; }
-      const uid = session.user.id;
-      const [{ data: profile }, { data: memberships }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-        supabase.from("memberships").select("*").eq("user_id", uid).eq("status", "active"),
-      ]);
-      const membership = (memberships || [])[0] || null;
-      let gym = null;
-      if (membership) {
-        const { data } = await supabase.from("gyms").select("*").eq("id", membership.gym_id).maybeSingle();
-        gym = data;
-        supabase.from("memberships").update({ last_active_at: new Date().toISOString() }).eq("id", membership.id).then(() => {});
+      try {
+        if (!session) { if (alive) setState({ loading: false, error: null, session: null, membership: null, gym: null, profile: null }); return; }
+        const uid = session.user.id;
+        const [{ data: profile }, { data: memberships }] = await withTimeout(Promise.all([
+          supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+          supabase.from("memberships").select("*").eq("user_id", uid).eq("status", "active"),
+        ]), 12000, "Sign-in check");
+        const membership = (memberships || [])[0] || null;
+        let gym = null;
+        if (membership) {
+          const { data } = await withTimeout(supabase.from("gyms").select("*").eq("id", membership.gym_id).maybeSingle(), 12000, "Loading gym");
+          gym = data;
+          supabase.from("memberships").update({ last_active_at: new Date().toISOString() }).eq("id", membership.id).then(() => {});
+        }
+        if (alive) setState({ loading: false, error: null, session, membership, gym, profile });
+      } catch (e) {
+        if (alive) setState({ loading: false, error: e?.message || "Couldn't reach the server", session, membership: null, gym: null, profile: null });
       }
-      if (alive) setState({ loading: false, session, membership, gym, profile });
     };
-    supabase.auth.getSession().then(({ data }) => resolve(data.session));
+    withTimeout(supabase.auth.getSession(), 12000, "Session")
+      .then(({ data }) => resolve(data.session))
+      .catch((e) => { if (alive) setState({ loading: false, error: e?.message || "Couldn't reach the server", session: null, membership: null, gym: null, profile: null }); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => resolve(session));
     return () => { alive = false; sub.subscription.unsubscribe(); };
-  }, []);
+  };
+  useEffect(load, [retry]);
 
   const signOut = () => supabase.auth.signOut();
 
   if (state.loading) return <div style={wrap}><div style={{ color: "#8AA294" }}>Loading…</div></div>;
+  if (state.error && !state.session) return (
+    <div style={wrap}><div style={card}>
+      <div style={{ fontSize: "20px", fontWeight: 800, marginBottom: "8px" }}>Couldn't reach the server</div>
+      <div style={{ fontSize: "13px", color: "#8AA294", lineHeight: 1.6, marginBottom: "22px" }}>{state.error}. Check your connection or that the Supabase project is running, then retry.</div>
+      <button style={btn} onClick={() => { setState((s) => ({ ...s, loading: true, error: null })); setRetry((n) => n + 1); }}>Retry</button>
+    </div></div>
+  );
   if (!state.session) return <Login />;
   if (!state.membership) return <NotAuthorized email={state.session.user.email} onSignOut={signOut} />;
 
