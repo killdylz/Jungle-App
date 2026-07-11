@@ -80,10 +80,10 @@ function applySkinCSS(tokens, meta={}) {
   r.setProperty("--muted",  tokens.muted);
   // Compute on-accent / on-green: dark bg text for light accents, light text for dark accents
   const _rgbA = hexToRgb(tokens.accent);
-  const _lumA = _rgbA ? relativeLuminance(_rgbA) : 0;
+  const _lumA = _rgbA ? relativeLuminance(..._rgbA) : 0;
   r.setProperty("--on-accent", _lumA > 0.18 ? tokens.bg : tokens.text);
   const _rgbG = hexToRgb(tokens.green);
-  const _lumG = _rgbG ? relativeLuminance(_rgbG) : 0;
+  const _lumG = _rgbG ? relativeLuminance(..._rgbG) : 0;
   r.setProperty("--on-green", _lumG > 0.18 ? tokens.bg : tokens.text);
   // Alpha variant shortcuts for CSS-only colour transitions
   r.setProperty("--accent-10", tokens.accent + "1A");
@@ -4837,7 +4837,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
               ))}
             </div>
             <div style={{display:"flex",gap:"8px",marginTop:"14px"}}>
-              <button onClick={()=>{onCustomSkinChange(draftTokens);onSkinChange(activeSkinId);}}
+              <button onClick={()=>{onCustomSkinChange(draftTokens);onSkinChange("custom");}}
                 style={{flex:1,padding:"10px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",fontFamily:`'${displayFont}',sans-serif`}}>
                 Save custom tokens
               </button>
@@ -8113,6 +8113,8 @@ export default function App() {
     const skin = PRESET_SKINS[activeSkinId];
     if (skin) injectSkinFonts(skin);
     localStorage.setItem("jungle_skin", activeSkinId);
+    if (customSkinTokens) localStorage.setItem("jungle_custom_skin", JSON.stringify(customSkinTokens));
+    else localStorage.removeItem("jungle_custom_skin");
   }, [activeSkinId, customSkinTokens]);
 
   // ── Gym branding ─────────────────────────────────────────────────────────
