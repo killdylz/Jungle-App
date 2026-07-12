@@ -3,6 +3,7 @@ import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, M
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
 import { FLAGS, isViewEnabled } from "./config/flags.js";
+import * as store from "./lib/store.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -431,7 +432,7 @@ function rampVolume(player, from, to, secs){
   return iv;
 }
 async function fetchExerciseGif(name){
-  const key = (localStorage.getItem("jungle_exdb_key")||"").trim();
+  const key = store.getExerciseDbKey();
   if (!key) return null;
   let cache={}; try { cache=JSON.parse(localStorage.getItem("jungle_gif_cache")||"{}"); } catch(_){}
   const norm = (name||"").toLowerCase().replace(/\(.*?\)/g,"").replace(/[^a-z0-9 ]/g,"").trim();
@@ -831,7 +832,7 @@ const BASE_SCHEDULE = {
   "Sat-09:00": {name:"Strength Lab", coach:"Dev",  fill:82, type:"Strength",dur:"50m"},
   "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
 };
-function getUserClasses(){ try { return JSON.parse(localStorage.getItem("jungle_user_classes")||"[]"); } catch(_){ return []; } }
+function getUserClasses(){ return store.getUserClasses(); }
 function getDayClasses(dayAbbrev){
   const out = [];
   const baseSchedule = FLAGS.mockSchedule ? BASE_SCHEDULE : {};
@@ -1581,9 +1582,8 @@ const WORKOUT_LIBRARY = {
 // ─── Editable library helpers ─────────────────────────────────────────────────
 function getLibrary() {
   try {
-    const raw = localStorage.getItem("jungle_library_custom");
-    if (raw) {
-      const saved = JSON.parse(raw);
+    const saved = store.getLibraryCustom();
+    if (saved) {
       const merged = {};
       const allKeys = [...new Set([...Object.keys(WORKOUT_LIBRARY), ...Object.keys(saved)])];
       allKeys.forEach(k => {
@@ -1603,10 +1603,10 @@ function getLibrary() {
   return WORKOUT_LIBRARY;
 }
 function saveLibrary(data) {
-  try { localStorage.setItem("jungle_library_custom", JSON.stringify(data)); } catch(_) {}
+  store.saveLibraryCustom(data);
 }
 function resetLibrary() {
-  try { localStorage.removeItem("jungle_library_custom"); } catch(_) {}
+  store.resetLibraryCustom();
 }
 
 // ─── SCFG-to-library stage mapping ───────────────────────────────────────────
@@ -3661,8 +3661,8 @@ function CalendarScreen({onBack}) {
   const [viewMode, setViewMode] = React.useState("grid"); // "grid" | "heat"
   const [dismissedTips, setDismissedTips] = React.useState([]);
   // F5: user-created recurring classes
-  const [userClasses, setUserClasses] = React.useState(() => { try { return JSON.parse(localStorage.getItem("jungle_user_classes")||"[]"); } catch(_) { return []; } });
-  React.useEffect(() => { try { localStorage.setItem("jungle_user_classes", JSON.stringify(userClasses)); } catch(_) {} }, [userClasses]);
+  const [userClasses, setUserClasses] = React.useState(() => store.getUserClasses());
+  React.useEffect(() => { store.saveUserClasses(userClasses); }, [userClasses]);
   const [showAddClass, setShowAddClass] = React.useState(false);
   const [addForm, setAddForm] = React.useState({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
 
@@ -3917,21 +3917,21 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   const isTablet = vw < 768;
 
   // Settings (persisted)
-  const [energy,     setEnergy]     = React.useState(()=>localStorage.getItem("dj_energy")||"High");
-  const [bpmMin,     setBpmMin]     = React.useState(()=>Number(localStorage.getItem("dj_bpmMin")||120));
-  const [bpmMax,     setBpmMax]     = React.useState(()=>Number(localStorage.getItem("dj_bpmMax")||142));
-  const [transition, setTransition] = React.useState(()=>localStorage.getItem("dj_transition")||"Beat-match");
-  const [followStructure, setFollowStructure] = React.useState(()=>localStorage.getItem("dj_follow")!=="false");
-  const [takeRequests,    setTakeRequests]    = React.useState(()=>localStorage.getItem("dj_requests")!=="false");
-  const [cleanEdits,      setCleanEdits]      = React.useState(()=>localStorage.getItem("dj_clean")!=="false");
+  const [energy,     setEnergy]     = React.useState(()=>store.getDjEnergy());
+  const [bpmMin,     setBpmMin]     = React.useState(()=>store.getDjBpmMin());
+  const [bpmMax,     setBpmMax]     = React.useState(()=>store.getDjBpmMax());
+  const [transition, setTransition] = React.useState(()=>store.getDjTransition());
+  const [followStructure, setFollowStructure] = React.useState(()=>store.getDjFollowStructure());
+  const [takeRequests,    setTakeRequests]    = React.useState(()=>store.getDjTakeRequests());
+  const [cleanEdits,      setCleanEdits]      = React.useState(()=>store.getDjCleanEdits());
 
   // Persist settings
-  React.useEffect(()=>{ localStorage.setItem("dj_energy",energy); },[energy]);
-  React.useEffect(()=>{ localStorage.setItem("dj_bpmMin",String(bpmMin)); localStorage.setItem("dj_bpmMax",String(bpmMax)); },[bpmMin,bpmMax]);
-  React.useEffect(()=>{ localStorage.setItem("dj_transition",transition); },[transition]);
-  React.useEffect(()=>{ localStorage.setItem("dj_follow",String(followStructure)); },[followStructure]);
-  React.useEffect(()=>{ localStorage.setItem("dj_requests",String(takeRequests)); },[takeRequests]);
-  React.useEffect(()=>{ localStorage.setItem("dj_clean",String(cleanEdits)); },[cleanEdits]);
+  React.useEffect(()=>{ store.saveDjEnergy(energy); },[energy]);
+  React.useEffect(()=>{ store.saveDjBpmRange(bpmMin, bpmMax); },[bpmMin,bpmMax]);
+  React.useEffect(()=>{ store.saveDjTransition(transition); },[transition]);
+  React.useEffect(()=>{ store.saveDjFollowStructure(followStructure); },[followStructure]);
+  React.useEffect(()=>{ store.saveDjTakeRequests(takeRequests); },[takeRequests]);
+  React.useEffect(()=>{ store.saveDjCleanEdits(cleanEdits); },[cleanEdits]);
 
   // Real playlists from Spotify
   const [playlists, setPlaylists] = React.useState([]);
@@ -6156,7 +6156,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const [gifState, setGifState] = useState({});
   const [gifKeyDraft, setGifKeyDraft] = useState("");
   const openGif = (gkey, name) => {
-    const hasKey = !!(localStorage.getItem("jungle_exdb_key")||"").trim();
+    const hasKey = !!store.getExerciseDbKey();
     if (!hasKey) { setGifState(pv=>({...pv,[gkey]:{status:"nokey"}})); return; }
     setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
     fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
@@ -6167,7 +6167,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   };
   const saveGifKey = (gkey, name) => {
     const v=(gifKeyDraft||"").trim(); if(!v) return;
-    try { localStorage.setItem("jungle_exdb_key", v); } catch(_){}
+    store.saveExerciseDbKey(v);
     setGifKeyDraft("");
     setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
     fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
@@ -7451,12 +7451,12 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   const totalDur = stages.reduce((a,s)=>a+s.dur,0);
 
   // Display prefs persisted to localStorage
-  const [preset,    setPreset]    = useState(() => { try { return JSON.parse(localStorage.getItem("jungle_disp_prefs")||"{}").preset    || "full"; } catch{return "full";} });
-  const [fontScale, setFontScale] = useState(() => { try { return JSON.parse(localStorage.getItem("jungle_disp_prefs")||"{}").fontScale || "m";    } catch{return "m";}   });
+  const [preset,    setPreset]    = useState(() => store.getDisplayPrefs().preset);
+  const [fontScale, setFontScale] = useState(() => store.getDisplayPrefs().fontScale);
   const [showSettings, setShowSettings] = useState(false);
   const [showQR,       setShowQR]       = useState(false);
   useEffect(() => {
-    try { localStorage.setItem("jungle_disp_prefs", JSON.stringify({ preset, fontScale })); } catch{}
+    store.saveDisplayPrefs({ preset, fontScale });
   }, [preset, fontScale]);
 
   // Feature 6: Generate attendee URL for QR code (try/catch guards against non-ASCII btoa errors)
@@ -8121,14 +8121,12 @@ export default function App() {
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [shareCopied, setShareCopied] = useState(false);
   const [showNav, setShowNav] = React.useState(false);
-  const [crossfade, setCrossfade] = useState(() => { try { return parseInt(localStorage.getItem("jungle_crossfade")||"0")||0; } catch(_) { return 0; } });
-  useEffect(() => { try { localStorage.setItem("jungle_crossfade", String(crossfade)); } catch(_) {} }, [crossfade]);
+  const [crossfade, setCrossfade] = useState(() => store.getCrossfade());
+  useEffect(() => { store.saveCrossfade(crossfade); }, [crossfade]);
 
   // ── Skin / Theme ─────────────────────────────────────────────────────────
-  const [activeSkinId, setActiveSkinId] = useState(() => localStorage.getItem("jungle_skin") || "canopy");
-  const [customSkinTokens, setCustomSkinTokens] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jungle_custom_skin") || "null"); } catch(_) { return null; }
-  });
+  const [activeSkinId, setActiveSkinId] = useState(() => store.getSkinId());
+  const [customSkinTokens, setCustomSkinTokens] = useState(() => store.getCustomSkinTokens());
   const skinTokens = (activeSkinId === "custom" && customSkinTokens)
     ? customSkinTokens
     : (PRESET_SKINS[activeSkinId]?.tokens || PRESET_SKINS.canopy.tokens);
@@ -8142,17 +8140,15 @@ export default function App() {
     applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
     const skin = PRESET_SKINS[activeSkinId];
     if (skin) injectSkinFonts(skin);
-    localStorage.setItem("jungle_skin", activeSkinId);
-    if (customSkinTokens) localStorage.setItem("jungle_custom_skin", JSON.stringify(customSkinTokens));
-    else localStorage.removeItem("jungle_custom_skin");
+    store.saveSkinId(activeSkinId);
+    if (customSkinTokens) store.saveCustomSkinTokens(customSkinTokens);
+    else store.clearCustomSkinTokens();
   }, [activeSkinId, customSkinTokens]);
 
   // ── Gym branding ─────────────────────────────────────────────────────────
-  const [gymBranding, setGymBranding] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jungle_gym_branding") || "null") || {}; } catch(_) { return {}; }
-  });
+  const [gymBranding, setGymBranding] = useState(() => store.getGymBranding());
   useEffect(() => {
-    try { localStorage.setItem("jungle_gym_branding", JSON.stringify(gymBranding)); } catch(_) {}
+    store.saveGymBranding(gymBranding);
   }, [gymBranding]);
   // (legacy gymBranding accent/green override removed - superseded by the skin system)
   useEffect(() => {
@@ -8174,13 +8170,9 @@ export default function App() {
   const [liveState,   setLiveState]   = useState({ playing:false, idx:0, elapsed:0 });
   const [showProfile, setShowProfile] = useState(false);
   const [djProgress,  setDjProgress]  = useState(null);
-  const [templateTracks, setTemplateTracks] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jungle_tmpl_tracks")||"{}"); } catch(_) { return {}; }
-  });
-  useEffect(() => { try { localStorage.setItem("jungle_tmpl_tracks", JSON.stringify(templateTracks)); } catch(_) {} }, [templateTracks]);
-  const [sessionHistory, setSessionHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("jungle_history")||"[]"); } catch(_) { return []; }
-  });
+  const [templateTracks, setTemplateTracks] = useState(() => store.getTemplateTracks());
+  useEffect(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
+  const [sessionHistory, setSessionHistory] = useState(() => store.getHistory());
 
   const saveSession = () => {
     const totalElapsed = stages.slice(0, liveState.idx).reduce((a,s)=>a+s.dur,0) + liveState.elapsed;
@@ -8189,7 +8181,7 @@ export default function App() {
       durMin:Math.round(totalElapsed/60), ts:Date.now(), stageTypes:[...new Set(stages.map(s=>s.type))] };
     const updated = [record, ...sessionHistory].slice(0,100);
     setSessionHistory(updated);
-    try { localStorage.setItem("jungle_history", JSON.stringify(updated)); } catch(_) {}
+    store.saveHistory(updated);
   };
 
   // ── Session timer ─────────────────────────────────────────────────────────
