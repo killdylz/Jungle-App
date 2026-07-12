@@ -8325,6 +8325,16 @@ export default function App() {
   ];
   const auth = useJungleAuth();
   const can = auth?.can || (() => true); // no auth (supabase off) \u21d2 show everything
+  // Account identity = the signed-in (Google) user, not Spotify. Falls back to the
+  // Spotify profile only when there's no account session (e.g. Supabase disabled).
+  const gUser = auth?.user;
+  const gMeta = gUser?.user_metadata || {};
+  const gAvatar = gMeta.avatar_url || gMeta.picture || null;
+  const displayProfile = gUser ? {
+    ...profile,
+    display_name: gMeta.full_name || gMeta.name || auth?.profile?.name || profile?.display_name || gUser.email,
+    images: gAvatar ? [{ url: gAvatar }] : (profile?.images || []),
+  } : profile;
   const allNavItems = [
     {key:"dashboard",    label:"Dashboard",    icon:"\ud83c\udfe0",  group:"Main"},
     {key:"builder",      label:"Builder",      icon:"\ud83c\udffb",  group:"Main",     cap:"class:view"},
@@ -8350,7 +8360,7 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
     <div style={{display:"flex",flexDirection:"row",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
-      {!isFullscreen && !isMobile && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={profile} can={can}/>}
+      {!isFullscreen && !isMobile && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={displayProfile} can={can}/>}
       <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:"100vh"}}>
 
       {showNav && !isFullscreen && (
@@ -8415,7 +8425,7 @@ export default function App() {
               {shareCopied?<Check size={15}/>:<Share2 size={15}/>}
             </button>}
             <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
-              {profile?.images?.[0]?.url?<img src={profile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
+              {displayProfile?.images?.[0]?.url?<img src={displayProfile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
             </button>
           </div>
         </header>
@@ -8429,7 +8439,7 @@ export default function App() {
       )}
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={profile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
+        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
         {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
@@ -8451,7 +8461,7 @@ export default function App() {
         <p style={{fontSize:"11px",color:"var(--muted)"}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
       </footer>}
 
-      {showProfile&&<ProfileModal profile={profile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
+      {showProfile&&<ProfileModal profile={displayProfile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
     </div>
     </ThemeContext.Provider>
