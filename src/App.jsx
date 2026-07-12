@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
+import { FLAGS, isViewEnabled } from "./config/flags.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -833,7 +834,8 @@ const BASE_SCHEDULE = {
 function getUserClasses(){ try { return JSON.parse(localStorage.getItem("jungle_user_classes")||"[]"); } catch(_){ return []; } }
 function getDayClasses(dayAbbrev){
   const out = [];
-  Object.entries(BASE_SCHEDULE).forEach(([k,v])=>{ const parts=k.split("-"); if(parts[0]===dayAbbrev) out.push({time:parts[1],name:v.name,coach:v.coach,type:v.type,dur:v.dur,fill:v.fill,color:CLASS_COLORS[v.type]||"#8AA294"}); });
+  const baseSchedule = FLAGS.mockSchedule ? BASE_SCHEDULE : {};
+  Object.entries(baseSchedule).forEach(([k,v])=>{ const parts=k.split("-"); if(parts[0]===dayAbbrev) out.push({time:parts[1],name:v.name,coach:v.coach,type:v.type,dur:v.dur,fill:v.fill,color:CLASS_COLORS[v.type]||"#8AA294"}); });
   getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
   return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
 }
@@ -2868,7 +2870,7 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
     {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"floor-live",l:"Floor TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
-  ];
+  ].map(g => ({ ...g, items: g.items.filter(it => isViewEnabled(it.k)) })).filter(g => g.items.length);
 
   const card = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px"};
   const navBtn = (on) => ({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
@@ -3682,7 +3684,7 @@ function CalendarScreen({onBack}) {
 
   const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
 
-  const schedule = BASE_SCHEDULE;
+  const schedule = FLAGS.mockSchedule ? BASE_SCHEDULE : {};
 
   // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
   const effSchedule = { ...schedule };
@@ -3700,17 +3702,17 @@ function CalendarScreen({onBack}) {
     setShowAddClass(false);
     setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
   };
-  const suggested = [
+  const suggested = FLAGS.mockAnalytics ? [
     {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
-  ];
+  ] : [];
 
-  const trainers = [
+  const trainers = FLAGS.mockAnalytics ? [
     {name:"Mara K.",  classes:14, cap:16, color:"#F59E0B"},
     {name:"Dev R.",   classes:11, cap:14, color:"#22D3A6"},
     {name:"Priya S.", classes:8,  cap:12, color:"#8B5CF6"},
     {name:"Jo M.",    classes:5,  cap:10, color:"#3B82F6"},
-  ];
+  ] : [];
 
   const aiTips = [
     {id:0, text:"Tue 18:00 demand is up 34% — add a second Strength Lab. Likely 90%+ fill.", action:"Add it"},
@@ -3940,11 +3942,11 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   },[]);
 
   // Member requests (demo — would come from a backend in production)
-  const [requests, setRequests] = React.useState([
+  const [requests, setRequests] = React.useState(FLAGS.mockMembers ? [
     {id:1, track:"Titanium — David Guetta", member:"Sam",  votes:24, bpm:126, note:"fits Block B"},
     {id:2, track:"Levels — Avicii",         member:"Jess", votes:11, bpm:128, note:"cool-down maybe"},
     {id:3, track:"Somebody That I Used to Know", member:"Alex", votes:7, bpm:122, note:""},
-  ]);
+  ] : []);
 
   // Build real queue from stages
   const currentStageIdx = liveState.idx || 0;
@@ -7902,7 +7904,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
     {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle,cap:"class:view"},{k:"overview-display",l:"Studio TV",Icon:Monitor,cap:"class:view"},{k:"floor-live",l:"Floor TV",Icon:Monitor,cap:"class:view"},{k:"music",l:"Auto-DJ",Icon:Music,cap:"music:view"}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
-  ].map(g => ({ ...g, items: g.items.filter(it => !it.cap || can(it.cap)) })).filter(g => g.items.length);
+  ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k)) })).filter(g => g.items.length);
   const first = profile?.display_name?.split(" ")?.[0] || "Coach";
   const navBtn=(on)=>({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
   return (
@@ -8079,8 +8081,36 @@ function AdminTeamScreen({ onBack }) {
   );
 }
 
+// Placeholder shown when a mock/theatre view is flagged off (see config/flags.js).
+// Keeps a leftover nav route from ever surfacing fabricated data.
+function MockDisabledScreen({ title, note, onBack }) {
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"12px"}}>
+      <div style={{fontFamily:"var(--display)",fontSize:"20px",fontWeight:"800",color:"var(--text)"}}>{title} — coming soon</div>
+      <div style={{fontSize:"13px",color:"var(--muted)",maxWidth:"420px",lineHeight:1.5}}>{note}</div>
+      {onBack&&<button onClick={onBack} style={{marginTop:"6px",padding:"9px 18px",background:"var(--accent)",color:"var(--on-accent,var(--bg))",border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"13px"}}>Back to dashboard</button>}
+    </div>
+  );
+}
+
+// Shown when a music surface is opened without a connected Spotify account.
+// Spotify is optional and post-login (any user for now) — never an entry gate.
+function ConnectSpotifyPrompt({ onConnect, onBack }) {
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"14px"}}>
+      <div style={{fontSize:"34px"}}>🎵</div>
+      <div style={{fontFamily:"var(--display)",fontSize:"20px",fontWeight:"800",color:"var(--text)"}}>Connect Spotify</div>
+      <div style={{fontSize:"13px",color:"var(--muted)",maxWidth:"420px",lineHeight:1.5}}>Music is optional. Connect a Spotify account to power playlists and Auto-DJ. You can use the rest of Jungle without it.</div>
+      <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
+        {onConnect&&<button onClick={onConnect} style={{padding:"10px 20px",background:"#1DB954",color:"#fff",border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"800",fontSize:"13px"}}>Connect Spotify</button>}
+        {onBack&&<button onClick={onBack} style={{padding:"10px 20px",background:"transparent",color:"var(--text)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"13px"}}>Back</button>}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  if (ATTENDEE_PAYLOAD) return <AttendeeView data={ATTENDEE_PAYLOAD}/>;
+  if (FLAGS.attendeeShare && ATTENDEE_PAYLOAD) return <AttendeeView data={ATTENDEE_PAYLOAD}/>;
 
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -8278,7 +8308,8 @@ export default function App() {
     </div>;
   }
   if (!pinUnlocked) return <PinScreen onUnlock={()=>setPinUnlocked(true)}/>;
-  if (!token) return <LoginScreen onLogin={redirectToSpotify} authError={authError}/>;
+  // Spotify no longer gates the app — account auth (Google via AuthGate) is the gate.
+  // Spotify becomes an optional post-login connect (Music Hub → ConnectSpotifyPrompt).
 
   const fontFamily = gymBranding?.fontFamily && gymBranding.fontFamily!=="system"
     ? `'${gymBranding.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
@@ -8307,7 +8338,7 @@ export default function App() {
     {key:"team",         label:"Team",         icon:"\ud83d\udee1\ufe0f",  group:"Studio", cap:"members:manage"},
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio",   cap:"integrations:manage"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio",   cap:"brand:view"},
-  ].filter(n => !n.cap || can(n.cap));
+  ].filter(n => (!n.cap || can(n.cap)) && isViewEnabled(n.key));
   const isFullscreen = view==="display"||view==="overview-display"||view==="floor-live";
   const navGroups = ["Main","Insights","Tools","Studio"].filter(g => allNavItems.some(n => n.group===g));
   const navTo = key => {
@@ -8406,11 +8437,11 @@ export default function App() {
         {view==="live"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
         {view==="display"&&<DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
         {view==="floor-live"&&<FloorLiveScreen stages={stages} liveState={liveState} nowPlaying={nowPlaying} onBack={()=>setView(liveState.playing?"live":"dashboard")}/>}
-        {view==="analytics"&&<AnalyticsScreen onBack={()=>setView("dashboard")}/>}
+        {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
-        {view==="music"&&<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>}
-        {view==="member"&&<MemberScreen onBack={()=>setView("dashboard")}/>}
+        {view==="music"&&(token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
+        {view==="member"&&(FLAGS.mockMembers?<MemberScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Members" note="The member experience is rebuilt on the members table in Phase 1." onBack={()=>setView("dashboard")}/>)}
         {view==="integrations"&&<IntegrationsScreen onBack={()=>setView("dashboard")}/>}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}
