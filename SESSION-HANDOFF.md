@@ -1,60 +1,50 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-11_
+_Last updated: 2026-07-12_
 
-## ▶️ Start here next session — pending deploy actions
+You're continuing work on **Jungle** — a white-label class operating system for boutique fitness studios (React + Vite + Supabase, deployed to GitHub Pages). This file is the cold-start brief: read it, confirm repo access, report `git status`, then propose a plan before editing.
 
-Everything below is **built and verified but not yet deployed**. Two actions to ship it:
+## ▶️ Start here
 
-**1. Run the RLS migration** (Supabase dashboard → SQL Editor → New query → paste → Run):
-- File: `supabase/migrations/0002_rbac_write_hardening.sql`
-- Safe to re-run.
-- (CLI alternative, only if you have it linked: `supabase db push`)
+- **Repo:** `C:\Users\dylan\jungle-app` (request folder access to this path first).
+- **Main file:** `src/App.jsx` (~8,400-line monolith). Also `src/AuthGate.jsx`, `src/supabase.js`, `src/config/flags.js`.
+- **Live site:** https://killdylz.github.io/Jungle-App/
+- **Deploy** = git push to `main` (GitHub Actions builds + deploys). A **failed CI build does NOT touch the live site.**
+  ```
+  cd C:\Users\dylan\jungle-app
+  git add -A
+  git commit -m "..."
+  git push origin main
+  ```
+- **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
+- **Possible pending push:** the Google-avatar/logout change may be uncommitted — check `git status` and push if so.
 
-**2. Redeploy the frontend** (PowerShell, one line at a time):
-```powershell
-cd "C:\Users\dylan\jungle-app"
-powershell -ExecutionPolicy Bypass -File .\deploy.ps1
-```
-Ships the Team screen, role-gated nav, and the AuthGate hang fix. GitHub Actions builds in ~1–2 min.
+## ✅ Done this session
 
-**3. (Carryover) Redeploy the `smart-build` Edge Function** — still pending from before:
-- Supabase dashboard → Edge Functions → `smart-build` → paste `supabase/functions/smart-build/index.ts` → Deploy.
-- Until done, Brand Studio's Smart Recommendation uses the curated fallback instead of the LLM.
+- **Google login is LIVE and working** (Supabase Auth + Google OAuth). Allowlist gate in `supabase/migrations/0001_auth_foundation.sql`; admin email allowlisted. Google OAuth app published to production (no "unverified" warning).
+- **Spotify is no longer an app gate** — removed the `if (!token) return <LoginScreen>` gate. Spotify is optional, connected post-login from Music Hub via `ConnectSpotifyPrompt` (any user for now; PT-only gating deferred).
+- **Mock/theatre surfaces flagged OFF** via new `src/config/flags.js` (`mockAnalytics`, `mockMembers`, `mockSchedule`, `attendeeShare`) — Analytics KPIs, Members app, hardcoded `BASE_SCHEDULE`, calendar suggestions/leaderboard, DJ demo requests, attendee share view. Nav items hidden + render blocked with a "coming soon" placeholder.
+- **Account identity fix** — sidebar/header/dashboard/profile avatar + name now use the Google identity (`displayProfile`), Spotify only as fallback. Log out now ends the account session (`auth.signOut()`), not just Spotify.
 
----
+Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 
-## ✅ Done this session (code complete, awaiting the deploy above)
+## ⚠️ Environment gotchas
 
-**LLM brand recommendation wiring**
-- `src/App.jsx` `runRecommend` now calls `smart-build` with `task:"brand"`, maps `{name,accent,vibe,mode,preset,note}` into the recommendation, and falls back to the curated matcher on any error or when Supabase is off. Added a "Thinking…" busy state. `applyRecommendation` now honors the LLM's light/dark `mode`. (This part was already deployed earlier.)
+- **Sandbox mount is byte-capped** — the Linux bash mirror serves TRUNCATED copies of large files (`App.jsx`, `AuthGate.jsx`), so `npm run build` / `cat` on the mount are unreliable. The **Read/Edit tools see the true host files — trust those.**
+- **Validate JSX edits** by parsing isolated snippets with `@babel/parser` in the sandbox, not by building the whole app locally. **CI is the real full-build check.**
+- **PowerShell:** `npm`/`.ps1` blocked by execution policy → use `npm.cmd ...` or `powershell -ExecutionPolicy Bypass -File .\deploy.ps1`. Paste multi-line commands **one line at a time**.
+- **Git index corruption** (rare): if git errors "bad signature / index corrupt" → `del .git\index` then `git reset` (rebuilds index; files untouched).
 
-**Roadmap item 1 — Make roles matter**
-- New `AdminTeamScreen` in `src/App.jsx`: lists members (`memberships`+`profiles`) with per-member role dropdown + Suspend/Reactivate; invite form writing `allowlist_entries` (email or `@domain` + role); revoke-invite list. Can't change/suspend your own membership. Guards for supabase-off and non-admins.
-- Wired `useJungleAuth()` into the app shell; `can` falls back to allow-all when Supabase is off.
-- Role-gated both navs (desktop `AppSidebar` + mobile drawer): each item carries a capability, hidden when `can(cap)` is false; empty groups drop out. Added **Team** item (gated to `members:manage`).
+## 🗺️ Next steps (from the roadmap)
 
-**AuthGate hardening — `src/AuthGate.jsx`**
-- Every Supabase call in `resolve()` now has a 12s timeout + try/catch. On failure shows a "Couldn't reach the server / Retry" screen instead of an infinite "Loading…". (Makes failures visible/retryable — does not fix a down backend.)
+1. **`src/lib/store.js` repository seam (highest-leverage)** — wrap every localStorage key behind one module (`getClasses/saveClasses`, library, brand, history, prefs, caches). This is the migration seam everything in Phase 1 depends on. **Do NOT start the Postgres schema before this seam exists.**
+2. Extract data constants → `src/data/`; shared UI → `src/ui/` (zero-risk splits).
+3. Phase 1: Postgres schema + RLS, Realtime room channels, QR/roster attendance capture (F4 — the data spine).
 
-**New migration — `supabase/migrations/0002_rbac_write_hardening.sql`**
-- Adds `is_gym_admin()` helper; splits `memberships`/`allowlist_entries` RLS into read vs. write; restricts writes (and invite reads) to admins/managers. Closes the gap where any gym member could write those tables via the API. Signup still works (`handle_new_user()` is SECURITY DEFINER).
+Full phased plan + task list: see the Fable spec doc and the build-plan doc.
 
-Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `supabase/migrations/0002_rbac_write_hardening.sql`.
+## Deferred / notes
 
----
-
-## 🔎 Verify after deploy
-- Sign in (you're platform admin) → you should see the full nav incl. **Team**.
-- Team screen: invite an email + role, change a member's role, suspend/reactivate, revoke an invite.
-- If the app was stuck on "Loading…", confirm the Supabase project is running (free tier auto-pauses); the app now shows Retry rather than hanging.
-
-## 🗺️ Roadmap after this
-2. **Cloud data** — move saved classes / sessions / library / skins from localStorage into Supabase tables (persist + sync per gym).
-3. **Polish** — Floor TV from a real built class, brand logo/voice across more surfaces, UX-loop items.
-
-## ⚠️ Gotchas learned this session
-- **Git index got corrupted** once (a `git stash`/lock collision). If `git` errors with "bad signature / index corrupt": `del .git\index` then `git reset` (rebuilds index; files untouched).
-- **`.\deploy.ps1` blocked by execution policy** → use `powershell -ExecutionPolicy Bypass -File .\deploy.ps1`.
-- **Paste multi-line commands one line at a time** in PowerShell — they concatenated when pasted as a block.
-- **Sandbox mount desync**: the Linux build sandbox served a stale/truncated copy of `App.jsx`, so a full `npm run build` there is unreliable. The real file on disk (what `deploy.ps1` commits) is intact; verification was done on the isolated new modules. The actual build runs fine via GitHub Actions on deploy.
+- `IntegrationsScreen` is still full mock theatre (fake ClassPass/Stripe/Wearables "connected" cards) — flag or rebuild before demoing it.
+- The legacy PIN screen still gates entry ahead of Google — redundant now; consider removing.
+- Carryover: redeploy the `smart-build` Edge Function (Supabase → Edge Functions → paste `supabase/functions/smart-build/index.ts` → Deploy) if the LLM brand recommendation isn't live.
