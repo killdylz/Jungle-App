@@ -3662,7 +3662,20 @@ function CalendarScreen({onBack}) {
   const [dismissedTips, setDismissedTips] = React.useState([]);
   // F5: user-created recurring classes
   const [userClasses, setUserClasses] = React.useState(() => store.getUserClasses());
-  React.useEffect(() => { store.saveUserClasses(userClasses); }, [userClasses]);
+  // Local-first: pull the gym's classes from Postgres once on mount (server
+  // wins / seeds from local). store.connect() already ran at the App root.
+  React.useEffect(() => {
+    let alive = true;
+    store.hydrateUserClasses().then(rows => { if (alive && rows) setUserClasses(rows); });
+    return () => { alive = false; };
+  }, []);
+  // Persist on change (local write + background push). Skip the initial mount so
+  // we never push stale/empty local over server data before hydrate reconciles.
+  const _ucInit = React.useRef(false);
+  React.useEffect(() => {
+    if (!_ucInit.current) { _ucInit.current = true; return; }
+    store.saveUserClasses(userClasses);
+  }, [userClasses]);
   const [showAddClass, setShowAddClass] = React.useState(false);
   const [addForm, setAddForm] = React.useState({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
 
@@ -8118,6 +8131,13 @@ export default function App() {
   const { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices,
           nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
 
+  // Account auth (Google via AuthGate) + local-first store wiring. Declared with
+  // the other top-level hooks — before any early return below — so the hook
+  // order never changes. store.connect() tells store.js the current gym/user so
+  // domain writes sync to Postgres in the background (no-op when Supabase off).
+  const auth = useJungleAuth();
+  store.connect({ gymId: auth?.gym?.id, userId: auth?.user?.id });
+
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [shareCopied, setShareCopied] = useState(false);
   const [showNav, setShowNav] = React.useState(false);
@@ -8315,7 +8335,6 @@ export default function App() {
     {key:"builder",    label:"Builder"},
     {key:"templates",  label:"Templates"},
   ];
-  const auth = useJungleAuth();
   const can = auth?.can || (() => true); // no auth (supabase off) \u21d2 show everything
   // Account identity = the signed-in (Google) user, not Spotify. Falls back to the
   // Spotify profile only when there's no account session (e.g. Supabase disabled).
