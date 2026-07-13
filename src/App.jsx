@@ -8194,6 +8194,28 @@ export default function App() {
   useEffect(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
   const [sessionHistory, setSessionHistory] = useState(() => store.getHistory());
 
+  // Local-first: on login, pull every domain's server state into localStorage
+  // and reflect the App-root-held values (brand / prefs / history). Runs once;
+  // no-op when Supabase is off. Child screens read the hydrated localStorage on
+  // their own mount; classes hydrate separately in CalendarScreen.
+  useEffect(() => {
+    let alive = true;
+    store.hydrateAll().then(r => {
+      if (!alive || !r) return;
+      if (r.brand) {
+        if (r.brand.skinId) setActiveSkinId(r.brand.skinId);
+        setCustomSkinTokens(r.brand.customSkinTokens ?? null);
+        setGymBranding(r.brand.branding ?? {});
+      }
+      if (r.prefs) {
+        setCrossfade(r.prefs.crossfade ?? 0);
+        setTemplateTracks(r.prefs.templateTracks ?? {});
+      }
+      if (r.history) setSessionHistory(r.history);
+    });
+    return () => { alive = false; };
+  }, []);
+
   const saveSession = () => {
     const totalElapsed = stages.slice(0, liveState.idx).reduce((a,s)=>a+s.dur,0) + liveState.elapsed;
     if (totalElapsed < 10) return;
@@ -8201,7 +8223,8 @@ export default function App() {
       durMin:Math.round(totalElapsed/60), ts:Date.now(), stageTypes:[...new Set(stages.map(s=>s.type))] };
     const updated = [record, ...sessionHistory].slice(0,100);
     setSessionHistory(updated);
-    store.saveHistory(updated);
+    store.saveHistory(updated);        // local: whole capped array
+    store.appendSessionHistory(record); // server: immutable insert of this session
   };
 
   // ── Session timer ─────────────────────────────────────────────────────────
