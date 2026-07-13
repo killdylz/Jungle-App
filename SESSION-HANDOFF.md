@@ -17,7 +17,7 @@ You're continuing work on **Jungle** — a white-label class operating system fo
   git push origin main
   ```
 - **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
-- **Unpushed local commit:** as of 2026-07-13 the tree is clean but `main` is one commit ahead of `origin` — the `0003` schema migration (`ef05f76`). `git push origin main` when ready (harmless: SQL-only, no app-code change, so the live build is unaffected).
+- **Repo state:** as of 2026-07-13 the tree is clean and `main` is in sync with `origin`. `0003` schema is applied to Supabase (verified) and the user-classes local-first sync is live — see Next steps. (`.claude/launch.json`, a dev-server config, is left untracked.)
 
 ## ✅ Done this session
 
@@ -31,19 +31,26 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 ## ⚠️ Environment gotchas
 
 - **Sandbox mount is byte-capped** — the Linux bash mirror serves TRUNCATED copies of large files (`App.jsx`, `AuthGate.jsx`), so `npm run build` / `cat` on the mount are unreliable. The **Read/Edit tools see the true host files — trust those.**
-- **Validate JSX edits** by parsing isolated snippets with `@babel/parser` in the sandbox, not by building the whole app locally. **CI is the real full-build check.**
+- **Validate edits with the HOST build, not the sandbox one.** `npm.cmd run build` in **PowerShell** runs against the true host files and is a reliable full-compile check (it caught a real duplicate-declaration + surfaced the path to a hook bug this session). Only the *bash sandbox* build is unreliable (truncated mirror). `@babel/parser` on isolated snippets is a fast pre-check; the host `vite build` is the authoritative one, ahead of CI.
 - **PowerShell:** `npm`/`.ps1` blocked by execution policy → use `npm.cmd ...` or `powershell -ExecutionPolicy Bypass -File .\deploy.ps1`. Paste multi-line commands **one line at a time**.
 - **Git index corruption** (rare): if git errors "bad signature / index corrupt" → `del .git\index` then `git reset` (rebuilds index; files untouched).
 
 ## 🗺️ Next steps (from the roadmap)
 
 - ✅ **DONE — `src/lib/store.js` repository seam** (`f9f8514`). One module wraps every domain localStorage key (classes, library, brand/skin, history, prefs, DJ); ~30 App.jsx call sites route through it. Spotify tokens + derived caches intentionally excluded.
-- ✅ **DONE — Phase 1 domain schema drafted + committed** as `supabase/migrations/0003_phase1_domain_tables.sql` (`ef05f76`). A Postgres home for each store.js domain, built on the 0001/0002 tenant + RLS model. Reviewed against 0001/0002 and the live call sites; `session_history` confirmed **append-only** (insert-only RLS). **NOT yet applied** — apply manually in Supabase SQL Editor (paste → Run; idempotent).
+- ✅ **DONE — Phase 1 domain schema applied** (`0003_phase1_domain_tables.sql`, `ef05f76`). Applied to Supabase and verified (5 tables + RLS; `session_history` is **append-only**, insert-only RLS). Built on the 0001/0002 tenant model. Idempotent — safe to re-run.
+- ✅ **DONE + LIVE — user-classes Supabase sync** (`1640587`). First domain through a **local-first sync layer** — this is the CHOSEN architecture, **not** a full async rewrite:
+  - `store.js` keeps its **sync API**. localStorage stays the instant/offline read layer; each `save*` also fires a **background upsert**; `hydrate*()` pulls server → local once on mount (**server wins**; seeds server from local when the server is empty). Every sync path no-ops when Supabase is off or no gym is resolved, so the plain-localStorage build is unchanged.
+  - Wiring: `store.connect({gymId,userId})` at the App root (top-level, before early returns); the screen calls `store.hydrateXxx()` on mount and **skips its initial save** so stale/empty local never clobbers server data pre-hydrate.
+  - Also fixed a pre-existing Rules-of-Hooks bug (`useJungleAuth()` was after the PIN early-return → App hook count changed on unlock). Verified live: add-class persists to Postgres.
 
-1. **Apply `0003` in Supabase** (SQL Editor → paste `0003_phase1_domain_tables.sql` → Run) so the tables exist before the swap.
-2. **`store.js` → Supabase swap (the big one)** — change store.js internals from sync localStorage to async Supabase reads/writes (no App.jsx call-site shape change beyond going async). Threads `gym_id`/auth context, adds loading/offline handling. Note the two shape changes baked into `0003`: `type`→`class_type`, and `saveHistory` becomes an **append** (single insert, `ts` = `to_timestamp(Date.now()/1000)`), not a full-array overwrite.
-3. Extract data constants → `src/data/`; shared UI → `src/ui/` (zero-risk splits).
-4. Phase 1 spine continues: Realtime room channels, QR/roster attendance capture (F4).
+**Next — replicate the proven pattern for the remaining domains** (each mirrors the classes pilot: mapper + background upsert in `saveXxx`, a `hydrateXxx()`, and a screen-mount hydrate/skip-initial-save):
+1. **`library_overrides`** — `getLibraryCustom`/`save`/`reset`; one jsonb blob per gym, admin-write RLS.
+2. **`brand_profiles`** — skin id (reuse `gyms.active_skin_id`), `jungle_custom_skin`, `jungle_gym_branding`; one row per gym, admin-write. Wired from the App root (skin/branding state lives there).
+3. **`session_history`** — **append** per completed session (single insert; `ts = to_timestamp(Date.now()/1000)`), cap-to-100 at read time — NOT a full-array overwrite. Insert-only RLS.
+4. **`user_prefs`** — disp prefs, crossfade, template tracks, exdb key, `dj_*`; one row **per user** (not per-gym; uses `auth.uid()` RLS).
+
+Then: extract data constants → `src/data/`, shared UI → `src/ui/` (zero-risk splits). Phase 1 spine continues: Realtime room channels, QR/roster attendance capture (F4).
 
 Full phased plan + task list: see the Fable spec doc and the build-plan doc.
 
