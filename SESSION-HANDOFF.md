@@ -1,6 +1,6 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-12_
+_Last updated: 2026-07-13_
 
 You're continuing work on **Jungle** — a white-label class operating system for boutique fitness studios (React + Vite + Supabase, deployed to GitHub Pages). This file is the cold-start brief: read it, confirm repo access, report `git status`, then propose a plan before editing.
 
@@ -17,7 +17,7 @@ You're continuing work on **Jungle** — a white-label class operating system fo
   git push origin main
   ```
 - **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
-- **Possible pending push:** the Google-avatar/logout change may be uncommitted — check `git status` and push if so.
+- **Unpushed local commit:** as of 2026-07-13 the tree is clean but `main` is one commit ahead of `origin` — the `0003` schema migration (`ef05f76`). `git push origin main` when ready (harmless: SQL-only, no app-code change, so the live build is unaffected).
 
 ## ✅ Done this session
 
@@ -37,9 +37,13 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 
 ## 🗺️ Next steps (from the roadmap)
 
-1. **`src/lib/store.js` repository seam (highest-leverage)** — wrap every localStorage key behind one module (`getClasses/saveClasses`, library, brand, history, prefs, caches). This is the migration seam everything in Phase 1 depends on. **Do NOT start the Postgres schema before this seam exists.**
-2. Extract data constants → `src/data/`; shared UI → `src/ui/` (zero-risk splits).
-3. Phase 1: Postgres schema + RLS, Realtime room channels, QR/roster attendance capture (F4 — the data spine).
+- ✅ **DONE — `src/lib/store.js` repository seam** (`f9f8514`). One module wraps every domain localStorage key (classes, library, brand/skin, history, prefs, DJ); ~30 App.jsx call sites route through it. Spotify tokens + derived caches intentionally excluded.
+- ✅ **DONE — Phase 1 domain schema drafted + committed** as `supabase/migrations/0003_phase1_domain_tables.sql` (`ef05f76`). A Postgres home for each store.js domain, built on the 0001/0002 tenant + RLS model. Reviewed against 0001/0002 and the live call sites; `session_history` confirmed **append-only** (insert-only RLS). **NOT yet applied** — apply manually in Supabase SQL Editor (paste → Run; idempotent).
+
+1. **Apply `0003` in Supabase** (SQL Editor → paste `0003_phase1_domain_tables.sql` → Run) so the tables exist before the swap.
+2. **`store.js` → Supabase swap (the big one)** — change store.js internals from sync localStorage to async Supabase reads/writes (no App.jsx call-site shape change beyond going async). Threads `gym_id`/auth context, adds loading/offline handling. Note the two shape changes baked into `0003`: `type`→`class_type`, and `saveHistory` becomes an **append** (single insert, `ts` = `to_timestamp(Date.now()/1000)`), not a full-array overwrite.
+3. Extract data constants → `src/data/`; shared UI → `src/ui/` (zero-risk splits).
+4. Phase 1 spine continues: Realtime room channels, QR/roster attendance capture (F4).
 
 Full phased plan + task list: see the Fable spec doc and the build-plan doc.
 
