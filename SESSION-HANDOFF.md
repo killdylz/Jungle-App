@@ -17,7 +17,7 @@ You're continuing work on **Jungle** — a white-label class operating system fo
   git push origin main
   ```
 - **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
-- **Repo state:** as of 2026-07-13 the tree is clean and `main` is in sync with `origin`. `0003` schema is applied to Supabase (verified) and the user-classes local-first sync is live — see Next steps. (`.claude/launch.json`, a dev-server config, is left untracked.)
+- **Repo state:** as of 2026-07-13 the tree is clean and `main` is in sync with `origin`. Migrations `0003` + `0004` are applied to Supabase; the **full store.js → Postgres local-first sync is live and verified** (all domains) — see Next steps. (`.claude/launch.json`, a dev-server config, is left untracked.)
 
 ## ✅ Done this session
 
@@ -44,13 +44,17 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
   - Wiring: `store.connect({gymId,userId})` at the App root (top-level, before early returns); the screen calls `store.hydrateXxx()` on mount and **skips its initial save** so stale/empty local never clobbers server data pre-hydrate.
   - Also fixed a pre-existing Rules-of-Hooks bug (`useJungleAuth()` was after the PIN early-return → App hook count changed on unlock). Verified live: add-class persists to Postgres.
 
-**Next — replicate the proven pattern for the remaining domains** (each mirrors the classes pilot: mapper + background upsert in `saveXxx`, a `hydrateXxx()`, and a screen-mount hydrate/skip-initial-save):
-1. **`library_overrides`** — `getLibraryCustom`/`save`/`reset`; one jsonb blob per gym, admin-write RLS.
-2. **`brand_profiles`** — skin id (reuse `gyms.active_skin_id`), `jungle_custom_skin`, `jungle_gym_branding`; one row per gym, admin-write. Wired from the App root (skin/branding state lives there).
-3. **`session_history`** — **append** per completed session (single insert; `ts = to_timestamp(Date.now()/1000)`), cap-to-100 at read time — NOT a full-array overwrite. Insert-only RLS.
-4. **`user_prefs`** — disp prefs, crossfade, template tracks, exdb key, `dj_*`; one row **per user** (not per-gym; uses `auth.uid()` RLS).
+- ✅ **DONE + LIVE — remaining domains synced** (`c3b2e2d`), all via the same local-first pattern; verified live 2026-07-13:
+  - **`library_overrides`** (per-gym, admin-write) — upsert blob on save, delete on reset.
+  - **`brand_profiles`** (per-gym, admin-write) — partial upserts for skin id / custom tokens / branding. Skin id lives in **`brand_profiles.active_skin_id`** (migration `0004`, applied) because `gyms.active_skin_id` is read-only under RLS.
+  - **`session_history`** (append) — `appendSessionHistory()` inserts one row per session; hydrate **merges** server+local by `ts` (never drops offline sessions), caps 100.
+  - **`user_prefs`** (per-user) — disp prefs, crossfade, template tracks, exdb key, all `dj_*`.
+  - Wiring differs from classes: a single **`store.hydrateAll()`** runs once at the App root, writes every domain into localStorage, and setStates the App-root-held values (brand/prefs/history). Child screens + on-demand readers pick up the hydrated localStorage on their own mount — no child call-site changes.
 
-Then: extract data constants → `src/data/`, shared UI → `src/ui/` (zero-risk splits). Phase 1 spine continues: Realtime room channels, QR/roster attendance capture (F4).
+**🎯 Phase 1 local→Postgres storage migration is COMPLETE.** Every store.js domain now syncs. Next up the roadmap:
+1. Extract data constants → `src/data/`, shared UI → `src/ui/` (zero-risk splits of the 8.4k-line monolith).
+2. Phase 1 spine: Realtime room channels, QR/roster attendance capture (F4 — the data spine).
+3. Tighten `class_schedule_rules` RLS to admin/coach-only once the Calendar UI gates it (currently any gym member can write — see the note in `0003`).
 
 Full phased plan + task list: see the Fable spec doc and the build-plan doc.
 
