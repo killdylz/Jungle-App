@@ -7895,6 +7895,22 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     return () => { alive = false; };
   }, []);
 
+  // Backfill the movement catalog for any persona that has plans but no catalog
+  // rows yet — e.g. plans arriving from a bulk import or a fresh load. Runs only
+  // when a persona is missing entirely, so it never clobbers curated edits.
+  useEffect(() => {
+    if (!personas.length || !plans.length) return;
+    const have = new Set(movements.map(m => m.personaId));
+    const missing = personas.filter(p => !have.has(p.id) && plans.some(pl => pl.personaId === p.id));
+    if (!missing.length) return;
+    let cat = movements.slice();
+    missing.forEach(p => {
+      const pplans = plans.filter(pl => pl.personaId === p.id);
+      cat = cat.concat(aggregateMovements(pplans, []).map(m => ({ ...m, personaId: p.id })));
+    });
+    setMovements(store.savePersonaMovements(cat));
+  }, [personas, plans]); // movements omitted by design — guard prevents re-runs
+
   // Recompute a persona's movement catalog from its plans (using the current
   // catalog so alias/name edits fold occurrences together), persist, setState.
   const recompute = (allPlans, catalog, pid) => {
