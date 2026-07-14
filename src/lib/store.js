@@ -31,6 +31,7 @@ const KEYS = {
   personas:      "jungle_personas",
   personaPlans:  "jungle_persona_plans",
   personaMoves:  "jungle_persona_movements",
+  personaGens:   "jungle_persona_generations",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -444,6 +445,41 @@ export function deletePersonaMovement(id) {
   return moves;
 }
 
+// Generation ledger (persona_generations) — every class the generate flow produced
+// for a coach, so future generations avoid repeating (items 6–8). Local shape:
+// { id, personaId, classType, category, title, focus, brief:{}, movements:[], plan:{}, createdAt }.
+// Capped to the most recent GEN_CAP per persona locally to stay bounded.
+const GEN_CAP = 50;
+export function getPersonaGenerations() { return readJSON(KEYS.personaGens, []); }
+function _genToRow(g) {
+  return { id: g.id, gym_id: _ctx.gymId, persona_id: g.personaId, class_type: g.classType || "",
+           category: g.category || "mixed", title: g.title || "", focus: g.focus || "",
+           brief: g.brief || {}, movements: g.movements || [], plan: g.plan || {},
+           created_by: _ctx.userId || null, created_at: g.createdAt || new Date().toISOString() };
+}
+function _rowToGen(r) {
+  return { id: r.id, personaId: r.persona_id, classType: r.class_type || "", category: r.category || "mixed",
+           title: r.title || "", focus: r.focus || "", brief: r.brief || {}, movements: r.movements || [],
+           plan: r.plan || {}, createdAt: r.created_at || "" };
+}
+// Append one generation (newest-first), cap per persona, and background-insert it.
+export function appendPersonaGeneration(gen) {
+  const row = { ...gen, id: gen.id || newId(), createdAt: gen.createdAt || new Date().toISOString() };
+  const all = [row, ...getPersonaGenerations().filter(g => g.id !== row.id)];
+  const perCount = {};
+  const capped = all.filter(g => (perCount[g.personaId] = (perCount[g.personaId] || 0) + 1) <= GEN_CAP);
+  writeJSON(KEYS.personaGens, capped);
+  if (_synced()) _bgUpsert("persona_generations", [_genToRow(row)], "id");
+  return capped;
+}
+export function savePersonaGenerations(list) {
+  writeJSON(KEYS.personaGens, list || []);
+  if (_synced()) {
+    const rows = (list || []).map(_genToRow);
+    if (rows.length) _bgUpsert("persona_generations", rows, "id");
+  }
+}
+
 // One-time hydrate for the Personas screen: pull both tables for the gym
 // (server wins), seed the server from local when it has none. Returns
 // { personas, plans } or null when not synced / on error (caller keeps local).
@@ -459,6 +495,14 @@ export async function hydratePersonas() {
       console.warn("[store] hydratePersonas failed:", (pRes.error || plRes.error || mRes.error).message);
       return null;
     }
+    // Generation ledger is optional — pulled defensively so a not-yet-applied 0006
+    // never breaks core persona hydration. serverGens stays null if the table is absent.
+    let serverGens = null;
+    try {
+      const gRes = await supabase.from("persona_generations").select("*").eq("gym_id", _ctx.gymId);
+      if (!gRes.error) serverGens = (gRes.data || []).map(_rowToGen);
+    } catch (_) { /* table may not exist yet */ }
+
     const serverPersonas = (pRes.data || []).map(_rowToPersona);
     const serverPlans    = (plRes.data || []).map(_rowToPlan);
     const serverMoves    = (mRes.data || []).map(_rowToMove);
@@ -467,12 +511,15 @@ export async function hydratePersonas() {
       savePersonas(local);                 // seed server from pre-sync local
       savePersonaPlans(getPersonaPlans());
       savePersonaMovements(getPersonaMovements());
+      if (serverGens !== null) savePersonaGenerations(getPersonaGenerations());
       return null;                         // keep local as-is (no flicker)
     }
     writeJSON(KEYS.personas, serverPersonas);
     writeJSON(KEYS.personaPlans, serverPlans);
     writeJSON(KEYS.personaMoves, serverMoves);
-    return { personas: serverPersonas, plans: serverPlans, movements: serverMoves };
+    if (serverGens !== null) writeJSON(KEYS.personaGens, serverGens);
+    return { personas: serverPersonas, plans: serverPlans, movements: serverMoves,
+             generations: serverGens !== null ? serverGens : getPersonaGenerations() };
   } catch (e) {
     console.warn("[store] hydratePersonas error:", e?.message || e);
     return null;

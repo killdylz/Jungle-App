@@ -74,7 +74,7 @@ Rules:
 
 const GENERATE_SYSTEM = `You draft a NEW class plan in a specific coach's established style. Output ONLY a JSON object — no markdown fences, no prose.
 
-You are given (as a JSON payload in the user message): the coach and class type, the coach's derived block STRUCTURE and SCHEME conventions for that class type, their movement vocabulary ("catalog"), a few of their past plans as style references ("examples"), and a "brief" for the new class.
+You are given (as a JSON payload in the user message): the coach and class type, its training "category" (strength | conditioning | endurance | mixed), the coach's derived block STRUCTURE and SCHEME conventions for that class type, their movement vocabulary ("catalog"), a few of their past plans as style references ("examples"), and a "brief" for the new class.
 
 Produce a new plan that:
 - follows the coach's typical block structure and ORDER for this class type,
@@ -82,6 +82,13 @@ Produce a new plan that:
 - draws movements primarily from the provided catalog vocabulary (close variants are allowed when the brief demands, but prefer catalog names),
 - honors the brief (focus, target duration; for periodized formats respect the given week X of N),
 - is realistic, safe, and coherent for a single class.
+
+CATEGORY DISCIPLINE — respect the payload's "category"; never turn a strength class into a metcon or vice versa:
+- "strength": the primary_lift and superset blocks MUST be resistance/strength movements (barbell, dumbbell, kettlebell, machine, bodyweight strength). Do NOT put steady-state cardio (rower/erg, run, bike, ski, sled intervals) in those blocks — cardio only belongs in a warmup or an optional finisher.
+- "conditioning" / "endurance": center the work on circuits, intervals, AMRAP, ergs/runs; strength movements appear only as accessory or finisher volume, not as the spine.
+- Match the category to what the coach's own examples show.
+
+NOVELTY — the payload's "recent" lists classes ALREADY recommended to this coach for this class type (title, focus, movements). Produce something meaningfully DIFFERENT from every entry: choose a different primary lift / focus and rotate the movement selection so the coach is not handed the same class again. Do not reuse a recent title, and avoid leaning on the same primary movements as the most recent entries. Stay within the coach's style and category while varying the specifics.
 
 Output the SAME shape the extractor produces:
 { "title": string, "plan": ${"{ \"blocks\": [ ... ] }"} }
@@ -197,10 +204,12 @@ serve(async (req) => {
       const payload = {
         coach: body?.persona || {},
         classType: body.classType,
+        category: body?.category || "mixed",
         brief: body?.brief || {},
         profile: body?.profile || {},
         catalog: Array.isArray(body?.catalog) ? body.catalog : [],
         examples: Array.isArray(body?.examples) ? body.examples : [],
+        recent: Array.isArray(body?.recent) ? body.recent : [],
       };
       prompt = `Generate a new "${body.classType}" class in this coach's style. Payload:\n${JSON.stringify(payload)}`;
     }

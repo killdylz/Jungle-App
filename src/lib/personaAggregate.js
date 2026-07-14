@@ -61,6 +61,34 @@ export function aggregateClassType(plans, classType) {
   return { classType, planCount: ctPlans.length, structure, schemes, defaults: { rir, restByRole } };
 }
 
+// Coarse training category for a class type, derived from its block roles, scheme
+// mix and movement equipment/targets. Drives (a) which Builder class type is auto-
+// selected on push and (b) in-category discipline during generation (no cardio in a
+// strength class). Returns "strength" | "conditioning" | "endurance" | "mixed".
+const ENDURANCE_RE = /\berg|row(?:ing|er)?|run(?:ning)?|ski|bike|assault|echo|sled|prowler|\d+\s?k\b|\d+\s?km|\d+\s?m\b|\d+\s?mi|meter|metre|calorie|\bcals?\b/i;
+export function classCategory(plans, classType) {
+  const ctPlans = (plans || []).filter(pl => classTypeOf(pl) === classType);
+  const blocks = ctPlans.flatMap(pl => pl.plan?.blocks || []);
+  if (!blocks.length) return "mixed";
+  let strength = 0, cond = 0, endur = 0;
+  blocks.forEach(b => {
+    const role = b.role || "circuit";
+    const type = b.scheme?.type;
+    if (role === "primary_lift" || role === "superset") strength += 2;
+    if (role === "circuit" || role === "finisher") cond += 1;
+    if (type === "sets_reps") strength += 1;
+    if (type === "amrap" || type === "interval" || type === "rounds") cond += 1;
+    if (type === "time") endur += 1;
+    (b.exercises || []).forEach(ex => {
+      if (ENDURANCE_RE.test(`${ex.name || ""} ${ex.equip || ""} ${ex.target || ""}`)) endur += 1;
+    });
+  });
+  if (Math.max(strength, cond, endur) === 0) return "mixed";
+  if (strength >= cond && strength >= endur) return "strength";
+  if (endur > cond && endur >= 3) return "endurance";
+  return "conditioning";
+}
+
 function aliasIndex(catalog) {
   const idx = new Map();
   (catalog || []).forEach(m => {

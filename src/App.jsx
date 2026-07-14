@@ -7,7 +7,7 @@ import * as store from "./lib/store.js";
 import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
-import { classTypesOf, aggregateClassType, aggregateMovements } from "./lib/personaAggregate.js";
+import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -7834,6 +7834,10 @@ async function runDjOrchestrator(stages, selectedPlaylistIds, setStages, setDjPr
 const ROLE_TO_STAGE = { warmup:"warmup", primary_lift:"strength", superset:"strength",
                         circuit:"circuit", finisher:"circuit", cooldown:"cooldown", recovery:"recovery" };
 const ROLE_DUR_SEC  = { warmup:300, primary_lift:900, superset:600, circuit:600, finisher:480, cooldown:300, recovery:300 };
+// Persona class-type category → Builder class-type key (each must exist in WORKOUT_LIBRARY).
+// Item 9: a persona pushed to the Builder lands on the right class type, not "untyped".
+const CATEGORY_TO_BUILDER = { strength:"strength", conditioning:"circuit", endurance:"hyrox", mixed:"bootcamp" };
+const CATEGORY_LABEL = { strength:"Strength", conditioning:"Conditioning", endurance:"Endurance", mixed:"Mixed" };
 function planToStages(plan) {
   const blocks = plan?.blocks || [];
   return blocks.map(b => {
@@ -7861,6 +7865,9 @@ const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
 const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
 const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
+// Distinct exercise names across a plan's blocks — the novelty signature stored in
+// the generation ledger and used to steer the next generation away from repeats.
+const blockMovementNames = blocks => { const s = new Set(); (blocks||[]).forEach(b => (b.exercises||[]).forEach(ex => { const n=(ex.name||"").trim(); if (n) s.add(n); })); return [...s]; };
 
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
@@ -7874,6 +7881,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const [personas, setPersonas] = useState(() => store.getPersonas());
   const [plans, setPlans]       = useState(() => store.getPersonaPlans());
   const [movements, setMovements] = useState(() => store.getPersonaMovements());
+  const [generations, setGenerations] = useState(() => store.getPersonaGenerations());
   const [selectedId, setSelectedId] = useState(() => store.getPersonas()[0]?.id || null);
   const [activeCT, setActiveCT] = useState(null);
   const [form, setForm] = useState({ name:"", kind:"coach", description:"" });
@@ -7896,6 +7904,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     store.hydratePersonas().then(r => {
       if (!alive || !r) return;
       setPersonas(r.personas); setPlans(r.plans); setMovements(r.movements || []);
+      if (r.generations) setGenerations(r.generations);
       setSelectedId(id => id || r.personas[0]?.id || null);
     });
     return () => { alive = false; };
@@ -7951,7 +7960,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const removePersona = id => {
     const r = store.deletePersona(id);
     const moves = store.savePersonaMovements(store.getPersonaMovements().filter(m => m.personaId !== id));
-    setPersonas(r.personas); setPlans(r.plans); setMovements(moves);
+    const gens = store.getPersonaGenerations().filter(g => g.personaId !== id); // server rows cascade via FK
+    store.savePersonaGenerations(gens);
+    setPersonas(r.personas); setPlans(r.plans); setMovements(moves); setGenerations(gens);
     if (selectedId === id) setSelectedId(r.personas[0]?.id || null);
   };
   const seedSample = () => {
@@ -8039,12 +8050,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const curCT = (activeCT && classTypes.includes(activeCT)) ? activeCT : (classTypes[0] || null);
   const ctPlans = selPlans.filter(pl => ctOf(pl) === curCT);
   const prof = curCT ? aggregateClassType(selPlans, curCT) : null;
+  const category = curCT ? classCategory(selPlans, curCT) : "mixed";
+  const builderClass = CATEGORY_TO_BUILDER[category] || "bootcamp";
+  const recentGens = generations.filter(g => g.personaId === selectedId && g.classType === curCT);
   const ctMoves = movements.filter(m => m.personaId === selectedId && (m.classTypes?.[curCT] || 0) > 0);
   const extracted = selected?.styleProfile?.byClassType?.[curCT] || {};
   const countFor = id => plans.filter(pl => pl.personaId === id).length;
   // Deterministic fallback: seed the Builder from the coach's most recent plan for
   // this class type. Used when the Edge Function is absent or errors.
-  const draftFromRecent = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — draft`); };
+  const draftFromRecent = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — draft`, builderClass); };
   // True in-style generation: persona-ai (task:"generate") grounded on the derived
   // profile + movement catalog + a few past plans + the brief. Falls back to
   // draftFromRecent when Supabase is off or the function errors.
@@ -8058,6 +8072,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         task: "generate",
         persona: { name: selected?.name || "", kind: selected?.kind || "coach" },
         classType: curCT,
+        category,
         brief: {
           focus: brief.focus.trim(),
           durationMin: Number(brief.durationMin) || undefined,
@@ -8067,6 +8082,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         profile: prof,
         catalog: ctMoves.map(m => ({ name: m.name, equip: m.equip || "", aliases: m.aliases || [] })),
         examples: ctPlans.slice(0, 3).map(pl => ({ title: pl.title, focus: pl.focus || "", plan: pl.plan })),
+        // Items 6–8: what's already been recommended to THIS coach for THIS class type,
+        // so the model produces something meaningfully different.
+        recent: generations.filter(g => g.personaId === selectedId && (g.classType || "") === curCT)
+                  .slice(0, 6).map(g => ({ title: g.title, focus: g.focus, movements: (g.movements || []).slice(0, 12) })),
       };
       const { data, error } = await supabase.functions.invoke("persona-ai", { body: payload });
       if (error) throw error;
@@ -8074,7 +8093,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       const blocks = data?.plan?.blocks || [];
       if (!blocks.length) throw new Error("no blocks came back");
       const label = data.title || `${curCT}${brief.focus.trim() ? " — " + brief.focus.trim() : " — generated"}`;
-      onDraftToBuilder(planToStages({ blocks }), label);
+      // Record the recommendation so the next generation for this coach avoids repeating it.
+      setGenerations(store.appendPersonaGeneration({ personaId: selectedId, classType: curCT, category,
+        title: label, focus: brief.focus.trim(), brief: payload.brief, movements: blockMovementNames(blocks), plan: { blocks } }));
+      onDraftToBuilder(planToStages({ blocks }), label, builderClass);
       setShowGen(false);
     } catch (e) {
       setGenErr(`Generation failed: ${e.message || e}. Drafted from the most recent plan instead.`);
@@ -8235,7 +8257,11 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   {/* Class-type profile */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
-                      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
+                      <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+                        <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
+                        <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CATEGORY_LABEL[category]}</Tag>
+                        <span style={{fontSize:"11px",color:"var(--muted)"}}>→ builds as <b style={{color:"var(--text)"}}>{WORKOUT_LIBRARY[builderClass]?.label||builderClass}</b></span>
+                      </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>
                     {showGen && (
@@ -8258,6 +8284,21 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                       </div>
                     )}
                     <PersonaProfilePanel prof={prof} extracted={extracted}/>
+                    {recentGens.length > 0 && (
+                      <div style={{marginTop:"14px",paddingTop:"14px",borderTop:"1px solid var(--border)"}}>
+                        <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>Recently generated · {recentGens.length}</p>
+                        <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+                          {recentGens.slice(0,4).map(g => (
+                            <div key={g.id} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px"}}>
+                              <span style={{flex:1,minWidth:0,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.title}</span>
+                              <span style={{color:"var(--muted)",fontSize:"11px",flexShrink:0}}>{g.createdAt ? new Date(g.createdAt).toLocaleDateString() : ""}</span>
+                              <button onClick={()=>onDraftToBuilder(planToStages(g.plan), g.title, builderClass)} title="Re-open this draft in the Builder" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"600",padding:"3px 8px",flexShrink:0}}>Reopen</button>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>New generations are steered to differ from these.</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Movement catalog */}
@@ -8279,7 +8320,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                             <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {pl.source}</div>
                           </div>
                           <button onClick={()=>setEditingPlan(pl)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
-                          <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
+                          <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
                           <button onClick={()=>removePlan(pl.id)} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                         </div>
                       );
@@ -8861,10 +8902,17 @@ export default function App() {
   };
   // Workstream D: draft a persona plan's blocks into the Builder as an editable
   // starting session (coach edits + approves — the hard gate before it's a class).
-  const handleDraftFromPersona = (draftStages, name) => {
+  const handleDraftFromPersona = (draftStages, name, builderClass) => {
     if (!draftStages?.length) return;
     setStages(draftStages);
     setSessionName(name || "Persona draft");
+    // Item 9: land on the right Builder class type (strength/circuit/hyrox…) so the
+    // header + BPM targets match. Sets the selector only — does NOT apply a template,
+    // so the drafted persona stages are preserved.
+    if (builderClass && WORKOUT_LIBRARY[builderClass]) {
+      const sub = Object.keys(WORKOUT_LIBRARY[builderClass].subTypes || {})[0] || null;
+      setClassChoice({ classType: builderClass, subType: sub });
+    }
     setView("builder");
   };
   const handleSelectClassStyle = (ctk, stk) => {
