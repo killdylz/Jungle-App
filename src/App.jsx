@@ -7884,6 +7884,12 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const [planErr, setPlanErr] = useState("");
   const [editingPlan, setEditingPlan] = useState(null);
   const [slidesNote, setSlidesNote] = useState(false);
+  const [planMode, setPlanMode] = useState("json"); // "json" = paste extraction JSON · "text" = paste deck text → LLM extract
+  const [planBusy, setPlanBusy] = useState(false);
+  const [showGen, setShowGen] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genErr, setGenErr] = useState("");
+  const [brief, setBrief] = useState({ focus:"", durationMin:"45", weekX:"", weekN:"" });
 
   useEffect(() => {
     let alive = true;
@@ -7990,6 +7996,34 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     setShowAddPlan(false);
     if (ct) setActiveCT(ct);
   };
+  // Paste raw deck text → persona-ai (task:"extract") turns it into the { blocks }
+  // shape and folds it into the corpus. Needs the Edge Function; JSON paste is the
+  // offline fallback. In "text" mode planForm.json holds the raw text.
+  const extractAndAdd = async () => {
+    setPlanErr("");
+    const text = (planForm.json || "").trim();
+    if (!text) { setPlanErr("Paste the deck text to extract."); return; }
+    if (!(supabaseEnabled && supabase)) { setPlanErr("Extraction needs the persona-ai Edge Function. Switch to Paste JSON, or deploy it first."); return; }
+    setPlanBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("persona-ai", { body: {
+        task: "extract", text, classType: planForm.classType.trim(), title: planForm.title.trim(), focus: planForm.focus.trim() } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const blocks = data?.plan?.blocks || [];
+      if (!blocks.length) throw new Error("no blocks came back");
+      const ct = (planForm.classType.trim() || data.classType || "").trim();
+      const pl = { id: store.newId(), personaId: selectedId, source: "extract", sourceRef: "",
+                   title: planForm.title.trim() || data.title || "Untitled plan", classType: ct,
+                   focus: planForm.focus.trim() || data.focus || "", planDate: "", plan: { blocks } };
+      commitPlans([...plans, pl]);
+      setPlanForm({ title:"", classType:"", focus:"", json:"" });
+      setShowAddPlan(false);
+      if (ct) setActiveCT(ct);
+    } catch (e) {
+      setPlanErr(`Extraction failed: ${e.message || e}. Switch to Paste JSON to add it manually.`);
+    } finally { setPlanBusy(false); }
+  };
   const savePlanEdit = updated => { commitPlans(plans.map(pl => pl.id === updated.id ? updated : pl)); setEditingPlan(null); };
   const removePlan = id => commitPlans(store.deletePersonaPlan(id));
 
@@ -8008,7 +8042,45 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const ctMoves = movements.filter(m => m.personaId === selectedId && (m.classTypes?.[curCT] || 0) > 0);
   const extracted = selected?.styleProfile?.byClassType?.[curCT] || {};
   const countFor = id => plans.filter(pl => pl.personaId === id).length;
-  const generateForCT = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — generated draft`); };
+  // Deterministic fallback: seed the Builder from the coach's most recent plan for
+  // this class type. Used when the Edge Function is absent or errors.
+  const draftFromRecent = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — draft`); };
+  // True in-style generation: persona-ai (task:"generate") grounded on the derived
+  // profile + movement catalog + a few past plans + the brief. Falls back to
+  // draftFromRecent when Supabase is off or the function errors.
+  const generateForCT = async () => {
+    if (!curCT || !prof) return;
+    setGenErr("");
+    if (!(supabaseEnabled && supabase)) { draftFromRecent(); setShowGen(false); return; }
+    setGenBusy(true);
+    try {
+      const payload = {
+        task: "generate",
+        persona: { name: selected?.name || "", kind: selected?.kind || "coach" },
+        classType: curCT,
+        brief: {
+          focus: brief.focus.trim(),
+          durationMin: Number(brief.durationMin) || undefined,
+          weekX: brief.weekX ? Number(brief.weekX) : undefined,
+          weekN: brief.weekN ? Number(brief.weekN) : undefined,
+        },
+        profile: prof,
+        catalog: ctMoves.map(m => ({ name: m.name, equip: m.equip || "", aliases: m.aliases || [] })),
+        examples: ctPlans.slice(0, 3).map(pl => ({ title: pl.title, focus: pl.focus || "", plan: pl.plan })),
+      };
+      const { data, error } = await supabase.functions.invoke("persona-ai", { body: payload });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const blocks = data?.plan?.blocks || [];
+      if (!blocks.length) throw new Error("no blocks came back");
+      const label = data.title || `${curCT}${brief.focus.trim() ? " — " + brief.focus.trim() : " — generated"}`;
+      onDraftToBuilder(planToStages({ blocks }), label);
+      setShowGen(false);
+    } catch (e) {
+      setGenErr(`Generation failed: ${e.message || e}. Drafted from the most recent plan instead.`);
+      draftFromRecent();
+    } finally { setGenBusy(false); }
+  };
 
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -8102,22 +8174,38 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
                   <button onClick={()=>setSlidesNote(s=>!s)} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:"transparent",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"6px 12px"}}><Upload size={13}/> Import from Google Slides</button>
                 </div>
-                {slidesNote && <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Google Slides import lands in the next build (chunk 3): connect a coach's Slides folder → decks are extracted into plans automatically. For now, paste a deck's extraction JSON via <b>Add plan</b>.</p>}
+                {slidesNote && <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Direct Google Slides import lands in a later build (chunk 3): connect a coach's Slides folder → decks are extracted automatically. Until then, open a deck, copy its text, and use <b>Add plan → Paste deck text</b> — persona-ai extracts the blocks, schemes and movements for you.</p>}
               </div>
 
               {showAddPlan && (
                 <div style={{...P_CARD,padding:"16px",background:"var(--navy)"}}>
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"8px",marginBottom:"8px"}}>
-                    <Input placeholder="Title" value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))}/>
-                    <Input placeholder="Class type (S360…)" value={planForm.classType} onChange={e=>setPlanForm(f=>({...f,classType:e.target.value}))}/>
-                    <Input placeholder="Focus" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
+                  <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
+                    {[["text","Paste deck text"],["json","Paste JSON"]].map(([m,lbl]) => {
+                      const on = planMode === m;
+                      return (
+                        <button key={m} onClick={()=>{setPlanMode(m);setPlanErr("");}} style={{
+                          padding:"5px 12px",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:on?"700":"600",
+                          border:`1px solid ${on?"var(--accent)":"var(--border)"}`,
+                          background:on?"color-mix(in srgb, var(--accent) 13%, transparent)":"transparent",
+                          color:on?"var(--accent)":"var(--muted)"}}>{lbl}</button>
+                      );
+                    })}
                   </div>
-                  <textarea placeholder='Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"8px",marginBottom:"8px"}}>
+                    <Input placeholder="Title (optional)" value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))}/>
+                    <Input placeholder="Class type (S360…)" value={planForm.classType} onChange={e=>setPlanForm(f=>({...f,classType:e.target.value}))}/>
+                    <Input placeholder="Focus (optional)" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
+                  </div>
+                  <textarea placeholder={planMode==="text"
+                    ? "Paste the deck's text / coach notes — persona-ai extracts the blocks, schemes and movements. The class-type hint above helps."
+                    : 'Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'}
                     value={planForm.json} onChange={e=>setPlanForm(f=>({...f,json:e.target.value}))}
-                    style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:"monospace",outline:"none",resize:"vertical"}}/>
+                    style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:planMode==="json"?"monospace":"inherit",outline:"none",resize:"vertical"}}/>
                   {planErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{planErr}</p>}
-                  <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
-                    <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>
+                  <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center"}}>
+                    {planMode==="text"
+                      ? <Btn onClick={extractAndAdd} disabled={planBusy}>{planBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {planBusy ? "Extracting…" : "Extract & add"}</Btn>
+                      : <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>}
                     <Btn variant="ghost" onClick={()=>{setShowAddPlan(false);setPlanErr("");}}>Cancel</Btn>
                   </div>
                 </div>
@@ -8148,8 +8236,27 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
                       <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
-                      <Btn onClick={generateForCT} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
+                      <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>
+                    {showGen && (
+                      <div style={{marginBottom:"14px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
+                        <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>New {curCT} class — brief</p>
+                        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:"8px",marginBottom:"8px"}}>
+                          <Input placeholder="Focus — e.g. Deadlift · Engine · Upper hypertrophy" value={brief.focus} onChange={e=>setBrief(b=>({...b,focus:e.target.value}))}/>
+                          <Input placeholder="Duration (min)" type="number" value={brief.durationMin} onChange={e=>setBrief(b=>({...b,durationMin:e.target.value}))}/>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                          <Input placeholder="Week X (periodized, optional)" type="number" value={brief.weekX} onChange={e=>setBrief(b=>({...b,weekX:e.target.value}))}/>
+                          <Input placeholder="of N weeks (optional)" type="number" value={brief.weekN} onChange={e=>setBrief(b=>({...b,weekN:e.target.value}))}/>
+                        </div>
+                        {genErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{genErr}</p>}
+                        <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center"}}>
+                          <Btn onClick={generateForCT} disabled={genBusy}>{genBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {genBusy ? "Generating…" : "Generate in style"}</Btn>
+                          <Btn variant="ghost" onClick={draftFromRecent}><Layers size={13}/> Draft from recent</Btn>
+                        </div>
+                        <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Grounded on this coach's {curCT} structure, schemes and movement vocabulary. Opens as an editable draft in the Builder.</p>
+                      </div>
+                    )}
                     <PersonaProfilePanel prof={prof} extracted={extracted}/>
                   </div>
 
