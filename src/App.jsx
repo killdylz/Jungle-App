@@ -9,7 +9,7 @@ import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
-import { slidesEnabled, getSlidesToken, parseFolderId, listPresentations, fetchPresentationText } from "./lib/slidesImport.js";
+import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText } from "./lib/slidesImport.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
@@ -7187,18 +7187,19 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   };
   const listSlideDecks = async () => {
     setSlidesErr("");
-    const folderId = parseFolderId(slidesFolder);
-    if (!folderId) { setSlidesErr("Paste the coach's Drive folder link (or its ID)."); return; }
+    if (!parseDriveId(slidesFolder)) { setSlidesErr("Paste the coach's Drive folder link, a Slides deck link, or its ID."); return; }
     setSlidesBusy("list");
     try {
       const token = await getSlidesToken();
-      const decks = await listPresentations(token, folderId);
+      // The pasted link may be a whole folder OR one deck — Drive tells us which.
+      const target = await resolveDriveTarget(token, slidesFolder);
+      const decks = target.kind === "presentation" ? [target.deck] : await listPresentations(token, target.id);
       setSlideDecks(decks);
       setDeckSel(new Set(decks.filter(d => !importedRefs.has(d.id)).map(d => d.id)));
       if ((selected?.styleProfile?.slidesFolder || "") !== slidesFolder.trim())
         commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: { ...(p.styleProfile || {}), slidesFolder: slidesFolder.trim() } } : p));
       if (!decks.length) setSlidesErr("No Google Slides decks found in that folder.");
-    } catch (e) { setSlidesErr(`Couldn't list the folder: ${e.message || e}`); }
+    } catch (e) { setSlidesErr(`Couldn't read that link: ${e.message || e}`); }
     finally { setSlidesBusy(""); }
   };
   const importSlideDecks = async () => {
@@ -7332,9 +7333,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Slides import isn't configured in this build (<b>VITE_GOOGLE_SLIDES_CLIENT_ID</b> missing at build time). Use <b>Add plan → Paste deck text</b> instead.</p>
                 ) : (
                   <div style={{marginTop:"12px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
-                    <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>Import from this coach's Drive folder</p>
+                    <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>Import from this coach's Google Slides</p>
                     <div style={{display:"flex",gap:"8px",flexWrap:isMobile?"wrap":"nowrap"}}>
-                      <Input placeholder="Drive folder link — https://drive.google.com/drive/folders/…" value={slidesFolder}
+                      <Input placeholder="Drive folder link or a single deck link — drive.google.com/drive/folders/… or docs.google.com/presentation/d/…" value={slidesFolder}
                              onChange={e=>setSlidesFolder(e.target.value)} style={{flex:"1 1 240px"}}/>
                       <Btn onClick={listSlideDecks} disabled={!!slidesBusy} style={{flexShrink:0}}>
                         {slidesBusy==="list" ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Search size={14}/>} {slidesBusy==="list" ? "Listing…" : "List decks"}

@@ -53,15 +53,33 @@ export async function getSlidesToken() {
   });
 }
 
-// ── Drive: list the presentations in a folder ──────────────────────────────
-// Accepts a raw folder ID or any Drive folder URL
-// (…/drive/folders/<id>, …?id=<id>, …/drive/u/0/folders/<id>?usp=…).
-export function parseFolderId(input) {
+// ── Drive: resolve whatever the coach pastes ───────────────────────────────
+// Accepts a folder URL (…/drive/folders/<id>), a presentation URL
+// (docs.google.com/presentation/d/<id>/edit…), any …/d/<id> or ?id=<id> link,
+// or a bare ID. Returns just the ID — resolveDriveTarget then asks Drive what
+// it actually is (a bare ID could be either a folder or a single deck).
+export function parseDriveId(input) {
   const s = (input || "").trim();
   if (!s) return "";
-  const m = s.match(/\/folders\/([A-Za-z0-9_-]+)/) || s.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  const m = s.match(/\/folders\/([A-Za-z0-9_-]+)/)
+         || s.match(/\/d\/([A-Za-z0-9_-]+)/)
+         || s.match(/[?&]id=([A-Za-z0-9_-]+)/);
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{10,}$/.test(s) ? s : "";
+}
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+const SLIDES_MIME = "application/vnd.google-apps.presentation";
+
+// One files.get tells us whether the pasted link is a whole folder or a single
+// deck: { kind:"folder", id } or { kind:"presentation", deck:{id,name,modifiedTime} }.
+export async function resolveDriveTarget(token, input) {
+  const id = parseDriveId(input);
+  if (!id) throw new Error("Paste a Drive folder link, a Slides deck link, or its ID.");
+  const f = await gapi(token, `https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,mimeType,modifiedTime`);
+  if (f.mimeType === FOLDER_MIME) return { kind: "folder", id: f.id };
+  if (f.mimeType === SLIDES_MIME) return { kind: "presentation", deck: { id: f.id, name: f.name, modifiedTime: f.modifiedTime || "" } };
+  throw new Error(`That link is a ${f.mimeType?.split(".").pop() || "file"}, not a folder or Slides deck.`);
 }
 
 async function gapi(token, url) {
