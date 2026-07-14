@@ -26,6 +26,17 @@ function median(arr) {
 }
 function totalCount(ct) { return Object.values(ct || {}).reduce((a, b) => a + b, 0); }
 
+// RPE for a scheme. First-class scheme.rpe (increment 3) with a fallback parse
+// from scheme.note, where earlier extractions put it ("RPE 7", "@ RPE 7-8" —
+// ranges land on their midpoint). Lets pre-increment-3 corpora feed RPE
+// defaults without re-extraction.
+function rpeOf(scheme) {
+  if (scheme?.rpe != null && !Number.isNaN(Number(scheme.rpe))) return Number(scheme.rpe);
+  const m = (scheme?.note || "").match(/\bRPE\s*:?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?/i);
+  if (!m) return null;
+  return m[2] ? (Number(m[1]) + Number(m[2])) / 2 : Number(m[1]);
+}
+
 // Distinct class types present in a persona's plans, first-seen order.
 export function classTypesOf(plans) {
   const seen = [];
@@ -53,12 +64,13 @@ export function aggregateClassType(plans, classType) {
   const schemes = [...schemeMap.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
   // defaults
   const rir = mode(blocks.map(b => b.scheme?.rir).filter(v => v != null));
+  const rpe = mode(blocks.map(b => rpeOf(b.scheme)).filter(v => v != null));
   const restByRole = {};
   ROLE_ORDER.forEach(role => {
     const md = median(blocks.filter(b => (b.role || "circuit") === role).map(b => b.scheme?.rest_sec));
     if (md != null) restByRole[role] = md;
   });
-  return { classType, planCount: ctPlans.length, structure, schemes, defaults: { rir, restByRole } };
+  return { classType, planCount: ctPlans.length, structure, schemes, defaults: { rir, rpe, restByRole } };
 }
 
 // Coarse training category for a class type, derived from its block roles, scheme
@@ -100,7 +112,8 @@ function aliasIndex(catalog) {
 function commonScheme(schemes) {
   if (!schemes.length) return {};
   const out = { type: mode(schemes.map(s => s.type)), sets: mode(schemes.map(s => s.sets).filter(v => v != null)),
-                rir: mode(schemes.map(s => s.rir).filter(v => v != null)), rest_sec: median(schemes.map(s => s.rest_sec)) };
+                rir: mode(schemes.map(s => s.rir).filter(v => v != null)), rpe: mode(schemes.map(rpeOf).filter(v => v != null)),
+                rest_sec: median(schemes.map(s => s.rest_sec)) };
   Object.keys(out).forEach(k => (out[k] == null) && delete out[k]);
   return out;
 }
@@ -133,11 +146,14 @@ export function aggregateMovements(plans, catalog = []) {
     const equip = ex?.equip || mode(Object.entries(d.equipVotes).flatMap(([k, n]) => Array(n).fill(k))) || "";
     if (ex) {
       usedExisting.add(norm(canon));
+      // Local shape is camelCase (store maps to common_scheme on sync) — emitting
+      // snake_case here previously hid the derived scheme from the catalog UI and
+      // let savePersonaMovements clobber it to {} server-side.
       out.push({ ...ex, equip, classTypes: d.classTypes,
-                 common_scheme: ex.meta?._schemeEdited ? ex.common_scheme : commonScheme(d.schemes) });
+                 commonScheme: ex.meta?._schemeEdited ? (ex.commonScheme || ex.common_scheme) : commonScheme(d.schemes) });
     } else {
       out.push({ id: null, personaId: (catalog[0]?.personaId) || null, name: canon, aliases: [], equip,
-                 classTypes: d.classTypes, common_scheme: commonScheme(d.schemes), glossaryRef: "", meta: {} });
+                 classTypes: d.classTypes, commonScheme: commonScheme(d.schemes), glossaryRef: "", meta: {} });
     }
   });
   (catalog || []).forEach(m => {

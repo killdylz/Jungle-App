@@ -39,8 +39,9 @@ const BLOCK_SCHEMA = `A plan is { "blocks": [ Block, ... ] }. Each Block:
     "sets": number | null,
     "reps": [numbers] | [],   // rep ladder, e.g. [12,10,10,8]; [] if not rep-based
     "rir": number | null,     // reps in reserve
+    "rpe": number | null,     // rate of perceived exertion 1-10; a range like "RPE 7-8" -> its midpoint 7.5
     "rest_sec": number | null,// rest between sets/rounds, in SECONDS
-    "note": string            // scheme note, e.g. "1st set as primer", "AMRAP 8min", "RPE 7"
+    "note": string            // scheme note, e.g. "1st set as primer", "AMRAP 8min", tempo codes like "31X1"
   },
   "exercises": [
     {
@@ -67,10 +68,12 @@ Shape:
 ${BLOCK_SCHEMA}
 
 Rules:
-- Preserve rep ladders exactly ("12-10-10-8" -> reps:[12,10,10,8]).
-- Roles: warmups -> "warmup"; the main barbell/primary movement -> "primary_lift"; antagonist/paired supersets (A1+A2, B1+B2) -> "superset" with the pairing in "rotation"; conditioning circuits / AMRAP / intervals -> "circuit"; closing finishers -> "finisher"; cooldowns -> "cooldown".
-- Convert rest given in minutes to seconds. Capture RIR, per-side, regressions, targets, erg distances, intervals, AMRAP. Put RPE in scheme.note.
-- Use the caller's classType hint when provided. NEVER invent exercises that are not in the source text.`;
+- Preserve rep ladders exactly ("12-10-10-8" -> reps:[12,10,10,8]). "3x10" -> sets:3, reps:[10]. "4 x 8-10" -> sets:4, reps:[8], note:"8-10 reps".
+- Roles: warmups -> "warmup"; the main barbell/primary movement -> "primary_lift"; antagonist/paired supersets (A1+A2, B1+B2 — pair them even when the word "superset" never appears) -> "superset" with the pairing in "rotation"; conditioning circuits / AMRAP / intervals -> "circuit"; closing finishers -> "finisher"; cooldowns -> "cooldown".
+- Numbers land in their FIELD, not in notes: rest in rest_sec (minutes -> SECONDS), RIR in rir, RPE in rpe (a range like "RPE 7-8" -> 7.5). Tempo codes ("31X1", "3-1-X-1") go in scheme.note.
+- Every distinct movement line/station is ONE exercise, in source order — never merge two movements into one name, never split one movement into two. Distances, calories, meters and time caps go in that exercise's "target" (e.g. "500m", "15 cal", "40s on"); "each side"/"e/s" -> per_side:true; an easier option ("or", "scale to", "regression:") -> "regression".
+- Ignore non-programming content: title/branding slides, hype quotes, logistics, playlists, coach bios. Extract ONLY the workout.
+- Use the caller's classType hint when provided. NEVER invent exercises that are not in the source text; keep each exercise's name as the coach wrote it (expand only obvious abbreviations like "DB"/"KB"/"BB").`;
 
 const GENERATE_SYSTEM = `You draft a NEW class plan in a specific coach's established style. Output ONLY a JSON object — no markdown fences, no prose.
 
@@ -78,7 +81,7 @@ You are given (as a JSON payload in the user message): the coach and class type,
 
 Produce a new plan that:
 - follows the coach's typical block structure and ORDER for this class type,
-- reuses their scheme conventions (sets / rep ladders / RIR / rest, superset rotations, intervals / AMRAP where they use them),
+- reuses their scheme conventions (sets / rep ladders / RIR / RPE / rest, superset rotations, intervals / AMRAP where they use them),
 - draws movements primarily from the provided catalog vocabulary (close variants are allowed when the brief demands, but prefer catalog names),
 - honors the brief (focus, target duration; for periodized formats respect the given week X of N),
 - is realistic, safe, and coherent for a single class.

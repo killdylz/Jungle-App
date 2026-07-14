@@ -7844,11 +7844,17 @@ function planToStages(plan) {
   return blocks.map(b => {
     const sc = b.scheme || {};
     const restLabel = sc.rest_sec ? `${sc.rest_sec}s` : "";
+    // Intensity + scheme qualifiers ride into the Builder on each exercise's notes
+    // (stages have no block-level scheme fields).
+    const schemeBits = [sc.rir != null ? `RIR ${sc.rir}` : "", sc.rpe != null ? `RPE ${sc.rpe}` : "",
+                        sc.note || ""].filter(Boolean);
     const exercises = (b.exercises || []).map(ex => {
-      const reps = ex.reps != null ? String(ex.reps)
+      // ex.reps is "" (schema default) when the block scheme's ladder applies —
+      // only a non-empty per-exercise value overrides it.
+      const reps = (ex.reps != null && String(ex.reps).trim() !== "") ? String(ex.reps)
                  : (Array.isArray(sc.reps) && sc.reps.length ? sc.reps.join("-") : "");
       const notes = [ex.per_side ? "per side" : "", ex.regression ? `regress: ${ex.regression}` : "",
-                     ex.equip || "", ex.target ? `target: ${ex.target}` : ""].filter(Boolean).join(" · ");
+                     ex.equip || "", ex.target ? `target: ${ex.target}` : "", ...schemeBits].filter(Boolean).join(" · ");
       return { n: ex.name || "Movement", s: sc.sets != null ? String(sc.sets) : "",
                r: reps, rest: restLabel, notes };
     });
@@ -7865,7 +7871,7 @@ const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Su
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
 const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
-const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
+const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rpe!=null?`RPE ${sc.rpe}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
 // Distinct exercise names across a plan's blocks — the novelty signature stored in
 // the generation ledger and used to steer the next generation away from repeats.
 const blockMovementNames = blocks => { const s = new Set(); (blocks||[]).forEach(b => (b.exercises||[]).forEach(ex => { const n=(ex.name||"").trim(); if (n) s.add(n); })); return [...s]; };
@@ -8477,11 +8483,12 @@ function PersonaProfilePanel({ prof, extracted }) {
       ) : null}
       {chips("Conventions", extracted.conventions)}
       {chips("Vocabulary", extracted.vocabulary)}
-      {(prof.defaults?.rir != null || restEntries.length) ? (
+      {(prof.defaults?.rir != null || prof.defaults?.rpe != null || restEntries.length) ? (
         <div>
           <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Defaults</div>
           <div>
             {prof.defaults?.rir != null && <span style={P_CHIP}>RIR {prof.defaults.rir}</span>}
+            {prof.defaults?.rpe != null && <span style={P_CHIP}>RPE {prof.defaults.rpe}</span>}
             {restEntries.map(([role,sec])=><span key={role} style={P_CHIP}>{ROLE_LABEL[role]||role} rest {fmtRest(sec)}</span>)}
           </div>
         </div>
@@ -8555,6 +8562,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
   const rmBlock  = i => setBlocks(bs => bs.filter((_,j)=>j!==i));
   const move     = (i,d) => setBlocks(bs => { const n=[...bs]; const j=i+d; if(j<0||j>=n.length) return n; [n[i],n[j]]=[n[j],n[i]]; return n; });
   const num = v => { const n = parseInt(v,10); return Number.isNaN(n) ? undefined : n; };
+  const numF = v => { const n = parseFloat(v); return Number.isNaN(n) ? undefined : n; }; // RPE allows halves (7.5)
   const iconBtn = { background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"13px",fontWeight:"700",padding:"3px 9px",lineHeight:1 };
   const lbl = { fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:"3px" };
   return (
@@ -8578,7 +8586,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
               <button onClick={()=>move(i,1)} title="Move down" style={iconBtn}>↓</button>
               <button onClick={()=>rmBlock(i)} title="Remove block" style={{...iconBtn,color:"var(--accent)"}}><Trash2 size={13}/></button>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1.2fr 1fr 0.7fr 0.7fr 0.9fr",gap:"6px",marginBottom:"10px"}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1.2fr 1fr 0.6fr 0.6fr 0.6fr 0.8fr",gap:"6px",marginBottom:"10px"}}>
               <div><label style={lbl}>Role</label>
                 <Select value={b.role||"circuit"} onChange={e=>upBlock(i,{role:e.target.value})}>
                   {["warmup","primary_lift","superset","circuit","finisher","recovery","cooldown"].map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
@@ -8592,6 +8600,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
               </div>
               <div><label style={lbl}>Sets</label><Input type="number" value={b.scheme?.sets??""} onChange={e=>upScheme(i,{sets:num(e.target.value)})}/></div>
               <div><label style={lbl}>RIR</label><Input type="number" value={b.scheme?.rir??""} onChange={e=>upScheme(i,{rir:num(e.target.value)})}/></div>
+              <div><label style={lbl}>RPE</label><Input type="number" step="0.5" value={b.scheme?.rpe??""} onChange={e=>upScheme(i,{rpe:numF(e.target.value)})}/></div>
               <div><label style={lbl}>Rest (s)</label><Input type="number" value={b.scheme?.rest_sec??""} onChange={e=>upScheme(i,{rest_sec:num(e.target.value)})}/></div>
             </div>
             {(b.exercises||[]).map((ex,k) => (
