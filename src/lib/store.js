@@ -28,7 +28,21 @@ const KEYS = {
   djFollow:      "dj_follow",
   djRequests:    "dj_requests",
   djClean:       "dj_clean",
+  personas:      "jungle_personas",
+  personaPlans:  "jungle_persona_plans",
 };
+
+// Client-generated UUID, used as the row PK on both coach_personas and
+// persona_plans so the persona→plans FK bridges cleanly in the local-first
+// flow (create locally, sync later, same id server-side). Prefers the native
+// generator; the fallback stays uuid-v4-shaped so Postgres accepts it.
+export function newId() {
+  try { return crypto.randomUUID(); } catch (_) {}
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 function readJSON(key, fallback) {
   try {
@@ -334,6 +348,97 @@ async function _hydratePrefs() {
     writeStr(KEYS.djClean, String(data.dj_clean_edits !== false));
     return { crossfade: data.crossfade ?? 0, templateTracks: data.template_tracks || {} };
   } catch (e) { console.warn("[store] hydrate prefs error:", e?.message || e); return null; }
+}
+
+// ── Coach personas (workstream D) → public.coach_personas / persona_plans ────
+// Persona-first planning. A persona is the unit you define up front; historical
+// class plans are attached to it as the corpus. Both tables are gym-scoped,
+// admin-write RLS (mirrors library/brand). Row PKs are client-generated (newId)
+// so persona.id === persona_plans.persona_id links locally and after sync.
+// Local persona shape: { id, name, kind, description, styleProfile:{}, profileUpdatedAt }
+// Local plan shape:    { id, personaId, source, sourceRef, title, classType, focus, planDate, plan:{blocks:[]} }
+export function getPersonas()     { return readJSON(KEYS.personas, []); }
+export function getPersonaPlans() { return readJSON(KEYS.personaPlans, []); }
+
+function _personaToRow(p) {
+  return { id: p.id, gym_id: _ctx.gymId, name: p.name, kind: p.kind || "coach",
+           description: p.description || null, style_profile: p.styleProfile || {},
+           profile_updated_at: p.profileUpdatedAt || null, created_by: _ctx.userId || null };
+}
+function _rowToPersona(r) {
+  return { id: r.id, name: r.name, kind: r.kind || "coach", description: r.description || "",
+           styleProfile: r.style_profile || {}, profileUpdatedAt: r.profile_updated_at || null };
+}
+function _planToRow(pl) {
+  return { id: pl.id, gym_id: _ctx.gymId, persona_id: pl.personaId, source: pl.source || "manual",
+           source_ref: pl.sourceRef || null, title: pl.title || null, class_type: pl.classType || null,
+           focus: pl.focus || null, plan_date: pl.planDate || null, plan: pl.plan || {},
+           created_by: _ctx.userId || null };
+}
+function _rowToPlan(r) {
+  return { id: r.id, personaId: r.persona_id, source: r.source || "manual", sourceRef: r.source_ref || "",
+           title: r.title || "", classType: r.class_type || "", focus: r.focus || "",
+           planDate: r.plan_date || "", plan: r.plan || {} };
+}
+
+// Upsert the whole persona list (local write + background push, onConflict id).
+export function savePersonas(personas) {
+  writeJSON(KEYS.personas, personas);
+  if (!_synced()) return;
+  const rows = (personas || []).map(_personaToRow);
+  if (rows.length) _bgUpsert("coach_personas", rows, "id");
+}
+export function savePersonaPlans(plans) {
+  writeJSON(KEYS.personaPlans, plans);
+  if (!_synced()) return;
+  const rows = (plans || []).map(_planToRow);
+  if (rows.length) _bgUpsert("persona_plans", rows, "id");
+}
+// Delete a persona + its plans locally; server plans cascade via the FK.
+export function deletePersona(id) {
+  const personas = getPersonas().filter(p => p.id !== id);
+  const plans    = getPersonaPlans().filter(pl => pl.personaId !== id);
+  writeJSON(KEYS.personas, personas);
+  writeJSON(KEYS.personaPlans, plans);
+  if (_synced()) _bgDelete("coach_personas", "id", id);
+  return { personas, plans };
+}
+export function deletePersonaPlan(id) {
+  const plans = getPersonaPlans().filter(pl => pl.id !== id);
+  writeJSON(KEYS.personaPlans, plans);
+  if (_synced()) _bgDelete("persona_plans", "id", id);
+  return plans;
+}
+
+// One-time hydrate for the Personas screen: pull both tables for the gym
+// (server wins), seed the server from local when it has none. Returns
+// { personas, plans } or null when not synced / on error (caller keeps local).
+export async function hydratePersonas() {
+  if (!_synced()) return null;
+  try {
+    const [pRes, plRes] = await Promise.all([
+      supabase.from("coach_personas").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("persona_plans").select("*").eq("gym_id", _ctx.gymId),
+    ]);
+    if (pRes.error || plRes.error) {
+      console.warn("[store] hydratePersonas failed:", (pRes.error || plRes.error).message);
+      return null;
+    }
+    const serverPersonas = (pRes.data || []).map(_rowToPersona);
+    const serverPlans    = (plRes.data || []).map(_rowToPlan);
+    const local = getPersonas();
+    if (serverPersonas.length === 0 && local.length > 0) {
+      savePersonas(local);                 // seed server from pre-sync local
+      savePersonaPlans(getPersonaPlans());
+      return null;                         // keep local as-is (no flicker)
+    }
+    writeJSON(KEYS.personas, serverPersonas);
+    writeJSON(KEYS.personaPlans, serverPlans);
+    return { personas: serverPersonas, plans: serverPlans };
+  } catch (e) {
+    console.warn("[store] hydratePersonas error:", e?.message || e);
+    return null;
+  }
 }
 
 // ── One-shot hydrate for the App root ────────────────────────────────────────

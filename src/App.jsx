@@ -6,6 +6,7 @@ import { FLAGS, isViewEnabled } from "./config/flags.js";
 import * as store from "./lib/store.js";
 import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
+import { SEED_PERSONAS } from "./data/personas.seed.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -7821,10 +7822,293 @@ async function runDjOrchestrator(stages, selectedPlaylistIds, setStages, setDjPr
   setTimeout(() => setDjProgress(null), 3000);
 }
 
+// ─── Coach Personas (workstream D — persona-level planning) ──────────────────
+// Persona-first: define/choose a persona, connect historical plans as its
+// corpus, view its learned style, then draft a new class "in this style" into
+// the Builder (coach edits + approves — the hard gate). Local-first via store;
+// syncs to coach_personas / persona_plans once 0005 is applied.
+
+// Map a persona plan's normalized {blocks} → Builder stages. Roles collapse onto
+// the Builder's five stage types; scheme/rest inform sets·reps·rest per exercise.
+const ROLE_TO_STAGE = { warmup:"warmup", primary_lift:"strength", superset:"strength",
+                        circuit:"circuit", finisher:"circuit", cooldown:"cooldown", recovery:"recovery" };
+const ROLE_DUR_SEC  = { warmup:300, primary_lift:900, superset:600, circuit:600, finisher:480, cooldown:300, recovery:300 };
+function planToStages(plan) {
+  const blocks = plan?.blocks || [];
+  return blocks.map(b => {
+    const sc = b.scheme || {};
+    const restLabel = sc.rest_sec ? `${sc.rest_sec}s` : "";
+    const exercises = (b.exercises || []).map(ex => {
+      const reps = ex.reps != null ? String(ex.reps)
+                 : (Array.isArray(sc.reps) && sc.reps.length ? sc.reps.join("-") : "");
+      const notes = [ex.per_side ? "per side" : "", ex.regression ? `regress: ${ex.regression}` : "",
+                     ex.equip || "", ex.target ? `target: ${ex.target}` : ""].filter(Boolean).join(" · ");
+      return { n: ex.name || "Movement", s: sc.sets != null ? String(sc.sets) : "",
+               r: reps, rest: restLabel, notes };
+    });
+    return { id: uid(), type: ROLE_TO_STAGE[b.role] || "circuit",
+             name: b.label || "Block", dur: ROLE_DUR_SEC[b.role] || 600,
+             exercises, tracks: [] };
+  });
+}
+
+function PersonasScreen({ onBack, onDraftToBuilder }) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 480;
+  const isTablet = vw < 900;
+  const [personas, setPersonas] = useState(() => store.getPersonas());
+  const [plans, setPlans]       = useState(() => store.getPersonaPlans());
+  const [selectedId, setSelectedId] = useState(() => store.getPersonas()[0]?.id || null);
+  const [form, setForm] = useState({ name:"", kind:"coach", description:"" });
+  const [showAddPlan, setShowAddPlan] = useState(false);
+  const [planForm, setPlanForm] = useState({ title:"", classType:"", focus:"", json:"" });
+  const [planErr, setPlanErr] = useState("");
+
+  // Local-first: pull personas + plans from Postgres once on mount (server wins /
+  // seeds from local). store.connect() already ran at the App root. No-op when
+  // Supabase is off or 0005 isn't applied yet — the screen runs on localStorage.
+  useEffect(() => {
+    let alive = true;
+    store.hydratePersonas().then(r => {
+      if (!alive || !r) return;
+      setPersonas(r.personas);
+      setPlans(r.plans);
+      setSelectedId(id => id || r.personas[0]?.id || null);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const commitPersonas = list => { setPersonas(list); store.savePersonas(list); };
+  const commitPlans    = list => { setPlans(list);    store.savePersonaPlans(list); };
+
+  const createPersona = () => {
+    const name = form.name.trim();
+    if (!name) return;
+    const p = { id: store.newId(), name, kind: form.kind, description: form.description.trim(),
+                styleProfile: {}, profileUpdatedAt: null };
+    commitPersonas([...personas, p]);
+    setSelectedId(p.id);
+    setForm({ name:"", kind:"coach", description:"" });
+  };
+  const removePersona = id => {
+    const r = store.deletePersona(id);
+    setPersonas(r.personas); setPlans(r.plans);
+    if (selectedId === id) setSelectedId(r.personas[0]?.id || null);
+  };
+  const seedGarage = () => {
+    const now = personas.slice();
+    const newPlans = plans.slice();
+    SEED_PERSONAS.forEach(sp => {
+      if (now.some(p => p.name === sp.name)) return; // idempotent by name
+      const id = store.newId();
+      now.push({ id, name: sp.name, kind: sp.kind, description: sp.description,
+                 styleProfile: sp.styleProfile || {}, profileUpdatedAt: new Date().toISOString() });
+      (sp.plans || []).forEach(pl => newPlans.push({
+        id: store.newId(), personaId: id, source: pl.source || "jungle", sourceRef: "",
+        title: pl.title, classType: pl.classType || "", focus: pl.focus || "", planDate: "",
+        plan: pl.plan || {},
+      }));
+    });
+    commitPersonas(now); commitPlans(newPlans);
+    setSelectedId(id => id || now[0]?.id || null);
+  };
+
+  const addPlan = () => {
+    setPlanErr("");
+    let parsed;
+    try { parsed = JSON.parse(planForm.json); }
+    catch (e) { setPlanErr("Not valid JSON — paste an extraction object like { \"blocks\": [ … ] }."); return; }
+    const planObj = Array.isArray(parsed) ? { blocks: parsed } : (parsed.blocks ? parsed : { blocks: [] });
+    if (!Array.isArray(planObj.blocks) || !planObj.blocks.length) { setPlanErr("No blocks found in that JSON."); return; }
+    const pl = { id: store.newId(), personaId: selectedId, source: "manual", sourceRef: "",
+                 title: planForm.title.trim() || "Untitled plan", classType: planForm.classType.trim(),
+                 focus: planForm.focus.trim(), planDate: "", plan: planObj };
+    commitPlans([...plans, pl]);
+    setPlanForm({ title:"", classType:"", focus:"", json:"" });
+    setShowAddPlan(false);
+  };
+  const removePlan = id => commitPlans(store.deletePersonaPlan(id));
+
+  const selected = personas.find(p => p.id === selectedId) || null;
+  const selPlans = plans.filter(pl => pl.personaId === selectedId);
+  const kindColor = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
+  const countFor = id => plans.filter(pl => pl.personaId === id).length;
+
+  const card = { background:"var(--card)", border:"1px solid var(--border)", borderRadius:"12px" };
+  const chip = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)",
+                 borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Page header bar */}
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{flex:1,minWidth:0}}>
+          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACH PERSONAS</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Define a persona, connect its class plans, then draft new classes in its style</p>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px 28px"}}>
+        <div style={{maxWidth:"1200px",margin:"0 auto",display:"grid",gridTemplateColumns:isTablet?"1fr":"330px 1fr",gap:"20px",alignItems:"start"}}>
+
+          {/* ── Left: create + persona list ─────────────────────────────── */}
+          <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+            <div style={{...card,padding:"16px"}}>
+              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"10px"}}>New persona</p>
+              <Input placeholder="Name — e.g. Coach Mike" value={form.name}
+                     onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{marginBottom:"8px"}}/>
+              <Select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
+                <option value="coach">Coach — an individual's voice</option>
+                <option value="format">Format — a class type (S360, GC…)</option>
+                <option value="house">House — whole-facility style</option>
+              </Select>
+              <Input placeholder="Description (optional)" value={form.description}
+                     onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{marginBottom:"10px"}}/>
+              <Btn onClick={createPersona} style={{width:"100%",justifyContent:"center"}}><Plus size={14}/> Create persona</Btn>
+            </div>
+
+            {personas.length === 0 ? (
+              <div style={{...card,padding:"16px",textAlign:"center"}}>
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"12px"}}>
+                  No personas yet. Seed the three Garage house formats (S360 · GC · Enduro) with their learned styles to start.
+                </p>
+                <Btn variant="ghost" onClick={seedGarage} style={{width:"100%",justifyContent:"center"}}><Zap size={14}/> Seed Garage formats</Btn>
+              </div>
+            ) : (
+              <div style={{...card,overflow:"hidden"}}>
+                {personas.map(p => {
+                  const on = p.id === selectedId;
+                  return (
+                    <div key={p.id} onClick={()=>setSelectedId(p.id)}
+                      style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 14px",cursor:"pointer",
+                              borderBottom:"1px solid var(--border)",
+                              background:on?"color-mix(in srgb, var(--accent) 10%, transparent)":"transparent"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:"13px",fontWeight:on?"700":"600",color:on?"var(--accent)":"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
+                        <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+                          <span style={{color:kindColor[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{p.kind}</span>
+                          {"  ·  "}{countFor(p.id)} plan{countFor(p.id)===1?"":"s"}
+                        </div>
+                      </div>
+                      <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} title="Delete persona"
+                        style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right: selected persona detail ──────────────────────────── */}
+          {!selected ? (
+            <div style={{...card,padding:"40px 24px",textAlign:"center",color:"var(--muted)"}}>
+              <Users size={28} style={{opacity:0.5,marginBottom:"10px"}}/>
+              <p style={{fontSize:"13px"}}>Select or create a persona to view its style and plans.</p>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
+              {/* Persona head */}
+              <div style={{...card,padding:"18px 20px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"6px"}}>
+                  <h2 style={{fontSize:"20px",fontWeight:"800",color:"var(--text)",margin:0}}>{selected.name}</h2>
+                  <Tag color={kindColor[selected.kind]||"var(--navy)"}>{selected.kind}</Tag>
+                </div>
+                {selected.description && <p style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>{selected.description}</p>}
+              </div>
+
+              {/* Learned style */}
+              <div style={{...card,padding:"18px 20px"}}>
+                <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Learned style</p>
+                <StyleProfileView profile={selected.styleProfile} chip={chip}/>
+              </div>
+
+              {/* Plans / corpus */}
+              <div style={{...card,padding:"18px 20px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+                  <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Plans <span style={{color:"var(--text)"}}>({selPlans.length})</span></p>
+                  <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
+                </div>
+
+                {showAddPlan && (
+                  <div style={{padding:"14px",background:"var(--navy)",borderRadius:"10px",marginBottom:"14px"}}>
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"8px",marginBottom:"8px"}}>
+                      <Input placeholder="Title" value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))}/>
+                      <Input placeholder="Class type (S360…)" value={planForm.classType} onChange={e=>setPlanForm(f=>({...f,classType:e.target.value}))}/>
+                      <Input placeholder="Focus" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
+                    </div>
+                    <textarea placeholder='Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'
+                      value={planForm.json} onChange={e=>setPlanForm(f=>({...f,json:e.target.value}))}
+                      style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:"monospace",outline:"none",resize:"vertical"}}/>
+                    {planErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{planErr}</p>}
+                    <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+                      <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>
+                      <Btn variant="ghost" onClick={()=>{setShowAddPlan(false);setPlanErr("");}}>Cancel</Btn>
+                    </div>
+                  </div>
+                )}
+
+                {selPlans.length === 0 ? (
+                  <p style={{fontSize:"13px",color:"var(--muted)"}}>No plans connected yet. Add one above, or import the persona's historical decks.</p>
+                ) : selPlans.map(pl => {
+                  const nBlocks = (pl.plan?.blocks || []).length;
+                  return (
+                    <div key={pl.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 0",borderTop:"1px solid var(--border)"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{pl.title}</div>
+                        <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+                          {[pl.classType, pl.focus].filter(Boolean).join(" · ")}{pl.classType||pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {pl.source}
+                        </div>
+                      </div>
+                      <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
+                      <button onClick={()=>removePlan(pl.id)} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Render a persona's learned style_profile (whatever keys it has) as labelled
+// sections — structure/conventions/schemes/vocabulary as chips, defaults as k:v.
+function StyleProfileView({ profile, chip }) {
+  const p = profile || {};
+  const empty = !p || Object.keys(p).length === 0;
+  if (empty) return <p style={{fontSize:"13px",color:"var(--muted)"}}>No learned style yet — it's recomputed from this persona's plans as you connect them.</p>;
+  const list = (label, arr) => (Array.isArray(arr) && arr.length) ? (
+    <div style={{marginBottom:"12px"}}>
+      <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>{label}</div>
+      <div>{arr.map((x,i)=><span key={i} style={chip}>{x}</span>)}</div>
+    </div>
+  ) : null;
+  const defaults = p.defaults && Object.keys(p.defaults).length ? p.defaults : null;
+  return (
+    <div>
+      {p.focus && <div style={{marginBottom:"12px"}}><span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginRight:"8px"}}>FOCUS</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)",textTransform:"capitalize"}}>{p.focus}</span></div>}
+      {list("Structure", p.structure)}
+      {list("Conventions", p.conventions)}
+      {list("Schemes", p.schemes)}
+      {list("Vocabulary", p.vocabulary)}
+      {defaults && (
+        <div style={{marginBottom:"2px"}}>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Defaults</div>
+          <div>{Object.entries(defaults).map(([k,v])=><span key={k} style={chip}>{k.replace(/_/g," ")}: {String(v)}</span>)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
   const nav = [
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
-    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
+    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coach Personas",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
     {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle,cap:"class:view"},{k:"overview-display",l:"Studio TV",Icon:Monitor,cap:"class:view"},{k:"floor-live",l:"Floor TV",Icon:Monitor,cap:"class:view"},{k:"music",l:"Auto-DJ",Icon:Music,cap:"music:view"}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
@@ -8216,6 +8500,14 @@ export default function App() {
     setStages(t.stages.map((s,i) => ({...s,id:uid(),tracks:[...(saved[i]||[])],exercises:s.exercises.map(e=>({...e}))})));
     setSessionName(t.name); setView("builder");
   };
+  // Workstream D: draft a persona plan's blocks into the Builder as an editable
+  // starting session (coach edits + approves — the hard gate before it's a class).
+  const handleDraftFromPersona = (draftStages, name) => {
+    if (!draftStages?.length) return;
+    setStages(draftStages);
+    setSessionName(name || "Persona draft");
+    setView("builder");
+  };
   const handleSelectClassStyle = (ctk, stk) => {
     const stageDefs = CLASS_STAGE_TEMPLATES[ctk]?.[stk]||[];
     const init = stageDefs.map(s=>({...s,id:uid(),exercises:[],tracks:[]}));
@@ -8283,6 +8575,7 @@ export default function App() {
   const allNavItems = [
     {key:"dashboard",    label:"Dashboard",    icon:"\ud83c\udfe0",  group:"Main"},
     {key:"builder",      label:"Builder",      icon:"\ud83c\udffb",  group:"Main",     cap:"class:view"},
+    {key:"personas",     label:"Personas",     icon:"\ud83c\udf99\ufe0f",  group:"Main", cap:"class:view"},
     {key:"templates",    label:"Templates",    icon:"\ud83d\udccb",  group:"Main",     cap:"templates:view"},
     {key:"analytics",    label:"Analytics",    icon:"\ud83d\udcca",  group:"Insights", cap:"analytics:view"},
     {key:"calendar",     label:"Schedule",     icon:"\ud83d\udcc5",  group:"Insights", cap:"schedule:view"},
@@ -8387,6 +8680,7 @@ export default function App() {
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
         {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
+        {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="overview-display"&&<OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
         {view==="live"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}

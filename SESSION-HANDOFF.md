@@ -57,7 +57,7 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 
 **B + C — Class Runner umbrella + merged Room TV.** ▸ PLANNED, not started. Today the RUN nav = 4 items: Live Runner (`live`→`LiveScreen` 6717), Studio TV (`overview-display`→`OverviewDisplayScreen` 7142), Floor TV (`floor-live`→`FloorLiveScreen` 7352), Auto-DJ. Plus an in-runner `display`→`DisplayScreen` 7453. GOAL (user ask): ONE **Class Runner** nav entry with sub-modes (Run / Room TV / Auto-DJ); **merge OverviewDisplay + FloorLive + Display into one `RoomTV` component** with a mode switch, governed by Fable P1 ("now over next", current move ≥60% visual weight) + P2 ("10-foot rule", legible at 8m). Later: Supabase Realtime room channels so the TV is a separate device from the coach's phone (Fable's "missing organ").
 
-**D — Coach-persona class planning.** ▸ DESIGN LOCKED + prototype proven — see the dedicated section below.
+**D — Coach-persona class planning.** ▸ Personas SCREEN SHIPPED + verified (2026-07-14) — see the dedicated section below.
 
 **Roadmap after these:** F4 attendance spine (QR self-check-in + coach roster sweep) + Realtime channels → F5 analytics. Tighten `class_schedule_rules` RLS to admin/coach once the Calendar UI gates writes (`0003` note). Full phased plan: the Fable spec doc.
 
@@ -77,9 +77,9 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 **Schema:** `supabase/migrations/0005_coach_personas.sql` (`f69d8fd`, **DRAFT — not applied**) — `coach_personas` (name, kind, `style_profile` jsonb, aggregated from the corpus) + `persona_plans` (the corpus; `plan` jsonb holds the `{blocks}` extraction; dedupe on `source_ref`). Gym-scoped, admin-write RLS (mirrors 0003). Uses `public.set_updated_at()` from 0003.
 
 **D — next steps (in order):**
-1. Confirm the persona model → **apply `0005`** in Supabase (SQL Editor → paste → Run).
-2. Build the **Personas screen** in Jungle (create/choose persona → connect data → view plans + learned profile → "Generate in this style" into the Builder; coach edits + approves — Fable's hard gate). **Buildable against `0005` with NO external infra**; **seed the 6 Garage decks** as the first persona(s). ← recommended first build.
-3. **Extraction Edge Function** (extend the `smart-build` pattern): deck → `{blocks}` JSON. Needs a Supabase Edge Function deploy.
+1. ⬜ **Apply `0005`** in Supabase (SQL Editor → paste → Run) — turns persona sync on. Reviewed & sound; still NOT applied. Until then the screen runs on localStorage (hydrate fails gracefully → warns → falls back).
+2. ✅ **DONE + verified (2026-07-14) — Personas screen SHIPPED.** New `personas` view (BUILD group, both navs, gated `class:view`) in `src/App.jsx`: `PersonasScreen` + `StyleProfileView` + `planToStages()` mapper; App-root `handleDraftFromPersona`. Persona domain added to `src/lib/store.js` (get/save/delete personas+plans, `hydratePersonas()`, `newId()` UUID helper — same local-first pattern; **row PKs are client-generated UUIDs so persona.id === persona_plans.persona_id bridges the FK locally + after sync**). Seeds in `src/data/personas.seed.js` (3 documented Garage formats S360/GC/Enduro + 1 illustrative S360 plan). **"Draft" = deterministic draft-from-corpus → Builder (coach edits+approves gate), NOT LLM gen.** Verified live (Supabase off): seed → learned-style renders → Draft maps 5 blocks → 5 editable stages; localStorage persists; UUIDs valid + FK links intact; host build clean. **Still TODO: seed the 6 REAL decks** — the seed only has documented format *styles* + 1 example plan; re-share the deck images to extract real `persona_plans` (I did not fabricate deck data).
+3. **Extraction Edge Function** (extend the `smart-build` pattern): deck → `{blocks}` JSON. Needs a Supabase Edge Function deploy. This is what upgrades "Draft" from deterministic-from-corpus to true in-style LLM generation.
 4. **Slides connector** (Google Slides API OAuth) for bulk historical import.
 
 The 6 sample decks (S360 Shoulder-Hypertrophy 11 Jul; S360 Squat-Peak Strength 20 Jun; GC Fundamental 11 Jul & 9 May; Garage Enduro Wk11/24) were pasted in the 2026-07-14 chat — re-share to seed if the images aren't retained.
