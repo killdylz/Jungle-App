@@ -30,6 +30,7 @@ const KEYS = {
   djClean:       "dj_clean",
   personas:      "jungle_personas",
   personaPlans:  "jungle_persona_plans",
+  personaMoves:  "jungle_persona_movements",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -410,31 +411,68 @@ export function deletePersonaPlan(id) {
   return plans;
 }
 
+// Movement catalog (persona_movements) — normalized, editable, aggregated from
+// plans. Local shape: { id, personaId, name, aliases:[], equip, classTypes:{},
+// commonScheme:{}, glossaryRef, meta:{} }.
+export function getPersonaMovements() { return readJSON(KEYS.personaMoves, []); }
+function _moveToRow(m) {
+  return { id: m.id, gym_id: _ctx.gymId, persona_id: m.personaId, name: m.name,
+           aliases: m.aliases || [], equip: m.equip || null, class_types: m.classTypes || {},
+           common_scheme: m.commonScheme || m.common_scheme || {}, glossary_ref: m.glossaryRef || null,
+           meta: m.meta || {} };
+}
+function _rowToMove(r) {
+  return { id: r.id, personaId: r.persona_id, name: r.name, aliases: r.aliases || [], equip: r.equip || "",
+           classTypes: r.class_types || {}, commonScheme: r.common_scheme || {}, glossaryRef: r.glossary_ref || "",
+           meta: r.meta || {} };
+}
+// Save the whole catalog for a persona. Rows may arrive from aggregation without
+// an id (freshly derived) — mint one so the row keys locally and after sync.
+export function savePersonaMovements(moves) {
+  const withIds = (moves || []).map(m => (m.id ? m : { ...m, id: newId() }));
+  writeJSON(KEYS.personaMoves, withIds);
+  if (_synced()) {
+    const rows = withIds.map(m => ({ ...m, common_scheme: m.commonScheme || {} })).map(_moveToRow);
+    if (rows.length) _bgUpsert("persona_movements", rows, "id");
+  }
+  return withIds;
+}
+export function deletePersonaMovement(id) {
+  const moves = getPersonaMovements().filter(m => m.id !== id);
+  writeJSON(KEYS.personaMoves, moves);
+  if (_synced()) _bgDelete("persona_movements", "id", id);
+  return moves;
+}
+
 // One-time hydrate for the Personas screen: pull both tables for the gym
 // (server wins), seed the server from local when it has none. Returns
 // { personas, plans } or null when not synced / on error (caller keeps local).
 export async function hydratePersonas() {
   if (!_synced()) return null;
   try {
-    const [pRes, plRes] = await Promise.all([
+    const [pRes, plRes, mRes] = await Promise.all([
       supabase.from("coach_personas").select("*").eq("gym_id", _ctx.gymId),
       supabase.from("persona_plans").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("persona_movements").select("*").eq("gym_id", _ctx.gymId),
     ]);
-    if (pRes.error || plRes.error) {
-      console.warn("[store] hydratePersonas failed:", (pRes.error || plRes.error).message);
+    if (pRes.error || plRes.error || mRes.error) {
+      console.warn("[store] hydratePersonas failed:", (pRes.error || plRes.error || mRes.error).message);
       return null;
     }
     const serverPersonas = (pRes.data || []).map(_rowToPersona);
     const serverPlans    = (plRes.data || []).map(_rowToPlan);
+    const serverMoves    = (mRes.data || []).map(_rowToMove);
     const local = getPersonas();
     if (serverPersonas.length === 0 && local.length > 0) {
       savePersonas(local);                 // seed server from pre-sync local
       savePersonaPlans(getPersonaPlans());
+      savePersonaMovements(getPersonaMovements());
       return null;                         // keep local as-is (no flicker)
     }
     writeJSON(KEYS.personas, serverPersonas);
     writeJSON(KEYS.personaPlans, serverPlans);
-    return { personas: serverPersonas, plans: serverPlans };
+    writeJSON(KEYS.personaMoves, serverMoves);
+    return { personas: serverPersonas, plans: serverPlans, movements: serverMoves };
   } catch (e) {
     console.warn("[store] hydratePersonas error:", e?.message || e);
     return null;

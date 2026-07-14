@@ -7,6 +7,7 @@ import * as store from "./lib/store.js";
 import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
+import { classTypesOf, aggregateClassType, aggregateMovements } from "./lib/personaAggregate.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -7852,34 +7853,64 @@ function planToStages(plan) {
   });
 }
 
+// Shared styling + labels for the persona surfaces.
+const P_CARD = { background:"var(--card)", border:"1px solid var(--border)", borderRadius:"12px" };
+const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)", borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
+const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Superset", circuit:"Circuit", finisher:"Finisher", recovery:"Recovery", cooldown:"Cool-down" };
+const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
+const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
+const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
+const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
+
+// Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
+// dimension within them. Open a coach → tab per class type → that class type's
+// derived profile + editable movement catalog + past plans + draft/generate.
+// Runs on localStorage; syncs to coach_personas/persona_plans/persona_movements
+// once 0005 is applied. LLM generation arrives with the Edge Function (chunk 2).
 function PersonasScreen({ onBack, onDraftToBuilder }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
   const [personas, setPersonas] = useState(() => store.getPersonas());
   const [plans, setPlans]       = useState(() => store.getPersonaPlans());
+  const [movements, setMovements] = useState(() => store.getPersonaMovements());
   const [selectedId, setSelectedId] = useState(() => store.getPersonas()[0]?.id || null);
+  const [activeCT, setActiveCT] = useState(null);
   const [form, setForm] = useState({ name:"", kind:"coach", description:"" });
+  const [editHead, setEditHead] = useState(false);
+  const [headForm, setHeadForm] = useState({ name:"", description:"" });
   const [showAddPlan, setShowAddPlan] = useState(false);
   const [planForm, setPlanForm] = useState({ title:"", classType:"", focus:"", json:"" });
   const [planErr, setPlanErr] = useState("");
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [slidesNote, setSlidesNote] = useState(false);
 
-  // Local-first: pull personas + plans from Postgres once on mount (server wins /
-  // seeds from local). store.connect() already ran at the App root. No-op when
-  // Supabase is off or 0005 isn't applied yet — the screen runs on localStorage.
   useEffect(() => {
     let alive = true;
     store.hydratePersonas().then(r => {
       if (!alive || !r) return;
-      setPersonas(r.personas);
-      setPlans(r.plans);
+      setPersonas(r.personas); setPlans(r.plans); setMovements(r.movements || []);
       setSelectedId(id => id || r.personas[0]?.id || null);
     });
     return () => { alive = false; };
   }, []);
 
+  // Recompute a persona's movement catalog from its plans (using the current
+  // catalog so alias/name edits fold occurrences together), persist, setState.
+  const recompute = (allPlans, catalog, pid) => {
+    const untouched = catalog.filter(m => m.personaId !== pid);
+    const existing  = catalog.filter(m => m.personaId === pid);
+    const pplans    = allPlans.filter(pl => pl.personaId === pid);
+    const derived   = aggregateMovements(pplans, existing).map(m => ({ ...m, personaId: pid }));
+    const merged = store.savePersonaMovements([...untouched, ...derived]);
+    setMovements(merged);
+  };
+
   const commitPersonas = list => { setPersonas(list); store.savePersonas(list); };
-  const commitPlans    = list => { setPlans(list);    store.savePersonaPlans(list); };
+  const commitPlans = (list, pid = selectedId) => {
+    setPlans(list); store.savePersonaPlans(list);
+    if (pid) recompute(list, movements, pid);
+  };
 
   const createPersona = () => {
     const name = form.name.trim();
@@ -7890,26 +7921,40 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     setSelectedId(p.id);
     setForm({ name:"", kind:"coach", description:"" });
   };
+  const saveHead = () => {
+    const name = headForm.name.trim(); if (!name) return;
+    commitPersonas(personas.map(p => p.id === selectedId ? { ...p, name, description: headForm.description.trim() } : p));
+    setEditHead(false);
+  };
   const removePersona = id => {
     const r = store.deletePersona(id);
-    setPersonas(r.personas); setPlans(r.plans);
+    const moves = store.savePersonaMovements(store.getPersonaMovements().filter(m => m.personaId !== id));
+    setPersonas(r.personas); setPlans(r.plans); setMovements(moves);
     if (selectedId === id) setSelectedId(r.personas[0]?.id || null);
   };
-  const seedGarage = () => {
+  const seedSample = () => {
     const now = personas.slice();
     const newPlans = plans.slice();
+    const touched = [];
     SEED_PERSONAS.forEach(sp => {
       if (now.some(p => p.name === sp.name)) return; // idempotent by name
-      const id = store.newId();
+      const id = store.newId(); touched.push(id);
       now.push({ id, name: sp.name, kind: sp.kind, description: sp.description,
                  styleProfile: sp.styleProfile || {}, profileUpdatedAt: new Date().toISOString() });
       (sp.plans || []).forEach(pl => newPlans.push({
         id: store.newId(), personaId: id, source: pl.source || "jungle", sourceRef: "",
-        title: pl.title, classType: pl.classType || "", focus: pl.focus || "", planDate: "",
-        plan: pl.plan || {},
+        title: pl.title, classType: pl.classType || "", focus: pl.focus || "", planDate: "", plan: pl.plan || {},
       }));
     });
-    commitPersonas(now); commitPlans(newPlans);
+    commitPersonas(now);
+    setPlans(newPlans); store.savePersonaPlans(newPlans);
+    let cat = movements;
+    touched.forEach(pid => {
+      const pplans = newPlans.filter(pl => pl.personaId === pid);
+      const derived = aggregateMovements(pplans, []).map(m => ({ ...m, personaId: pid }));
+      cat = [...cat, ...derived];
+    });
+    setMovements(store.savePersonaMovements(cat));
     setSelectedId(id => id || now[0]?.id || null);
   };
 
@@ -7920,49 +7965,58 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     catch (e) { setPlanErr("Not valid JSON — paste an extraction object like { \"blocks\": [ … ] }."); return; }
     const planObj = Array.isArray(parsed) ? { blocks: parsed } : (parsed.blocks ? parsed : { blocks: [] });
     if (!Array.isArray(planObj.blocks) || !planObj.blocks.length) { setPlanErr("No blocks found in that JSON."); return; }
+    const ct = planForm.classType.trim();
     const pl = { id: store.newId(), personaId: selectedId, source: "manual", sourceRef: "",
-                 title: planForm.title.trim() || "Untitled plan", classType: planForm.classType.trim(),
+                 title: planForm.title.trim() || "Untitled plan", classType: ct,
                  focus: planForm.focus.trim(), planDate: "", plan: planObj };
     commitPlans([...plans, pl]);
     setPlanForm({ title:"", classType:"", focus:"", json:"" });
     setShowAddPlan(false);
+    if (ct) setActiveCT(ct);
   };
+  const savePlanEdit = updated => { commitPlans(plans.map(pl => pl.id === updated.id ? updated : pl)); setEditingPlan(null); };
   const removePlan = id => commitPlans(store.deletePersonaPlan(id));
+
+  const changeMovement = updated => {
+    const list = movements.map(m => m.id === updated.id ? updated : m);
+    recompute(plans, list, selectedId); // re-fold occurrences under any new alias/name
+  };
+  const deleteMovement = id => setMovements(store.deletePersonaMovement(id));
 
   const selected = personas.find(p => p.id === selectedId) || null;
   const selPlans = plans.filter(pl => pl.personaId === selectedId);
-  const kindColor = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
+  const classTypes = classTypesOf(selPlans);
+  const curCT = (activeCT && classTypes.includes(activeCT)) ? activeCT : (classTypes[0] || null);
+  const ctPlans = selPlans.filter(pl => ctOf(pl) === curCT);
+  const prof = curCT ? aggregateClassType(selPlans, curCT) : null;
+  const ctMoves = movements.filter(m => m.personaId === selectedId && (m.classTypes?.[curCT] || 0) > 0);
+  const extracted = selected?.styleProfile?.byClassType?.[curCT] || {};
   const countFor = id => plans.filter(pl => pl.personaId === id).length;
-
-  const card = { background:"var(--card)", border:"1px solid var(--border)", borderRadius:"12px" };
-  const chip = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)",
-                 borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
+  const generateForCT = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — generated draft`); };
 
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Page header bar */}
       <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
           <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACH PERSONAS</p>
-          <p style={{fontSize:"12px",color:"var(--muted)"}}>Define a persona, connect its class plans, then draft new classes in its style</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Pick a coach, connect their class plans, then draft a new class in their style</p>
         </div>
       </div>
 
-      {/* Content */}
       <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px 28px"}}>
-        <div style={{maxWidth:"1200px",margin:"0 auto",display:"grid",gridTemplateColumns:isTablet?"1fr":"330px 1fr",gap:"20px",alignItems:"start"}}>
+        <div style={{maxWidth:"1200px",margin:"0 auto",display:"grid",gridTemplateColumns:isTablet?"1fr":"320px 1fr",gap:"20px",alignItems:"start"}}>
 
           {/* ── Left: create + persona list ─────────────────────────────── */}
           <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
-            <div style={{...card,padding:"16px"}}>
+            <div style={{...P_CARD,padding:"16px"}}>
               <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"10px"}}>New persona</p>
               <Input placeholder="Name — e.g. Coach Mike" value={form.name}
                      onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{marginBottom:"8px"}}/>
               <Select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
-                <option value="coach">Coach — an individual's voice</option>
-                <option value="format">Format — a class type (S360, GC…)</option>
+                <option value="coach">Coach — an individual</option>
                 <option value="house">House — whole-facility style</option>
+                <option value="format">Format — a single class type</option>
               </Select>
               <Input placeholder="Description (optional)" value={form.description}
                      onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{marginBottom:"10px"}}/>
@@ -7970,25 +8024,23 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
             </div>
 
             {personas.length === 0 ? (
-              <div style={{...card,padding:"16px",textAlign:"center"}}>
-                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"12px"}}>
-                  No personas yet. Seed the three Garage house formats (S360 · GC · Enduro) with their learned styles to start.
-                </p>
-                <Btn variant="ghost" onClick={seedGarage} style={{width:"100%",justifyContent:"center"}}><Zap size={14}/> Seed Garage formats</Btn>
+              <div style={{...P_CARD,padding:"16px",textAlign:"center"}}>
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"12px"}}>No personas yet. Load a sample coach (S360 example) to see the layout, or create one above.</p>
+                <Btn variant="ghost" onClick={seedSample} style={{width:"100%",justifyContent:"center"}}><Zap size={14}/> Load sample coach</Btn>
               </div>
             ) : (
-              <div style={{...card,overflow:"hidden"}}>
+              <div style={{...P_CARD,overflow:"hidden"}}>
                 {personas.map(p => {
                   const on = p.id === selectedId;
                   return (
-                    <div key={p.id} onClick={()=>setSelectedId(p.id)}
+                    <div key={p.id} onClick={()=>{setSelectedId(p.id);setActiveCT(null);setEditHead(false);}}
                       style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 14px",cursor:"pointer",
                               borderBottom:"1px solid var(--border)",
                               background:on?"color-mix(in srgb, var(--accent) 10%, transparent)":"transparent"}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:"13px",fontWeight:on?"700":"600",color:on?"var(--accent)":"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
                         <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
-                          <span style={{color:kindColor[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{p.kind}</span>
+                          <span style={{color:KIND_COLOR[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{p.kind}</span>
                           {"  ·  "}{countFor(p.id)} plan{countFor(p.id)===1?"":"s"}
                         </div>
                       </div>
@@ -8001,106 +8053,290 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
             )}
           </div>
 
-          {/* ── Right: selected persona detail ──────────────────────────── */}
+          {/* ── Right: selected coach detail ────────────────────────────── */}
           {!selected ? (
-            <div style={{...card,padding:"40px 24px",textAlign:"center",color:"var(--muted)"}}>
+            <div style={{...P_CARD,padding:"40px 24px",textAlign:"center",color:"var(--muted)"}}>
               <Users size={28} style={{opacity:0.5,marginBottom:"10px"}}/>
-              <p style={{fontSize:"13px"}}>Select or create a persona to view its style and plans.</p>
+              <p style={{fontSize:"13px"}}>Select or create a coach persona to view their class types and plans.</p>
             </div>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              {/* Persona head */}
-              <div style={{...card,padding:"18px 20px"}}>
-                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"6px"}}>
-                  <h2 style={{fontSize:"20px",fontWeight:"800",color:"var(--text)",margin:0}}>{selected.name}</h2>
-                  <Tag color={kindColor[selected.kind]||"var(--navy)"}>{selected.kind}</Tag>
-                </div>
-                {selected.description && <p style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>{selected.description}</p>}
-              </div>
-
-              {/* Learned style */}
-              <div style={{...card,padding:"18px 20px"}}>
-                <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>Learned style</p>
-                <StyleProfileView profile={selected.styleProfile} chip={chip}/>
-              </div>
-
-              {/* Plans / corpus */}
-              <div style={{...card,padding:"18px 20px"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-                  <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Plans <span style={{color:"var(--text)"}}>({selPlans.length})</span></p>
-                  <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
-                </div>
-
-                {showAddPlan && (
-                  <div style={{padding:"14px",background:"var(--navy)",borderRadius:"10px",marginBottom:"14px"}}>
-                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"8px",marginBottom:"8px"}}>
-                      <Input placeholder="Title" value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))}/>
-                      <Input placeholder="Class type (S360…)" value={planForm.classType} onChange={e=>setPlanForm(f=>({...f,classType:e.target.value}))}/>
-                      <Input placeholder="Focus" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
+              {/* Persona head (editable) */}
+              <div style={{...P_CARD,padding:"18px 20px"}}>
+                {editHead ? (
+                  <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                    <Input value={headForm.name} onChange={e=>setHeadForm(f=>({...f,name:e.target.value}))} placeholder="Persona name"/>
+                    <Input value={headForm.description} onChange={e=>setHeadForm(f=>({...f,description:e.target.value}))} placeholder="Description"/>
+                    <div style={{display:"flex",gap:"8px"}}><Btn onClick={saveHead}><Check size={14}/> Save</Btn><Btn variant="ghost" onClick={()=>setEditHead(false)}>Cancel</Btn></div>
+                  </div>
+                ) : (
+                  <div style={{display:"flex",alignItems:"flex-start",gap:"10px"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"6px"}}>
+                        <h2 style={{fontSize:"20px",fontWeight:"800",color:"var(--text)",margin:0}}>{selected.name}</h2>
+                        <Tag color={KIND_COLOR[selected.kind]||"var(--navy)"}>{selected.kind}</Tag>
+                      </div>
+                      {selected.description && <p style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>{selected.description}</p>}
                     </div>
-                    <textarea placeholder='Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'
-                      value={planForm.json} onChange={e=>setPlanForm(f=>({...f,json:e.target.value}))}
-                      style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:"monospace",outline:"none",resize:"vertical"}}/>
-                    {planErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{planErr}</p>}
-                    <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
-                      <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>
-                      <Btn variant="ghost" onClick={()=>{setShowAddPlan(false);setPlanErr("");}}>Cancel</Btn>
-                    </div>
+                    <button onClick={()=>{setHeadForm({name:selected.name,description:selected.description||""});setEditHead(true);}}
+                      style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
                   </div>
                 )}
-
-                {selPlans.length === 0 ? (
-                  <p style={{fontSize:"13px",color:"var(--muted)"}}>No plans connected yet. Add one above, or import the persona's historical decks.</p>
-                ) : selPlans.map(pl => {
-                  const nBlocks = (pl.plan?.blocks || []).length;
-                  return (
-                    <div key={pl.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 0",borderTop:"1px solid var(--border)"}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{pl.title}</div>
-                        <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
-                          {[pl.classType, pl.focus].filter(Boolean).join(" · ")}{pl.classType||pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {pl.source}
-                        </div>
-                      </div>
-                      <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
-                      <button onClick={()=>removePlan(pl.id)} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
-                    </div>
-                  );
-                })}
+                <div style={{display:"flex",alignItems:"center",gap:"10px",marginTop:"14px",flexWrap:"wrap"}}>
+                  <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
+                  <button onClick={()=>setSlidesNote(s=>!s)} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:"transparent",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"6px 12px"}}><Upload size={13}/> Import from Google Slides</button>
+                </div>
+                {slidesNote && <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Google Slides import lands in the next build (chunk 3): connect a coach's Slides folder → decks are extracted into plans automatically. For now, paste a deck's extraction JSON via <b>Add plan</b>.</p>}
               </div>
+
+              {showAddPlan && (
+                <div style={{...P_CARD,padding:"16px",background:"var(--navy)"}}>
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"8px",marginBottom:"8px"}}>
+                    <Input placeholder="Title" value={planForm.title} onChange={e=>setPlanForm(f=>({...f,title:e.target.value}))}/>
+                    <Input placeholder="Class type (S360…)" value={planForm.classType} onChange={e=>setPlanForm(f=>({...f,classType:e.target.value}))}/>
+                    <Input placeholder="Focus" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
+                  </div>
+                  <textarea placeholder='Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'
+                    value={planForm.json} onChange={e=>setPlanForm(f=>({...f,json:e.target.value}))}
+                    style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:"monospace",outline:"none",resize:"vertical"}}/>
+                  {planErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{planErr}</p>}
+                  <div style={{display:"flex",gap:"8px",marginTop:"10px"}}>
+                    <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>
+                    <Btn variant="ghost" onClick={()=>{setShowAddPlan(false);setPlanErr("");}}>Cancel</Btn>
+                  </div>
+                </div>
+              )}
+
+              {classTypes.length === 0 ? (
+                <div style={{...P_CARD,padding:"30px 24px",textAlign:"center",color:"var(--muted)"}}>
+                  <p style={{fontSize:"13px"}}>No plans yet. Use <b>Add plan</b> to connect this coach's programming — each plan's <i>class type</i> (S360, GC, Enduro…) groups it here.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Class-type tabs */}
+                  <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                    {classTypes.map(ct => {
+                      const on = ct === curCT;
+                      const n = selPlans.filter(pl => ctOf(pl) === ct).length;
+                      return (
+                        <button key={ct} onClick={()=>setActiveCT(ct)} style={{
+                          padding:"7px 14px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:on?"700":"600",
+                          border:`1px solid ${on?"var(--accent)":"var(--border)"}`,
+                          background:on?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--card)",
+                          color:on?"var(--accent)":"var(--text)"}}>{ct} <span style={{opacity:0.6,fontWeight:"600"}}>· {n}</span></button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Class-type profile */}
+                  <div style={{...P_CARD,padding:"18px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
+                      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
+                      <Btn onClick={generateForCT} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
+                    </div>
+                    <PersonaProfilePanel prof={prof} extracted={extracted}/>
+                  </div>
+
+                  {/* Movement catalog */}
+                  <div style={{...P_CARD,padding:"18px 20px"}}>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Movements <span style={{color:"var(--text)"}}>· {ctMoves.length}</span></p>
+                    <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"12px"}}>Aggregated from this coach's {curCT} plans. Editable — rename to merge variants, set equipment. Counts &amp; scheme are derived.</p>
+                    <MovementCatalog movements={ctMoves} classType={curCT} onChange={changeMovement} onDelete={deleteMovement}/>
+                  </div>
+
+                  {/* Plans for this class type */}
+                  <div style={{...P_CARD,padding:"18px 20px"}}>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>{curCT} plans <span style={{color:"var(--text)"}}>· {ctPlans.length}</span></p>
+                    {ctPlans.map(pl => {
+                      const nBlocks = (pl.plan?.blocks || []).length;
+                      return (
+                        <div key={pl.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 0",borderTop:"1px solid var(--border)"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{pl.title}</div>
+                            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {pl.source}</div>
+                          </div>
+                          <button onClick={()=>setEditingPlan(pl)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
+                          <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
+                          <button onClick={()=>removePlan(pl.id)} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {editingPlan && <PersonaPlanEditor plan={editingPlan} onSave={savePlanEdit} onClose={()=>setEditingPlan(null)}/>}
     </div>
   );
 }
 
-// Render a persona's learned style_profile (whatever keys it has) as labelled
-// sections — structure/conventions/schemes/vocabulary as chips, defaults as k:v.
-function StyleProfileView({ profile, chip }) {
-  const p = profile || {};
-  const empty = !p || Object.keys(p).length === 0;
-  if (empty) return <p style={{fontSize:"13px",color:"var(--muted)"}}>No learned style yet — it's recomputed from this persona's plans as you connect them.</p>;
-  const list = (label, arr) => (Array.isArray(arr) && arr.length) ? (
+// Per-class-type derived profile: structure skeleton, scheme mix, defaults, plus
+// the qualitative conventions/vocabulary carried from LLM extraction.
+function PersonaProfilePanel({ prof, extracted }) {
+  const chips = (label, arr) => (Array.isArray(arr) && arr.length) ? (
     <div style={{marginBottom:"12px"}}>
       <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>{label}</div>
-      <div>{arr.map((x,i)=><span key={i} style={chip}>{x}</span>)}</div>
+      <div>{arr.map((x,i)=><span key={i} style={P_CHIP}>{x}</span>)}</div>
     </div>
   ) : null;
-  const defaults = p.defaults && Object.keys(p.defaults).length ? p.defaults : null;
+  const restEntries = Object.entries(prof.defaults?.restByRole || {});
   return (
     <div>
-      {p.focus && <div style={{marginBottom:"12px"}}><span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginRight:"8px"}}>FOCUS</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)",textTransform:"capitalize"}}>{p.focus}</span></div>}
-      {list("Structure", p.structure)}
-      {list("Conventions", p.conventions)}
-      {list("Schemes", p.schemes)}
-      {list("Vocabulary", p.vocabulary)}
-      {defaults && (
-        <div style={{marginBottom:"2px"}}>
-          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Defaults</div>
-          <div>{Object.entries(defaults).map(([k,v])=><span key={k} style={chip}>{k.replace(/_/g," ")}: {String(v)}</span>)}</div>
+      {extracted.focus && <div style={{marginBottom:"12px"}}><span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginRight:"8px"}}>FOCUS</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)",textTransform:"capitalize"}}>{extracted.focus}</span></div>}
+      {prof.structure?.length ? (
+        <div style={{marginBottom:"12px"}}>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Structure</div>
+          <div>{prof.structure.map((s,i)=><span key={i} style={P_CHIP}>{ROLE_LABEL[s.role]||s.role} <span style={{opacity:0.6}}>×{s.plans}</span></span>)}</div>
         </div>
+      ) : null}
+      {prof.schemes?.length ? (
+        <div style={{marginBottom:"12px"}}>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Schemes</div>
+          <div>{prof.schemes.map((s,i)=><span key={i} style={P_CHIP}>{s.type} <span style={{opacity:0.6}}>×{s.count}</span></span>)}</div>
+        </div>
+      ) : null}
+      {chips("Conventions", extracted.conventions)}
+      {chips("Vocabulary", extracted.vocabulary)}
+      {(prof.defaults?.rir != null || restEntries.length) ? (
+        <div>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Defaults</div>
+          <div>
+            {prof.defaults?.rir != null && <span style={P_CHIP}>RIR {prof.defaults.rir}</span>}
+            {restEntries.map(([role,sec])=><span key={role} style={P_CHIP}>{ROLE_LABEL[role]||role} rest {fmtRest(sec)}</span>)}
+          </div>
+        </div>
+      ) : null}
+      {!prof.structure?.length && !prof.schemes?.length && !extracted.conventions?.length && (
+        <p style={{fontSize:"13px",color:"var(--muted)"}}>Add plans for {prof.classType} and the structure, schemes and defaults are learned automatically.</p>
       )}
+    </div>
+  );
+}
+
+// Editable movement catalog for one class type. Rename folds variants (old name
+// kept as an alias so aggregation re-maps its occurrences); equipment + notes are
+// free; the per-class-type count and typical scheme are derived (read-only).
+function MovementCatalog({ movements, classType, onChange, onDelete }) {
+  const [editId, setEditId] = useState(null);
+  const [draft, setDraft] = useState({ name:"", equip:"", aliases:"", notes:"" });
+  if (!movements.length) return <p style={{fontSize:"13px",color:"var(--muted)"}}>No movements catalogued for {classType} yet — they populate from this class type's plans.</p>;
+  const start = m => { setEditId(m.id); setDraft({ name:m.name, equip:m.equip||"", aliases:(m.aliases||[]).join(", "), notes:m.meta?.notes||"" }); };
+  const save = m => {
+    const name = draft.name.trim() || m.name;
+    const aliases = draft.aliases.split(",").map(s=>s.trim()).filter(Boolean);
+    if (name.toLowerCase() !== m.name.toLowerCase() && !aliases.some(a=>a.toLowerCase()===m.name.toLowerCase())) aliases.push(m.name);
+    onChange({ ...m, name, equip:draft.equip.trim(), aliases, meta:{ ...(m.meta||{}), notes:draft.notes.trim() } });
+    setEditId(null);
+  };
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+      {movements.map(m => editId === m.id ? (
+        <div key={m.id} style={{padding:"12px",background:"var(--navy)",borderRadius:"10px",margin:"4px 0"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}}>
+            <Input value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Movement name"/>
+            <Input value={draft.equip} onChange={e=>setDraft(d=>({...d,equip:e.target.value}))} placeholder="Equipment"/>
+          </div>
+          <Input value={draft.aliases} onChange={e=>setDraft(d=>({...d,aliases:e.target.value}))} placeholder="Aliases (comma-separated)" style={{marginBottom:"8px"}}/>
+          <Input value={draft.notes} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} placeholder="Notes / cue" style={{marginBottom:"10px"}}/>
+          <div style={{display:"flex",gap:"8px"}}><Btn onClick={()=>save(m)}><Check size={13}/> Save</Btn><Btn variant="ghost" onClick={()=>setEditId(null)}>Cancel</Btn></div>
+        </div>
+      ) : (
+        <div key={m.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderTop:"1px solid var(--border)"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}{m.equip && <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span>}</div>
+            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+              {(m.classTypes?.[classType]||0)}× in {classType}
+              {fmtScheme(m.commonScheme) && <span> · {fmtScheme(m.commonScheme)}</span>}
+              {m.meta?.notes && <span> · {m.meta.notes}</span>}
+            </div>
+          </div>
+          <button onClick={()=>start(m)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"4px 10px"}}>Edit</button>
+          <button onClick={()=>onDelete(m.id)} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Full plan editor (blocks + exercises) — maximal editability before a plan
+// grounds generation. Modal over a deep-copied draft; Save writes back the plan.
+function PersonaPlanEditor({ plan, onSave, onClose }) {
+  const vw = useWindowWidth(); const isMobile = vw < 640;
+  const [title, setTitle] = useState(plan.title || "");
+  const [classType, setClassType] = useState(plan.classType || "");
+  const [focus, setFocus] = useState(plan.focus || "");
+  const [blocks, setBlocks] = useState(() => JSON.parse(JSON.stringify(plan.plan?.blocks || [])));
+  const upBlock  = (i, patch) => setBlocks(bs => bs.map((b,j)=>j===i?{...b,...patch}:b));
+  const upScheme = (i, patch) => setBlocks(bs => bs.map((b,j)=>j===i?{...b,scheme:{...(b.scheme||{}),...patch}}:b));
+  const upEx     = (i,k,patch) => setBlocks(bs => bs.map((b,j)=> j===i ? {...b,exercises:(b.exercises||[]).map((e,m)=>m===k?{...e,...patch}:e)} : b));
+  const addEx    = i => setBlocks(bs => bs.map((b,j)=>j===i?{...b,exercises:[...(b.exercises||[]),{name:"",reps:""}]}:b));
+  const rmEx     = (i,k) => setBlocks(bs => bs.map((b,j)=>j===i?{...b,exercises:(b.exercises||[]).filter((_,m)=>m!==k)}:b));
+  const addBlock = () => setBlocks(bs => [...bs,{label:"New block",role:"circuit",scheme:{},exercises:[]}]);
+  const rmBlock  = i => setBlocks(bs => bs.filter((_,j)=>j!==i));
+  const move     = (i,d) => setBlocks(bs => { const n=[...bs]; const j=i+d; if(j<0||j>=n.length) return n; [n[i],n[j]]=[n[j],n[i]]; return n; });
+  const num = v => { const n = parseInt(v,10); return Number.isNaN(n) ? undefined : n; };
+  const iconBtn = { background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"13px",fontWeight:"700",padding:"3px 9px",lineHeight:1 };
+  const lbl = { fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:"3px" };
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:isMobile?"12px":"40px 20px",overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{...P_CARD,width:"100%",maxWidth:"720px",padding:isMobile?"16px":"24px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+          <h3 style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",margin:0}}>Edit plan</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr 1fr",gap:"8px",marginBottom:"16px"}}>
+          <div><label style={lbl}>Title</label><Input value={title} onChange={e=>setTitle(e.target.value)}/></div>
+          <div><label style={lbl}>Class type</label><Input value={classType} onChange={e=>setClassType(e.target.value)}/></div>
+          <div><label style={lbl}>Focus</label><Input value={focus} onChange={e=>setFocus(e.target.value)}/></div>
+        </div>
+
+        {blocks.map((b,i) => (
+          <div key={i} style={{border:"1px solid var(--border)",borderRadius:"10px",padding:"12px",marginBottom:"12px"}}>
+            <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"10px"}}>
+              <Input value={b.label||""} onChange={e=>upBlock(i,{label:e.target.value})} placeholder="Block label" style={{flex:1}}/>
+              <button onClick={()=>move(i,-1)} title="Move up" style={iconBtn}>↑</button>
+              <button onClick={()=>move(i,1)} title="Move down" style={iconBtn}>↓</button>
+              <button onClick={()=>rmBlock(i)} title="Remove block" style={{...iconBtn,color:"var(--accent)"}}><Trash2 size={13}/></button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1.2fr 1fr 0.7fr 0.7fr 0.9fr",gap:"6px",marginBottom:"10px"}}>
+              <div><label style={lbl}>Role</label>
+                <Select value={b.role||"circuit"} onChange={e=>upBlock(i,{role:e.target.value})}>
+                  {["warmup","primary_lift","superset","circuit","finisher","recovery","cooldown"].map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                </Select>
+              </div>
+              <div><label style={lbl}>Scheme</label>
+                <Select value={b.scheme?.type||""} onChange={e=>upScheme(i,{type:e.target.value||undefined})}>
+                  <option value="">—</option>
+                  {["sets_reps","rounds","time","interval","amrap"].map(t=><option key={t} value={t}>{t}</option>)}
+                </Select>
+              </div>
+              <div><label style={lbl}>Sets</label><Input type="number" value={b.scheme?.sets??""} onChange={e=>upScheme(i,{sets:num(e.target.value)})}/></div>
+              <div><label style={lbl}>RIR</label><Input type="number" value={b.scheme?.rir??""} onChange={e=>upScheme(i,{rir:num(e.target.value)})}/></div>
+              <div><label style={lbl}>Rest (s)</label><Input type="number" value={b.scheme?.rest_sec??""} onChange={e=>upScheme(i,{rest_sec:num(e.target.value)})}/></div>
+            </div>
+            {(b.exercises||[]).map((ex,k) => (
+              <div key={k} style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr auto":"1.6fr 1fr 0.9fr 1.2fr auto",gap:"6px",marginBottom:"6px",alignItems:"center"}}>
+                <Input value={ex.name||""} onChange={e=>upEx(i,k,{name:e.target.value})} placeholder="Movement"/>
+                <Input value={ex.equip||""} onChange={e=>upEx(i,k,{equip:e.target.value})} placeholder="Equip"/>
+                <Input value={ex.reps!=null?String(ex.reps):""} onChange={e=>upEx(i,k,{reps:e.target.value})} placeholder="Reps"/>
+                {!isMobile && <Input value={ex.regression||""} onChange={e=>upEx(i,k,{regression:e.target.value})} placeholder="Regression"/>}
+                <button onClick={()=>rmEx(i,k)} title="Remove" style={{...iconBtn,color:"var(--accent)"}}><X size={13}/></button>
+              </div>
+            ))}
+            <button onClick={()=>addEx(i)} style={{...iconBtn,marginTop:"4px",padding:"5px 10px",fontSize:"12px"}}>+ exercise</button>
+          </div>
+        ))}
+
+        <Btn variant="ghost" onClick={addBlock} style={{width:"100%",justifyContent:"center",marginBottom:"16px"}}><Plus size={14}/> Add block</Btn>
+        <div style={{display:"flex",gap:"8px",justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={()=>onSave({ ...plan, title, classType, focus, plan:{ ...(plan.plan||{}), blocks } })}><Check size={14}/> Save plan</Btn>
+        </div>
+      </div>
     </div>
   );
 }
