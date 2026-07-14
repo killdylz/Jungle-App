@@ -8,6 +8,7 @@ import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
+import { slidesEnabled, getSlidesToken, parseFolderId, listPresentations, fetchPresentationText } from "./lib/slidesImport.js";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -7891,7 +7892,14 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const [planForm, setPlanForm] = useState({ title:"", classType:"", focus:"", json:"" });
   const [planErr, setPlanErr] = useState("");
   const [editingPlan, setEditingPlan] = useState(null);
-  const [slidesNote, setSlidesNote] = useState(false);
+  // Google Slides import (chunk 3): folder → deck list → per-deck extract.
+  const [showSlides, setShowSlides] = useState(false);
+  const [slidesFolder, setSlidesFolder] = useState("");
+  const [slideDecks, setSlideDecks] = useState(null);   // null = not listed yet
+  const [deckSel, setDeckSel] = useState(() => new Set());
+  const [slidesBusy, setSlidesBusy] = useState("");     // "" | "list" | "import"
+  const [slidesErr, setSlidesErr] = useState("");
+  const [slidesProg, setSlidesProg] = useState(null);   // { done, total, current }
   const [planMode, setPlanMode] = useState("json"); // "json" = paste extraction JSON · "text" = paste deck text → LLM extract
   const [planBusy, setPlanBusy] = useState(false);
   const [showGen, setShowGen] = useState(false);
@@ -8104,6 +8112,69 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     } finally { setGenBusy(false); }
   };
 
+  // ── Google Slides import (chunk 3) ────────────────────────────────────────
+  // The coach's decks live in their own Drive folder: token → list the folder's
+  // presentations → per-deck slide text → persona-ai task:"extract" → fold into
+  // the corpus. sourceRef carries the presentation id so re-imports dedupe;
+  // the folder is remembered on the persona (styleProfile syncs to Supabase).
+  // Add plan → Paste deck text stays as the manual fallback.
+  const importedRefs = new Set(selPlans.map(pl => pl.sourceRef).filter(Boolean));
+  const openSlides = () => {
+    setShowSlides(s => !s);
+    setSlidesErr(""); setSlideDecks(null); setDeckSel(new Set()); setSlidesProg(null);
+    setSlidesFolder(selected?.styleProfile?.slidesFolder || "");
+  };
+  const listSlideDecks = async () => {
+    setSlidesErr("");
+    const folderId = parseFolderId(slidesFolder);
+    if (!folderId) { setSlidesErr("Paste the coach's Drive folder link (or its ID)."); return; }
+    setSlidesBusy("list");
+    try {
+      const token = await getSlidesToken();
+      const decks = await listPresentations(token, folderId);
+      setSlideDecks(decks);
+      setDeckSel(new Set(decks.filter(d => !importedRefs.has(d.id)).map(d => d.id)));
+      if ((selected?.styleProfile?.slidesFolder || "") !== slidesFolder.trim())
+        commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: { ...(p.styleProfile || {}), slidesFolder: slidesFolder.trim() } } : p));
+      if (!decks.length) setSlidesErr("No Google Slides decks found in that folder.");
+    } catch (e) { setSlidesErr(`Couldn't list the folder: ${e.message || e}`); }
+    finally { setSlidesBusy(""); }
+  };
+  const importSlideDecks = async () => {
+    if (!(supabaseEnabled && supabase)) { setSlidesErr("Import needs the persona-ai Edge Function for extraction. Use Add plan → Paste deck text instead."); return; }
+    const chosen = (slideDecks || []).filter(d => deckSel.has(d.id));
+    if (!chosen.length) { setSlidesErr("Select at least one deck to import."); return; }
+    setSlidesErr(""); setSlidesBusy("import");
+    const added = []; const failed = [];
+    try {
+      const token = await getSlidesToken();
+      for (const d of chosen) {
+        setSlidesProg({ done: added.length + failed.length, total: chosen.length, current: d.name });
+        try {
+          const { text } = await fetchPresentationText(token, d.id);
+          if (!text.trim()) throw new Error("deck has no readable text");
+          const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text, title: d.name } });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          const blocks = data?.plan?.blocks || [];
+          if (!blocks.length) throw new Error("no blocks extracted");
+          added.push({ id: store.newId(), personaId: selectedId, source: "slides", sourceRef: d.id,
+                       title: data.title || d.name, classType: (data.classType || "").trim(),
+                       focus: data.focus || "", planDate: (d.modifiedTime || "").slice(0, 10), plan: { blocks } });
+        } catch (e) { failed.push(`${d.name} — ${e.message || e}`); }
+      }
+    } catch (e) { failed.push(`${e.message || e}`); }
+    setSlidesProg(null); setSlidesBusy("");
+    if (added.length) {
+      commitPlans([...plans, ...added]);
+      const ct = added.find(pl => pl.classType)?.classType;
+      if (ct) setActiveCT(ct);
+      setDeckSel(new Set());
+    }
+    if (failed.length) setSlidesErr(`Imported ${added.length} of ${chosen.length}. Failed: ${failed.join(" · ")}`);
+    else if (added.length) setShowSlides(false);
+  };
+
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
@@ -8194,9 +8265,50 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                 )}
                 <div style={{display:"flex",alignItems:"center",gap:"10px",marginTop:"14px",flexWrap:"wrap"}}>
                   <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
-                  <button onClick={()=>setSlidesNote(s=>!s)} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:"transparent",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"6px 12px"}}><Upload size={13}/> Import from Google Slides</button>
+                  <button onClick={openSlides} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:"transparent",border:`1px solid ${showSlides?"var(--accent)":"var(--border)"}`,borderRadius:"6px",cursor:"pointer",color:showSlides?"var(--accent)":"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"6px 12px"}}><Upload size={13}/> Import from Google Slides</button>
                 </div>
-                {slidesNote && <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Direct Google Slides import lands in a later build (chunk 3): connect a coach's Slides folder → decks are extracted automatically. Until then, open a deck, copy its text, and use <b>Add plan → Paste deck text</b> — persona-ai extracts the blocks, schemes and movements for you.</p>}
+                {showSlides && (!slidesEnabled ? (
+                  <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Slides import isn't configured in this build (<b>VITE_GOOGLE_SLIDES_CLIENT_ID</b> missing at build time). Use <b>Add plan → Paste deck text</b> instead.</p>
+                ) : (
+                  <div style={{marginTop:"12px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
+                    <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>Import from this coach's Drive folder</p>
+                    <div style={{display:"flex",gap:"8px",flexWrap:isMobile?"wrap":"nowrap"}}>
+                      <Input placeholder="Drive folder link — https://drive.google.com/drive/folders/…" value={slidesFolder}
+                             onChange={e=>setSlidesFolder(e.target.value)} style={{flex:"1 1 240px"}}/>
+                      <Btn onClick={listSlideDecks} disabled={!!slidesBusy} style={{flexShrink:0}}>
+                        {slidesBusy==="list" ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Search size={14}/>} {slidesBusy==="list" ? "Listing…" : "List decks"}
+                      </Btn>
+                    </div>
+                    {slideDecks && slideDecks.length > 0 && (
+                      <div style={{marginTop:"10px"}}>
+                        <div style={{maxHeight:"220px",overflowY:"auto",border:"1px solid var(--border)",borderRadius:"8px",background:"var(--bg)"}}>
+                          {slideDecks.map(d => {
+                            const done = importedRefs.has(d.id);
+                            const on = deckSel.has(d.id);
+                            return (
+                              <label key={d.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",borderBottom:"1px solid var(--border)",cursor:"pointer",opacity:done&&!on?0.55:1}}>
+                                <input type="checkbox" checked={on} disabled={slidesBusy==="import"}
+                                  onChange={()=>setDeckSel(s=>{const n=new Set(s); if(n.has(d.id)) n.delete(d.id); else n.add(d.id); return n;})}/>
+                                <span style={{flex:1,minWidth:0,fontSize:"12px",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</span>
+                                {done && <Tag color="var(--navy)">imported</Tag>}
+                                <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0}}>{(d.modifiedTime||"").slice(0,10)}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center",flexWrap:"wrap"}}>
+                          <Btn onClick={importSlideDecks} disabled={!!slidesBusy || deckSel.size===0}>
+                            {slidesBusy==="import" ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>}
+                            {slidesBusy==="import" && slidesProg ? ` Extracting ${slidesProg.done+1}/${slidesProg.total}…` : ` Import ${deckSel.size} deck${deckSel.size===1?"":"s"}`}
+                          </Btn>
+                          {slidesBusy==="import" && slidesProg && <span style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"260px"}}>{slidesProg.current}</span>}
+                        </div>
+                      </div>
+                    )}
+                    {slidesErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0",lineHeight:"1.5"}}>{slidesErr}</p>}
+                    <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Each deck is read via the Google Slides API (read-only) and extracted by persona-ai into blocks, schemes and movements. Already-imported decks are detected and skipped by default.</p>
+                  </div>
+                ))}
               </div>
 
               {showAddPlan && (

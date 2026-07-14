@@ -28,6 +28,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # OAuth CLIENT ID (not a secret — it ships in every OAuth web app's
+          # bundle by design). Dedicated Slides-import Cloud project, consent
+          # screen in Testing mode; scopes are read-only Slides + Drive.
+          VITE_GOOGLE_SLIDES_CLIENT_ID: 752012094269-2egmufghtkmoiem8r923edublm4i4n3o.apps.googleusercontent.com
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
