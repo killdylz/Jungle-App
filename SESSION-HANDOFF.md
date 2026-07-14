@@ -1,6 +1,6 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-13_
+_Last updated: 2026-07-14_
 
 You're continuing work on **Jungle** — a white-label class operating system for boutique fitness studios (React + Vite + Supabase, deployed to GitHub Pages). This file is the cold-start brief: read it, confirm repo access, report `git status`, then propose a plan before editing.
 
@@ -17,9 +17,9 @@ You're continuing work on **Jungle** — a white-label class operating system fo
   git push origin main
   ```
 - **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
-- **Repo state:** as of 2026-07-13 the tree is clean and `main` is in sync with `origin`. Migrations `0003` + `0004` are applied to Supabase; the **full store.js → Postgres local-first sync is live and verified** (all domains) — see Next steps. (`.claude/launch.json`, a dev-server config, is left untracked.)
+- **Repo state:** as of 2026-07-14, tree clean, `main` in sync with `origin`. Migrations **`0001`–`0004` applied** to Supabase; **`0005` (coach personas) drafted, NOT applied**. Full store.js → Postgres local-first sync is **live + verified** (all domains). `src/data/` monolith split **started**. Four workstreams open (A/B/C/D — see roadmap). (`.claude/launch.json` dev config left untracked.)
 
-## ✅ Done this session
+## ✅ Foundations already in place (earlier sessions)
 
 - **Google login is LIVE and working** (Supabase Auth + Google OAuth). Allowlist gate in `supabase/migrations/0001_auth_foundation.sql`; admin email allowlisted. Google OAuth app published to production (no "unverified" warning).
 - **Spotify is no longer an app gate** — removed the `if (!token) return <LoginScreen>` gate. Spotify is optional, connected post-login from Music Hub via `ConnectSpotifyPrompt` (any user for now; PT-only gating deferred).
@@ -51,12 +51,38 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
   - **`user_prefs`** (per-user) — disp prefs, crossfade, template tracks, exdb key, all `dj_*`.
   - Wiring differs from classes: a single **`store.hydrateAll()`** runs once at the App root, writes every domain into localStorage, and setStates the App-root-held values (brand/prefs/history). Child screens + on-demand readers pick up the hydrated localStorage on their own mount — no child call-site changes.
 
-**🎯 Phase 1 local→Postgres storage migration is COMPLETE.** Every store.js domain now syncs. Next up the roadmap:
-1. Extract data constants → `src/data/`, shared UI → `src/ui/` (zero-risk splits of the 8.4k-line monolith).
-2. Phase 1 spine: Realtime room channels, QR/roster attendance capture (F4 — the data spine).
-3. Tighten `class_schedule_rules` RLS to admin/coach-only once the Calendar UI gates it (currently any gym member can write — see the note in `0003`).
+**🎯 Phase 1 local→Postgres storage migration is COMPLETE.** Every store.js domain syncs. This session the user said "go down the list and keep working" + added feature priorities → **four active workstreams**:
 
-Full phased plan + task list: see the Fable spec doc and the build-plan doc.
+**A — Monolith splits (Fable §4.5, zero-risk).** ▸ IN PROGRESS. `TEMPLATES` + `GLOSSARY` extracted to `src/data/` (`c2b5e36`, build-verified, both screens render). NEXT: `WORKOUT_LIBRARY` (App.jsx ~937–1613) + `STAGE_LIBRARY_MAP` (~1614) + `CLASS_STAGE_TEMPLATES` (~1650) → `src/data/library.js` — **big block; move via PowerShell splice on host files, not the Edit tool** (self-verifying method: an exact-match removal proves byte-fidelity). Then shared UI (`Btn/Input/Select/Tag/BrandLogo/StatCard`) → `src/ui/`.
+
+**B + C — Class Runner umbrella + merged Room TV.** ▸ PLANNED, not started. Today the RUN nav = 4 items: Live Runner (`live`→`LiveScreen` 6717), Studio TV (`overview-display`→`OverviewDisplayScreen` 7142), Floor TV (`floor-live`→`FloorLiveScreen` 7352), Auto-DJ. Plus an in-runner `display`→`DisplayScreen` 7453. GOAL (user ask): ONE **Class Runner** nav entry with sub-modes (Run / Room TV / Auto-DJ); **merge OverviewDisplay + FloorLive + Display into one `RoomTV` component** with a mode switch, governed by Fable P1 ("now over next", current move ≥60% visual weight) + P2 ("10-foot rule", legible at 8m). Later: Supabase Realtime room channels so the TV is a separate device from the coach's phone (Fable's "missing organ").
+
+**D — Coach-persona class planning.** ▸ DESIGN LOCKED + prototype proven — see the dedicated section below.
+
+**Roadmap after these:** F4 attendance spine (QR self-check-in + coach roster sweep) + Realtime channels → F5 analytics. Tighten `class_schedule_rules` RLS to admin/coach once the Calendar UI gates writes (`0003` note). Full phased plan: the Fable spec doc.
+
+## 🧠 Workstream D — Coach-persona class planning (big new capability)
+
+**Goal:** ingest years of historical class plans (the user's gym stores them in **Google Slides**) and let Jungle plan new classes at a **persona level** — recognizing exercises, rep/set schemes, and structure across class types, per coach. Maps to Fable **F2** (AI programming) deepened with personas.
+
+**Decisions locked (2026-07-14):**
+- **Model approach = "both, phased":** **extract → RAG now** (structured extraction + persona/style context fed to the LLM at generate time), fine-tuning kept as a *later* option once the corpus is big + clean. NOT fine-tuning first.
+- **Persona-FIRST workflow:** you DEFINE/CHOOSE a persona up front, then CONNECT data to it — no auto-inference from folder names or clustering. `kind` = `coach | format | house`.
+- **Ingestion:** Google Slides API is **free** (only the LLM extraction costs tokens). Slide text is baked into slide graphics → the **Slides API** (structured text runs per shape) beats OCR. Manual/paste import is fine for prototyping first.
+
+**Prototype PROVEN on 6 real "The Garage" decks:** parsed cleanly into structured JSON; detected **3 house formats** — **S360** (strength: `Warm Up 5min → M1 barbell primary w/ DB regression + ladder|5×5 + "1st set as primer" + RIR 2 + rest 3min → A1+A2 & B1+B2 antagonist supersets, 3 rounds, "go to B/A after" → C1 finisher, rest 90s`), **GC (Fundamental)** (conditioning: `C1 warmup → C2/C3` interval / AMRAP / rep-target circuits, erg-heavy), **Garage Enduro** (periodized endurance, "Week X of 24", runs+ergs+sled, RPE-driven). Extraction captured rep-ladders (`12-10-10-8`), RIR, rest, superset rotation, regressions, per-side, rep targets, intervals, AMRAP, erg distances, RPE. Generated a NEW on-style **"S360 (Deadlift — Peak Strength)"** as proof.
+
+**Extraction shape** (what a deck becomes): `{ facility, class_type, focus, date, blocks:[ { label, role:"warmup|primary_lift|superset|finisher|circuit", rotation, scheme:{ type:"sets_reps|rounds|time|interval|amrap", sets, reps:[], rir, rest_sec, note }, exercises:[ { name, equip, reps, per_side, regression, target } ] } ] }`.
+
+**Schema:** `supabase/migrations/0005_coach_personas.sql` (`f69d8fd`, **DRAFT — not applied**) — `coach_personas` (name, kind, `style_profile` jsonb, aggregated from the corpus) + `persona_plans` (the corpus; `plan` jsonb holds the `{blocks}` extraction; dedupe on `source_ref`). Gym-scoped, admin-write RLS (mirrors 0003). Uses `public.set_updated_at()` from 0003.
+
+**D — next steps (in order):**
+1. Confirm the persona model → **apply `0005`** in Supabase (SQL Editor → paste → Run).
+2. Build the **Personas screen** in Jungle (create/choose persona → connect data → view plans + learned profile → "Generate in this style" into the Builder; coach edits + approves — Fable's hard gate). **Buildable against `0005` with NO external infra**; **seed the 6 Garage decks** as the first persona(s). ← recommended first build.
+3. **Extraction Edge Function** (extend the `smart-build` pattern): deck → `{blocks}` JSON. Needs a Supabase Edge Function deploy.
+4. **Slides connector** (Google Slides API OAuth) for bulk historical import.
+
+The 6 sample decks (S360 Shoulder-Hypertrophy 11 Jul; S360 Squat-Peak Strength 20 Jun; GC Fundamental 11 Jul & 9 May; Garage Enduro Wk11/24) were pasted in the 2026-07-14 chat — re-share to seed if the images aren't retained.
 
 ## Deferred / notes
 
