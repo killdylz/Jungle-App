@@ -10,7 +10,9 @@
 // OAuth app is never touched. The client ID is public by design — only the
 // read-only scopes below are requested, and Google grants them per-user.
 const SLIDES_CLIENT_ID = import.meta.env.VITE_GOOGLE_SLIDES_CLIENT_ID;
-const SCOPES = "https://www.googleapis.com/auth/presentations.readonly https://www.googleapis.com/auth/drive.readonly";
+const SCOPE_SLIDES = "https://www.googleapis.com/auth/presentations.readonly";
+const SCOPE_DRIVE  = "https://www.googleapis.com/auth/drive.readonly";
+const SCOPES = `${SCOPE_SLIDES} ${SCOPE_DRIVE}`;
 
 export const slidesEnabled = !!SLIDES_CLIENT_ID;
 
@@ -44,6 +46,14 @@ export async function getSlidesToken() {
       scope: SCOPES,
       callback: (resp) => {
         if (resp.error) { reject(new Error(resp.error_description || resp.error)); return; }
+        // Google's consent popup shows a CHECKBOX per permission and users can
+        // grant only some. A token without the Drive scope fails every call
+        // downstream ("insufficient authentication scopes") — catch it here,
+        // never cache it, and say exactly what to re-tick.
+        if (!window.google.accounts.oauth2.hasGrantedAllScopes(resp, SCOPE_SLIDES, SCOPE_DRIVE)) {
+          reject(new Error('Google granted only part of the access. Click again and tick BOTH checkboxes on the Google popup ("See your Google Slides presentations" and "See and download your Google Drive files").'));
+          return;
+        }
         cachedToken = { token: resp.access_token, exp: Date.now() + (Number(resp.expires_in) || 3600) * 1000 };
         resolve(resp.access_token);
       },
@@ -87,6 +97,10 @@ async function gapi(token, url) {
   if (!res.ok) {
     let msg = `Google API error ${res.status}`;
     try { msg = (await res.json())?.error?.message || msg; } catch { /* keep status text */ }
+    if (/insufficient.*scopes/i.test(msg)) {
+      cachedToken = null; // drop the partial-grant token so the next click re-prompts
+      msg = 'Google granted only part of the access. Click again and tick BOTH checkboxes on the Google popup ("See your Google Slides presentations" and "See and download your Google Drive files").';
+    }
     throw new Error(msg);
   }
   return res.json();
