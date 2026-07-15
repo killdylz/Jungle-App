@@ -112,7 +112,12 @@ function extractJson(text: string) {
   return JSON.parse(t);
 }
 
-async function gemini(system: string, prompt: string) {
+// opts.think:false disables Gemini 2.5's default thinking pass — extraction of a
+// long deck otherwise runs 100s+ and can blow the Edge Function gateway timeout
+// (~150s), which the client sees as a bare non-2xx. Extraction is transcription,
+// not reasoning; it doesn't need thinking and it DOES need to finish.
+type LlmOpts = { temperature?: number; think?: boolean };
+async function gemini(system: string, prompt: string, opts: LlmOpts = {}) {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY not set");
   const model = Deno.env.get("PERSONA_LLM_MODEL") || "gemini-2.5-flash";
@@ -124,7 +129,11 @@ async function gemini(system: string, prompt: string) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: opts.temperature ?? 0.7,
+          ...(opts.think === false ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        },
       }),
     },
   );
@@ -133,7 +142,7 @@ async function gemini(system: string, prompt: string) {
   return extractJson(d?.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
 }
 
-async function openai(system: string, prompt: string) {
+async function openai(system: string, prompt: string, opts: LlmOpts = {}) {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) throw new Error("OPENAI_API_KEY not set");
   const model = Deno.env.get("PERSONA_LLM_MODEL") || "gpt-4o-mini";
@@ -143,6 +152,7 @@ async function openai(system: string, prompt: string) {
     body: JSON.stringify({
       model,
       response_format: { type: "json_object" },
+      ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
       messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
     }),
   });
@@ -151,7 +161,7 @@ async function openai(system: string, prompt: string) {
   return extractJson(d?.choices?.[0]?.message?.content || "{}");
 }
 
-async function anthropic(system: string, prompt: string) {
+async function anthropic(system: string, prompt: string, _opts: LlmOpts = {}) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not set");
   // Default to the latest Claude. Opus 4.8 rejects temperature / budget_tokens, so
@@ -192,7 +202,8 @@ serve(async (req) => {
     let system: string, prompt: string;
     if (task === "extract") {
       const text = String(body?.text || "").trim();
-      if (!text) return json({ error: "Missing deck text to extract" }, 400);
+      // v rides on this cheap validation error so a deploy can be detected without an LLM call.
+      if (!text) return json({ error: "Missing deck text to extract", v: 4 }, 400);
       system = EXTRACT_SYSTEM;
       const hints = [
         body?.classType ? `classType hint: ${body.classType}` : "",
@@ -220,7 +231,18 @@ serve(async (req) => {
     // Default free: persona-specific override → the shared smart-build provider → gemini.
     const provider = (Deno.env.get("PERSONA_LLM_PROVIDER") || Deno.env.get("LLM_PROVIDER") || "gemini").toLowerCase();
     const call = provider === "openai" ? openai : provider === "gemini" ? gemini : anthropic;
-    const out = await call(system, prompt);
+    // Extraction = faithful transcription: low temperature, no thinking pass (speed).
+    const opts: LlmOpts = task === "extract" ? { temperature: 0.2, think: false } : {};
+    let out;
+    try {
+      out = await call(system, prompt, opts);
+    } catch (e) {
+      // One retry for transient provider blips (free-tier rate limits, overload).
+      const msg = String((e as Error)?.message || e);
+      if (!/429|quota|rate ?limit|overloaded|unavailable|try again|internal/i.test(msg)) throw e;
+      await new Promise((res) => setTimeout(res, 2500));
+      out = await call(system, prompt, opts);
+    }
     const normalized = normalizePlan(out || {});
     if (!normalized.plan.blocks.length) throw new Error("Model returned no blocks");
     return json(normalized, 200);
