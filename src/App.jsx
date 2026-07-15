@@ -6930,6 +6930,16 @@ const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!
 // Distinct exercise names across a plan's blocks — the novelty signature stored in
 // the generation ledger and used to steer the next generation away from repeats.
 const blockMovementNames = blocks => { const s = new Set(); (blocks||[]).forEach(b => (b.exercises||[]).forEach(ex => { const n=(ex.name||"").trim(); if (n) s.add(n); })); return [...s]; };
+// supabase.functions.invoke wraps every non-2xx in a FunctionsHttpError whose
+// message is just "Edge Function returned a non-2xx status code" — the function's
+// real { error } body is on error.context (a Response). Read it or debugging is blind.
+async function fnErrorMessage(error) {
+  try {
+    const body = await error.context.json();
+    if (body?.error) return String(body.error);
+    return JSON.stringify(body);
+  } catch { return error?.message || String(error); }
+}
 
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
@@ -7088,7 +7098,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     try {
       const { data, error } = await supabase.functions.invoke("persona-ai", { body: {
         task: "extract", text, classType: planForm.classType.trim(), title: planForm.title.trim(), focus: planForm.focus.trim() } });
-      if (error) throw error;
+      if (error) throw new Error(await fnErrorMessage(error));
       if (data?.error) throw new Error(data.error);
       const blocks = data?.plan?.blocks || [];
       if (!blocks.length) throw new Error("no blocks came back");
@@ -7157,7 +7167,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   .slice(0, 6).map(g => ({ title: g.title, focus: g.focus, movements: (g.movements || []).slice(0, 12) })),
       };
       const { data, error } = await supabase.functions.invoke("persona-ai", { body: payload });
-      if (error) throw error;
+      if (error) throw new Error(await fnErrorMessage(error));
       if (data?.error) throw new Error(data.error);
       const blocks = data?.plan?.blocks || [];
       if (!blocks.length) throw new Error("no blocks came back");
@@ -7215,8 +7225,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         try {
           const { text } = await fetchPresentationText(token, d.id);
           if (!text.trim()) throw new Error("deck has no readable text");
-          const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text, title: d.name } });
-          if (error) throw error;
+          // Cap pathological decks so one giant outlier can't blow the function's limits.
+          const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: text.slice(0, 120000), title: d.name } });
+          if (error) throw new Error(await fnErrorMessage(error));
           if (data?.error) throw new Error(data.error);
           const blocks = data?.plan?.blocks || [];
           if (!blocks.length) throw new Error("no blocks extracted");
