@@ -1836,7 +1836,7 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
   const nav = [
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers},{k:"templates",l:"Templates",Icon:LayoutGrid},{k:"library",l:"Exercise Library",Icon:BookOpen},{k:"glossary",l:"Glossary",Icon:List}]},
-    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle},{k:"overview-display",l:"Studio TV",Icon:Monitor},{k:"floor-live",l:"Floor TV",Icon:Monitor},{k:"music",l:"Auto-DJ",Icon:Music}]},
+    {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
   ].map(g => ({ ...g, items: g.items.filter(it => isViewEnabled(it.k)) })).filter(g => g.items.length);
@@ -5683,6 +5683,37 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 }
 
 // ─── LiveScreen ───────────────────────────────────────────────────────────────
+// ─── Room TV (workstreams B+C) ────────────────────────────────────────────────
+// ONE fullscreen TV surface with three modes, replacing the separate Studio TV /
+// Floor TV / coach-Display views: "studio" = pre-class plan overview, "floor" =
+// whole-class live board, "coach" = the in-runner coach display. Fable P1/P2:
+// the mode switch is a transient overlay (the running surface keeps the whole
+// screen) with buttons sized for an across-the-room tap.
+function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, spPaused, onPlayPause }) {
+  const [ctl, setCtl] = useState(true);
+  useEffect(() => {
+    if (!ctl) return;
+    const t = setTimeout(() => setCtl(false), 4500);
+    return () => clearTimeout(t);
+  }, [ctl, mode]);
+  const wake = () => setCtl(true);
+  return (
+    <div onMouseMove={wake} onTouchStart={wake} style={{position:"relative",flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {mode==="studio" && <OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={onExit}/>}
+      {mode==="floor"  && <FloorLiveScreen stages={stages} liveState={liveState} nowPlaying={nowPlaying} onBack={onExit}/>}
+      {mode==="coach"  && <DisplayScreen stages={stages} liveState={liveState} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={onPlayPause}/>}
+      {ctl && (
+        <div style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:80,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
+          {[["studio","Plan"],["floor","Floor"],["coach","Coach"]].map(([m,lbl]) => (
+            <button key={m} onClick={()=>onMode(m)} style={{padding:"10px 20px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"15px",fontWeight:"800",letterSpacing:"0.5px",background:mode===m?"var(--accent)":"transparent",color:mode===m?"var(--on-accent)":"rgba(255,255,255,0.85)"}}>{lbl}</button>
+          ))}
+          <button onClick={onExit} style={{padding:"10px 16px",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.25)",cursor:"pointer",fontSize:"14px",fontWeight:"700",background:"transparent",color:"rgba(255,255,255,0.85)"}}>Exit</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -7697,7 +7728,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
   const nav = [
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coach Personas",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
-    {group:"RUN",    items:[{k:"live",l:"Live Runner",Icon:PlayCircle,cap:"class:view"},{k:"overview-display",l:"Studio TV",Icon:Monitor,cap:"class:view"},{k:"floor-live",l:"Floor TV",Icon:Monitor,cap:"class:view"},{k:"music",l:"Auto-DJ",Icon:Music,cap:"music:view"}]},
+    {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle,cap:"class:view"}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
   ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k)) })).filter(g => g.items.length);
@@ -7968,6 +7999,10 @@ export default function App() {
     return { classType:fc, subType:Object.keys(WORKOUT_LIBRARY[fc]?.subTypes||{})[0]||null };
   });
   const [view,        setView]        = useState("dashboard");
+  // Class Runner umbrella (B+C): sub-mode within the runner view, and which of
+  // the merged Room TV surfaces is showing.
+  const [runnerTab,   setRunnerTab]   = useState("run");     // "run" | "dj"
+  const [roomTvMode,  setRoomTvMode]  = useState("studio");  // "studio" | "floor" | "coach"
   const [stages,      setStages]      = useState(mkStages);
   const [sessionName, setSessionName] = useState("My Workout");
   const [liveState,   setLiveState]   = useState({ playing:false, idx:0, elapsed:0 });
@@ -8018,7 +8053,7 @@ export default function App() {
   const crossfadeRef = useRef(crossfade);
   crossfadeRef.current = crossfade;
   useEffect(() => {
-    if (view!=="live"&&view!=="display"&&view!=="overview-display"&&view!=="floor-live") return;
+    if (view!=="live"&&view!=="room-tv") return;
     if (!liveState.playing) return;
     const iv = setInterval(() => {
       setLiveState(ls => {
@@ -8182,11 +8217,11 @@ export default function App() {
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio",   cap:"integrations:manage"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio",   cap:"brand:view"},
   ].filter(n => (!n.cap || can(n.cap)) && isViewEnabled(n.key));
-  const isFullscreen = view==="display"||view==="overview-display"||view==="floor-live";
+  const isFullscreen = view==="room-tv";
   const navGroups = ["Main","Insights","Tools","Studio"].filter(g => allNavItems.some(n => n.group===g));
   const navTo = key => {
-    if ((view==="live"||view==="display") && player) player.pause().catch(()=>{});
-    if (view==="live"||view==="display") setLiveState(ls=>({...ls,playing:false}));
+    if ((view==="live"||view==="room-tv") && player) player.pause().catch(()=>{});
+    if (view==="live"||view==="room-tv") setLiveState(ls=>({...ls,playing:false}));
     setView(key); setShowNav(false);
   };
 
@@ -8274,13 +8309,23 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
-        {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>setView("overview-display")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
+        {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
-        {view==="overview-display"&&<OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={()=>setView("builder")}/>}
-        {view==="live"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>setView("display")} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
-        {view==="display"&&<DisplayScreen stages={stages} liveState={liveState} onBack={()=>setView("live")} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
-        {view==="floor-live"&&<FloorLiveScreen stages={stages} liveState={liveState} nowPlaying={nowPlaying} onBack={()=>setView(liveState.playing?"live":"dashboard")}/>}
+        {view==="live"&&(
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            {/* Class Runner umbrella (B): one nav entry, sub-modes Run / Room TV / Auto-DJ. */}
+            <div style={{flexShrink:0,display:"flex",gap:"6px",alignItems:"center",padding:"8px 16px",borderBottom:"1px solid var(--border)",background:"var(--card)"}}>
+              {[["run","Run"],["dj","Auto-DJ"]].map(([t,lbl]) => (
+                <button key={t} onClick={()=>setRunnerTab(t)} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:runnerTab===t?"700":"600",border:`1px solid ${runnerTab===t?"var(--accent)":"var(--border)"}`,background:runnerTab===t?"color-mix(in srgb, var(--accent) 13%, transparent)":"transparent",color:runnerTab===t?"var(--accent)":"var(--text)"}}>{lbl}</button>
+              ))}
+              <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
+            </div>
+            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack}/>}
+            {runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
+          </div>
+        )}
+        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
