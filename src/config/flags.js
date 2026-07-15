@@ -5,15 +5,16 @@
 // surface gets replaced by a real-data implementation in the phase noted below.
 
 export const FLAGS = {
-  mockAnalytics: false, // AnalyticsScreen hardcoded KPIs + calendar suggestions/leaderboard → real analytics, Phase 2 (N2)
-  mockMembers:   false, // MemberScreen demo app + demo member song requests → members table, Phase 1
-  mockSchedule:  false, // BASE_SCHEDULE hardcoded classes → class_instances, Phase 1
-  attendeeShare: false, // Legacy b64-in-URL read-only attendee view → replaced by magic-link member view, Phase 1
+  mockAnalytics:    false, // AnalyticsScreen hardcoded KPIs + calendar suggestions/leaderboard → real analytics, Phase 2 (N2)
+  mockMembers:      false, // MemberScreen demo app + demo member song requests → members table, Phase 1
+  mockSchedule:     false, // BASE_SCHEDULE hardcoded classes → class_instances, Phase 1
+  attendeeShare:    false, // Legacy b64-in-URL read-only attendee view → replaced by magic-link member view, Phase 1
+  mockIntegrations: false, // IntegrationsScreen fake ClassPass/Stripe/Wearables "connected" cards → real integrations, later phase
 };
 
 // Views that exist only as mock/theatre today. Hidden from every nav and blocked
 // at the render choke-point unless their flag is explicitly on.
-const MOCK_VIEW_FLAG = { analytics: "mockAnalytics", member: "mockMembers" };
+const MOCK_VIEW_FLAG = { analytics: "mockAnalytics", member: "mockMembers", integrations: "mockIntegrations" };
 
 export function isViewEnabled(key) {
   const flag = MOCK_VIEW_FLAG[key];

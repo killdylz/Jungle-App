@@ -8331,7 +8331,7 @@ export default function App() {
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
         {view==="music"&&(token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
         {view==="member"&&(FLAGS.mockMembers?<MemberScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Members" note="The member experience is rebuilt on the members table in Phase 1." onBack={()=>setView("dashboard")}/>)}
-        {view==="integrations"&&<IntegrationsScreen onBack={()=>setView("dashboard")}/>}
+        {view==="integrations"&&(FLAGS.mockIntegrations?<IntegrationsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Integrations" note="Real integrations (booking, payments, wearables) land in a later phase — the previous cards were demo theatre." onBack={()=>setView("dashboard")}/>)}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}
       </div>
