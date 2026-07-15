@@ -10,6 +10,7 @@ import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText } from "./lib/slidesImport.js";
+import { onRoomState, sendRoomState } from "./lib/room.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
@@ -5689,7 +5690,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 // whole-class live board, "coach" = the in-runner coach display. Fable P1/P2:
 // the mode switch is a transient overlay (the running surface keeps the whole
 // screen) with buttons sized for an across-the-room tap.
-function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, spPaused, onPlayPause }) {
+function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, spPaused, onPlayPause, canFollow, follow, onFollow, remote }) {
   const [ctl, setCtl] = useState(true);
   useEffect(() => {
     if (!ctl) return;
@@ -5697,16 +5698,35 @@ function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlayi
     return () => clearTimeout(t);
   }, [ctl, mode]);
   const wake = () => setCtl(true);
+  // Follow mode: mirror the active runner's broadcast instead of local state.
+  // A broadcast is live if it arrived within the last 10s (the runner sends 1/s).
+  const remoteLive = follow && remote && (Date.now() - (remote.at || 0) < 10_000);
+  const S  = remoteLive ? (remote.stages || [])  : stages;
+  const SN = remoteLive ? (remote.sessionName || "Class") : sessionName;
+  const LS = remoteLive ? (remote.liveState || {playing:false,idx:0,elapsed:0}) : liveState;
+  const NP = remoteLive ? remote.nowPlaying : nowPlaying;
   return (
     <div onMouseMove={wake} onTouchStart={wake} style={{position:"relative",flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {mode==="studio" && <OverviewDisplayScreen stages={stages} sessionName={sessionName} onBack={onExit}/>}
-      {mode==="floor"  && <FloorLiveScreen stages={stages} liveState={liveState} nowPlaying={nowPlaying} onBack={onExit}/>}
-      {mode==="coach"  && <DisplayScreen stages={stages} liveState={liveState} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={nowPlaying} onPlayPause={onPlayPause}/>}
+      {mode==="studio" && <OverviewDisplayScreen stages={S} sessionName={SN} onBack={onExit}/>}
+      {mode==="floor"  && <FloorLiveScreen stages={S} liveState={LS} nowPlaying={NP} onBack={onExit}/>}
+      {mode==="coach"  && <DisplayScreen stages={S} liveState={LS} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={NP} onPlayPause={onPlayPause}/>}
+      {follow && !remoteLive && (
+        <div style={{position:"absolute",bottom:"18px",left:"50%",transform:"translateX(-50%)",zIndex:80,padding:"10px 18px",borderRadius:"10px",background:"rgba(10,14,20,0.72)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",fontSize:"14px",fontWeight:"700"}}>
+          Following this room — waiting for the coach's runner to start…
+        </div>
+      )}
       {ctl && (
         <div style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:80,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
           {[["studio","Plan"],["floor","Floor"],["coach","Coach"]].map(([m,lbl]) => (
             <button key={m} onClick={()=>onMode(m)} style={{padding:"10px 20px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"15px",fontWeight:"800",letterSpacing:"0.5px",background:mode===m?"var(--accent)":"transparent",color:mode===m?"var(--on-accent)":"rgba(255,255,255,0.85)"}}>{lbl}</button>
           ))}
+          {canFollow && (
+            <button onClick={()=>onFollow(!follow)} title="Mirror the runner playing on another device"
+              style={{padding:"10px 16px",borderRadius:"10px",border:`1px solid ${follow?"var(--accent)":"rgba(255,255,255,0.25)"}`,cursor:"pointer",fontSize:"14px",fontWeight:"700",background:follow?"color-mix(in srgb, var(--accent) 25%, transparent)":"transparent",color:follow?"var(--accent)":"rgba(255,255,255,0.85)",display:"inline-flex",alignItems:"center",gap:"7px"}}>
+              <span style={{width:"9px",height:"9px",borderRadius:"50%",background:remoteLive?"#22C55E":(follow?"#F59E0B":"rgba(255,255,255,0.4)"),display:"inline-block"}}/>
+              Follow
+            </button>
+          )}
           <button onClick={onExit} style={{padding:"10px 16px",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.25)",cursor:"pointer",fontSize:"14px",fontWeight:"700",background:"transparent",color:"rgba(255,255,255,0.85)"}}>Exit</button>
         </div>
       )}
@@ -8003,6 +8023,9 @@ export default function App() {
   // the merged Room TV surfaces is showing.
   const [runnerTab,   setRunnerTab]   = useState("run");     // "run" | "dj"
   const [roomTvMode,  setRoomTvMode]  = useState("studio");  // "studio" | "floor" | "coach"
+  // Realtime room: a Room TV on another device can FOLLOW the active runner.
+  const [followRoom,  setFollowRoom]  = useState(false);
+  const [remoteRoom,  setRemoteRoom]  = useState(null);      // last broadcast { stages, sessionName, liveState, nowPlaying, at }
   const [stages,      setStages]      = useState(mkStages);
   const [sessionName, setSessionName] = useState("My Workout");
   const [liveState,   setLiveState]   = useState({ playing:false, idx:0, elapsed:0 });
@@ -8100,6 +8123,25 @@ export default function App() {
     window.addEventListener("keydown", onSpace);
     return () => window.removeEventListener("keydown", onSpace);
   }, [view, player]);
+
+  // ── Realtime room (B+C): runner broadcasts, a following Room TV mirrors ────
+  // Broadcasts ride the 1/s live tick while the runner is playing; tracks are
+  // stripped (the TV never needs Spotify URIs) to keep payloads small.
+  const roomGymId = auth?.gym?.id;
+  useEffect(() => {
+    if (!roomGymId || view !== "live" || !liveState.playing) return;
+    sendRoomState(roomGymId, {
+      sessionName,
+      liveState,
+      at: Date.now(),
+      stages: stagesRef.current.map(s => ({ ...s, tracks: [] })),
+      nowPlaying: nowPlaying ? { name: nowPlaying.name, artists: (nowPlaying.artists || []).map(a => ({ name: a.name })) } : null,
+    });
+  }, [view, liveState, sessionName, roomGymId]);
+  useEffect(() => {
+    if (!roomGymId || view !== "room-tv" || !followRoom) return;
+    return onRoomState(roomGymId, p => setRemoteRoom(p));
+  }, [roomGymId, view, followRoom]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleAddTrack     = (si, t)        => setStages(ss => { const n=[...ss]; n[si]={...n[si],tracks:[...(n[si].tracks||[]),t]};          return n; });
@@ -8325,7 +8367,7 @@ export default function App() {
             {runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
-        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))}/>}
+        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
