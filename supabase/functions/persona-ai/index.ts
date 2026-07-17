@@ -152,6 +152,11 @@ function extractJson(text: string) {
 // Bad key / bad request never match, so they surface immediately.
 const TRANSIENT = /429|rate.?limit|resource.?exhausted|quota|exceeded|overload|unavailable|high demand|temporar|try again|retry in|internal|deadline|503|500/i;
 
+// A model id that's been retired/renamed ("... is no longer available", "not found",
+// "not supported") should make the sweep SKIP to the next free model, not abort — so
+// one bad id can never take down extraction.
+const MODEL_GONE = /no longer available|not found|not supported|unsupported|does not exist|is not available|unknown.{0,10}model|invalid.{0,10}model/i;
+
 // Gemini 429s carry a "Please retry in 58.7s" hint — honor it so we wait exactly the
 // window rather than guessing. Returns ms, or 0 when absent.
 function retryHintMs(msg: string): number {
@@ -166,13 +171,15 @@ function retryHintMs(msg: string): number {
 type LlmOpts = { temperature?: number; think?: boolean };
 
 // Free-tier fallback chain: while we stay on the no-cost Gemini path, an overloaded
-// primary model doesn't mean the whole tier is down — the lighter models draw on
-// SEPARATE capacity and per-model rate limits. Extraction is faithful transcription,
-// so a lighter model is an acceptable stand-in when the primary is busy. The
-// configured model (PERSONA_LLM_MODEL) always leads; duplicates are dropped.
+// OR quota-exhausted primary model doesn't mean the whole tier is down — the other
+// models draw on SEPARATE capacity and per-model rate limits (2.5-flash 5rpm ->
+// 2.0-flash 15rpm -> 2.0-flash-lite 30rpm). Extraction is faithful transcription, so
+// a lighter model is an acceptable stand-in. The configured model (PERSONA_LLM_MODEL)
+// always leads; duplicates dropped. All ids here are current GA models — an unknown/
+// retired id (e.g. the old "gemini-2.5-flash-lite") is skipped by the sweep, not fatal.
 function geminiModels(): string[] {
   const primary = Deno.env.get("PERSONA_LLM_MODEL") || "gemini-2.5-flash";
-  return [...new Set([primary, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"])];
+  return [...new Set([primary, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"])];
 }
 
 async function geminiOnce(model: string, key: string, system: string, prompt: string, opts: LlmOpts) {
@@ -213,10 +220,12 @@ async function gemini(system: string, prompt: string, opts: LlmOpts = {}) {
       return await geminiOnce(model, key, system, prompt, opts);
     } catch (e) {
       lastErr = e;
-      // Only fall through to the next free model on a transient/overload error.
-      // A deterministic failure (bad key, malformed request) would fail identically
-      // on every model, so surface it now.
-      if (!TRANSIENT.test(String((e as Error)?.message || e))) throw e;
+      const msg = String((e as Error)?.message || e);
+      // Fall through to the next free model on a transient/overload/quota error, OR
+      // when this model id is unavailable/retired (a renamed model must not abort the
+      // sweep). A deterministic content failure (bad key, malformed request) would
+      // fail identically on every model, so surface it now.
+      if (!TRANSIENT.test(msg) && !MODEL_GONE.test(msg)) throw e;
     }
   }
   throw lastErr;
@@ -311,7 +320,7 @@ serve(async (req) => {
     if (task === "extract") {
       const text = String(body?.text || "").trim();
       // v rides on this cheap validation error so a deploy can be detected without an LLM call.
-      if (!text) return json({ error: "Missing deck text to extract", v: 6 }, 400);
+      if (!text) return json({ error: "Missing deck text to extract", v: 7 }, 400);
       system = EXTRACT_SYSTEM;
       const hints = [
         body?.classType ? `classType hint: ${body.classType}` : "",
