@@ -3601,6 +3601,33 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     } catch(_){ return null; }
   };
 
+  // ── WCAG-AA contrast audit of member-visible token pairs (Fable F6 · P2 10-foot rule).
+  //    Checked live against the draft tokens the coach is editing. Button-label colour
+  //    (--on-accent) is auto-derived (dark ink on a light accent, light ink on a dark one),
+  //    so we mirror that derivation here rather than treating it as an editable token.
+  const onAccentFor = (tk) => {
+    try { return relativeLuminance(...hexToRgb(tk.accent)) > 0.18 ? tk.bg : tk.text; }
+    catch(_){ return tk.text; }
+  };
+  const a11yChecks = [
+    { id:"text-bg",   fgKey:"text",   fg:draftTokens.text,          bg:draftTokens.bg,     label:"Body text on background",     min:4.5, big:false },
+    { id:"text-card", fgKey:"text",   fg:draftTokens.text,          bg:draftTokens.card,   label:"Text on card surface",        min:4.5, big:false },
+    { id:"muted-bg",  fgKey:"muted",  fg:draftTokens.muted,         bg:draftTokens.bg,     label:"Secondary text on background",min:4.5, big:false },
+    { id:"onacc-acc", fgKey:null,     fg:onAccentFor(draftTokens),  bg:draftTokens.accent, label:"Button label on accent",      min:4.5, big:false },
+    { id:"accent-bg", fgKey:"accent", fg:draftTokens.accent,        bg:draftTokens.bg,     label:"Accent as text / graphics",   min:3.0, big:true  },
+  ].map(c => {
+    let ratio = 0; try { ratio = wcagContrast(c.fg, c.bg); } catch(_){}
+    return { ...c, ratio, pass: ratio >= c.min };
+  });
+  const a11yTextFails = a11yChecks.filter(c => !c.big && !c.pass).length;
+  const fixablePair  = (c) => c.fgKey && c.fgKey !== "accent" && !c.pass;   // never auto-mangle the brand accent
+  const fixPair = (c) => { if (fixablePair(c)) setDraftTokens(d => ({ ...d, [c.fgKey]: nudgeContrast(c.fg, c.bg, c.min) })); };
+  const fixAllText = () => setDraftTokens(d => {
+    const nd = { ...d };
+    a11yChecks.forEach(c => { if (c.fgKey && c.fgKey !== "accent" && !c.pass) nd[c.fgKey] = nudgeContrast(nd[c.fgKey], c.bg, c.min); });
+    return nd;
+  });
+
   const sectionStyle = {
     background:"var(--card)", border:`1px solid var(--border)`, borderRadius:"16px", padding:"20px",
   };
@@ -3830,6 +3857,54 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 style={{padding:"10px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",color:"var(--muted)"}}>
                 Reset
               </button>
+            </div>
+          </div>
+
+          {/* 3.5 ACCESSIBILITY — live WCAG-AA contrast audit (F6 · P2 10-foot rule) */}
+          <div style={sectionStyle}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",flexWrap:"wrap",marginBottom:"10px"}}>
+              <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px"}}>ACCESSIBILITY · WCAG AA</div>
+              {a11yTextFails>0 && (
+                <button onClick={fixAllText} title="Nudge failing text colours until they pass AA"
+                  style={{fontSize:"11px",fontWeight:"700",padding:"5px 11px",borderRadius:"999px",border:"1px solid var(--accent)",background:"color-mix(in srgb, var(--accent) 12%, transparent)",color:"var(--accent)",cursor:"pointer"}}>Auto-fix text</button>
+              )}
+            </div>
+
+            {/* Roll-up banner */}
+            <div style={{display:"flex",alignItems:"center",gap:"9px",padding:"10px 12px",borderRadius:"9px",marginBottom:"12px",
+              background:a11yTextFails===0?"rgba(123,227,164,.12)":"rgba(245,158,11,.12)",
+              border:`1px solid ${a11yTextFails===0?"rgba(123,227,164,.4)":"rgba(245,158,11,.4)"}`}}>
+              <span style={{fontSize:"15px",flexShrink:0}}>{a11yTextFails===0?"✓":"⚠️"}</span>
+              <span style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",lineHeight:1.4}}>
+                {a11yTextFails===0
+                  ? "Member-visible text meets WCAG AA — legible at room-display size."
+                  : `${a11yTextFails} text pair${a11yTextFails>1?"s":""} below AA — may be hard to read from the back of the floor.`}
+              </span>
+            </div>
+
+            {/* Per-pair rows */}
+            <div style={{display:"flex",flexDirection:"column",gap:"7px"}}>
+              {a11yChecks.map(c=>(
+                <div key={c.id} style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                  <div style={{width:"36px",height:"28px",borderRadius:"6px",background:c.bg,border:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{color:c.fg,fontSize:"13px",fontWeight:"800",lineHeight:1}}>Aa</span>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"12px",fontWeight:"600",color:"var(--text)"}}>{c.label}</div>
+                    <div style={{fontSize:"10px",color:"var(--muted)"}}>{c.ratio.toFixed(2)}:1 · needs {c.min}:1{c.big?" · large/graphic":""}</div>
+                  </div>
+                  <span style={{fontSize:"10px",fontWeight:"800",padding:"2px 7px",borderRadius:"999px",flexShrink:0,
+                    background:c.pass?"rgba(123,227,164,.15)":"rgba(239,68,68,.15)",color:c.pass?"#7BE3A4":"#EF4444"}}>{c.pass?"AA":"FAIL"}</span>
+                  {fixablePair(c) && (
+                    <button onClick={()=>fixPair(c)} title="Nudge this text colour until it passes AA"
+                      style={{fontSize:"10px",fontWeight:"700",padding:"3px 8px",borderRadius:"6px",border:`1px solid var(--border)`,background:"var(--navy)",color:"var(--text)",cursor:"pointer",flexShrink:0}}>Fix</button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"11px",lineHeight:1.5}}>
+              Live against your draft tokens. AA needs 4.5:1 for body text, 3:1 for large/graphic marks. Passing keeps every branded member surface — including the room TV read at 8&nbsp;m — legible.
             </div>
           </div>
 
