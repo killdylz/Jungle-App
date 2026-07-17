@@ -7275,13 +7275,18 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         setSlidesProg({ done: added.length + failed.length, total: chosen.length, current: d.name });
         try {
           const { text } = await fetchPresentationText(token, d.id);
-          if (!text.trim()) throw new Error("deck has no readable text");
+          const textLen = text.trim().length;
+          // Log the exact text the extractor receives so a "no blocks" failure is
+          // diagnosable (image-only decks yield near-zero text — the Slides API
+          // can't read words baked into pictures).
+          console.log(`[slides-import] "${d.name}" — ${textLen} chars of slide text extracted:\n`, text);
+          if (!textLen) throw new Error("no readable text found — this deck is likely image-based (the Slides API can't read text inside pictures/screenshots)");
           // Cap pathological decks so one giant outlier can't blow the function's limits.
           const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: text.slice(0, 120000), title: d.name } });
           if (error) throw new Error(await fnErrorMessage(error));
           if (data?.error) throw new Error(data.error);
           const blocks = data?.plan?.blocks || [];
-          if (!blocks.length) throw new Error("no blocks extracted");
+          if (!blocks.length) throw new Error(`no blocks extracted from ${textLen} chars of text` + (textLen < 200 ? " — this deck is likely image-based (workout inside pictures the Slides API can't read); try a text-based deck or Add plan → Paste deck text" : " — the text was read but not recognized as a workout; check the browser console for the raw text"));
           added.push({ id: store.newId(), personaId: selectedId, source: "slides", sourceRef: d.id,
                        title: data.title || d.name, classType: (data.classType || "").trim(),
                        focus: data.focus || "", planDate: (d.modifiedTime || "").slice(0, 10), plan: { blocks } });
