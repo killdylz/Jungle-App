@@ -7705,7 +7705,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
 
                   {/* Movement catalog */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
-                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Movements <span style={{color:"var(--text)"}}>· {ctMoves.length}</span></p>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Movements <span style={{color:"var(--text)"}}>· {ctMoves.length}</span>{(() => { const n = ctMoves.filter(m=>!(m.equip&&m.equip.trim())).length; return n>0 ? <span style={{color:"#E0B85B"}}> · {n} need equipment</span> : null; })()}</p>
                     <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"12px"}}>Aggregated from this coach's {curCT} plans. Editable — rename to merge variants, set equipment. Counts &amp; scheme are derived.</p>
                     <MovementCatalog movements={ctMoves} classType={curCT} onChange={changeMovement} onDelete={deleteMovement}/>
                   </div>
@@ -7784,12 +7784,19 @@ function PersonaProfilePanel({ prof, extracted }) {
   );
 }
 
+// Common equipment for the movement-catalog quick-pick (one tap instead of
+// typing). Free-text stays available for anything off-list.
+const CATALOG_EQUIP = ["barbell","dumbbell","kettlebell","bodyweight","band","machine","cable","erg","box"];
+
 // Editable movement catalog for one class type. Rename folds variants (old name
 // kept as an alias so aggregation re-maps its occurrences); equipment + notes are
 // free; the per-class-type count and typical scheme are derived (read-only).
+// A filter box appears past a handful of rows; missing equipment is flagged
+// because it grounds generation.
 function MovementCatalog({ movements, classType, onChange, onDelete }) {
   const [editId, setEditId] = useState(null);
   const [draft, setDraft] = useState({ name:"", equip:"", aliases:"", notes:"" });
+  const [q, setQ] = useState("");
   if (!movements.length) return <p style={{fontSize:"13px",color:"var(--muted)"}}>No movements catalogued for {classType} yet — they populate from this class type's plans.</p>;
   const start = m => { setEditId(m.id); setDraft({ name:m.name, equip:m.equip||"", aliases:(m.aliases||[]).join(", "), notes:m.meta?.notes||"" }); };
   const save = m => {
@@ -7799,13 +7806,27 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
     onChange({ ...m, name, equip:draft.equip.trim(), aliases, meta:{ ...(m.meta||{}), notes:draft.notes.trim() } });
     setEditId(null);
   };
+  const needle = q.trim().toLowerCase();
+  const filtered = needle ? movements.filter(m => (`${m.name} ${(m.aliases||[]).join(" ")} ${m.equip||""}`).toLowerCase().includes(needle)) : movements;
   return (
     <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-      {movements.map(m => editId === m.id ? (
+      {movements.length > 5 && (
+        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
+          <Input value={q} onChange={e=>setQ(e.target.value)} placeholder={`Filter ${movements.length} movements — name, alias or equipment`} style={{flex:1}}/>
+          {needle && <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0,whiteSpace:"nowrap"}}>{filtered.length} of {movements.length}</span>}
+        </div>
+      )}
+      {filtered.length === 0 && <p style={{fontSize:"12px",color:"var(--muted)",padding:"8px 0"}}>No movements match “{q}”.</p>}
+      {filtered.map(m => editId === m.id ? (
         <div key={m.id} style={{padding:"12px",background:"var(--navy)",borderRadius:"10px",margin:"4px 0"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}}>
             <Input value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Movement name"/>
             <Input value={draft.equip} onChange={e=>setDraft(d=>({...d,equip:e.target.value}))} placeholder="Equipment"/>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"8px"}}>
+            {CATALOG_EQUIP.map(eq => { const on = draft.equip.trim().toLowerCase()===eq; return (
+              <button key={eq} onClick={()=>setDraft(d=>({...d,equip:on?"":eq}))} style={{padding:"3px 9px",borderRadius:"12px",border:`1px solid ${on?"var(--accent)":"var(--border)"}`,background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--muted)",fontSize:"11px",fontWeight:"600",cursor:"pointer",textTransform:"capitalize"}}>{eq}</button>
+            );})}
           </div>
           <Input value={draft.aliases} onChange={e=>setDraft(d=>({...d,aliases:e.target.value}))} placeholder="Aliases (comma-separated)" style={{marginBottom:"8px"}}/>
           <Input value={draft.notes} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} placeholder="Notes / cue" style={{marginBottom:"10px"}}/>
@@ -7814,7 +7835,7 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
       ) : (
         <div key={m.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderTop:"1px solid var(--border)"}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}{m.equip && <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span>}</div>
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}{m.equip ? <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span> : <span style={{fontSize:"10px",fontWeight:"600",color:"#E0B85B",marginLeft:"8px"}}>needs equipment</span>}</div>
             <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
               {(m.classTypes?.[classType]||0)}× in {classType}
               {fmtScheme(m.commonScheme) && <span> · {fmtScheme(m.commonScheme)}</span>}
