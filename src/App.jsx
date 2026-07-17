@@ -6483,6 +6483,12 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   const cfg = SCFG[stage?.type]||SCFG.circuit;
   const totalDur = stages.reduce((a,s)=>a+s.dur,0);
 
+  // "Now over next": preview the upcoming stage so the room can anticipate. Kept
+  // secondary to the current move but sized to read across the floor.
+  const nextStage = stages[liveState.idx + 1];
+  const nextCfg = nextStage ? (SCFG[nextStage.type]||SCFG.circuit) : null;
+  const nextMoves = nextStage ? (nextStage.exercises||[]).map(e=>e.n).filter(Boolean).slice(0,3) : [];
+
   // Display prefs persisted to localStorage
   const [preset,    setPreset]    = useState(() => store.getDisplayPrefs().preset);
   const [fontScale, setFontScale] = useState(() => store.getDisplayPrefs().fontScale);
@@ -6662,6 +6668,9 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <div style={{width:"min(480px,80%)",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
+          {nextStage
+            ? <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:"var(--muted)",marginTop:"26px"}}>Next: <span style={{color:nextCfg.color,fontWeight:"800"}}>{nextStage.name}</span></p>
+            : <p style={{fontSize:`${Math.round(18*scaleMult)}px`,color:cfg.color,fontWeight:"700",marginTop:"26px"}}>Final stage</p>}
         </div>
         <div style={{height:"5px",display:"flex",overflow:"hidden"}}>
           {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||"var(--border)"; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:"var(--navy)"}}/>; })}
@@ -6869,6 +6878,22 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
             </div>
           </div>
         </div>
+      </div>
+
+      {/* UP NEXT — the "next" half of now-over-next; big enough to read across the floor,
+          but clearly secondary to the live stage above it. */}
+      <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:"18px",padding:isMobile?"12px 16px":"16px 32px",background:"var(--card)",borderTop:`1px solid var(--border)`,minHeight:0}}>
+        <span style={{fontSize:`${Math.round(14*scaleMult)}px`,fontWeight:"800",color:"var(--muted)",letterSpacing:"3px",flexShrink:0}}>UP NEXT</span>
+        {nextStage ? (
+          <>
+            <span style={{width:"14px",height:"14px",borderRadius:"50%",background:nextCfg.color,flexShrink:0,boxShadow:`0 0 12px ${nextCfg.color}80`}}/>
+            <span style={{fontSize:`${Math.round(30*scaleMult)}px`,fontWeight:"800",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:1,minWidth:0}}>{nextStage.name}</span>
+            <span style={{fontSize:`${Math.round(17*scaleMult)}px`,fontWeight:"700",color:nextCfg.color,flexShrink:0}}>{Math.round((nextStage.dur||0)/60)} min</span>
+            {nextMoves.length>0 && <span style={{fontSize:`${Math.round(18*scaleMult)}px`,color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>· {nextMoves.join("  ·  ")}</span>}
+          </>
+        ) : (
+          <span style={{fontSize:`${Math.round(24*scaleMult)}px`,fontWeight:"800",color:cfg.color}}>Final stage — class wraps after this 🎉</span>
+        )}
       </div>
     </div>
   );
