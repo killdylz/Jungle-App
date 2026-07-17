@@ -6558,6 +6558,33 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
   );
 }
 
+// Tempo guide (Fable §4.2 / N5): the zero-license default that keeps the rhythm
+// value when no soundtrack is playing. A silent, visual metronome — one ring
+// "pings" outward per beat at the stage's target BPM. No audio, no licensing.
+// Honours reduced-motion (static readout, no ping). BPM = midpoint of the
+// stage's SCFG range; the ping interval is 60/bpm seconds.
+function TempoGuide({ bpm, color, reduce, hasTracks }) {
+  const beat = bpm > 0 ? 60 / bpm : 0.5; // seconds per beat
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",gap:"16px"}}>
+      <style>{`@keyframes jg-tempo{0%{transform:scale(0.62);opacity:0.85}70%{opacity:0.12}100%{transform:scale(1.32);opacity:0}}`}</style>
+      <div style={{position:"relative",width:"128px",height:"128px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {!reduce && <span style={{position:"absolute",inset:"6px",borderRadius:"50%",border:`3px solid ${color}`,animation:`jg-tempo ${beat}s ease-out infinite`}}/>}
+        <div style={{width:"92px",height:"92px",borderRadius:"50%",background:`color-mix(in srgb, ${color} 16%, transparent)`,border:`2px solid ${color}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <span style={{fontSize:"32px",fontWeight:"900",color:"var(--text)",lineHeight:"1",fontVariantNumeric:"var(--num)"}}>{bpm}</span>
+          <span style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px"}}>BPM</span>
+        </div>
+      </div>
+      <div>
+        <p style={{fontSize:"13px",fontWeight:"800",color,letterSpacing:"1.5px"}}>TEMPO GUIDE</p>
+        <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"4px",maxWidth:"220px",lineHeight:"1.5"}}>
+          {hasTracks ? "Press play to start the queued soundtrack — or keep this silent pace cue." : "Silent pace cue at this stage's target tempo — no music or licensing needed."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, nowPlaying, onPlayPause}) {
   const vw = useWindowWidth();
   const reduce = prefersReducedMotion();
@@ -6570,6 +6597,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   const remaining = Math.max(0, dur - liveState.elapsed);
   const progress = (liveState.elapsed/dur)*100;
   const cfg = SCFG[stage?.type]||SCFG.circuit;
+  const tempoBpm = Math.round(((cfg.bpmMin||100)+(cfg.bpmMax||120))/2);
   const totalDur = stages.reduce((a,s)=>a+s.dur,0);
 
   // "Now over next": preview the upcoming stage so the room can anticipate. Kept
@@ -6951,15 +6979,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               </div>
             </>
           ) : (
-            <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
-              <Music size={56} color={hasNoTracks ? "color-mix(in srgb, var(--accent) 50%, transparent)" : "var(--muted)"} style={{marginBottom:"14px"}}/>
-              <p style={{fontSize:"15px",color:hasNoTracks ? "var(--accent)" : "var(--muted)",fontWeight:"600",marginBottom:"6px"}}>
-                {hasNoTracks ? "⏸ Music paused" : "No track playing"}
-              </p>
-              <p style={{fontSize:"12px",color:"var(--muted)"}}>
-                {hasNoTracks ? "No tracks assigned to this stage" : "Add songs in the builder to queue music per stage"}
-              </p>
-            </div>
+            <TempoGuide bpm={tempoBpm} color={cfg.color} reduce={reduce} hasTracks={!hasNoTracks}/>
           )}
           <div style={{marginTop:"auto",paddingTop:"24px",borderTop:`1px solid var(--border)`}}>
             <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"10px",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage Progress</p>
