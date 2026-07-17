@@ -102,25 +102,71 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
+// Extract the FIRST complete, balanced JSON value from model output, string- and
+// escape-aware. Gemini 2.5 Flash with thinking disabled occasionally appends extra
+// content after the object it was asked for (a duplicate object, a trailing note),
+// which the old "first { to last }" slice fed to JSON.parse whole -> "Unexpected
+// non-whitespace character after JSON". Matching braces and stopping at the first
+// balanced close ignores anything appended after it.
+function sliceFirstJson(t: string) {
+  const oi = t.indexOf("{"), ai = t.indexOf("[");
+  const start = oi < 0 ? ai : ai < 0 ? oi : Math.min(oi, ai);
+  if (start < 0) return t;
+  const open = t[start], close = open === "{" ? "}" : "]";
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === open) depth++;
+    else if (c === close) { depth--; if (depth === 0) return t.slice(start, i + 1); }
+  }
+  const lastClose = t.lastIndexOf(close); // unbalanced (truncated) — best effort
+  return lastClose > start ? t.slice(start, lastClose + 1) : t.slice(start);
+}
+
 function extractJson(text: string) {
   let t = (text || "").trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
-  const start = t.indexOf("{");
-  const end = t.lastIndexOf("}");
-  if (start >= 0 && end > start) t = t.slice(start, end + 1);
-  return JSON.parse(t);
+  const slice = sliceFirstJson(t);
+  try {
+    return JSON.parse(slice);
+  } catch (_e) {
+    // Last resort: drop trailing commas (`,]` / `,}`) and retry once.
+    return JSON.parse(slice.replace(/,\s*([}\]])/g, "$1"));
+  }
 }
+
+// Transient provider errors worth retrying/falling back on: rate limits, quota
+// bursts, and the free-tier overload messages ("The model is overloaded", "high
+// demand ... try again later", HTTP 503/500). Deterministic errors (bad key, bad
+// request, quota EXHAUSTED for the day) surface immediately instead of eating the
+// whole retry budget. Defined here so the Gemini fallback sweep and withRetry share it.
+const TRANSIENT = /429|rate ?limit|resource_exhausted|overload|unavailable|high demand|temporar|try again|internal|deadline|503|500/i;
 
 // opts.think:false disables Gemini 2.5's default thinking pass — extraction of a
 // long deck otherwise runs 100s+ and can blow the Edge Function gateway timeout
 // (~150s), which the client sees as a bare non-2xx. Extraction is transcription,
 // not reasoning; it doesn't need thinking and it DOES need to finish.
 type LlmOpts = { temperature?: number; think?: boolean };
-async function gemini(system: string, prompt: string, opts: LlmOpts = {}) {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw new Error("GEMINI_API_KEY not set");
-  const model = Deno.env.get("PERSONA_LLM_MODEL") || "gemini-2.5-flash";
+
+// Free-tier fallback chain: while we stay on the no-cost Gemini path, an overloaded
+// primary model doesn't mean the whole tier is down — the lighter models draw on
+// SEPARATE capacity and per-model rate limits. Extraction is faithful transcription,
+// so a lighter model is an acceptable stand-in when the primary is busy. The
+// configured model (PERSONA_LLM_MODEL) always leads; duplicates are dropped.
+function geminiModels(): string[] {
+  const primary = Deno.env.get("PERSONA_LLM_MODEL") || "gemini-2.5-flash";
+  return [...new Set([primary, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"])];
+}
+
+async function geminiOnce(model: string, key: string, system: string, prompt: string, opts: LlmOpts) {
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
@@ -132,14 +178,39 @@ async function gemini(system: string, prompt: string, opts: LlmOpts = {}) {
         generationConfig: {
           responseMimeType: "application/json",
           temperature: opts.temperature ?? 0.7,
-          ...(opts.think === false ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          // thinkingConfig is a 2.5-series field — 2.0-flash rejects it (a NON-transient
+          // 400 that would abort the fallback), so only send it to 2.5 models.
+          ...(opts.think === false && model.includes("2.5") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       }),
     },
   );
   const d = await r.json();
-  if (!r.ok) throw new Error(d?.error?.message || "Gemini error");
-  return extractJson(d?.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+  if (!r.ok) throw new Error(d?.error?.message || `Gemini ${model} error`);
+  // Join ALL text parts: a long-deck response can be split across several parts,
+  // and reading only parts[0] would truncate the JSON. extractJson then takes the
+  // first complete object if the model also appended a duplicate.
+  const parts = d?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts) ? parts.map((p: { text?: string }) => p?.text || "").join("") : "";
+  return extractJson(text || "{}");
+}
+
+async function gemini(system: string, prompt: string, opts: LlmOpts = {}) {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY not set");
+  let lastErr: unknown;
+  for (const model of geminiModels()) {
+    try {
+      return await geminiOnce(model, key, system, prompt, opts);
+    } catch (e) {
+      lastErr = e;
+      // Only fall through to the next free model on a transient/overload error.
+      // A deterministic failure (bad key, malformed request) would fail identically
+      // on every model, so surface it now.
+      if (!TRANSIENT.test(String((e as Error)?.message || e))) throw e;
+    }
+  }
+  throw lastErr;
 }
 
 async function openai(system: string, prompt: string, opts: LlmOpts = {}) {
@@ -170,7 +241,9 @@ async function anthropic(system: string, prompt: string, _opts: LlmOpts = {}) {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: 4096, system, messages: [{ role: "user", content: prompt }] }),
+    // 8192 leaves headroom for a big multi-block deck extraction (a long S360 deck
+    // can exceed 4k output tokens once every scheme/exercise field is emitted).
+    body: JSON.stringify({ model, max_tokens: 8192, system, messages: [{ role: "user", content: prompt }] }),
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d?.error?.message || "Anthropic error");
@@ -193,6 +266,29 @@ function normalizePlan(out: Record<string, unknown>) {
   };
 }
 
+// Time-budgeted retry. Each attempt already sweeps the whole free-model chain
+// (see gemini()), so this rides out a SUSTAINED free-tier overload by retrying the
+// sweep with capped exponential backoff + jitter until a deadline. We spend most of
+// the ~150s gateway window (deadline 120s) and keep ~30s of headroom so the final
+// attempt can finish. Waiting longer is the deliberate trade for staying no-cost.
+// A non-transient error (bad key, exhausted daily quota) throws immediately.
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + 120_000;
+  let delay = 2000;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = String((e as Error)?.message || e);
+      if (!TRANSIENT.test(msg)) throw e;
+      const wait = delay + Math.floor(Math.random() * 1000); // jitter to de-sync bursts
+      if (Date.now() + wait >= deadline) throw e;            // no time for another try
+      await new Promise((res) => setTimeout(res, wait));
+      delay = Math.min(delay * 1.6, 20_000);                 // capped exponential backoff
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -203,7 +299,7 @@ serve(async (req) => {
     if (task === "extract") {
       const text = String(body?.text || "").trim();
       // v rides on this cheap validation error so a deploy can be detected without an LLM call.
-      if (!text) return json({ error: "Missing deck text to extract", v: 4 }, 400);
+      if (!text) return json({ error: "Missing deck text to extract", v: 5 }, 400);
       system = EXTRACT_SYSTEM;
       const hints = [
         body?.classType ? `classType hint: ${body.classType}` : "",
@@ -233,16 +329,12 @@ serve(async (req) => {
     const call = provider === "openai" ? openai : provider === "gemini" ? gemini : anthropic;
     // Extraction = faithful transcription: low temperature, no thinking pass (speed).
     const opts: LlmOpts = task === "extract" ? { temperature: 0.2, think: false } : {};
-    let out;
-    try {
-      out = await call(system, prompt, opts);
-    } catch (e) {
-      // One retry for transient provider blips (free-tier rate limits, overload).
-      const msg = String((e as Error)?.message || e);
-      if (!/429|quota|rate ?limit|overloaded|unavailable|try again|internal/i.test(msg)) throw e;
-      await new Promise((res) => setTimeout(res, 2500));
-      out = await call(system, prompt, opts);
-    }
+    // Retry transient provider blips with backoff. The free Gemini tier throws
+    // "high demand / try again later" overload errors in bursts; a single retry
+    // isn't enough, so back off 1.5s -> 4s -> 9s (worst case ~15s, well under the
+    // ~150s gateway). A durable fix for sustained overload is switching the
+    // provider secret to Anthropic/Opus. Non-transient errors throw immediately.
+    const out = await withRetry(() => call(system, prompt, opts));
     const normalized = normalizePlan(out || {});
     if (!normalized.plan.blocks.length) throw new Error("Model returned no blocks");
     return json(normalized, 200);
