@@ -1822,7 +1822,7 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
     {label:"Sessions this week", value:String(sessionsWeek), Icon:Layers},
     {label:"Hours this month", value:(monthMins/60).toFixed(1), Icon:Clock},
     {label:"Day streak", value:String(streak), Icon:Zap},
-    {label:"Active members", value:"248", Icon:Users},
+    {label:"Total sessions", value:String(sessionHistory.length), Icon:BarChart2},
   ];
 
   const totalStages = stages.length;
@@ -2697,11 +2697,11 @@ function CalendarScreen({onBack}) {
     {name:"Jo M.",    classes:5,  cap:10, color:"#3B82F6"},
   ] : [];
 
-  const aiTips = [
+  const aiTips = FLAGS.mockAnalytics ? [
     {id:0, text:"Tue 18:00 demand is up 34% — add a second Strength Lab. Likely 90%+ fill.", action:"Add it"},
     {id:1, text:"Thu 09:00 Mobility under-fills. Try moving to 12:00 — matches lunchtime demand.", action:"Move it"},
     {id:2, text:"Mara is near weekly cap (14/16). Shift Fri Burn to Jo to balance load.", action:"Reassign"},
-  ];
+  ] : [];
 
   const fillColor = f => f >= 90 ? "var(--accent)" : f >= 70 ? "#E0B85B" : "#8AA294";
 
@@ -2859,7 +2859,9 @@ function CalendarScreen({onBack}) {
                 </div>
               </div>
             ))}
-            {dismissedTips.length===aiTips.length && (
+            {aiTips.length===0 ? (
+              <div style={{textAlign:"center",padding:"24px",color:"var(--muted)",fontSize:"13px",lineHeight:"1.5"}}>Scheduling suggestions appear here once Jungle has live attendance &amp; demand data.</div>
+            ) : dismissedTips.length===aiTips.length && (
               <div style={{textAlign:"center",padding:"24px",color:"var(--muted)",fontSize:"13px"}}>All suggestions reviewed ✓</div>
             )}
           </div>
@@ -2881,6 +2883,9 @@ function CalendarScreen({onBack}) {
                 <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
               </div>
             ))}
+            {trainers.length===0 && (
+              <div style={{textAlign:"center",padding:"20px 4px",color:"var(--muted)",fontSize:"13px",lineHeight:"1.5"}}>Trainer load balances here once classes are scheduled with assigned coaches.</div>
+            )}
           </div>
           {trainers.some(t=>t.classes/t.cap>0.85) && (
             <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
@@ -4788,10 +4793,10 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
             <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid var(--border)`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
               <div style={{flexShrink:0,padding:"16px 18px 10px"}}>
                 <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>Discover packs</p>
-                <p style={{fontSize:"11px",color:"var(--muted)"}}>Community workouts — one tap to import</p>
+                <p style={{fontSize:"11px",color:"var(--muted)"}}>{FLAGS.mockDiscover?"Community workouts — one tap to import":"Community pack marketplace — coming soon"}</p>
               </div>
               <div style={{flex:1,overflowY:"auto",padding:"6px 14px"}}>
-                {DISCOVER_PACKS.map(pack=>(
+                {FLAGS.mockDiscover ? DISCOVER_PACKS.map(pack=>(
                   <div key={pack.id} style={{background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",marginBottom:"10px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
                       <div style={{width:"36px",height:"36px",borderRadius:"9px",background:classColor+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:0}}>{pack.icon}</div>
@@ -4809,11 +4814,13 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                       </button>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div style={{padding:"18px 6px",color:"var(--muted)",fontSize:"12px",lineHeight:"1.6"}}>A community marketplace of shareable workout packs is coming soon — browse packs from other studios and import them, BPM hints included, in one tap.</div>
+                )}
               </div>
-              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
+              {FLAGS.mockDiscover&&<div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
                 <p style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.5"}}>Every imported exercise keeps its BPM hints, so the Auto-DJ scores it automatically.</p>
-              </div>
+              </div>}
             </div>
           )}
         </div>
@@ -6911,7 +6918,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                       <p style={{fontSize:`${Math.round((solo?34:24)*scaleMult)}px`,fontWeight:"800",color:"var(--text)",lineHeight:"1.1"}}>{ex.n}</p>
                       {ex.timing && ex.timing!=="none" && <span style={{fontSize:"11px",padding:"2px 7px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"4px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
-                    <p style={{fontSize:`${Math.round((solo?20:16)*scaleMult)}px`,color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
+                    <p style={{fontSize:`${Math.round((solo?20:16)*scaleMult)}px`,color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&(/^\d+(\s*[-–/x×]\s*\d+)*$/.test(String(ex.r).trim())?`${ex.r} reps`:String(ex.r)),ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
                   </div>
                 );})}
               </div>
@@ -8461,11 +8468,11 @@ export default function App() {
                 ))}
               </div>
             ))}
-            <div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid var(--border)`}}>
+            {FLAGS.attendeeShare&&<div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid var(--border)`}}>
               <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"transparent",color:"var(--muted)",fontSize:"13px",fontWeight:"500"}}>
                 <Share2 size={14}/> Share with Class
               </button>
-            </div>
+            </div>}
           </div>
         </div>
       )}
@@ -8484,10 +8491,10 @@ export default function App() {
           <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
             {deviceId&&isMobile&&<Wifi size={13} color={"var(--green)"}/>}
-            {!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?"color-mix(in srgb, var(--green) 13%, transparent)":"var(--navy)",color:shareCopied?"var(--green)":"var(--muted)",border:`1px solid ${shareCopied?"color-mix(in srgb, var(--green) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
+            {FLAGS.attendeeShare&&!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?"color-mix(in srgb, var(--green) 13%, transparent)":"var(--navy)",color:shareCopied?"var(--green)":"var(--muted)",border:`1px solid ${shareCopied?"color-mix(in srgb, var(--green) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
               {shareCopied?<Check size={13}/>:<Share2 size={13}/>}{shareCopied?"Copied!":"Share"}
             </button>}
-            {isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?"var(--green)":"var(--muted)",padding:"4px",display:"flex"}}>
+            {FLAGS.attendeeShare&&isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?"var(--green)":"var(--muted)",padding:"4px",display:"flex"}}>
               {shareCopied?<Check size={15}/>:<Share2 size={15}/>}
             </button>}
             <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
@@ -8538,7 +8545,7 @@ export default function App() {
         <p style={{fontSize:"11px",color:"var(--muted)"}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
       </footer>}
 
-      {showProfile&&<ProfileModal profile={displayProfile} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
+      {showProfile&&<ProfileModal profile={displayProfile||{display_name:"Coach"}} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
     </div>
     </ThemeContext.Provider>
