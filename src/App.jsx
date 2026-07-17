@@ -5766,6 +5766,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 }
 
 // ─── LiveScreen ───────────────────────────────────────────────────────────────
+// Honours the OS "reduce motion" setting on the room-facing displays (Fable §3).
+// Read at render, matching FloorLiveScreen's existing guard; callers gate any
+// looping scale/opacity animation on !reduce so the colour cue still lands.
+const prefersReducedMotion = () => (typeof window!=="undefined" && window.matchMedia) ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
 // ─── Room TV (workstreams B+C) ────────────────────────────────────────────────
 // ONE fullscreen TV surface with three modes, replacing the separate Studio TV /
 // Floor TV / coach-Display views: "studio" = pre-class plan overview, "floor" =
@@ -5773,6 +5777,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 // the mode switch is a transient overlay (the running surface keeps the whole
 // screen) with buttons sized for an across-the-room tap.
 function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, spPaused, onPlayPause, canFollow, follow, onFollow, remote }) {
+  const reduce = prefersReducedMotion();
   const [ctl, setCtl] = useState(true);
   useEffect(() => {
     if (!ctl) return;
@@ -6123,7 +6128,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 {/* Mic mode */}
                 {player && (
                   <button onClick={handleMicMode} title={micMode ? (micActive ? "Ducking - mic live" : "Mic Mode armed (M)") : "Mic Mode (M)"}
-                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",animation:micMode?"jg-pulse 1s ease-in-out infinite":"none"}}>
+                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",animation:(micMode&&!reduce)?"jg-pulse 1s ease-in-out infinite":"none"}}>
                     <Mic size={16}/>
                   </button>
                 )}
@@ -6467,7 +6472,7 @@ function buildFloorLayout(stages){
 
 function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0}, nowPlaying=null, onBack }){
   const vw = useWindowWidth(); const isMobile = vw < 700;
-  const reduce = (typeof window!=="undefined" && window.matchMedia) ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
+  const reduce = prefersReducedMotion();
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
   const elapsed = liveState.elapsed||0;
@@ -6555,6 +6560,7 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
 
 function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, nowPlaying, onPlayPause}) {
   const vw = useWindowWidth();
+  const reduce = prefersReducedMotion();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
   const { skin } = useTheme();
@@ -6713,7 +6719,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:"56px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
           <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:"var(--muted)",marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
           <p style={{fontSize:"13px",color:"var(--muted)",marginTop:"8px",opacity:0.6}}>Stage {liveState.idx+1} of {stages.length}</p>
         </div>
@@ -6746,7 +6752,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
           <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"56px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"28px"}}/>
-          <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"15px",color:"var(--muted)",marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
           <div style={{width:"min(480px,80%)",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -6799,7 +6805,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           </div>
           {/* Timer right */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"36px"}}>
-            <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
+            <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
             <p style={{fontSize:"16px",color:"var(--muted)",marginTop:"10px",marginBottom:"28px"}}>remaining</p>
             <div style={{width:"100%",maxWidth:"360px",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
               <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -6853,7 +6859,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"64px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"36px",transition:"background 0.5s"}}/>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:isPulsing?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"16px",color:"var(--muted)",marginBottom:"36px"}}>remaining</p>
           <div style={{width:"100%",height:"8px",background:"var(--navy)",borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
