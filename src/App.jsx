@@ -9,7 +9,7 @@ import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
-import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText } from "./lib/slidesImport.js";
+import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate } from "./lib/slidesImport.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 
@@ -6992,6 +6992,16 @@ async function fnErrorMessage(error) {
   } catch { return error?.message || String(error); }
 }
 
+// Free Gemini tiers cap requests-per-minute (e.g. 5/min for 2.5-flash), so a
+// deck with many slides trips "quota exceeded … retry in Ns". Recognise those
+// so the importer can WAIT OUT the 1-minute window and retry, instead of failing
+// — keeping the whole import on the free tier.
+const RATE_LIMITED = /quota|rate.?limit|resource.?exhausted|\b429\b|retry in|exceeded your current|high demand|overload|unavailable|try again/i;
+function retryAfterSecs(msg) {
+  const m = String(msg || "").match(/retry in ([\d.]+)\s*s/i); // Gemini says "Please retry in 58.7s"
+  return m ? Math.ceil(Number(m[1])) : 0;
+}
+
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
 // derived profile + editable movement catalog + past plans + draft/generate.
@@ -7256,7 +7266,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       const target = await resolveDriveTarget(token, slidesFolder);
       const decks = target.kind === "presentation" ? [target.deck] : await listPresentations(token, target.id);
       setSlideDecks(decks);
-      setDeckSel(new Set(decks.filter(d => !importedRefs.has(d.id)).map(d => d.id)));
+      setDeckSel(new Set(decks.filter(d => ![...importedRefs].some(ref => ref === d.id || ref.startsWith(`${d.id}#`))).map(d => d.id)));
       if ((selected?.styleProfile?.slidesFolder || "") !== slidesFolder.trim())
         commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: { ...(p.styleProfile || {}), slidesFolder: slidesFolder.trim() } } : p));
       if (!decks.length) setSlidesErr("No Google Slides decks found in that folder.");
@@ -7268,29 +7278,60 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     const chosen = (slideDecks || []).filter(d => deckSel.has(d.id));
     if (!chosen.length) { setSlidesErr("Select at least one deck to import."); return; }
     setSlidesErr(""); setSlidesBusy("import");
-    const added = []; const failed = [];
+    const added = []; const failed = []; let skipped = 0;
     try {
       const token = await getSlidesToken();
+      // A deck often holds a whole HISTORY of classes — one class per slide. Pull each
+      // deck's text, split it into per-slide class plans, and extract each slide on its
+      // own (the extractor handles ONE class at a time; a whole multi-class deck returns
+      // no usable plan). Per-slide sourceRef ("<deckId>#s<N>") dedupes at the slide level.
+      const units = [];
       for (const d of chosen) {
-        setSlidesProg({ done: added.length + failed.length, total: chosen.length, current: d.name });
-        try {
-          const { text } = await fetchPresentationText(token, d.id);
-          const textLen = text.trim().length;
-          // Log the exact text the extractor receives so a "no blocks" failure is
-          // diagnosable (image-only decks yield near-zero text — the Slides API
-          // can't read words baked into pictures).
-          console.log(`[slides-import] "${d.name}" — ${textLen} chars of slide text extracted:\n`, text);
-          if (!textLen) throw new Error("no readable text found — this deck is likely image-based (the Slides API can't read text inside pictures/screenshots)");
-          // Cap pathological decks so one giant outlier can't blow the function's limits.
-          const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: text.slice(0, 120000), title: d.name } });
-          if (error) throw new Error(await fnErrorMessage(error));
-          if (data?.error) throw new Error(data.error);
-          const blocks = data?.plan?.blocks || [];
-          if (!blocks.length) throw new Error(`no blocks extracted from ${textLen} chars of text` + (textLen < 200 ? " — this deck is likely image-based (workout inside pictures the Slides API can't read); try a text-based deck or Add plan → Paste deck text" : " — the text was read but not recognized as a workout; check the browser console for the raw text"));
-          added.push({ id: store.newId(), personaId: selectedId, source: "slides", sourceRef: d.id,
-                       title: data.title || d.name, classType: (data.classType || "").trim(),
-                       focus: data.focus || "", planDate: (d.modifiedTime || "").slice(0, 10), plan: { blocks } });
-        } catch (e) { failed.push(`${d.name} — ${e.message || e}`); }
+        let text = "";
+        try { ({ text } = await fetchPresentationText(token, d.id)); }
+        catch (e) { failed.push(`${d.name} — ${e.message || e}`); continue; }
+        const slides = splitDeckSlides(text);
+        console.log(`[slides-import] "${d.name}" — ${text.trim().length} chars, ${slides.length} slide(s)`);
+        if (!text.trim()) { failed.push(`${d.name} — no readable text (deck may be image-based; the Slides API can't read words inside pictures)`); continue; }
+        for (const s of slides) {
+          const ref = slides.length > 1 ? `${d.id}#s${s.n}` : d.id;
+          units.push({ deck: d, n: s.n, multi: slides.length > 1, text: s.text, ref, date: slideDate(s.text) });
+        }
+      }
+      const todo = units.filter(u => !importedRefs.has(u.ref));
+      for (let i = 0; i < todo.length; i++) {
+        const u = todo[i];
+        const label = u.multi ? `${u.deck.name} · slide ${u.n}` : u.deck.name;
+        setSlidesProg({ done: i, total: todo.length, current: label });
+        // Retry a slide ONLY when the free tier rate-limits us — wait out the window
+        // (the API tells us how long) and try again, up to a few times. Any other
+        // error fails just that slide and moves on.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: u.text.slice(0, 120000), title: u.deck.name } });
+            if (error) throw new Error(await fnErrorMessage(error));
+            if (data?.error) throw new Error(data.error);
+            const blocks = data?.plan?.blocks || [];
+            // A slide with no workout (title / branding / footer) legitimately yields
+            // no blocks — skip it quietly instead of failing the whole deck.
+            if (!blocks.length) { skipped++; break; }
+            added.push({ id: store.newId(), personaId: selectedId, source: "slides", sourceRef: u.ref,
+                         title: data.title || `${u.deck.name}${u.multi ? ` (slide ${u.n})` : ""}`, classType: (data.classType || "").trim(),
+                         focus: data.focus || "", planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10), plan: { blocks } });
+            break;
+          } catch (e) {
+            const msg = e?.message || String(e);
+            if (RATE_LIMITED.test(msg) && attempt < 6) {
+              const wait = (retryAfterSecs(msg) || 30) + 2;
+              setSlidesProg({ done: i, total: todo.length, current: `${label} — free-tier limit, waiting ${wait}s…`, waiting: true });
+              await new Promise(r => setTimeout(r, wait * 1000));
+              continue;
+            }
+            failed.push(`${u.deck.name}${u.multi ? ` s${u.n}` : ""} — ${msg}`);
+            break;
+          }
+        }
+        if (i < todo.length - 1) await new Promise(r => setTimeout(r, 800)); // gentle pace
       }
     } catch (e) { failed.push(`${e.message || e}`); }
     setSlidesProg(null); setSlidesBusy("");
@@ -7300,8 +7341,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       if (ct) setActiveCT(ct);
       setDeckSel(new Set());
     }
-    if (failed.length) setSlidesErr(`Imported ${added.length} of ${chosen.length}. Failed: ${failed.join(" · ")}`);
-    else if (added.length) setShowSlides(false);
+    const skipNote = skipped ? `, skipped ${skipped} non-class slide${skipped === 1 ? "" : "s"}` : "";
+    if (failed.length) setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}. Failed: ${failed.join(" · ")}`);
+    else if (added.length) { setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}.`); setShowSlides(false); }
+    else setSlidesErr(`Nothing imported${skipNote || " — no class plans found in the selected deck(s)"}.`);
   };
 
   return (

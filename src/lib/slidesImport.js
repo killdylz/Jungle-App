@@ -144,3 +144,34 @@ export async function fetchPresentationText(token, presentationId) {
   });
   return { title: data.title || "", text: parts.join("\n\n") };
 }
+
+// A coach's deck often holds a WHOLE HISTORY of classes — one class per slide
+// (e.g. an "S360" deck with 18 dated sessions). fetchPresentationText tags each
+// slide "--- Slide N ---"; split back on that so each class can be extracted on
+// its own (the extractor handles one class at a time). Returns [{ n, text }].
+export function splitDeckSlides(deckText) {
+  const t = (deckText || "").trim();
+  if (!t) return [];
+  const slides = [];
+  const re = /^--- Slide (\d+) ---$/gm;
+  let m, prev = null;
+  while ((m = re.exec(t)) !== null) {
+    if (prev) slides.push({ n: prev.n, text: t.slice(prev.end, m.index).trim() });
+    prev = { n: Number(m[1]), end: m.index + m[0].length };
+  }
+  if (prev) slides.push({ n: prev.n, text: t.slice(prev.end).trim() });
+  // No markers at all (single unlabelled deck) → treat the whole thing as one.
+  const filled = slides.filter(s => s.text);
+  return filled.length ? filled : [{ n: 1, text: t }];
+}
+
+const MONTHS = ["january","february","march","april","may","june","july","august",
+                "september","october","november","december"];
+// Pull a plan date out of a slide's own text ("11 July 2026" → "2026-07-11") so
+// each dated session keeps its real date instead of the deck's last-modified time.
+export function slideDate(text) {
+  const m = (text || "").match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/i);
+  if (!m) return "";
+  const mo = MONTHS.indexOf(m[2].toLowerCase()) + 1;
+  return `${m[3]}-${String(mo).padStart(2, "0")}-${String(Number(m[1])).padStart(2, "0")}`;
+}

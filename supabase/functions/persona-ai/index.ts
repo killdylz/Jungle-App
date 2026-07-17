@@ -143,12 +143,21 @@ function extractJson(text: string) {
   }
 }
 
-// Transient provider errors worth retrying/falling back on: rate limits, quota
-// bursts, and the free-tier overload messages ("The model is overloaded", "high
-// demand ... try again later", HTTP 503/500). Deterministic errors (bad key, bad
-// request, quota EXHAUSTED for the day) surface immediately instead of eating the
-// whole retry budget. Defined here so the Gemini fallback sweep and withRetry share it.
-const TRANSIENT = /429|rate ?limit|resource_exhausted|overload|unavailable|high demand|temporar|try again|internal|deadline|503|500/i;
+// Transient provider errors worth retrying/falling back on: per-minute rate limits
+// and quota bursts (free Gemini: "You exceeded your current quota ... Please retry in
+// 58s", RESOURCE_EXHAUSTED / 429) and the overload messages ("The model is
+// overloaded", "high demand ... try again later", HTTP 503/500). Matching quota here
+// is what lets the Gemini sweep fall THROUGH an exhausted model to the next free one
+// (each model has its OWN quota), and lets withRetry wait out the 1-minute window.
+// Bad key / bad request never match, so they surface immediately.
+const TRANSIENT = /429|rate.?limit|resource.?exhausted|quota|exceeded|overload|unavailable|high demand|temporar|try again|retry in|internal|deadline|503|500/i;
+
+// Gemini 429s carry a "Please retry in 58.7s" hint — honor it so we wait exactly the
+// window rather than guessing. Returns ms, or 0 when absent.
+function retryHintMs(msg: string): number {
+  const m = msg.match(/retry in ([\d.]+)\s*s/i);
+  return m ? Math.ceil(Number(m[1]) * 1000) : 0;
+}
 
 // opts.think:false disables Gemini 2.5's default thinking pass — extraction of a
 // long deck otherwise runs 100s+ and can blow the Edge Function gateway timeout
@@ -281,7 +290,10 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
     } catch (e) {
       const msg = String((e as Error)?.message || e);
       if (!TRANSIENT.test(msg)) throw e;
-      const wait = delay + Math.floor(Math.random() * 1000); // jitter to de-sync bursts
+      // If ALL free models are rate-limited, the error carries a "retry in Ns" hint —
+      // wait exactly that window (only reached once the model sweep has been exhausted).
+      // Otherwise use capped exponential backoff + jitter.
+      const wait = retryHintMs(msg) ? retryHintMs(msg) + 500 : delay + Math.floor(Math.random() * 1000);
       if (Date.now() + wait >= deadline) throw e;            // no time for another try
       await new Promise((res) => setTimeout(res, wait));
       delay = Math.min(delay * 1.6, 20_000);                 // capped exponential backoff
@@ -299,7 +311,7 @@ serve(async (req) => {
     if (task === "extract") {
       const text = String(body?.text || "").trim();
       // v rides on this cheap validation error so a deploy can be detected without an LLM call.
-      if (!text) return json({ error: "Missing deck text to extract", v: 5 }, 400);
+      if (!text) return json({ error: "Missing deck text to extract", v: 6 }, 400);
       system = EXTRACT_SYSTEM;
       const hints = [
         body?.classType ? `classType hint: ${body.classType}` : "",
