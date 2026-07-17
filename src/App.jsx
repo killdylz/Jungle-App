@@ -6444,37 +6444,34 @@ const FONT_SCALES = [
   { id:"xl", label:"XL", mult:1.85 },
 ];
 
+// Honest floor board derived from the coach's real class plan. No fabricated
+// member rosters, headcounts, or HR zones — the core is biometric-free (Fable M3)
+// and the roster returns for real once F4 attendance check-in lands.
 function buildFloorLayout(stages){
-  const demo = [
-    {type:"strength", move:"Trap-Bar Deadlift", load:"70% 1RM", target:"8 reps",  hrZone:"Z3"},
-    {type:"engine",   move:"Ski Erg",           load:"Damper 6",target:"250 m",   hrZone:"Z4"},
-    {type:"power",    move:"Box Jump Over",     load:'24"',     target:"10 reps", hrZone:"Z4"},
-    {type:"core",     move:"Weighted Sit-Up",   load:"10 kg",   target:"15 reps", hrZone:"Z2"},
-  ];
-  const base = (stages&&stages.length>=2) ? stages.slice(0,4) : null;
-  const src = base ? base.map((s,i)=>({ type:s.type||demo[i%4].type, move:(s.exercises&&s.exercises[0]&&s.exercises[0].n)||demo[i%4].move, load:demo[i%4].load, target:(s.exercises&&s.exercises[0]&&s.exercises[0].r)||demo[i%4].target, hrZone:demo[i%4].hrZone })) : demo;
-  const names=["Alex","Sam","Priya","Dev","Mara","Jo","Kai","Noa","Ivy","Ben","Zoe","Tom"];
-  return src.map((st,i)=>({ id:"st"+i, type:st.type, label:(SCFG[st.type]||SCFG.circuit).label, move:st.move, load:st.load, target:st.target, hrZone:st.hrZone, headcount:3+((i*2)%4), order:i, isStart:i===0, isFinish:i===src.length-1, members:names.slice(i*3,i*3+3).map((n,j)=>({id:i+"-"+j,name:n})) }));
+  const src = (stages||[]).filter(Boolean).slice(0,5);
+  return src.map((s,i)=>{
+    const ex = (s.exercises && s.exercises[0]) || null;
+    const cfg = SCFG[s.type] || SCFG.circuit;
+    const move = (ex && ex.n) || s.name || cfg.label;
+    const scheme = ex ? [ex.s && `${ex.s}×`, ex.r].filter(Boolean).join(" ").trim() : "";
+    return { id:"st"+i, type:s.type||"circuit", label:cfg.label, move, scheme, order:i, isStart:i===0, isFinish:i===src.length-1 };
+  });
 }
 
 function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0}, nowPlaying=null, onBack }){
   const vw = useWindowWidth(); const isMobile = vw < 700;
   const reduce = (typeof window!=="undefined" && window.matchMedia) ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
-  const [meName, setMeName] = useState("");
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
   const elapsed = liveState.elapsed||0;
   const rotateEverySec = 180;
   const rotateRemaining = rotateEverySec - (elapsed % rotateEverySec);
-  const spotlight = Math.floor(elapsed/6) % floor.length;
+  const spotlight = floor.length ? Math.floor(elapsed/6) % floor.length : 0;
   const roundLen=45, restLen=15, cycle=roundLen+restLen;
   const inCycle = elapsed % cycle;
   const phase = inCycle < roundLen ? "WORK" : "REST";
   const phaseRemaining = phase==="WORK" ? roundLen-inCycle : cycle-inCycle;
   const rounds = 8; const currentRound = Math.min(rounds, Math.floor(elapsed/cycle)+1);
-  const norm=s=>(s||"").trim().toLowerCase();
-  const myIdx = meName ? floor.findIndex(st=>st.members.some(m=>norm(m.name)===norm(meName))) : -1;
-  const cue = !meName ? null : (myIdx<0 ? "not" : (myIdx===spotlight ? "up" : "hold"));
   const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(Math.max(0,s)%60)).padStart(2,"0")}`;
   const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
   const panel = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"16px"};
@@ -6501,15 +6498,14 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
         </div>
       </div>
 
-      {cue && (
-        <div style={{...panel,padding:"12px 16px",borderColor:cue==="up"?"var(--accent)":"var(--border)",background:cue==="up"?"color-mix(in srgb, var(--accent) 16%, transparent)":"var(--card)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{fontSize:"14px",fontWeight:"800",color:cue==="up"?"var(--accent)":"var(--text)"}}>{cue==="up"?`${meName.toUpperCase()} — YOU'RE UP`:cue==="hold"?`${meName} — hold, your station is next`:`"${meName}" is not on the floor`}</div>
-          <button onClick={()=>setMeName("")} style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer"}}><X size={16}/></button>
+      {floor.length===0 ? (
+        <div style={{...panel,textAlign:"center",padding:"40px 20px"}}>
+          <div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)",marginBottom:"6px"}}>No stations yet</div>
+          <div style={{fontSize:"12px",color:"var(--muted)"}}>Build a class in the Class Builder — its stages light up the floor board here.</div>
         </div>
-      )}
-
+      ) : (
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":`repeat(${floor.length},1fr)`,gap:"12px"}}>
-        {floor.map((st,i)=>{ const c=(SCFG[st.type]||SCFG.circuit).color; const on=i===spotlight; const isMe=myIdx===i;
+        {floor.map((st,i)=>{ const c=(SCFG[st.type]||SCFG.circuit).color; const on=i===spotlight;
           return (
           <div key={st.id} style={{background:"var(--card)",border:`2px solid ${on?c:"var(--border)"}`,borderRadius:"14px",padding:"14px",position:"relative",transition:reduce?"none":"transform .3s, box-shadow .3s",transform:on&&!reduce?"scale(1.02)":"none",boxShadow:on?`0 0 24px ${c}55`:"none"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
@@ -6518,15 +6514,12 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
               {st.isFinish&&<span style={{fontSize:"9px",fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
             </div>
             <div style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"26px",fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
-            <div style={{display:"flex",gap:"10px",flexWrap:"wrap",fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}><span>{st.load}</span><span>·</span><span>{st.target}</span><span>·</span><span>{st.hrZone}</span></div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-              {st.members.map(m=>{ const me=norm(m.name)===norm(meName); return <span key={m.id} style={{fontSize:"10px",fontWeight:"700",padding:"2px 7px",borderRadius:"999px",background:me?c:"var(--navy)",color:me?"var(--bg)":"var(--muted)"}}>{m.name}</span>; })}
-              <span style={{fontSize:"10px",color:"var(--muted)",padding:"2px 4px"}}>+{Math.max(0,st.headcount-st.members.length)}</span>
-            </div>
+            {st.scheme && <div style={{fontSize:"13px",color:"var(--muted)"}}>{st.scheme}</div>}
             {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:"9px",fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
           </div>
         );})}
       </div>
+      )}
 
       <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"center",gap:"18px",flexWrap:"wrap"}}>
         <div style={{fontSize:"12px",fontWeight:"800",color:"var(--muted)",letterSpacing:"2px"}}>THE LOOP</div>
@@ -6549,10 +6542,6 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
         </div>
       </div>
 
-      <div style={{...panel,padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px"}}>
-        <span style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)"}}>Find me:</span>
-        <input value={meName} onChange={e=>setMeName(e.target.value)} placeholder="Type your name" style={{flex:1,maxWidth:"260px",padding:"8px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
-      </div>
     </div>
   );
 }
