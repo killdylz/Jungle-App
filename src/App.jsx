@@ -6429,7 +6429,7 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
               {st.isStart&&<span style={{fontSize:"9px",fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
               {st.isFinish&&<span style={{fontSize:"9px",fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
             </div>
-            <div style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"20px",fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
+            <div style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"26px",fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
             <div style={{display:"flex",gap:"10px",flexWrap:"wrap",fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}><span>{st.load}</span><span>·</span><span>{st.target}</span><span>·</span><span>{st.hrZone}</span></div>
             <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
               {st.members.map(m=>{ const me=norm(m.name)===norm(meName); return <span key={m.id} style={{fontSize:"10px",fontWeight:"700",padding:"2px 7px",borderRadius:"999px",background:me?c:"var(--navy)",color:me?"var(--bg)":"var(--muted)"}}>{m.name}</span>; })}
@@ -6452,9 +6452,8 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
           {npName ? <div><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>{npName}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{npArtist}</div></div> : <div style={{fontSize:"12px",color:"var(--muted)"}}>No track playing.</div>}
         </div>
         <div style={panel}>
-          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>WORKOUT OF THE WEEK</div>
-          <div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>The Gauntlet</div>
-          <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>4 rounds for time · best today 12:40 · 9 attempts</div>
+          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>BENCHMARK OF THE WEEK</div>
+          <div style={{fontSize:"12px",color:"var(--muted)"}}>Set a weekly benchmark WOD to track PRs and attempts on the floor. Coming soon.</div>
         </div>
         <div style={panel}>
           <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>OUTPUT · avg watts</div>
