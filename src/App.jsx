@@ -6823,17 +6823,21 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
 
           {stage?.exercises?.length > 0 && (
             <div>
-              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Exercises</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
-                {stage.exercises.map((ex,i) => (
-                  <div key={i} style={{padding:"14px 18px",background:"var(--card)",border:`1px solid var(--border)`,borderLeft:`3px solid ${cfg.color}`,borderRadius:"8px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"6px",marginBottom:"3px"}}>
-                      <p style={{fontSize:`${Math.round(16*scaleMult)}px`,fontWeight:"700",color:"var(--text)"}}>{ex.n}</p>
-                      {ex.timing && ex.timing!=="none" && <span style={{fontSize:"10px",padding:"1px 5px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"3px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
+              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"14px"}}>Doing Now</p>
+              {/* One movement (e.g. a strength primary) gets the full width and the biggest
+                  type; multiple stations share two columns. Sized to read across the floor. */}
+              <div style={{display:"grid",gridTemplateColumns:stage.exercises.length===1?"1fr":"1fr 1fr",gap:"12px"}}>
+                {stage.exercises.map((ex,i) => {
+                  const solo = stage.exercises.length===1;
+                  return (
+                  <div key={i} style={{padding:"18px 22px",background:"var(--card)",border:`1px solid var(--border)`,borderLeft:`5px solid ${cfg.color}`,borderRadius:"10px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}>
+                      <p style={{fontSize:`${Math.round((solo?34:24)*scaleMult)}px`,fontWeight:"800",color:"var(--text)",lineHeight:"1.1"}}>{ex.n}</p>
+                      {ex.timing && ex.timing!=="none" && <span style={{fontSize:"11px",padding:"2px 7px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"4px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
-                    <p style={{fontSize:"13px",color:"var(--muted)"}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
+                    <p style={{fontSize:`${Math.round((solo?20:16)*scaleMult)}px`,color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&`${ex.r} reps`,ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
                   </div>
-                ))}
+                );})}
               </div>
             </div>
           )}
