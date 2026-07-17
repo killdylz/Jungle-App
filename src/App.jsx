@@ -5707,7 +5707,7 @@ function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlayi
   const NP = remoteLive ? remote.nowPlaying : nowPlaying;
   return (
     <div onMouseMove={wake} onTouchStart={wake} style={{position:"relative",flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {mode==="studio" && <OverviewDisplayScreen stages={S} sessionName={SN} onBack={onExit}/>}
+      {mode==="studio" && <OverviewDisplayScreen stages={S} sessionName={SN} liveState={LS} onBack={onExit}/>}
       {mode==="floor"  && <FloorLiveScreen stages={S} liveState={LS} nowPlaying={NP} onBack={onExit}/>}
       {mode==="coach"  && <DisplayScreen stages={S} liveState={LS} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={NP} onPlayPause={onPlayPause}/>}
       {follow && !remoteLive && (
@@ -6159,13 +6159,17 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
 }
 
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
-function OverviewDisplayScreen({ stages, sessionName, onBack }) {
+function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
   const totalDur    = stages.reduce((a,s)=>a+s.dur,0);
   const totalTracks = stages.reduce((a,s)=>a+(s.tracks||[]).length, 0);
   const totalExs    = stages.reduce((a,s)=>a+(s.exercises||[]).length, 0);
+  // Live current-stage highlight (P1 "now over next"): only when a class is actually
+  // running — a static Builder "Preview on TV" must not falsely light up stage 0.
+  const curIdx = liveState?.playing ? liveState.idx : -1;
+  const isLive = curIdx >= 0;
 
   useEffect(() => {
     const onKey = e => { if (e.key==="Escape") onBack(); };
@@ -6223,6 +6227,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                 </p>
                 <p style={{fontSize:"12px",color:"var(--muted)"}}>
                   {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
+                  {isLive && <span style={{color:"var(--accent)",fontWeight:"800"}}> · ● Stage {curIdx+1}/{stages.length}</span>}
                 </p>
               </div>
             </div>
@@ -6231,14 +6236,17 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
             <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
               {stages.map((s,si)=>{
                 const cfg = SCFG[s.type]||SCFG.circuit;
+                const chipCur = si===curIdx;
                 return (
                   <div key={s.id} style={{
                     display:"flex",alignItems:"center",gap:"5px",
-                    padding:"5px 10px",background:`${cfg.color}18`,
-                    borderRadius:"999px",border:`1px solid ${cfg.color}40`
+                    padding:"5px 10px",
+                    background:chipCur?"var(--accent)":`${cfg.color}18`,
+                    borderRadius:"999px",
+                    border:`1px solid ${chipCur?"var(--accent)":cfg.color+"40"}`
                   }}>
-                    <div style={{width:"6px",height:"6px",borderRadius:"50%",background:cfg.color}}/>
-                    <span style={{fontSize:"11px",fontWeight:"700",color:cfg.color}}>{fmtDur(s.dur)}</span>
+                    <div style={{width:"6px",height:"6px",borderRadius:"50%",background:chipCur?"var(--on-accent)":cfg.color}}/>
+                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":cfg.color}}>{fmtDur(s.dur)}</span>
                   </div>
                 );
               })}
@@ -6257,19 +6265,23 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                 const exList  = s.exercises||[];
                 const trList  = s.tracks||[];
                 const grpList = s.groups||[];
-                const isPeak  = si===peakIdx && stages.length>1;
+                const isCur   = si===curIdx;                            // running now
+                const isPast  = isLive && si<curIdx;                    // already done
+                const isPeak  = si===peakIdx && stages.length>1 && !isLive; // planning cue only when idle
                 const firstTrack = trList[0];
 
                 return (
                   <div key={s.id} style={{
                     borderRadius:"14px",overflow:"hidden",display:"flex",flexDirection:"column",
-                    border:isPeak?`2px solid ${cfg.color}`:`2px solid ${cfg.color}40`,
-                    background:isPeak?`linear-gradient(160deg,var(--navy),var(--card))`:`var(--card)`,
-                    boxShadow:isPeak?`0 0 0 3px ${cfg.color}18`:"none"
+                    opacity:isPast?0.4:1,
+                    transition:"opacity .3s ease, box-shadow .3s ease",
+                    border:isCur?`3px solid var(--accent)`:isPeak?`2px solid ${cfg.color}`:`2px solid ${cfg.color}40`,
+                    background:isCur?`linear-gradient(160deg,color-mix(in srgb,var(--accent) 12%,var(--card)),var(--card))`:isPeak?`linear-gradient(160deg,var(--navy),var(--card))`:`var(--card)`,
+                    boxShadow:isCur?`0 0 0 4px color-mix(in srgb,var(--accent) 20%,transparent),0 10px 40px color-mix(in srgb,var(--accent) 25%,transparent)`:isPeak?`0 0 0 3px ${cfg.color}18`:"none"
                   }}>
 
                     {/* Colored header band */}
-                    <div style={{background:`${cfg.color}${isPeak?"28":"18"}`,padding:"14px 18px"}}>
+                    <div style={{background:isCur?`color-mix(in srgb,var(--accent) 22%,transparent)`:`${cfg.color}${isPeak?"28":"18"}`,padding:"14px 18px"}}>
                       {/* Stage label */}
                       <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"8px"}}>
                         <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
@@ -6277,6 +6289,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack }) {
                           textTransform:"uppercase",letterSpacing:"1px"}}>
                           {cfg.label}{isPeak?" · PEAK":""}
                         </span>
+                        {isCur && <span style={{marginLeft:"auto",fontSize:"11px",fontWeight:"900",letterSpacing:"1px",color:"var(--on-accent)",background:"var(--accent)",padding:"2px 9px",borderRadius:"999px"}}>NOW</span>}
                       </div>
                       {/* Stage name */}
                       <p style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
@@ -8293,7 +8306,10 @@ export default function App() {
       <p style={{fontSize:"12px",color:"var(--muted)"}}>This window will close automatically.</p>
     </div>;
   }
-  if (!pinUnlocked) return <PinScreen onUnlock={()=>setPinUnlocked(true)}/>;
+  // Legacy PIN gate: only meaningful in the no-Supabase (localStorage) build, where
+  // AuthGate passes through and this is the sole entry gate. When Supabase is configured,
+  // AuthGate already enforces Google/email login + allowlist, so the PIN is redundant — skip it.
+  if (!supabaseEnabled && !pinUnlocked) return <PinScreen onUnlock={()=>setPinUnlocked(true)}/>;
   // Spotify no longer gates the app — account auth (Google via AuthGate) is the gate.
   // Spotify becomes an optional post-login connect (Music Hub → ConnectSpotifyPrompt).
 
