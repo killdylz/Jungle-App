@@ -11,6 +11,7 @@ import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./dat
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { parsePlanText, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
+import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -7296,6 +7297,200 @@ const SLIDE_BATCH = 5;
 // looksLikeClassSlide lives in src/lib/slidesImport.js (slide logic, and unit-tested
 // there — the heuristic is easy to break in a way no manual click would reveal).
 
+// ─── Members & attendance (F4 slice 2) ───────────────────────────────────────
+// Replaces the flagged-off `MemberScreen` theatre at the `member` route. Two jobs:
+// show the real roster, and backfill historical attendance from a CSV.
+//
+// The backfill is the point. Phase 2 — cohort curves, at-risk detection,
+// revenue-at-risk — is arithmetic over attendance rows, and it is no longer
+// blocked on schema (0007 is applied) but on rows EXISTING. A studio arriving
+// from another system already has years of them; without an import, the outcome
+// tier is months of one-class-at-a-time accumulation away.
+//
+// Deliberately a TWO-STEP flow: analyze (pure, writes nothing) → preview →
+// apply. `attendance` is append-only server-side, so a half-applied import
+// cannot be rolled back; the coach sees exactly what will be written first.
+function RosterScreen({ onBack }) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 640;
+  const [members, setMembers] = useState(() => store.getMembers());
+  const [attendance, setAttendance] = useState(() => store.getAttendance());
+  const [classes, setClasses] = useState(() => store.getClassInstances());
+  const [csv, setCsv] = useState("");
+  const [dayFirst, setDayFirst] = useState(true);
+  const [analysis, setAnalysis] = useState(null);
+  const [result, setResult] = useState(null);
+  const [q, setQ] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    store.hydrateAttendance().then(r => {
+      if (!alive || !r) return;
+      setMembers(r.members); setAttendance(r.attendance); setClasses(r.classInstances);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const visitsFor = id => attendance.filter(a => a.memberId === id).length;
+  const lastSeen = id => {
+    const ts = attendance.filter(a => a.memberId === id).map(a => a.checkedInAt).sort();
+    return ts.length ? ts[ts.length - 1].slice(0, 10) : "";
+  };
+  const term = q.trim().toLowerCase();
+  const shown = members
+    .filter(m => !term || (m.name || "").toLowerCase().includes(term) || (m.email || "").toLowerCase().includes(term))
+    .sort((a, b) => visitsFor(b.id) - visitsFor(a.id) || (a.name || "").localeCompare(b.name || ""));
+
+  const analyze = () => {
+    setResult(null);
+    setAnalysis(analyzeAttendanceCsv(csv, members, { dayFirst }));
+  };
+  const apply = () => {
+    const r = store.applyAttendanceImport(analysis);
+    setResult(r);
+    setAnalysis(null);
+    setCsv("");
+    setMembers(store.getMembers());
+    setAttendance(store.getAttendance());
+    setClasses(store.getClassInstances());
+  };
+  const onFile = e => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { setCsv(String(reader.result || "")); setAnalysis(null); setResult(null); };
+    reader.readAsText(f);
+  };
+
+  const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{flex:1,minWidth:0}}>
+          <h1 style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"22px",fontWeight:"800",color:"var(--text)"}}>Members</h1>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Your roster and the attendance history behind it</p>
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px"}}>
+        <div style={{maxWidth:"1000px",margin:"0 auto",display:"flex",flexDirection:"column",gap:"18px"}}>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:"12px"}}>
+            <StatCard label="MEMBERS" value={String(members.length)}/>
+            <StatCard label="CHECK-INS" value={String(attendance.length)}/>
+            <StatCard label="CLASSES RUN" value={String(classes.length)}/>
+          </div>
+
+          {/* ── CSV backfill ───────────────────────────────────────────── */}
+          <div style={card}>
+            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
+              Bring past check-ins across from your previous system. A CSV with a <strong>member name
+              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
+              are used when present. Nothing is written until you review what was read.
+            </p>
+
+            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
+                <Upload size={14}/> Choose CSV
+                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
+              </label>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
+                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
+                Dates are day/month (e.g. 03/04 = 3 April)
+              </label>
+            </div>
+
+            <textarea
+              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
+              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
+              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
+            />
+
+            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
+              {/* Btn's prop is `variant` (default "primary") — passing a bare
+                  `primary` leaks an unknown attribute to the DOM. Once a preview
+                  exists, Import is the primary action and the other two step back. */}
+              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
+                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
+              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
+              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
+            </div>
+
+            {/* Preview. Everything the apply will do, before it does any of it. */}
+            {analysis && !analysis.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #F5576C55",background:"#F5576C14",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                {analysis.error}
+              </div>
+            )}
+            {analysis?.ok && (
+              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
+                {analysis.newMembers.length > 0 && (
+                  <div style={{color:"var(--muted)"}}>
+                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
+                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
+                  </div>
+                )}
+                {analysis.problems.length > 0 && (
+                  <details style={{marginTop:"6px"}}>
+                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
+                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
+                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {result?.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #7BE3A455",background:"#7BE3A414",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
+                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
+                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
+              </div>
+            )}
+          </div>
+
+          {/* ── Roster ─────────────────────────────────────────────────── */}
+          <div style={card}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Roster · {members.length}</div>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
+                style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+            </div>
+            {members.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
+                No members yet. Import a CSV above, or check people in from the Class Runner —
+                a name is all that’s needed and the roster row is created for you.
+              </p>
+            ) : shown.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                {shown.slice(0, 200).map(m => (
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name||"(no name)"}</div>
+                      {m.email&&<div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.email}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)"}}>{visitsFor(m.id)}</div>
+                      <div style={{fontSize:"10px",color:"var(--muted)"}}>{lastSeen(m.id)||"never"}</div>
+                    </div>
+                  </div>
+                ))}
+                {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Unsynced-data banner (infra backlog I3) ─────────────────────────────────
 // store.js now records EVERY failed background write to a persisted ledger, and
 // the hydrate guards stop a stale server copy overwriting local data. But a guard
@@ -8936,7 +9131,7 @@ export default function App() {
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
         {view==="music"&&(token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
-        {view==="member"&&(FLAGS.mockMembers?<MemberScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Members" note="The member experience is rebuilt on the members table in Phase 1." onBack={()=>setView("dashboard")}/>)}
+        {view==="member"&&<RosterScreen onBack={()=>setView("dashboard")}/>}
         {view==="integrations"&&(FLAGS.mockIntegrations?<IntegrationsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Integrations" note="Real integrations (booking, payments, wearables) land in a later phase — the previous cards were demo theatre." onBack={()=>setView("dashboard")}/>)}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}

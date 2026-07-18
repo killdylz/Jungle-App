@@ -15,8 +15,9 @@ import {
   planSource, attendanceSource, ATTENDANCE_SOURCES,
   getMembers, addMember, getAttendance, recordAttendance,
   ensureClassInstance, getClassInstances, _ciToRow,
-  _guardList, _blobStale, syncErrors,
+  _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
 } from "./store.js";
+import { analyzeAttendanceCsv } from "./csvImport.js";
 
 const ALLOWED = ["google_slides", "manual", "jungle"];
 
@@ -241,5 +242,68 @@ describe("syncErrors", () => {
     }));
     expect(syncErrors().map(e => e.table).sort()).toEqual(["persona_plans", "user_prefs"]);
     expect(syncErrors().find(e => e.table === "persona_plans").msg).toBe("check violation");
+  });
+});
+
+// ── CSV backfill apply step (F4 slice 2) ─────────────────────────────────────
+// analyzeAttendanceCsv validates; applyAttendanceImport materialises. The order
+// (members -> class_instances -> attendance) is a foreign-key requirement, not a
+// preference, and re-running an overlapping export must not duplicate anything.
+describe("applyAttendanceImport", () => {
+  beforeEach(() => localStorage.clear());
+
+  const CSV = `Member Name,Email,Date,Class,Type
+Sarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm,S360
+Tom Reed,tom@example.com,2026-03-04,Tuesday 6pm,S360
+Sarah Chen,sarah@example.com,2026-03-06,Thursday 6pm,GC`;
+
+  it("creates members, classes and check-ins from an empty roster", () => {
+    const r = applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
+    expect(r).toMatchObject({ ok: true, members: 2, classes: 2, attendance: 3 });
+    expect(getMembers()).toHaveLength(2);
+    expect(getClassInstances()).toHaveLength(2);
+    expect(getAttendance()).toHaveLength(3);
+  });
+
+  it("marks every backfilled row source='import' so it stays distinguishable from a live check-in", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
+    expect(getAttendance().every(a => a.source === "import")).toBe(true);
+    getAttendance().forEach(a => expect(ATTENDANCE_SOURCES).toContain(a.source));
+  });
+
+  it("points check-ins at REAL member and class ids, not the analysis placeholders", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
+    const memberIds = new Set(getMembers().map(m => m.id));
+    const ciIds = new Set(getClassInstances().map(c => c.id));
+    getAttendance().forEach(a => {
+      expect(memberIds.has(a.memberId)).toBe(true);
+      expect(ciIds.has(a.classInstanceId)).toBe(true);
+      expect(String(a.memberId).startsWith("new:")).toBe(false);
+    });
+  });
+
+  it("reuses an existing roster member instead of creating a second row", () => {
+    const { member } = addMember("Sarah Chen");
+    const r = applyAttendanceImport(analyzeAttendanceCsv(CSV, getMembers()));
+    expect(r.members).toBe(1);                  // only Tom is new
+    expect(getMembers()).toHaveLength(2);
+    const sarahRows = getAttendance().filter(a => a.memberId === member.id);
+    expect(sarahRows).toHaveLength(2);
+  });
+
+  it("is IDEMPOTENT — re-importing the same file adds nothing", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(CSV, getMembers()));
+    const second = applyAttendanceImport(analyzeAttendanceCsv(CSV, getMembers()));
+    expect(second.attendance).toBe(0);
+    expect(second.duplicates).toBe(3);
+    expect(getAttendance()).toHaveLength(3);
+    expect(getClassInstances()).toHaveLength(2);   // no duplicate occurrences
+    expect(getMembers()).toHaveLength(2);
+  });
+
+  it("refuses to apply an analysis that failed validation", () => {
+    const bad = analyzeAttendanceCsv("class,date\nTuesday,2026-03-04", []);
+    expect(applyAttendanceImport(bad).ok).toBe(false);
+    expect(getAttendance()).toHaveLength(0);
   });
 });

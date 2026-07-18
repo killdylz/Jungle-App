@@ -815,6 +815,75 @@ export function recordAttendance({ classInstanceId, memberId, source = "coach" }
   return { attendance: next, added: true, row };
 }
 
+// Apply a validated CSV backfill (F4 slice 2). Takes the output of
+// csvImport.analyzeAttendanceCsv — which has ALREADY rejected every unusable row
+// — and materialises it: new members, then class occurrences, then the check-ins
+// that reference them.
+//
+// Order matters and is not cosmetic. attendance carries FKs to members and
+// class_instances, so those rows must exist first; creating them in one batch
+// each (rather than per check-in) also keeps a 2,000-row backfill to three
+// writes instead of six thousand.
+//
+// source is "import" — one of the three values 0007's CHECK constraint allows,
+// routed through attendanceSource() like every other call site. It is also what
+// makes a backfilled row distinguishable from a live check-in forever, which
+// matters when Phase 2 reports on data the studio did not capture in Jungle.
+export function applyAttendanceImport(analysis) {
+  if (!analysis?.ok) return { ok: false, error: analysis?.error || "nothing to import" };
+
+  // 1. Members. Keyed by the analysis's own "new:<key>" placeholders.
+  const memberIdFor = new Map();
+  const members = getMembers();
+  const newRows = (analysis.newMembers || []).map(nm => {
+    const m = { id: newId(), name: nm.name, email: nm.email || "", status: "active",
+                joinedAt: "", externalRef: "" };
+    memberIdFor.set(nm.key, m.id);
+    return m;
+  });
+  if (newRows.length) saveMembers([...members, ...newRows]);
+
+  // 2. Class occurrences. Reuse an existing occurrence with the same name+day so
+  //    re-running an overlapping export doesn't mint a duplicate class.
+  const cis = getClassInstances();
+  const ciIdFor = new Map();
+  const dayKey = (name, startsAt) => `${name}@${String(startsAt).slice(0, 10)}`;
+  const existingCi = new Map(cis.map(c => [dayKey(c.name, c.startsAt), c.id]));
+  const newCis = [];
+  (analysis.classes || []).forEach(c => {
+    const hit = existingCi.get(dayKey(c.name, c.startsAt));
+    if (hit) { ciIdFor.set(c.key, hit); return; }
+    const row = { id: newId(), startsAt: c.startsAt, name: c.name,
+                  classType: c.classType || "", coachName: c.coachName || "", durationMin: null };
+    ciIdFor.set(c.key, row.id);
+    newCis.push(row);
+  });
+  if (newCis.length) saveClassInstances([...cis, ...newCis]);
+
+  // 3. Check-ins. Dedupe against what is already recorded — the server's unique
+  //    index would reject these anyway, and counting them would overstate the
+  //    import to the coach.
+  const existing = getAttendance();
+  const have = new Set(existing.map(a => `${a.classInstanceId}|${a.memberId}`));
+  const rows = [];
+  (analysis.rows || []).forEach(r => {
+    const memberId = memberIdFor.get(r.memberKey) || r.memberKey;
+    const classInstanceId = ciIdFor.get(r.classKey);
+    if (!classInstanceId || !memberId) return;
+    const pair = `${classInstanceId}|${memberId}`;
+    if (have.has(pair)) return;
+    have.add(pair);
+    rows.push({ id: newId(), classInstanceId, memberId,
+                source: attendanceSource("import"), checkedInAt: r.checkedInAt });
+  });
+  if (rows.length) {
+    writeJSON(KEYS.attendance, [...existing, ...rows]);
+    _pushAttendance(rows);
+  }
+  return { ok: true, members: newRows.length, classes: newCis.length, attendance: rows.length,
+           duplicates: (analysis.rows || []).length - rows.length };
+}
+
 // ── consent_records: append-only ledger ─────────────────────────────────────
 // Notice-level roster/attendance consent is all Phase 1 needs; every biometric
 // scope stays unused until Phase 4. Fire-and-forget: a consent record that fails
@@ -855,16 +924,11 @@ export async function hydrateAttendance() {
     const serverCis     = (cRes.data || []).map(_rowToCi);
     const serverAtt     = (aRes.data || []).map(_rowToAtt);
 
-    const keepUnsynced = (table, server, local) => {
-      if (!syncErrorFor(table)) return server;
-      const onServer = new Set(server.map(r => r.id));
-      const localOnly = local.filter(r => !onServer.has(r.id));
-      return localOnly.length ? [...server, ...localOnly] : server;
-    };
-    const members = keepUnsynced("members", serverMembers, getMembers());
-    const cis     = keepUnsynced("class_instances", serverCis, getClassInstances());
-    if (members.length !== serverMembers.length) saveMembers(members);
-    if (cis.length !== serverCis.length) saveClassInstances(cis);
+    // Uses the shared _guardList (I3) rather than the local copy this once had —
+    // one implementation means a fix to the guard reaches every domain, which is
+    // the whole point of generalising it.
+    const members = _guardList("members", serverMembers, getMembers, saveMembers);
+    const cis     = _guardList("class_instances", serverCis, getClassInstances, saveClassInstances);
 
     // Append log: never drop a local check-in the server hasn't got. Push it up.
     const seen = new Set(serverAtt.map(a => a.id));
