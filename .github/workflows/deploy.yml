@@ -24,6 +24,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Crash gate — runs BEFORE the build so a runtime-breaking deploy never
+      # reaches Pages. `vite build` does not resolve identifiers, so a
+      # ReferenceError compiles clean and deploys green (this happened: 9f71f61
+      # crashed the Live runner on Mic Mode). See eslint.crash.config.js — it is
+      # a small, must-be-zero rule set, NOT the ~218-message style baseline.
+      - run: npm run lint:crash
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

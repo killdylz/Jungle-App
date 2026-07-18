@@ -75,6 +75,38 @@ Rules:
 - Ignore non-programming content: title/branding slides, hype quotes, logistics, playlists, coach bios. Extract ONLY the workout.
 - Use the caller's classType hint when provided. NEVER invent exercises that are not in the source text; keep each exercise's name as the coach wrote it (expand only obvious abbreviations like "DB"/"KB"/"BB").`;
 
+// Batch extraction. A coach's deck is usually a WHOLE HISTORY — one class per slide
+// (an 18-slide S360 deck = 18 classes). Extracting one slide per call meant 18 calls
+// per deck, which drained the free Gemini DAILY quota in a single import. Free-tier
+// limits are per-REQUEST, not per-token, so folding N slides into one call cuts quota
+// consumption by ~N with no loss of fidelity: each slide is still extracted
+// independently, just in one round trip.
+const BATCH_EXTRACT_SYSTEM = `You convert SEVERAL boutique-fitness class plans into ONE structured JSON object. Each input slide is an INDEPENDENT class — never merge two slides into one plan, never split one slide across two.
+
+Output ONLY this JSON — no markdown fences, no prose:
+{
+  "plans": [
+    {
+      "n": number,          // the slide number exactly as given in the input
+      "title": string,      // short plan title, e.g. "S360 — Deadlift (Hypertrophy)"
+      "classType": string,  // class format/type, e.g. "S360", "GC", "Enduro" (use the caller's hint if given)
+      "focus": string,      // the day's focus, e.g. "Deadlift — Hypertrophy", "Week 11/24"
+      "plan": ${"{ \"blocks\": [ ... ] }"}
+    }
+  ]
+}
+
+${BLOCK_SCHEMA}
+
+Rules — apply these to EACH slide independently:
+- Preserve rep ladders exactly ("12-10-10-8" -> reps:[12,10,10,8]). "3x10" -> sets:3, reps:[10]. "4 x 8-10" -> sets:4, reps:[8], note:"8-10 reps".
+- Roles: warmups -> "warmup"; the main barbell/primary movement -> "primary_lift"; antagonist/paired supersets (A1+A2, B1+B2 — pair them even when the word "superset" never appears) -> "superset" with the pairing in "rotation"; conditioning circuits / AMRAP / intervals -> "circuit"; closing finishers -> "finisher"; cooldowns -> "cooldown".
+- Numbers land in their FIELD, not in notes: rest in rest_sec (minutes -> SECONDS), RIR in rir, RPE in rpe (a range like "RPE 7-8" -> 7.5). Tempo codes ("31X1") go in scheme.note.
+- Every distinct movement line/station is ONE exercise, in source order. Distances, calories, meters and time caps go in that exercise's "target"; "each side"/"e/s" -> per_side:true; an easier option ("or", "scale to", "regression:") -> "regression".
+- NEVER invent exercises absent from that slide's text; keep names as the coach wrote them (expand only obvious abbreviations like DB/KB/BB).
+- A slide with NO workout on it (title slide, branding, hype quote, logistics, playlist, coach bio) must be OMITTED from "plans" entirely — do not emit an entry with empty blocks for it.
+- "n" MUST match the slide number it came from, so the caller can map results back. Return plans in slide order.`;
+
 const GENERATE_SYSTEM = `You draft a NEW class plan in a specific coach's established style. Output ONLY a JSON object — no markdown fences, no prose.
 
 You are given (as a JSON payload in the user message): the coach and class type, its training "category" (strength | conditioning | endurance | mixed), the coach's derived block STRUCTURE and SCHEME conventions for that class type, their movement vocabulary ("catalog"), a few of their past plans as style references ("examples"), and a "brief" for the new class.
@@ -168,7 +200,9 @@ function retryHintMs(msg: string): number {
 // long deck otherwise runs 100s+ and can blow the Edge Function gateway timeout
 // (~150s), which the client sees as a bare non-2xx. Extraction is transcription,
 // not reasoning; it doesn't need thinking and it DOES need to finish.
-type LlmOpts = { temperature?: number; think?: boolean };
+// maxTokens matters for extract_batch: N plans in one response can run well past the
+// 8k default, and a truncated response is unparseable JSON — the whole batch lost.
+type LlmOpts = { temperature?: number; think?: boolean; maxTokens?: number };
 
 // Free-tier fallback chain: while we stay on the no-cost Gemini path, an overloaded
 // OR quota-exhausted primary model doesn't mean the whole tier is down — the other
@@ -194,6 +228,7 @@ async function geminiOnce(model: string, key: string, system: string, prompt: st
         generationConfig: {
           responseMimeType: "application/json",
           temperature: opts.temperature ?? 0.7,
+          ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
           // thinkingConfig is a 2.5-series field — 2.0-flash rejects it (a NON-transient
           // 400 that would abort the fallback), so only send it to 2.5 models.
           ...(opts.think === false && model.includes("2.5") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
@@ -250,7 +285,7 @@ async function openai(system: string, prompt: string, opts: LlmOpts = {}) {
   return extractJson(d?.choices?.[0]?.message?.content || "{}");
 }
 
-async function anthropic(system: string, prompt: string, _opts: LlmOpts = {}) {
+async function anthropic(system: string, prompt: string, opts: LlmOpts = {}) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not set");
   // Default to the latest Claude. Opus 4.8 rejects temperature / budget_tokens, so
@@ -261,7 +296,7 @@ async function anthropic(system: string, prompt: string, _opts: LlmOpts = {}) {
     headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
     // 8192 leaves headroom for a big multi-block deck extraction (a long S360 deck
     // can exceed 4k output tokens once every scheme/exercise field is emitted).
-    body: JSON.stringify({ model, max_tokens: 8192, system, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: opts.maxTokens || 8192, system, messages: [{ role: "user", content: prompt }] }),
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d?.error?.message || "Anthropic error");
@@ -314,13 +349,26 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const body = await req.json();
-    const task = body?.task === "generate" ? "generate" : "extract";
+    const task = body?.task === "generate" ? "generate"
+               : body?.task === "extract_batch" ? "extract_batch"
+               : "extract";
 
     let system: string, prompt: string;
-    if (task === "extract") {
+    if (task === "extract_batch") {
+      // slides: [{ n, text }] — several independent classes in ONE call.
+      const slides = (Array.isArray(body?.slides) ? body.slides : [])
+        .map((s: { n?: unknown; text?: unknown }) => ({ n: Number(s?.n) || 0, text: String(s?.text || "").trim() }))
+        .filter((s: { text: string }) => s.text);
+      // v rides on this cheap validation error so a deploy can be detected without an LLM call.
+      if (!slides.length) return json({ error: "Missing slides to extract", v: 8 }, 400);
+      system = BATCH_EXTRACT_SYSTEM;
+      const hints = body?.classType ? `classType hint: ${body.classType}\n\n` : "";
+      prompt = `${hints}Extract each of these ${slides.length} slides as its own class plan:\n\n` +
+        slides.map((s: { n: number; text: string }) => `--- Slide ${s.n} ---\n${s.text}`).join("\n\n");
+    } else if (task === "extract") {
       const text = String(body?.text || "").trim();
       // v rides on this cheap validation error so a deploy can be detected without an LLM call.
-      if (!text) return json({ error: "Missing deck text to extract", v: 7 }, 400);
+      if (!text) return json({ error: "Missing deck text to extract", v: 8 }, 400);
       system = EXTRACT_SYSTEM;
       const hints = [
         body?.classType ? `classType hint: ${body.classType}` : "",
@@ -349,13 +397,31 @@ serve(async (req) => {
     const provider = (Deno.env.get("PERSONA_LLM_PROVIDER") || Deno.env.get("LLM_PROVIDER") || "gemini").toLowerCase();
     const call = provider === "openai" ? openai : provider === "gemini" ? gemini : anthropic;
     // Extraction = faithful transcription: low temperature, no thinking pass (speed).
-    const opts: LlmOpts = task === "extract" ? { temperature: 0.2, think: false } : {};
+    const opts: LlmOpts = task === "generate" ? {}
+      // Both extract paths are faithful transcription: low temperature, no thinking
+      // pass (speed). The batch path also needs a big output ceiling — N plans in one
+      // response easily passes the 8k default, and a truncated JSON loses the batch.
+      : task === "extract_batch" ? { temperature: 0.2, think: false, maxTokens: 32768 }
+      : { temperature: 0.2, think: false };
     // Retry transient provider blips with backoff. The free Gemini tier throws
     // "high demand / try again later" overload errors in bursts; a single retry
     // isn't enough, so back off 1.5s -> 4s -> 9s (worst case ~15s, well under the
     // ~150s gateway). A durable fix for sustained overload is switching the
     // provider secret to Anthropic/Opus. Non-transient errors throw immediately.
     const out = await withRetry(() => call(system, prompt, opts));
+
+    if (task === "extract_batch") {
+      const raw = Array.isArray((out as { plans?: unknown })?.plans) ? (out as { plans: unknown[] }).plans : [];
+      // Drop entries with no blocks: the prompt says omit non-class slides, but a
+      // model that emits one anyway shouldn't become an empty plan in the corpus.
+      const plans = raw
+        .map((p) => ({ n: Number((p as { n?: unknown })?.n) || 0, ...normalizePlan((p || {}) as Record<string, unknown>) }))
+        .filter((p) => p.plan.blocks.length);
+      // An empty array is a VALID result here (every slide was a title/branding slide),
+      // so unlike single extract this must not throw — the caller counts it as skipped.
+      return json({ plans, v: 8 }, 200);
+    }
+
     const normalized = normalizePlan(out || {});
     if (!normalized.plan.blocks.length) throw new Error("Model returned no blocks");
     return json(normalized, 200);

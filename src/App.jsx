@@ -2521,9 +2521,11 @@ function GlossaryScreen({onBack}) {
   const toggleGroup = grp => setOpenGroups(prev=>({...prev,[grp]:!prev[grp]}));
 
   const diffStyle = diff => {
-    if (diff==="Advanced")     return {bg:"rgba(123,227,164,.18)",color:"var(--accent)"||"#7BE3A4"};
+    // `var(--accent)` is a non-empty string, so the old `|| "#7BE3A4"` fallback was
+    // unreachable — the brand token is always the value. Dropped, not "fixed".
+    if (diff==="Advanced")     return {bg:"rgba(123,227,164,.18)",color:"var(--accent)"};
     if (diff==="Intermediate") return {bg:"rgba(224,184,91,.15)", color:"#E0B85B"};
-    return                            {bg:"rgba(123,227,164,.15)",color:"var(--accent)"||"#7BE3A4"};
+    return                            {bg:"rgba(123,227,164,.15)",color:"var(--accent)"};
   };
 
   return (
@@ -5832,6 +5834,11 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const progress = elapsed / dur;
   const totalDur = stages.reduce((a,s)=>a+s.dur,0);
   const cfg = SCFG[stage?.type]||SCFG.circuit;
+  // Fable §3: the mic button's looping jg-pulse is suppressed under reduced-motion,
+  // same as the room displays. This MUST be declared here — the mic button reads it
+  // and `micMode && !reduce` only short-circuits while mic mode is OFF, so a missing
+  // binding crashed the runner the instant a coach armed the mic.
+  const reduce = prefersReducedMotion();
 
   // Feature 7: on-the-fly search overlay
   const [showLiveSearch, setShowLiveSearch] = useState(false);
@@ -7139,6 +7146,34 @@ function retryAfterSecs(msg) {
   const m = String(msg || "").match(/retry in ([\d.]+)\s*s/i); // Gemini says "Please retry in 58.7s"
   return m ? Math.ceil(Number(m[1])) : 0;
 }
+// A DAILY quota exhaustion is not a per-minute rate limit and must not be retried:
+// Gemini's per-day cap resets on Google's ~midnight-Pacific cycle, so waiting 30s and
+// retrying 6 times per slide just turns a dead import into a 30-minute hang before
+// failing anyway. Google names the daily quota "…RequestsPerDay…" in the error.
+const DAILY_QUOTA_GONE = /per\s?day|daily\s+(quota|limit)|limit:\s*0/i;
+
+// One LLM call per slide drained the free daily quota on a single 18-slide deck, so
+// slides are sent in batches. Small enough that one bad batch costs little and the
+// response stays inside the output ceiling; big enough to cut quota use ~5x.
+const SLIDE_BATCH = 5;
+
+// Cheap client-side gate BEFORE spending a quota unit. A coach's deck is mostly
+// classes, but it also carries title cards, hype quotes, playlists and logistics —
+// each of which used to cost a full LLM call just to come back with zero blocks.
+// Deliberately CONSERVATIVE: a slide is kept unless it is both short and carries no
+// programming signal at all. Wrongly skipping a real class is far worse than
+// wrongly spending one call.
+const CLASS_SIGNAL = /\b(\d+\s*[x×]\s*\d+|reps?|sets?|rounds?|amrap|emom|rpe|rir|rest|superset|warm\s*-?\s*up|cool\s*-?\s*down|circuit|ladder|tempo|min|sec|cal|km|kg)\b/i;
+function looksLikeClassSlide(text) {
+  const t = (text || "").trim();
+  if (!t) return false;
+  // A scheme word or a "5x3" keeps the slide at ANY length — a terse but real slide
+  // ("M1 Deadlift 5x3 @ RPE 8, rest 3min") is only 34 chars, so a blanket length
+  // floor would silently discard it. This ordering is load-bearing, not stylistic.
+  if (CLASS_SIGNAL.test(t)) return true;
+  if (t.length < 40) return false;              // short AND no signal = title card
+  return /\d/.test(t);                          // long and numeric — send it, cheap to be wrong
+}
 
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
@@ -7436,40 +7471,101 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
           units.push({ deck: d, n: s.n, multi: slides.length > 1, text: s.text, ref, date: slideDate(s.text) });
         }
       }
-      const todo = units.filter(u => !importedRefs.has(u.ref));
-      for (let i = 0; i < todo.length; i++) {
-        const u = todo[i];
-        const label = u.multi ? `${u.deck.name} · slide ${u.n}` : u.deck.name;
-        setSlidesProg({ done: i, total: todo.length, current: label });
-        // Retry a slide ONLY when the free tier rate-limits us — wait out the window
-        // (the API tells us how long) and try again, up to a few times. Any other
-        // error fails just that slide and moves on.
+      // Drop already-imported slides, then drop the ones that plainly aren't classes
+      // (title cards, hype quotes, playlists) — those used to cost a full LLM call each
+      // just to return zero blocks, and the free tier is metered per REQUEST.
+      const unseen = units.filter(u => !importedRefs.has(u.ref));
+      const todo = unseen.filter(u => looksLikeClassSlide(u.text));
+      skipped += unseen.length - todo.length;
+
+      // Turn a plan payload from either task into the corpus row shape.
+      const rowFor = (u, data) => ({
+        id: store.newId(), personaId: selectedId, source: "slides", sourceRef: u.ref,
+        title: data.title || `${u.deck.name}${u.multi ? ` (slide ${u.n})` : ""}`,
+        classType: (data.classType || "").trim(), focus: data.focus || "",
+        planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10), plan: { blocks: data.plan.blocks },
+      });
+      // Persist what's extracted so far. A long import used to hold everything in
+      // memory until the very end — closing the tab at slide 15 of 18 lost the lot.
+      const flush = () => { if (added.length) commitPlans([...plans, ...added]); };
+
+      // Batch WITHIN a deck: slide numbers and the deck title hint are per-deck.
+      const batches = [];
+      for (const d of chosen) {
+        const mine = todo.filter(u => u.deck.id === d.id);
+        for (let i = 0; i < mine.length; i += SLIDE_BATCH) batches.push({ deck: d, units: mine.slice(i, i + SLIDE_BATCH) });
+      }
+
+      // One call per batch, falling back to one call per slide if the batch fails —
+      // so batching is a quota optimisation that can never cost us an import.
+      const extractOne = async (u) => {
+        const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: u.text.slice(0, 120000), title: u.deck.name } });
+        if (error) throw new Error(await fnErrorMessage(error));
+        if (data?.error) throw new Error(data.error);
+        return (data?.plan?.blocks || []).length ? [{ u, data }] : [];
+      };
+      const extractBatch = async (b) => {
+        if (b.units.length === 1) return extractOne(b.units[0]);
+        const { data, error } = await supabase.functions.invoke("persona-ai", { body: {
+          task: "extract_batch", title: b.deck.name,
+          slides: b.units.map(u => ({ n: u.n, text: u.text.slice(0, 120000) })),
+        } });
+        if (error) throw new Error(await fnErrorMessage(error));
+        if (data?.error) throw new Error(data.error);
+        if (!Array.isArray(data?.plans)) throw new Error("batch response had no plans array");
+        // Map each returned plan back to its slide by number.
+        return data.plans.map(p => { const u = b.units.find(x => x.n === p.n); return u ? { u, data: p } : null; }).filter(Boolean);
+      };
+
+      let done = 0;
+      outer:
+      for (let bi = 0; bi < batches.length; bi++) {
+        const b = batches[bi];
+        const label = b.units.length > 1
+          ? `${b.deck.name} · slides ${b.units[0].n}–${b.units[b.units.length - 1].n}`
+          : (b.units[0].multi ? `${b.deck.name} · slide ${b.units[0].n}` : b.deck.name);
+        setSlidesProg({ done, total: todo.length, current: label });
+
+        let got = null;
         for (let attempt = 0; ; attempt++) {
-          try {
-            const { data, error } = await supabase.functions.invoke("persona-ai", { body: { task: "extract", text: u.text.slice(0, 120000), title: u.deck.name } });
-            if (error) throw new Error(await fnErrorMessage(error));
-            if (data?.error) throw new Error(data.error);
-            const blocks = data?.plan?.blocks || [];
-            // A slide with no workout (title / branding / footer) legitimately yields
-            // no blocks — skip it quietly instead of failing the whole deck.
-            if (!blocks.length) { skipped++; break; }
-            added.push({ id: store.newId(), personaId: selectedId, source: "slides", sourceRef: u.ref,
-                         title: data.title || `${u.deck.name}${u.multi ? ` (slide ${u.n})` : ""}`, classType: (data.classType || "").trim(),
-                         focus: data.focus || "", planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10), plan: { blocks } });
-            break;
-          } catch (e) {
+          try { got = await extractBatch(b); break; }
+          catch (e) {
             const msg = e?.message || String(e);
+            // Daily cap: every remaining call fails the same way. Stop the whole import
+            // now and say so, instead of burning ~3 min of pointless waiting per batch.
+            if (DAILY_QUOTA_GONE.test(msg)) {
+              failed.push(`free Gemini DAILY quota is exhausted — it resets around midnight US Pacific. ${added.length} plan${added.length === 1 ? "" : "s"} imported before it ran out; re-run the import after the reset and already-imported slides will be skipped automatically`);
+              break outer;
+            }
             if (RATE_LIMITED.test(msg) && attempt < 6) {
               const wait = (retryAfterSecs(msg) || 30) + 2;
-              setSlidesProg({ done: i, total: todo.length, current: `${label} — free-tier limit, waiting ${wait}s…`, waiting: true });
+              setSlidesProg({ done, total: todo.length, current: `${label} — free-tier limit, waiting ${wait}s…`, waiting: true });
               await new Promise(r => setTimeout(r, wait * 1000));
               continue;
             }
-            failed.push(`${u.deck.name}${u.multi ? ` s${u.n}` : ""} — ${msg}`);
+            // The batch itself failed (bad JSON, truncation, a model hiccup). Retry the
+            // slides one at a time so one awkward slide can't sink its four neighbours.
+            if (b.units.length > 1) {
+              for (const u of b.units) {
+                try { const r = await extractOne(u); r.length ? added.push(rowFor(u, r[0].data)) : skipped++; }
+                catch (e2) { failed.push(`${b.deck.name} s${u.n} — ${e2?.message || e2}`); }
+                await new Promise(r => setTimeout(r, 800));
+              }
+              got = null;
+            } else {
+              failed.push(`${b.deck.name}${b.units[0].multi ? ` s${b.units[0].n}` : ""} — ${msg}`);
+              got = [];
+            }
             break;
           }
         }
-        if (i < todo.length - 1) await new Promise(r => setTimeout(r, 800)); // gentle pace
+        if (got) {
+          got.forEach(({ u, data }) => added.push(rowFor(u, data)));
+          skipped += b.units.length - got.length;   // slides the model found no workout on
+        }
+        done += b.units.length;
+        flush();                                    // crash-safe: persist each batch
+        if (bi < batches.length - 1) await new Promise(r => setTimeout(r, 800)); // gentle pace
       }
     } catch (e) { failed.push(`${e.message || e}`); }
     setSlidesProg(null); setSlidesBusy("");
