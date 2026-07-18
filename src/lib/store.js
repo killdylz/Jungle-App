@@ -32,6 +32,9 @@ const KEYS = {
   personaPlans:  "jungle_persona_plans",
   personaMoves:  "jungle_persona_movements",
   personaGens:   "jungle_persona_generations",
+  members:       "jungle_members",
+  classInstances:"jungle_class_instances",
+  attendance:    "jungle_attendance",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -593,6 +596,224 @@ export async function hydratePersonas() {
              generations: serverGens !== null ? serverGens : getPersonaGenerations() };
   } catch (e) {
     console.warn("[store] hydratePersonas error:", e?.message || e);
+    return null;
+  }
+}
+
+// ── F4 attendance spine (migration 0007) ─────────────────────────────────────
+// members / class_instances / attendance. The critical-path data spine: every
+// delivered session writes attendance, and the retention instrument is priced
+// against it.
+//
+// TWO WAYS THIS SECTION DIFFERS FROM EVERY OTHER DOMAIN ABOVE — both deliberate:
+//
+// 1. `attendance` is INSERT-ONLY server-side (0007 grants read+insert and no
+//    update/delete policy at all). So it must NOT use the whole-list `_bgUpsert`
+//    pattern: a re-upsert of an existing row compiles to ON CONFLICT DO UPDATE,
+//    which has no policy and would silently affect zero rows. It follows
+//    session_history's append+merge shape instead, and the one place a conflict
+//    is expected uses ignoreDuplicates (ON CONFLICT DO NOTHING — insert-only).
+// 2. Hydrate MERGES attendance rather than letting the server win. A check-in
+//    recorded on a coach's phone in a dead-Wi-Fi room is the only copy that
+//    exists; server-wins would delete it (exactly how the persona_plans data
+//    loss happened on 2026-07-18).
+
+// The three values 0007's CHECK constraint allows on attendance.source. Pinned in
+// ONE place with a unit test precisely because that constraint class already cost
+// us live data once: persona_plans.source rejected the client's value, the
+// background write failed silently, and a server-wins hydrate then destroyed the
+// only remaining copy. Never inline a raw source string at a call site.
+export const ATTENDANCE_SOURCES = ["qr", "coach", "import"];
+export function attendanceSource(s) {
+  return ATTENDANCE_SOURCES.includes(s) ? s : "coach";
+}
+
+// ── members: roster rows, NOT auth users ────────────────────────────────────
+// Local shape: { id, name, email, status, joinedAt, externalRef }
+function _memberToRow(m) {
+  return { id: m.id, gym_id: _ctx.gymId, name: m.name, email: m.email || null,
+           status: m.status || "active", joined_at: m.joinedAt || null,
+           external_ref: m.externalRef || null, created_by: _ctx.userId || null };
+}
+function _rowToMember(r) {
+  return { id: r.id, name: r.name || "", email: r.email || "", status: r.status || "active",
+           joinedAt: r.joined_at || "", externalRef: r.external_ref || "" };
+}
+export function getMembers() { return readJSON(KEYS.members, []); }
+export function saveMembers(list) {
+  writeJSON(KEYS.members, list || []);
+  if (!_synced()) return;
+  const rows = (list || []).map(_memberToRow);
+  if (rows.length) _bgUpsert("members", rows, "id");
+}
+// Quick-add during check-in: a name is all that's required, because anything
+// more is a form a coach won't fill in mid-class and P6 gives us <5 seconds.
+export function addMember(name, extra = {}) {
+  const m = { id: newId(), name: String(name || "").trim(),
+              email: extra.email || "", status: "active",
+              joinedAt: extra.joinedAt || new Date().toISOString().slice(0, 10),
+              externalRef: extra.externalRef || "" };
+  const list = [...getMembers(), m];
+  saveMembers(list);
+  return { member: m, members: list };
+}
+
+// ── class_instances: one dated occurrence ───────────────────────────────────
+// Local shape: { id, startsAt, name, classType, coachName, durationMin }
+//
+// class_type is a `text` column, and the app's classChoice is an OBJECT
+// ({classType, subType}). Passing it straight through fails the insert — the same
+// silent-sync-failure shape that cost us persona_plans data. Coerced here so no
+// caller can put a non-string into a text column, regardless of what it holds.
+function _asText(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "object") return [v.classType, v.subType].filter(Boolean).join(" · ") || null;
+  return String(v);
+}
+// Exported for tests: this mapper is the last line of defence before a value
+// reaches Postgres, so it's worth pinning directly rather than through a proxy.
+export function _ciToRow(c) {
+  return { id: c.id, gym_id: _ctx.gymId, starts_at: c.startsAt, name: _asText(c.name),
+           class_type: _asText(c.classType), coach_name: _asText(c.coachName),
+           coach_id: _ctx.userId || null, duration_min: c.durationMin || null,
+           created_by: _ctx.userId || null };
+}
+function _rowToCi(r) {
+  return { id: r.id, startsAt: r.starts_at, name: r.name || "", classType: r.class_type || "",
+           coachName: r.coach_name || "", durationMin: r.duration_min || null };
+}
+export function getClassInstances() { return readJSON(KEYS.classInstances, []); }
+export function saveClassInstances(list) {
+  writeJSON(KEYS.classInstances, list || []);
+  if (!_synced()) return;
+  const rows = (list || []).map(_ciToRow);
+  if (rows.length) _bgUpsert("class_instances", rows, "id");
+}
+// Find-or-create the occurrence for a class being run right now. Idempotent
+// within the window so pausing and resuming, or reopening the roster, does not
+// mint a second occurrence and split one class's attendance across two rows.
+const CI_WINDOW_MS = 4 * 60 * 60 * 1000;   // same name inside 4h == the same class
+export function ensureClassInstance({ name, classType, coachName, durationMin }) {
+  const list = getClassInstances();
+  const now = Date.now();
+  const hit = list.find(c => (c.name || "") === (name || "") &&
+                             Math.abs(new Date(c.startsAt).getTime() - now) < CI_WINDOW_MS);
+  if (hit) return { instance: hit, instances: list };
+  const c = { id: newId(), startsAt: new Date().toISOString(), name: name || "",
+              classType: classType || "", coachName: coachName || "", durationMin: durationMin || null };
+  const next = [...list, c];
+  saveClassInstances(next);
+  return { instance: c, instances: next };
+}
+
+// ── attendance: the spine. Append-only. ─────────────────────────────────────
+// Local shape: { id, classInstanceId, memberId, source, checkedInAt }
+function _attToRow(a) {
+  return { id: a.id, gym_id: _ctx.gymId, class_instance_id: a.classInstanceId,
+           member_id: a.memberId, source: attendanceSource(a.source),
+           checked_in_at: a.checkedInAt, recorded_by: _ctx.userId || null };
+}
+function _rowToAtt(r) {
+  return { id: r.id, classInstanceId: r.class_instance_id, memberId: r.member_id,
+           source: r.source, checkedInAt: r.checked_in_at };
+}
+export function getAttendance() { return readJSON(KEYS.attendance, []); }
+
+// Insert-only push. ignoreDuplicates => ON CONFLICT DO NOTHING, which needs only
+// the INSERT policy; a plain upsert would be ON CONFLICT DO UPDATE and fail. The
+// conflict is EXPECTED, not exceptional: 0007 has unique(class_instance_id,
+// member_id) and a member self-scanning while the coach sweeps the roster is a
+// race we designed for rather than one we prevent.
+function _pushAttendance(rows) {
+  if (!_synced() || !rows.length) return;
+  supabase.from("attendance")
+    .upsert(rows.map(_attToRow), { onConflict: "class_instance_id,member_id", ignoreDuplicates: true })
+    .then(({ error }) => {
+      if (error) { console.warn("[store] attendance insert failed:", error.message); _noteSyncError("attendance", error.message); }
+      else _clearSyncError("attendance");
+    }, (e) => _noteSyncError("attendance", e?.message || e));
+}
+
+// Record one check-in. Local write is immediate and unconditional so a dead-Wi-Fi
+// room still captures attendance (P7); the server insert rides along. Returns
+// { attendance, added:false } when this member is already checked into this class,
+// so the caller can treat a double-tap as a no-op instead of an error.
+export function recordAttendance({ classInstanceId, memberId, source = "coach" }) {
+  const list = getAttendance();
+  if (list.some(a => a.classInstanceId === classInstanceId && a.memberId === memberId))
+    return { attendance: list, added: false };
+  const row = { id: newId(), classInstanceId, memberId,
+                source: attendanceSource(source), checkedInAt: new Date().toISOString() };
+  const next = [...list, row];
+  writeJSON(KEYS.attendance, next);
+  _pushAttendance([row]);
+  return { attendance: next, added: true, row };
+}
+
+// ── consent_records: append-only ledger ─────────────────────────────────────
+// Notice-level roster/attendance consent is all Phase 1 needs; every biometric
+// scope stays unused until Phase 4. Fire-and-forget: a consent record that fails
+// to write must never block a check-in, but it must also never be silently lost,
+// so failures land in the sync ledger like everything else.
+export function recordConsent({ memberId, scope = "roster_attendance", granted = true,
+                                policyVersion = "v1", method = "notice" }) {
+  if (!_synced()) return;
+  supabase.from("consent_records").insert({
+    gym_id: _ctx.gymId, member_id: memberId, scope, granted,
+    policy_version: policyVersion, method, recorded_by: _ctx.userId || null,
+  }).then(({ error }) => {
+    if (error) { console.warn("[store] consent insert failed:", error.message); _noteSyncError("consent_records", error.message); }
+    else _clearSyncError("consent_records");
+  }, (e) => _noteSyncError("consent_records", e?.message || e));
+}
+
+// ── hydrate ─────────────────────────────────────────────────────────────────
+// members + class_instances are server-wins but guarded (same shape as
+// hydratePersonas): if their last write failed, local-only rows are kept and
+// re-pushed rather than deleted. attendance always MERGES — it is an append log
+// and an offline check-in may be the only copy in existence.
+export async function hydrateAttendance() {
+  if (!_synced()) return null;
+  try {
+    const [mRes, cRes, aRes] = await Promise.all([
+      supabase.from("members").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("class_instances").select("*").eq("gym_id", _ctx.gymId)
+        .order("starts_at", { ascending: false }).limit(200),
+      supabase.from("attendance").select("*").eq("gym_id", _ctx.gymId)
+        .order("checked_in_at", { ascending: false }).limit(2000),
+    ]);
+    if (mRes.error || cRes.error || aRes.error) {
+      console.warn("[store] hydrateAttendance failed:", (mRes.error || cRes.error || aRes.error).message);
+      return null;
+    }
+    const serverMembers = (mRes.data || []).map(_rowToMember);
+    const serverCis     = (cRes.data || []).map(_rowToCi);
+    const serverAtt     = (aRes.data || []).map(_rowToAtt);
+
+    const keepUnsynced = (table, server, local) => {
+      if (!syncErrorFor(table)) return server;
+      const onServer = new Set(server.map(r => r.id));
+      const localOnly = local.filter(r => !onServer.has(r.id));
+      return localOnly.length ? [...server, ...localOnly] : server;
+    };
+    const members = keepUnsynced("members", serverMembers, getMembers());
+    const cis     = keepUnsynced("class_instances", serverCis, getClassInstances());
+    if (members.length !== serverMembers.length) saveMembers(members);
+    if (cis.length !== serverCis.length) saveClassInstances(cis);
+
+    // Append log: never drop a local check-in the server hasn't got. Push it up.
+    const seen = new Set(serverAtt.map(a => a.id));
+    const localOnlyAtt = getAttendance().filter(a => !seen.has(a.id));
+    if (localOnlyAtt.length) _pushAttendance(localOnlyAtt);
+    const attendance = [...serverAtt, ...localOnlyAtt];
+
+    writeJSON(KEYS.members, members);
+    writeJSON(KEYS.classInstances, cis);
+    writeJSON(KEYS.attendance, attendance);
+    return { members, classInstances: cis, attendance };
+  } catch (e) {
+    console.warn("[store] hydrateAttendance error:", e?.message || e);
     return null;
   }
 }

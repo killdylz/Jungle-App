@@ -32,10 +32,17 @@ Function holding the service-role key that validates a short-lived, class-scoped
 fix this by loosening the policies to `anon`.** `source='coach'` (roster sweep) and
 `source='import'` (CSV) work today, so the first slice isn't blocked.
 
-**➡️ NEXT BUILD — the F4 client:** `store.js` domains for the four tables (mirroring the
-local-first pattern), the coach roster sweep in the Live runner, CSV backfill, then the QR Edge
-Function. Pin `source` to `'qr'|'coach'|'import'` in ONE shared constant with a unit test — the
-persona_plans outage was exactly this constraint class.
+**✅ F4 CLIENT SLICE 1 SHIPPED** — `store.js` domains + the coach roster sweep. `ATTENDANCE_SOURCES`
+is pinned in ONE place with a unit test (the persona_plans outage was exactly this constraint
+class). Two things differ from every other store domain, deliberately: `attendance` is
+**append-only** (the server has no update/delete policy, so a whole-list upsert would compile to
+ON CONFLICT DO UPDATE and silently affect 0 rows — pushes use `ignoreDuplicates` = DO NOTHING),
+and its hydrate **merges** rather than server-wins, because an offline check-in is the only copy
+that exists.
+
+**➡️ NEXT — F4 slice 2:** CSV backfill, then the QR Edge Function (see the gap above). A Members
+management screen and the `class_instances` generator off `class_schedule_rules` are both still
+unbuilt.
 
 ## 🔴 PENDING USER ACTIONS — check these first
 
