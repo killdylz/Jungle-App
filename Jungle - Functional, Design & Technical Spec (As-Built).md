@@ -287,21 +287,35 @@ reports ~215 style/hooks messages, so the one message that mattered was invisibl
 generalizes: **a quality signal nobody can act on is not a quality signal.** The narrow gate is
 enforced; the broad baseline stays advisory.
 
-**Still absent — the spec's §4.6 in full:**
+**Built (2026-07-18):** a **Vitest suite**, run in CI before the build (`npm test`). 29 tests
+across `src/lib/slidesImport.test.js` and `src/lib/personaAggregate.test.js`.
+
+*Selection principle — these cover the functions whose failures are* ***silent***: a
+miscategorised class type drafts into the wrong Builder format; a lost movement alias splits one
+movement into two half-counted catalog rows; a `commonScheme` emitted in the wrong case gets
+clobbered to `{}` on the next sync; a slide is quietly dropped before extraction. All four have
+actually happened in this codebase, and none is visible by clicking through the UI.
+
+*The suite was mutation-checked, not just run.* Zeroing `classCategory`'s role weighting initially
+failed to break any test — the fixture's scheme types carried the result on their own. A
+discriminating fixture (superset blocks scored with a conditioning scheme) was added; breaking the
+role weighting now fails exactly that test and restoring it goes green. **A test that passes on
+first write is not yet evidence of anything.**
 
 | Required | State |
 |---|---|
-| Vitest units on pure logic (session ops, at-risk rules, timer/stage math, `can()`) | ⛔ No test runner installed |
+| Vitest units on pure logic | 🟡 **Runner installed; 29 tests.** Covers slide import + persona aggregation. Timer/stage math and `can()` still uncovered |
 | **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ⛔ Called **non-negotiable** by the spec |
-| **Attendance-immutability tests** | ⛔ Also non-negotiable; arrives with F4 |
+| **Attendance-immutability tests** | ⛔ Also non-negotiable; must arrive *with* F4, not after |
 | Playwright: plan→publish→run→display, QR check-in | ⛔ |
 | Visual snapshots at 1920×1080 / 4K (P2 regression) | ⛔ |
 | Realtime soak: 30 subscribers per room channel | ⛔ |
 
-**Honest read:** the project has one automated gate, added today, and it only catches crashes.
-Every correctness claim above rests on manual verification. Before F4 ships — where the failure
-mode is *silently wrong attendance data*, which no amount of clicking will reveal — at minimum
-the RLS and immutability tests must exist.
+**Honest read:** CI now runs three gates — crash lint, unit tests, build. That is a real floor,
+but it covers pure functions only. Every claim about *screens, sync and RLS* still rests on manual
+verification. Before F4 ships — where the failure mode is silently wrong attendance data — the RLS
+and immutability tests must exist, because that is precisely the class of bug this harness was
+built to catch and currently cannot.
 
 ---
 

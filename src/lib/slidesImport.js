@@ -165,6 +165,25 @@ export function splitDeckSlides(deckText) {
   return filled.length ? filled : [{ n: 1, text: t }];
 }
 
+// Cheap gate applied BEFORE spending an LLM call on a slide. The free Gemini tier
+// meters per REQUEST, so every title card, hype quote, playlist and coach bio that
+// reaches the extractor costs the same as a real class and comes back with nothing.
+//
+// Deliberately CONSERVATIVE — wrongly skipping a real class silently loses a session
+// from the corpus, while wrongly spending a call costs one quota unit. The ordering
+// below is load-bearing: a scheme word keeps a slide at ANY length, because a real
+// slide can be as short as "M1 Deadlift 5x3 @ RPE 8, rest 3min" (34 chars) and an
+// unconditional length floor discarded exactly that during testing.
+const CLASS_SIGNAL = /\b(\d+\s*[x×]\s*\d+|reps?|sets?|rounds?|amrap|emom|rpe|rir|rest|superset|warm\s*-?\s*up|cool\s*-?\s*down|circuit|ladder|tempo|min|sec|cal|km|kg)\b/i;
+
+export function looksLikeClassSlide(text) {
+  const t = (text || "").trim();
+  if (!t) return false;
+  if (CLASS_SIGNAL.test(t)) return true;   // scheme signal — keep at any length
+  if (t.length < 40) return false;         // short AND no signal = title/branding card
+  return /\d/.test(t);                     // long and numeric — cheap to be wrong, so send it
+}
+
 const MONTHS = ["january","february","march","april","may","june","july","august",
                 "september","october","november","december"];
 // Pull a plan date out of a slide's own text ("11 July 2026" → "2026-07-11") so

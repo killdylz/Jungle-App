@@ -8,6 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "lint:crash": "eslint . --config eslint.crash.config.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -26,7 +28,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "vite": "^7.1.0"
+    "vite": "^7.1.0",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "vite": "^7.1.0"

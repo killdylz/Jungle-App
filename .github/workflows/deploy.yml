@@ -30,6 +30,10 @@ jobs:
       # crashed the Live runner on Mic Mode). See eslint.crash.config.js — it is
       # a small, must-be-zero rule set, NOT the ~218-message style baseline.
       - run: npm run lint:crash
+      # Unit tests on pure logic. These cover the functions whose failures are
+      # SILENT — a miscategorised class type, a lost movement alias, a slide quietly
+      # dropped before extraction. Manual testing cannot surface any of them.
+      - run: npm test
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

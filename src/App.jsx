@@ -9,7 +9,7 @@ import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
-import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate } from "./lib/slidesImport.js";
+import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -7158,23 +7158,8 @@ const DAILY_QUOTA_GONE = /per\s?day|daily\s+(quota|limit)|limit:\s*0/i;
 // response stays inside the output ceiling; big enough to cut quota use ~5x.
 const SLIDE_BATCH = 5;
 
-// Cheap client-side gate BEFORE spending a quota unit. A coach's deck is mostly
-// classes, but it also carries title cards, hype quotes, playlists and logistics —
-// each of which used to cost a full LLM call just to come back with zero blocks.
-// Deliberately CONSERVATIVE: a slide is kept unless it is both short and carries no
-// programming signal at all. Wrongly skipping a real class is far worse than
-// wrongly spending one call.
-const CLASS_SIGNAL = /\b(\d+\s*[x×]\s*\d+|reps?|sets?|rounds?|amrap|emom|rpe|rir|rest|superset|warm\s*-?\s*up|cool\s*-?\s*down|circuit|ladder|tempo|min|sec|cal|km|kg)\b/i;
-function looksLikeClassSlide(text) {
-  const t = (text || "").trim();
-  if (!t) return false;
-  // A scheme word or a "5x3" keeps the slide at ANY length — a terse but real slide
-  // ("M1 Deadlift 5x3 @ RPE 8, rest 3min") is only 34 chars, so a blanket length
-  // floor would silently discard it. This ordering is load-bearing, not stylistic.
-  if (CLASS_SIGNAL.test(t)) return true;
-  if (t.length < 40) return false;              // short AND no signal = title card
-  return /\d/.test(t);                          // long and numeric — send it, cheap to be wrong
-}
+// looksLikeClassSlide lives in src/lib/slidesImport.js (slide logic, and unit-tested
+// there — the heuristic is easy to break in a way no manual click would reveal).
 
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
