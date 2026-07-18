@@ -71,6 +71,23 @@ specs** ahead of running the Design and Fable loops.
    that test. **When you add tests here, mutate the code to prove they can fail.**
    `looksLikeClassSlide` moved from `App.jsx` → `src/lib/slidesImport.js` to be testable.
 
+7. **🔴 Fixed a SILENT DATA-LOSS bug in Coach Personas** (`796debe`) — reported by Dylan: an
+   imported class showed up fine, then **vanished after leaving the page**. Root cause was a
+   schema/client mismatch: `0005` constrains `persona_plans.source` to
+   `('google_slides','manual','jungle')`, but the client wrote **`"slides"`** (Slides importer)
+   and **`"extract"`** (paste-deck path). Chain: local write succeeds → the upsert fails the
+   CHECK → `_bgUpsert` swallows it to `console.warn` → `hydratePersonas` is **server-wins** and
+   overwrites localStorage with a server list that never got the rows. Because the whole plan
+   list upserts in ONE call, one bad row also blocked *valid* manual plans from syncing.
+   Fixes: both call sites emit legal values; **`store.planSource()`** normalizes on write **and
+   on read** (so a corpus imported before the fix heals itself); a **persisted sync-failure
+   ledger** now stops `hydratePersonas` discarding local plans the server never received (it
+   keeps + re-pushes them); the Personas screen shows a **warning banner** when plans haven't
+   synced; plan rows show readable labels ("Google Slides") instead of raw enum values.
+   **No migration needed** — `google_slides` is the schema's own name for that path.
+   ⚠️ **Lesson worth generalising: any `_bgUpsert` failure + a server-wins `hydrate*` = silent
+   data loss.** `persona_plans` is now guarded; the other domains still have the same shape.
+
 **Audit findings NOT yet fixed** (all documented in the as-built spec §5): `sp_at`/`sp_rt`/`pkce_v`
 still in localStorage (`App.jsx:372–403`); user-supplied RapidAPI key still in the UI
 (`App.jsx:433`, `:5537`); Deezer BPM still called client-side (`App.jsx:525–533`). All three are
