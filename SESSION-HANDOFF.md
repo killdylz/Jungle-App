@@ -1,14 +1,76 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-18_
+_Last updated: 2026-07-18 (session 2)_
+
+> 📘 **READ THE AS-BUILT SPEC FIRST:** `Jungle - Functional, Design & Technical Spec (As-Built).md`
+> — new this session. It mirrors the Fable spec's §2/§3/§4 headings section-for-section with
+> verified build status per item (✅ built / 🟡 partial / ⛔ not started / 🎭 flagged off), the
+> proposed `0007` schema, the full deprecation-list status, and §8 open questions written
+> specifically for the **Design and Fable loops**. The Fable doc stays unedited as the dated
+> review artifact; the as-built doc is the living one. Update it as you ship.
 
 ## 🔴 PENDING USER ACTIONS — check these first
+
+0. ⬜ **Redeploy `persona-ai`** (Supabase → Edge Functions → paste
+   `supabase/functions/persona-ai/index.ts` → Deploy) to activate **`task:"extract_batch"`**
+   (v:8). This is the fix for the quota drain: the client now sends **5 slides per call**
+   instead of 1, so an 18-slide deck costs ~4 calls instead of 18. **Safe to defer** — until
+   it's deployed the batch call fails and the client falls back to per-slide automatically, so
+   imports keep working exactly as before, just at the old quota cost. Detect the deploy with a
+   `task:"extract_batch"` call with no `slides` → it returns `{"v":8}`.
 
 1. ⬜ **Retry the Google-Slides import once the free Gemini quota resets.** The import feature is **CODE-COMPLETE and verified** — `persona-ai` is deployed at **v7** (Claude confirmed `"v":7` live) and the client splits a multi-class deck into one plan per slide. The ONLY reason it isn't finishing right now: extensive Claude-side testing on 2026-07-17 **drained the project's shared free-tier daily Gemini quota** (every model returned `limit: 0`). It resets on Google's daily cycle (~midnight US Pacific); after that, open Coach Personas → the coach → Slides import → List decks → Import, and the 18-slide "S360" deck imports as 18 dated plans. If it still stalls on quota, either wait longer or (optional, still free) swap `GEMINI_API_KEY` for a fresh key from a different Google project. Deep detail below in the Workstream-D section. **The whole Slides saga (v5 JSON-parse fix → v6 quota handling → v7 valid model chain → client per-slide split) is DONE and pushed; nothing to code there — just quota.**
 2. ✅ **Legacy PIN screen — RESOLVED (2026-07-17).** Gated on build mode: `if (!supabaseEnabled && !pinUnlocked)` — the redundant PIN is dropped on the live (Supabase/Google-login) build, but kept as the sole gate on the no-Supabase (localStorage) build. Verified: offline build still shows the PIN; the Supabase build is gated upstream by AuthGate (login + allowlist), so the PIN can never be the sole gate there. (`App.jsx` PIN gate now ~`:8309`, `PinScreen` `:1248`, dev PIN `080921`.)
 3. ⬜ **Cross-device Room TV test** — phone: Class Runner → play; laptop/TV: Class Runner → Room TV → **Follow** (green dot = receiving). If nothing arrives, check Supabase → Realtime enabled.
 
-## 🟢 Shipped this session (2026-07-18, all client-only / free / no-infra, all dev-server-verified)
+## 🟢 Shipped 2026-07-18 SESSION 2 — infra audit, P0 crash fix, extract hardening, as-built spec
+
+`main`: `c8bc503` → `758878e`. Session brief was: audit infra for **free** improvements to the
+extract pipeline and general feature health, then **update the Functional / Design / Technical
+specs** ahead of running the Design and Fable loops.
+
+1. **🔴 P0 — fixed a live crash** (`2b86e97`). `reduce` was **undefined in `LiveScreen`**:
+   `9f71f61` added `prefersReducedMotion()` to RoomTV / DisplayScreen / FloorLive but **not** to
+   LiveScreen, whose mic button reads it. `micMode && !reduce` short-circuits while mic mode is
+   OFF, so it threw `ReferenceError` **the instant a coach armed the mic — crashing the runner
+   mid-class**. Only reachable with Spotify connected, which is why last session's regression
+   walk (local build, no `player`) never rendered the button.
+2. **CI crash gate** (`2b86e97`) — *why the above shipped green:* `vite build` never resolves
+   identifiers and CI runs only the build. New **`eslint.crash.config.js`** is a small
+   must-be-zero rule set (`no-undef`, `no-const-assign`, `no-dupe-keys`, …) run **before** the
+   build in `deploy.yml` (`npm run lint:crash`). The main config stays the unenforced ~215-message
+   style baseline. ⚠️ **If this gate ever fails, it is real breakage — never relax it to ship.**
+   Verified green in CI on `2b86e97`.
+3. **Slides extract hardening** (`2b86e97`) — the quota drain was structural, not bad luck. Free
+   Gemini meters **per request**, and one call per slide made an 18-slide deck cost 18 calls:
+   - `persona-ai` gains **`task:"extract_batch"`** (N slides, one call, 32k output ceiling);
+     client sends 5/call and **falls back to per-slide if a batch fails**, so batching can never
+     cost an import. ⚠️ **needs your redeploy — see PENDING #0.**
+   - **Client-side pre-filter** skips title/branding/playlist slides before spending a call.
+     Deliberately conservative: a scheme word keeps a slide at *any* length — a unit test caught
+     that a naive 40-char floor discarded a real slide (`"M1 Deadlift 5x3 @ RPE 8, rest 3min"`).
+   - **Daily-quota exhaustion now aborts the import immediately** instead of retrying 6×30s per
+     slide (which turned a dead import into a ~30-min hang before failing anyway).
+   - **Plans commit per batch** — closing the tab at slide 15 of 18 no longer loses the lot.
+4. **Local QR generation** (`758878e`) — `src/lib/qr.js` (`qrcode` dep, 0 vulns) replaces
+   `api.qrserver.com`. Deprecation-list item and **F4 prerequisite**: a third party must not sit
+   in the check-in path, and at F4 the payload identifies a member. Verified in-browser: 240×240
+   PNG data URL, `#060D18` corner, `#EEEEEE` finder interior.
+5. **📘 As-built specification** — `Jungle - Functional, Design & Technical Spec (As-Built).md`.
+   See the banner at the top of this file.
+
+**Audit findings NOT yet fixed** (all documented in the as-built spec §5): `sp_at`/`sp_rt`/`pkce_v`
+still in localStorage (`App.jsx:372–403`); user-supplied RapidAPI key still in the UI
+(`App.jsx:433`, `:5537`); Deezer BPM still called client-side (`App.jsx:525–533`). All three are
+the same shape — client-side third-party access that the spec requires to be server-side — and
+all three would be resolved by the `src/music/` + media-proxy work (§4.5 step 5).
+
+**Also worth knowing:** the project has **no test runner at all**. The crash gate is the only
+automated quality signal. The spec calls RLS + attendance-immutability tests "non-negotiable", and
+F4 is precisely the feature whose failure mode (silently wrong attendance) manual clicking cannot
+detect. Strongly recommend adding Vitest *with* migration `0007`, not after.
+
+## 🟢 Shipped earlier on 2026-07-18 (session 1 — all client-only / free / no-infra, dev-server-verified)
 
 `main`: `48838df` → `e9fd92f`, tree clean, in sync with origin, **all 4 CI deploys green**. Session = a full end-to-end regression pass (found the app crash-free; 6 defects, all data-honesty or polish) + 3 roadmap features. Commits:
 
@@ -92,7 +154,8 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 > **Scope when approved:** migration `0007` for `members`, `class_instances`, `attendance` (immutable, `source: qr|coach|import`), `consent_records` (append-only — the spec ships this in Phase 1 *even though biometrics don't*, as "cheap insurance"); QR self-check-in on the room screen; coach roster sweep in the Live runner; CSV backfill. **Design law P6: check-in ≤5s/member** — above that coaches skip it and the instrument starves (A7). QR must be generated **locally, not via `api.qrserver.com`** (deprecation list — no member data through a third-party URL).
 >
 > ### Free / no-infra work that can proceed in parallel (ranked)
-> 1. **Local QR generation** — swap `api.qrserver.com` for a local QR lib. Explicitly on the deprecation list, and a hard prerequisite for F4, so it de-risks the critical path *before* the migration is approved. (Adds one small client-side dep — confirm with Dylan.)
+> 1. ✅ **DONE 2026-07-18 (session 2) — Local QR generation** (`758878e`, `src/lib/qr.js`). The F4 prerequisite is cleared.
+> 1b. **NEW — add a test runner (Vitest) + RLS and attendance-immutability tests.** Promoted to the top of this list by the session-2 audit: there is currently **zero** automated testing, and the spec calls these two suites non-negotiable. Cheapest moment is immediately *before* migration `0007`, since F4's failure mode is silently-wrong data that manual testing cannot surface.
 > 2. **Screens split, §4.5 step 4** — `App.jsx` is ~8,590 lines again. Extract leaf-first (Glossary → Templates → Calendar → BrandStudio → Displays) into `src/screens/`. Zero-risk, mechanical, and directly reduces the recurring stale-build/merge pain.
 > 3. **`MusicProvider` shell + music quarantine (§4.5 step 5)** — move ~2,000 lines of Spotify/DJ into `src/music/` behind the interface (`Soundtrack | PersonalSpotify | TempoGuide | Null`). Closes the last Phase-0 item. Quarantine, don't refactor internals.
 > 4. **Tempo-guide extensions (N5)** — `TempoGuide` ships in the coach display's no-music state (`e9fd92f`). Additive follow-ups: the Floor board's "No track playing" slot has the identical gap; a Builder per-stage preview; optional tap-tempo override of the SCFG midpoint.

@@ -1,0 +1,399 @@
+# Jungle — Functional, Design & Technical Specification (As-Built)
+
+**Status:** Living document · **Last verified against the codebase:** 2026-07-18 (`main` = `758878e`)
+**Companion to:** `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` (2026-07-11, Fable)
+
+---
+
+## 0. How to read this document
+
+The Fable spec is the **architectural verdict** — the MODIFY direction, the reasoning, the
+assumptions, the kill criteria. It is a dated review artifact and is **not edited**; its §2/§3/§4
+describe the product as *specified*.
+
+This document describes the product as *built*, section-for-section against those same headings,
+so the two can be diffed directly. Where the build has diverged from the spec, the divergence is
+stated with its reason rather than quietly normalized.
+
+**Status vocabulary — used precisely:**
+
+| Mark | Meaning |
+|---|---|
+| ✅ **Built** | Implemented and exercised. Verification noted where it isn't obvious. |
+| 🟡 **Partial** | Real code, real value, but the spec's acceptance criteria are not all met. What's missing is named. |
+| ⛔ **Not started** | No implementation. |
+| 🚫 **Gated** | Deliberately not built — waiting on a decision, a migration, or an earlier phase. |
+| 🎭 **Flagged off** | Built as mock/theatre, hidden behind a flag so it cannot be demoed as real. |
+
+**A standing caution for anyone using this doc to plan:** a screen existing is not a feature
+working. Six of this codebase's surfaces rendered convincingly while presenting fabricated data,
+and were flagged off in `cb6e77f` for that reason. Status marks here refer to *honest, real-data*
+functionality.
+
+---
+
+## 1. Where we actually are
+
+| Fable phase | State | Evidence |
+|---|---|---|
+| **0 — De-risk** | ✅ Done | All six mock surfaces flagged off (`src/config/flags.js`, all default `false`). Deploy verification in place. Residual: `MusicProvider` shell never built — but N5's user value shipped without it, so it is now a refactor, not a blocker. |
+| **0.5 — Split slice** | 🟡 Steps 1–3 done | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` all extracted. Steps 4 (screens) and 5 (music quarantine) open. `App.jsx` is **~8,090 lines**. |
+| **1 — Data foundation ★** | 🟡 ~80% | Migrations `0001`–`0006` applied; RLS on every table; Realtime room channels live; local-first localStorage→Postgres sync across all 14 domains. **Missing: F4 attendance (N1) and the magic-link member view (N4).** |
+| **2 — Make theatre real** | ⛔ Blocked | N2/N3 cannot begin without attendance rows. |
+| **3 — Experience deepening** | 🟡 Partly done early | P1/P2 display work ✅, WCAG-AA in Brand Studio ✅, reduced-motion ✅, tempo guide ✅. BLE spike and Garmin application not started. |
+| **4–5** | ⛔ Not started | Correctly gated behind consent foundation and validation. |
+
+**The single structural fact that governs the roadmap:** F4 attendance is unbuilt, and it is the
+spine. Fable states it three ways — *"capture is F4 and sits on the critical path; dashboards are
+downstream consumers"*, MODIFY pillar **M2**, and assumption **A7** whose failure is kill
+criterion #3. Everything in Phase 2, the entire $349–499 outcome tier, an honest active-members
+number, the floor-board roster, and the member summary all wait on it.
+
+---
+
+## 2. Core functional specification
+
+### F1 — Session/assignment primitive · 🟡 Partial (group only)
+
+**Built:** A class is an array of stages, each with exercises, durations, type and optional
+tracks. Classes persist through `store.getUserClasses()/saveUserClasses()` and sync to Postgres.
+Completed sessions append to `session_history` (insert-only RLS — history genuinely cannot be
+rewritten).
+
+**Not built — and this is the spec's actual acceptance criterion:** there is no
+`session_assignments` table, no `class_instances`, and **no 1:1 path at all**. The spec's test —
+*"`session_assignment` targets a `class_instance` XOR a `member` — no parallel tables"* — cannot
+currently be run because neither side of the XOR exists. Templates also do not snapshot on
+publish; editing a template today does not mutate delivered history only because history is a
+separate append-only log, not because a snapshot boundary was designed.
+
+**Consequence:** the PT/1:1 market and the "one primitive, two lenses" design principle (P5) are
+both unreachable until this lands. It arrives naturally with the F4 migration, since
+`class_instances` is on both critical paths.
+
+### F2 — Programming & builder (AI-drafted, coach-approved) · ✅ Built, with two gaps
+
+**Built:**
+- Class Builder with stage/exercise editing, `WORKOUT_LIBRARY` (`src/data/library.js`), class-type
+  stage templates, and a template library (`src/data/templates.js`).
+- **`smart-build` Edge Function** — server-held key, thin client. LLM class-gen and brand-gen.
+- **Coach personas (workstream D)** — the deepest divergence from the original spec, and a
+  favourable one. A persona is an individual coach; class type (S360/GC/Enduro) is a dimension
+  within them. `persona-ai` extracts a coach's historical decks into a structured block/scheme
+  corpus, derives a per-class-type style profile and movement catalog, and generates new plans
+  in that coach's style with category discipline and novelty steering against a generation ledger.
+- **Google Slides connector** — reads a coach's own Drive folder, splits multi-class decks per
+  slide, extracts each independently.
+- **Coach-approval gate holds by construction:** every generated plan lands in the Builder as a
+  draft. Nothing auto-publishes and no LLM output reaches a member surface unreviewed.
+
+**Gap 1 — PAR-Q screen: ⛔ not built.** The spec makes this a hard gate before any *individualized*
+load prescription. It is not currently load-bearing because there is no 1:1 path (F1) — but it
+must land in the same change that introduces one, not after.
+
+**Gap 2 — exercise media: 🟡 still on the user's own API key.** `App.jsx:5537` still asks the
+coach to *"Paste your ExerciseDB (RapidAPI) key"*, and `App.jsx:433/441` calls RapidAPI directly
+from the browser. The spec calls this "unshippable UX" and specifies a server-side media proxy.
+Still open.
+
+### F3 — In-room delivery · ✅ Built (strongest area)
+
+- **Live runner** — stage control, timers, auto-advance, ±10s/±30s nudges, keyboard control.
+- **`RoomTV`** — one fullscreen surface, three modes (Plan / Floor / Coach), transient overlay
+  with 10-foot-sized controls that auto-hides after 4.5s.
+- **Realtime room channels** (`src/lib/room.js`) — the organ Fable identified as missing. The
+  runner broadcasts state on a 1/s tick over a `room:{gymId}` channel; a TV on another device
+  joins with **Follow** (green dot = receiving, amber = waiting, staleness banner past 10s).
+  *Not yet verified cross-device — needs two signed-in devices. This is the one claim in F3 that
+  is coded but unproven.*
+- **P1 "now over next"** — current move at 24px/800 (34px solo), "Doing Now" heading, UP NEXT
+  band with next stage, colour dot, minutes and up to 3 upcoming moves.
+- **Reduced-motion** — `prefersReducedMotion()` suppresses looping pulse animations across
+  RoomTV, DisplayScreen, FloorLive and the Live runner.
+- **Tempo guide (N5)** — silent visual metronome pulsing at the stage's target BPM when nothing
+  is streaming. Zero licensing exposure, which is the entire point.
+
+**Gap:** the spec requires a display to *"survive Wi-Fi loss for a full class (local cache)"*.
+localStorage holds the class, but there is **no explicit display-side session cache with a
+reconnect path**, and no soak test. Treat P7 as unproven for displays.
+
+### F4 — Attendance capture · ⛔ NOT BUILT — the critical path
+
+Nothing exists: no `members`, no `class_instances`, no `attendance`, no `consent_records`, no QR
+check-in, no coach roster sweep, no CSV backfill.
+
+**Prerequisite now cleared (2026-07-18):** QR codes generate **locally** (`src/lib/qr.js`,
+`qrcode` package), replacing `api.qrserver.com`. This was a deprecation-list item precisely
+because a third party must not sit in the check-in path and no member-identifying payload should
+transit someone else's URL. Verified in-browser: 240×240 PNG data URL, correct brand palette,
+works offline.
+
+**Blocked on:** approval of migration `0007`. Proposed shape in §4.1 below.
+
+**Design law that must govern the build: P6 — check-in ≤5 seconds per member.** Above that,
+coaches skip it, attendance starves, and the thesis is decapitated (A7 / kill criterion #3). This
+is a *measured* requirement, not an aspiration: instrument check-in duration from day one and
+treat the pilot's check-in rate as the #1 metric.
+
+### F5 — Retention analytics + at-risk loop · ⛔ Blocked on F4
+
+`AnalyticsScreen` exists but is 🎭 flagged off (`mockAnalytics`) because its KPIs were fabricated.
+Keep the layout as the Phase-2 target; rebuild on real data.
+
+Worth restating because it is easy to get wrong under delivery pressure: **at-risk v1 is SQL, not
+LLM.** Two transparent rules (<4 visits in month one; 14-day absence). The LLM drafts the win-back
+message and explains the flag — it does not decide who is at risk. An operator must be able to
+trust the rule and a lawyer must be able to read it.
+
+### F6 — White-label brand system · ✅ Built for staff surfaces, ⛔ absent for member surfaces
+
+**Built:** Brand Studio (the strongest single asset), preset skins, custom token editing, per-gym
+branding and logos, `brand_profiles` sync with `active_skin_id`, and a **live WCAG-AA contrast
+audit** on token pairs — compliance turned into a feature, exactly as specified.
+
+**Gap:** the spec's purpose sentence is *"the member experiences the studio's brand"* — and there
+is **no member-visible surface at all** today. The magic-link view (N4) is unbuilt and the legacy
+b64-in-URL attendee view is flagged off. The auto-generated per-gym privacy/consent page is also
+unbuilt. So F6's *acceptance* is met on staff surfaces and untested where it actually matters.
+
+---
+
+## 3. Design specification
+
+| # | Principle | State | Notes |
+|---|---|---|---|
+| **P1** | Now over next | ✅ | Current move ≥60% weight on the coach display; UP NEXT peripheral. |
+| **P2** | The 10-foot rule | 🟡 | `DISPLAY_PRESETS`/`FONT_SCALES` exist and sizes were raised, but there are **no enforced minimums** and no 1080p/4K snapshot regression. Still "gestures at" the rule, as Fable put it. |
+| **P3** | Brand-forward, coach-neutral | 🟡 | Staff surfaces neutral ✅; member surfaces don't exist yet, so the half that matters is untested. |
+| **P4** | Zero-touch room | ✅ | Auto-advance + phone-as-remote + Realtime Follow. |
+| **P5** | One primitive, two lenses | ⛔ | No 1:1 lens (see F1). |
+| **P6** | Capture costs <5s | 🚫 | Awaiting F4. **Must be instrumented, not assumed.** |
+| **P7** | Degrade gracefully | 🟡 | localStorage-first everywhere and QR now generates offline; but no display-side session cache with a verified reconnect path. |
+
+**Accessibility — built:** WCAG-AA contrast enforced at token-selection time in Brand Studio;
+reduced-motion honoured on every looping animation across all four display surfaces; timer state
+carries a colour cue *and* position/shape, not hue alone.
+
+**Accessibility — open:** no colourblind-safe palette reserved for future HR zones; no formal
+audit of information-encoded-by-colour outside the timer; display font minimums unenforced.
+
+---
+
+## 4. Technical specification
+
+### 4.1 Data model — as applied
+
+**Applied and live (migrations `0001`–`0006`).** Every table is gym-scoped with RLS.
+
+| Migration | Tables |
+|---|---|
+| `0001` auth foundation | `gyms`, `locations`, `profiles`, `memberships`, `allowlist_entries`, `subscriptions`, `audit_events` |
+| `0002` RBAC write hardening | Per-verb policies on `memberships` + `allowlist_entries` |
+| `0003` Phase-1 domain | `class_schedule_rules`, `library_overrides`, `brand_profiles`, `session_history` *(insert-only)*, `user_prefs` |
+| `0004` | `brand_profiles.active_skin_id` |
+| `0005` coach personas | `coach_personas`, `persona_plans`, `persona_movements` |
+| `0006` | `persona_generations` (recommendation ledger) |
+
+**Specified but NOT yet applied:** `members`, `consent_records`, `class_instances`, `attendance`,
+`session_templates`, `sessions`, `session_assignments`, `exercises_custom`, `music_prefs`,
+`device_connections`, `biometric_samples`, `export_jobs`.
+
+**Proposed migration `0007` (awaiting approval) — the F4 spine:**
+
+| Table | Key fields | Notes |
+|---|---|---|
+| `members` | `gym_id`, `name`, `email?`, `status`, `joined_at` | **Roster rows, not auth users.** This is what makes attendance capture require zero member adoption. |
+| `class_instances` | `gym_id`, `starts_at`, `coach_id`, `format` | A class *occurrence*. Explicitly **not booking** — no reservation, no payment. The no-CRM line in schema form. |
+| `attendance` | `class_instance_id`, `member_id`, `source: qr\|coach\|import`, `checked_in_at` | **Immutable** — insert-only RLS, same pattern as `session_history`. |
+| `consent_records` | `member_id`, `gym_id`, `scope`, `policy_version`, `method`, `granted_at`, `withdrawn_at` | Append-only. Ships in Phase 1 **even though biometrics don't** — cheap insurance, MHMDA-shaped. |
+
+*Design note carried from Fable:* graduated consent scopes. `roster/attendance` is notice-level
+now; `biometric_live`, `biometric_store`, `coach_view`, `export` are explicit opt-in later.
+
+### 4.2 Local-first sync architecture — ✅ built, and worth stating precisely
+
+This is the chosen architecture and **not** a staging post toward an async rewrite:
+
+- `store.js` keeps a **synchronous** API. localStorage is the instant, offline read layer.
+- Every `save*` additionally fires a **background upsert** to Postgres.
+- `hydrate*()` pulls server → local once on mount. **Server wins**; an empty server is seeded
+  from local.
+- Every sync path **no-ops** when Supabase is off or no gym is resolved — so the plain
+  localStorage build is byte-for-byte unaffected. This is what makes the no-Supabase build a
+  genuine test path rather than a degraded one.
+
+14 domains route through it: `jungle_user_classes`, `jungle_library_custom`, `jungle_skin`,
+`jungle_custom_skin`, `jungle_gym_branding`, `jungle_history`, `jungle_disp_prefs`,
+`jungle_tmpl_tracks`, `jungle_exdb_key`, `jungle_crossfade`, `jungle_personas`,
+`jungle_persona_plans`, `jungle_persona_movements`, `jungle_persona_generations`.
+
+**Deliberately excluded:** Spotify tokens and derived caches — see the deprecation status below,
+where their exclusion is a known violation rather than a design choice.
+
+### 4.3 LLM services — ✅ built
+
+Two JWT-verified Edge Functions, both holding their keys server-side:
+
+- **`smart-build`** — class-gen and brand-gen.
+- **`persona-ai`** — `task:"extract"` (deck text → structured plan), `task:"extract_batch"`
+  (N slides in one call), `task:"generate"` (in-style new plan).
+
+**Provider routing:** `PERSONA_LLM_PROVIDER` → shared `LLM_PROVIDER` → `gemini`. Currently on the
+**free Gemini 2.5 Flash** path with a fallback sweep (2.5-flash → 2.0-flash → 2.0-flash-lite; each
+model has its own quota) plus time-budgeted retry with backoff inside the ~150s gateway window.
+Upgrading persona reasoning to Opus 4.8 is a two-secret change (`PERSONA_LLM_PROVIDER=anthropic`
++ `ANTHROPIC_API_KEY`) that does not touch `smart-build`.
+
+**Extraction economics — the constraint that shapes the design.** The free tier meters per
+*request*, not per token. One call per slide meant an 18-slide deck cost 18 calls and drained the
+daily quota in a single import. Current design:
+
+1. **Batch** ~5 slides per call (`extract_batch`, 32k output ceiling), falling back to per-slide
+   if a batch fails — so batching is an optimisation that can never cost an import.
+2. **Pre-filter** non-class slides client-side before spending a call. Conservative by
+   construction: a scheme word keeps a slide at *any* length, because a real slide can be 34
+   characters and a naive length floor silently discards it.
+3. **Fast-fail on daily exhaustion**, distinguished from a per-minute rate limit — the latter is
+   worth waiting out, the former resets at ~midnight Pacific and retrying just hangs the import.
+4. **Commit per batch**, so a long import is crash-safe.
+
+**Hard rules that remain non-negotiable:** coach approval before any member-visible output;
+PAR-Q before individualized load; prompt-injection hygiene on member-supplied text entering
+prompts; **at-risk scoring is SQL, not LLM**.
+
+### 4.4 Modularization status (§4.5 of the Fable spec)
+
+| Step | Target | State |
+|---|---|---|
+| 1 | Data constants → `src/data/` | ✅ `library.js`, `templates.js`, `glossary.js`, `personas.seed.js` |
+| 2 | Repository seam → `src/lib/store.js` | ✅ The migration seam; ~30 call sites route through it |
+| 3 | Shared UI → `src/ui/primitives.jsx` | ✅ Incl. `ThemeContext`/`useTheme`/`useWindowWidth` |
+| 4 | Screens → `src/screens/` | ⛔ **Open.** `App.jsx` ~8,090 lines. Leaf-first: Glossary → Templates → Calendar → BrandStudio → Displays |
+| 5 | Music quarantine → `src/music/` | ⛔ **Open.** ~2,000 lines of Spotify/DJ still inline; `MusicProvider` never built |
+
+Step 4 is mechanical and zero-risk, and it directly reduces the recurring stale-build and
+merge pain this file causes.
+
+### 4.5 Quality gates and testing — the weakest area
+
+**Built (2026-07-18):** a **CI crash gate**. `eslint.crash.config.js` is a small, must-be-zero
+rule set (`no-undef`, `no-const-assign`, `no-dupe-keys`, `no-unsafe-optional-chaining`, …) run
+before `npm run build` in `deploy.yml`.
+
+*Why it exists:* commit `9f71f61` shipped a `ReferenceError` to production. `vite build` never
+resolves identifiers, so the bundle compiled clean and CI deployed green; the Live runner then
+crashed the moment a coach armed Mic Mode mid-class. The full lint config *did* catch it, but
+reports ~215 style/hooks messages, so the one message that mattered was invisible. The lesson
+generalizes: **a quality signal nobody can act on is not a quality signal.** The narrow gate is
+enforced; the broad baseline stays advisory.
+
+**Still absent — the spec's §4.6 in full:**
+
+| Required | State |
+|---|---|
+| Vitest units on pure logic (session ops, at-risk rules, timer/stage math, `can()`) | ⛔ No test runner installed |
+| **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ⛔ Called **non-negotiable** by the spec |
+| **Attendance-immutability tests** | ⛔ Also non-negotiable; arrives with F4 |
+| Playwright: plan→publish→run→display, QR check-in | ⛔ |
+| Visual snapshots at 1920×1080 / 4K (P2 regression) | ⛔ |
+| Realtime soak: 30 subscribers per room channel | ⛔ |
+
+**Honest read:** the project has one automated gate, added today, and it only catches crashes.
+Every correctness claim above rests on manual verification. Before F4 ships — where the failure
+mode is *silently wrong attendance data*, which no amount of clicking will reveal — at minimum
+the RLS and immutability tests must exist.
+
+---
+
+## 5. Deprecation list — current status
+
+| Item | Spec action | State |
+|---|---|---|
+| `api.qrserver.com` QR generation | Replace with local lib | ✅ **Done 2026-07-18** — `src/lib/qr.js` |
+| Mock Analytics | Flag off | ✅ `mockAnalytics` |
+| Mock Members + hardcoded `BASE_SCHEDULE` | Flag off | ✅ `mockMembers`, `mockSchedule` |
+| Legacy b64-in-URL attendee view | Replace with magic-link | ✅ Flagged off (`attendeeShare`); replacement unbuilt |
+| localStorage as system-of-record | Demote to cache | ✅ All 14 domains sync to Postgres |
+| Monolithic `App.jsx` | Split per §4.5 | 🟡 Steps 1–3 done, 4–5 open |
+| Spotify as commercial playback | Demote to `PersonalSpotifyProvider` | ⛔ `MusicProvider` never built; still inline and unrouted |
+| **`sp_at`/`sp_rt`/`pkce_v` in localStorage** | Remove → Edge Function + Vault | ⛔ **Still open** (`App.jsx:372–403`). A stated architectural constraint, currently violated. |
+| **User-supplied RapidAPI key** (`jungle_exdb_key`) | Remove → server-side media proxy | ⛔ **Still open** (`App.jsx:433`, UI at `:5537`) |
+| **Deezer BPM client-side calls** | Move behind server proxy; verify ToS | ⛔ **Still open** (`App.jsx:525–533`, `gsb_bpm_cache`) |
+
+The bottom three cluster: all are **client-side third-party access that should be server-side**,
+and all three would be resolved by the same `src/music/` + media-proxy work. They are the reason
+"no provider tokens in the browser" is currently an aspiration rather than a property.
+
+---
+
+## 6. New features (N1–N12)
+
+| # | Feature | State |
+|---|---|---|
+| N1 | Native attendance capture (QR + roster sweep) | ⛔ **Next build.** QR prerequisite ✅ done |
+| N2 | 90-day cohort curve + benchmark overlay + revenue-at-risk | ⛔ Blocked on N1 |
+| N3 | At-risk detection (2 SQL rules) + LLM outreach drafts | ⛔ Blocked on N2 |
+| N4 | Member magic-link session summary | ⛔ The only member-facing surface; unbuilt |
+| N5 | Tempo-guidance mode (BPM cues, no audio) | ✅ **Shipped** on the coach display's no-music state. Floor board has the identical gap |
+| N6 | Soundtrack (commercial) + personal Spotify routing | ⛔ Needs `MusicProvider` |
+| N7–N11 | BLE HR, aggregator, Strava, Garmin, iOS | ⛔ Correctly gated behind consent foundation |
+| N12 | Coach self-serve tier | ⛔ Post-validation |
+
+---
+
+## 7. Recommended next moves
+
+**Ranked by critical-path value, with cost and risk stated honestly.**
+
+1. **F4 attendance spine (N1)** — *needs migration `0007`.* The spine. Nothing in Phase 2, no
+   outcome tier, no honest member count, no floor roster, no member summary without it. Build
+   with P6 (≤5s) instrumented from the first commit, and with the RLS + immutability tests
+   written *alongside* the migration rather than after.
+2. **RLS + attendance-immutability tests** — the spec calls these non-negotiable, and F4 is
+   exactly the feature whose failure mode is invisible to manual testing. Cheapest moment to add
+   a test runner is immediately before the schema that needs it.
+3. **Screens split (§4.5 step 4)** — mechanical, zero-risk, and it attacks a recurring source of
+   real pain (stale builds, merge conflicts, a file too large to reason about).
+4. **`MusicProvider` shell + music quarantine (step 5)** — closes the last Phase-0 item and is
+   the natural home for fixing the three open client-side-token deprecations at once.
+5. **Member magic-link summary (N4)** — the only surface where the white-label thesis (F6, and
+   assumption A2) can actually be tested on a member. Currently F6 is validated only on surfaces
+   members never see.
+6. **Tempo-guide extensions** — Floor board's no-music slot, Builder per-stage preview, tap-tempo.
+7. **Display P7 hardening** — an explicit display-side session cache and a reconnect path, so
+   "survives Wi-Fi loss for a full class" becomes a tested claim rather than an assumption.
+
+---
+
+## 8. Open questions for the Design and Fable loops
+
+These are the decisions this document cannot settle from the code alone.
+
+1. **F1's scope at F4 time.** `class_instances` is on both the F1 and F4 critical paths. Do we
+   land the full `sessions` / `session_assignments` primitive with migration `0007` — more design
+   risk now, but it's the moment the XOR is cheapest to get right — or ship `class_instances`
+   narrowly for attendance and retrofit the primitive later, accepting a migration we know we'll
+   have to revisit?
+2. **P6 at 5 seconds — is the QR self-scan actually the fast path?** A member scanning, loading a
+   page and tapping their name may exceed 5s in a cold, crowded room. The coach roster sweep may
+   dominate in practice. Which is the primary path, and which the fallback? This changes what we
+   build first and what we optimise.
+3. **Does the outcome tier need a member surface to be sellable?** F6's premium (A2) is asserted
+   on surfaces the member never sees. N4 is the only place the white-label claim becomes real —
+   should it move ahead of some Phase-2 analytics work?
+4. **Testing floor before F4.** Is "RLS + immutability tests only" an acceptable minimum, or does
+   attendance warrant the Playwright happy path too, given the data is the product?
+5. **Persona LLM upgrade timing.** Extraction fidelity is currently bounded by free Gemini. Do we
+   move persona reasoning to Opus 4.8 (two secrets, no code change) before ingesting the full
+   historical corpus, given re-extraction later costs quota again?
+6. **The three client-side-token deprecations.** They're a stated constraint currently violated.
+   Are they a pre-revenue blocker, or acceptable while the only user is the founder? The answer
+   determines whether step 5 jumps the queue.
+
+---
+
+*Verification note: every status mark in this document was checked against the working tree at
+`758878e` — migrations read from `supabase/migrations/`, flags from `src/config/flags.js`, store
+domains from `src/lib/store.js`, and deprecation items confirmed by line reference in
+`src/App.jsx`. Where something is marked coded-but-unproven (Realtime cross-device, display
+offline cache), that distinction is deliberate.*
