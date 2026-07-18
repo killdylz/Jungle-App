@@ -58,6 +58,18 @@ specs** ahead of running the Design and Fable loops.
    PNG data URL, `#060D18` corner, `#EEEEEE` finder interior.
 5. **📘 As-built specification** — `Jungle - Functional, Design & Technical Spec (As-Built).md`.
    See the banner at the top of this file.
+6. **🧪 Vitest harness + 29 tests** (`889009e`) — the project had **no test runner at all**.
+   `npm test` now runs in CI between the crash gate and the build, so there are **three gates**:
+   `lint:crash` → `test` → `build`. Coverage is deliberately aimed at **silent** failures —
+   `slidesImport` (link parsing, real slide numbers for `sourceRef` dedupe, per-slide dates, the
+   pre-filter) and `personaAggregate` (`classCategory` → Builder type, alias folding,
+   `commonScheme` camelCase, manual-edit preservation). All four of those have actually broken
+   here before and none is visible by clicking.
+   ⚠️ **The suite was mutation-checked, and it mattered:** zeroing `classCategory`'s role
+   weighting initially broke **no test** — the fixture's scheme types carried the result alone,
+   so the test was vacuous. A discriminating fixture was added; the mutation now fails exactly
+   that test. **When you add tests here, mutate the code to prove they can fail.**
+   `looksLikeClassSlide` moved from `App.jsx` → `src/lib/slidesImport.js` to be testable.
 
 **Audit findings NOT yet fixed** (all documented in the as-built spec §5): `sp_at`/`sp_rt`/`pkce_v`
 still in localStorage (`App.jsx:372–403`); user-supplied RapidAPI key still in the UI
@@ -92,7 +104,7 @@ You're continuing work on **Jungle** — a white-label class operating system fo
 ## ▶️ Start here
 
 - **Repo:** `C:\Users\dylan\jungle-app` (request folder access to this path first).
-- **Main file:** `src/App.jsx` (~8,400-line monolith). Also `src/AuthGate.jsx`, `src/supabase.js`, `src/config/flags.js`.
+- **Main file:** `src/App.jsx` (~8,080-line monolith). Also `src/AuthGate.jsx`, `src/supabase.js`, `src/config/flags.js`, `src/lib/` (`store.js`, `qr.js`, `room.js`, `slidesImport.js`, `personaAggregate.js` — the last two have test suites next to them).
 - **Live site:** https://killdylz.github.io/Jungle-App/
 - **Deploy** = git push to `main` (GitHub Actions builds + deploys). A **failed CI build does NOT touch the live site.**
   ```
@@ -101,8 +113,8 @@ You're continuing work on **Jungle** — a white-label class operating system fo
   git commit -m "..."
   git push origin main
   ```
-- **Deep context / roadmap:** read `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` in the repo root.
-- **Repo state:** as of 2026-07-18, tree clean, `main` = `e9fd92f` in sync with `origin`, all CI deploys green (see "Shipped this session" above for the latest four commits). Migrations **`0001`–`0006` ALL applied**. Full store.js → Postgres local-first sync live + verified. **Workstream D (coach personas): COMPLETE through increment 3** — chunks 1–3 (UI+aggregation, `persona-ai` extract/generate, Google Slides connector) + increments 1–3 (class-type correctness, recommendation memory/novelty, recognition depth w/ first-class RPE) all built, pushed, client deployed. The deployed `persona-ai` runs increment 3 but **NOT yet the v4 timeout fix — see PENDING USER ACTIONS above**; until then long-deck Slides imports fail with a (now properly surfaced) timeout error. **Workstream A (monolith splits): DONE** — `src/data/library.js` (WORKOUT_LIBRARY + stage maps), `src/data/templates.js`, `src/data/glossary.js`, `src/ui/primitives.jsx` (Btn/Input/Select/Tag/SpBadge/logos/StatCard + ThemeContext/useTheme/useWindowWidth); App.jsx is ~8,300 lines (was 9,237). **Workstreams B+C chunks 1+2: DONE** — one Class Runner nav entry (Run/Auto-DJ tabs + Room TV button), merged fullscreen `RoomTV` (Plan/Floor/Coach modes, transient overlay), and a Realtime room channel (`src/lib/room.js`) with a Follow toggle so a TV mirrors the runner from another device (cross-device test pending — see above). `IntegrationsScreen` mock theatre flagged off (`mockIntegrations`). ⚠️ Historical: commit `c859589` swept in more than its message says (a second chat ran in this folder 2026-07-14); don't trust old commit messages blindly.
+- **Deep context / roadmap:** two docs. `Jungle - Functional, Design & Technical Spec (As-Built).md` = **current state**, read first. `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` = the dated architectural verdict and reasoning (unedited by design).
+- **Repo state:** as of 2026-07-18 (session 2), tree clean, `main` = `889009e` in sync with `origin`, all CI deploys green. **CI now runs three gates: `lint:crash` → `test` → `build`.** Migrations **`0001`–`0006` ALL applied**; `0007` (F4 attendance) **proposed, not approved** — schema in the as-built spec §4.1. Full store.js → Postgres local-first sync live + verified. **Workstream D (coach personas): COMPLETE through increment 3** — chunks 1–3 (UI+aggregation, `persona-ai` extract/generate, Google Slides connector) + increments 1–3 (class-type correctness, recommendation memory/novelty, recognition depth w/ first-class RPE) all built, pushed, client deployed. Deployed `persona-ai` is **v7**; the repo holds **v8** (adds `extract_batch`) awaiting your dashboard paste — see PENDING #0. Until then the client falls back to per-slide extraction automatically, so imports still work. **Workstream A (monolith splits): DONE** — `src/data/library.js` (WORKOUT_LIBRARY + stage maps), `src/data/templates.js`, `src/data/glossary.js`, `src/ui/primitives.jsx` (Btn/Input/Select/Tag/SpBadge/logos/StatCard + ThemeContext/useTheme/useWindowWidth); App.jsx is ~8,300 lines (was 9,237). **Workstreams B+C chunks 1+2: DONE** — one Class Runner nav entry (Run/Auto-DJ tabs + Room TV button), merged fullscreen `RoomTV` (Plan/Floor/Coach modes, transient overlay), and a Realtime room channel (`src/lib/room.js`) with a Follow toggle so a TV mirrors the runner from another device (cross-device test pending — see above). `IntegrationsScreen` mock theatre flagged off (`mockIntegrations`). ⚠️ Historical: commit `c859589` swept in more than its message says (a second chat ran in this folder 2026-07-14); don't trust old commit messages blindly.
 
 ## ✅ Foundations already in place (earlier sessions)
 
@@ -114,6 +126,15 @@ You're continuing work on **Jungle** — a white-label class operating system fo
 Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 
 ## ⚠️ Environment gotchas
+
+- 🚨 **The crash gate is NOT the style baseline — don't confuse them.** `npm run lint:crash`
+  (`eslint.crash.config.js`) must be **0**, and CI enforces it. It exists because a
+  `ReferenceError` deployed green and crashed the Live runner. **A failure there is real,
+  user-visible breakage — never relax a rule to get a deploy out.** Separately, `npm run lint` is
+  the ~215-message advisory baseline (unused vars, hooks, style); that one is expected to be
+  noisy and is NOT enforced. Keep it from growing, but judge on runtime.
+- 🧪 **`npm test` runs in CI too.** When adding tests, **mutate the code to prove the test can
+  fail** — the first version of the `classCategory` test passed even with the logic zeroed out.
 
 - **Sandbox mount is byte-capped** — the Linux bash mirror serves TRUNCATED copies of large files (`App.jsx`, `AuthGate.jsx`), so `npm run build` / `cat` on the mount are unreliable. The **Read/Edit tools see the true host files — trust those.**
 - **Validate edits with the HOST build, not the sandbox one.** `npm.cmd run build` in **PowerShell** runs against the true host files and is a reliable full-compile check (it caught a real duplicate-declaration + surfaced the path to a hook bug this session). Only the *bash sandbox* build is unreliable (truncated mirror). `@babel/parser` on isolated snippets is a fast pre-check; the host `vite build` is the authoritative one, ahead of CI.
