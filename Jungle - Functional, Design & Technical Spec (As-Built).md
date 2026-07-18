@@ -38,8 +38,8 @@ functionality.
 |---|---|---|
 | **0 — De-risk** | ✅ Done | All six mock surfaces flagged off (`src/config/flags.js`, all default `false`). Deploy verification in place. Residual: `MusicProvider` shell never built — but N5's user value shipped without it, so it is now a refactor, not a blocker. |
 | **0.5 — Split slice** | 🟡 Steps 1–3 done | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` all extracted. Steps 4 (screens) and 5 (music quarantine) open. `App.jsx` is **~8,090 lines**. |
-| **1 — Data foundation ★** | 🟡 ~80% | Migrations `0001`–`0006` applied; RLS on every table; Realtime room channels live; local-first localStorage→Postgres sync across all 14 domains. **Missing: F4 attendance (N1) and the magic-link member view (N4).** |
-| **2 — Make theatre real** | ⛔ Blocked | N2/N3 cannot begin without attendance rows. |
+| **1 — Data foundation ★** | 🟡 ~90% | Migrations `0001`–**`0007`** applied; RLS on every table (`0007`'s verified 11/11); Realtime room channels live; local-first sync across all 14 domains. **F4 schema is in — its capture UI is not.** Magic-link member view (N4) still missing. |
+| **2 — Make theatre real** | ⛔ Blocked | Still blocked: the tables exist but no attendance ROWS can be written until the F4 client ships. |
 | **3 — Experience deepening** | 🟡 Partly done early | P1/P2 display work ✅, WCAG-AA in Brand Studio ✅, reduced-motion ✅, tempo guide ✅. BLE spike and Garmin application not started. |
 | **4–5** | ⛔ Not started | Correctly gated behind consent foundation and validation. |
 
@@ -117,10 +117,33 @@ Still open.
 localStorage holds the class, but there is **no explicit display-side session cache with a
 reconnect path**, and no soak test. Treat P7 as unproven for displays.
 
-### F4 — Attendance capture · ⛔ NOT BUILT — the critical path
+### F4 — Attendance capture · 🟡 Schema APPLIED + RLS verified; capture UI not built
 
-Nothing exists: no `members`, no `class_instances`, no `attendance`, no `consent_records`, no QR
-check-in, no coach roster sweep, no CSV backfill.
+**Applied 2026-07-18 — migration `0007`.** `members`, `class_instances`, `attendance`
+(insert-only) and `consent_records` (append-only) are live, gym-scoped and RLS-protected.
+
+**RLS verified against the real project, not assumed.** `supabase/tests/0007_rls_selftest.sql`
+impersonates a real signed-in user via `role authenticated` + `request.jwt.claims` — necessary
+because the SQL editor runs as a superuser and *bypasses RLS*, so the naive form of this test
+passes trivially and proves nothing. **11/11 PASS, zero SKIP** (the account is not a platform
+admin, so the cross-tenant checks genuinely executed): cross-gym isolation on all four tables;
+a normal gym member can still record attendance; `UPDATE`/`DELETE` on attendance and consent
+affect zero rows; a cross-gym insert is rejected; the `source` CHECK bites.
+
+*Not covered by that suite, so it isn't mistaken for total coverage:* the `members_delete`
+admin-only policy, multi-gym membership, and the QR/anon write path (see the gap below).
+
+**Still to build — the whole client side:** `store.js` domains for the four tables, QR
+self-check-in, the coach roster sweep in the Live runner, and CSV backfill.
+
+**⚠️ Known gap, documented in the migration:** QR self-check-in **cannot write through these
+policies**. Every policy requires an authenticated staff user, and a member scanning the room
+screen is on their own phone — not an auth user, which is the entire point of
+members-as-roster-rows. `source='qr'` needs an Edge Function holding the service-role key that
+validates a short-lived, class-scoped token. **The wrong fix is loosening the policies to
+`anon`.** `source='coach'` (roster sweep) and `source='import'` (CSV) work against these
+policies today, so F4's first slice is not blocked — and the coach sweep may be the real <5s
+path anyway (§8 Q2).
 
 **Prerequisite now cleared (2026-07-18):** QR codes generate **locally** (`src/lib/qr.js`,
 `qrcode` package), replacing `api.qrserver.com`. This was a deprecation-list item precisely
@@ -193,12 +216,15 @@ audit of information-encoded-by-colour outside the timer; display font minimums 
 | `0004` | `brand_profiles.active_skin_id` |
 | `0005` coach personas | `coach_personas`, `persona_plans`, `persona_movements` |
 | `0006` | `persona_generations` (recommendation ledger) |
+| `0007` **the F4 spine** | `members`, `class_instances`, `attendance` *(insert-only)*, `consent_records` *(append-only)* — applied + RLS-verified 2026-07-18 |
 
-**Specified but NOT yet applied:** `members`, `consent_records`, `class_instances`, `attendance`,
-`session_templates`, `sessions`, `session_assignments`, `exercises_custom`, `music_prefs`,
-`device_connections`, `biometric_samples`, `export_jobs`.
+**Specified but NOT yet applied:** `session_templates`, `sessions`, `session_assignments`,
+`exercises_custom`, `music_prefs`, `device_connections`, `biometric_samples`, `export_jobs`.
 
-**Proposed migration `0007` (awaiting approval) — the F4 spine:**
+**Migration `0007` — APPLIED 2026-07-18. Scope deliberately narrow (§8 Q1, decided):** four
+tables only. The session primitive (`sessions` / `session_assignments` with the
+`class_instance` XOR `member` constraint, F1) is **not** included; `class_instances` is shaped so
+that layer can be added later *without altering existing columns*.
 
 | Table | Key fields | Notes |
 |---|---|---|
@@ -305,8 +331,8 @@ first write is not yet evidence of anything.**
 | Required | State |
 |---|---|
 | Vitest units on pure logic | 🟡 **Runner installed; 29 tests.** Covers slide import + persona aggregation. Timer/stage math and `can()` still uncovered |
-| **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ⛔ Called **non-negotiable** by the spec |
-| **Attendance-immutability tests** | ⛔ Also non-negotiable; must arrive *with* F4, not after |
+| **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ✅ **`supabase/tests/0007_rls_selftest.sql`, 11/11 PASS.** Dashboard-run (no Docker needed); impersonates `role authenticated` because the SQL editor bypasses RLS as superuser. Covers the `0007` tables only — `0001`–`0006` policies are still untested |
+| **Attendance-immutability tests** | ✅ Covered by the same suite: `UPDATE`/`DELETE` on `attendance` and `consent_records` both affect zero rows |
 | Playwright: plan→publish→run→display, QR check-in | ⛔ |
 | Visual snapshots at 1920×1080 / 4K (P2 regression) | ⛔ |
 | Realtime soak: 30 subscribers per room channel | ⛔ |
@@ -344,7 +370,7 @@ and all three would be resolved by the same `src/music/` + media-proxy work. The
 
 | # | Feature | State |
 |---|---|---|
-| N1 | Native attendance capture (QR + roster sweep) | ⛔ **Next build.** QR prerequisite ✅ done |
+| N1 | Native attendance capture (QR + roster sweep) | 🟡 **Schema + RLS done (`0007`).** Client is the next build. Local QR generation ✅; QR *write path* needs an Edge Function (see F4) |
 | N2 | 90-day cohort curve + benchmark overlay + revenue-at-risk | ⛔ Blocked on N1 |
 | N3 | At-risk detection (2 SQL rules) + LLM outreach drafts | ⛔ Blocked on N2 |
 | N4 | Member magic-link session summary | ⛔ The only member-facing surface; unbuilt |

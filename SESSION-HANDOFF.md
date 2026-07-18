@@ -9,6 +9,34 @@ _Last updated: 2026-07-18 (session 2)_
 > specifically for the **Design and Fable loops**. The Fable doc stays unedited as the dated
 > review artifact; the as-built doc is the living one. Update it as you ship.
 
+## ✅ MIGRATION 0007 IS APPLIED (2026-07-18) — F4 is unblocked
+
+`supabase/migrations/0007_attendance_spine.sql` is **live**: `members`, `class_instances`,
+`attendance` (insert-only), `consent_records` (append-only). Scope is deliberately **narrow** —
+the F1 session primitive is NOT included, and `class_instances` is shaped so it can be added
+later without altering existing columns.
+
+**RLS verified 11/11 PASS, zero SKIP** via `supabase/tests/0007_rls_selftest.sql`. Re-run that
+script in the SQL editor after ANY future policy change — it impersonates `role authenticated`
+because the SQL editor runs as superuser and **bypasses RLS**, so a naive test passes trivially.
+(Supabase warns about "destructive operations" and an RLS-less table — both benign: the deletes
+are its own fixtures, and `_rls_results` is a temp table. Choose **Run without RLS**.)
+
+⚠️ **NOT covered by that suite:** the `members_delete` admin-only policy, multi-gym membership,
+and the `0001`–`0006` policies. Don't read 11/11 as "RLS is fully tested".
+
+🚨 **KNOWN GAP — QR self-check-in cannot write through these policies.** Every `0007` policy
+requires an authenticated staff user; a member scanning the room screen is on their own phone and
+is NOT an auth user (that's the point of members-as-roster-rows). `source='qr'` needs an Edge
+Function holding the service-role key that validates a short-lived, class-scoped token. **Do NOT
+fix this by loosening the policies to `anon`.** `source='coach'` (roster sweep) and
+`source='import'` (CSV) work today, so the first slice isn't blocked.
+
+**➡️ NEXT BUILD — the F4 client:** `store.js` domains for the four tables (mirroring the
+local-first pattern), the coach roster sweep in the Live runner, CSV backfill, then the QR Edge
+Function. Pin `source` to `'qr'|'coach'|'import'` in ONE shared constant with a unit test — the
+persona_plans outage was exactly this constraint class.
+
 ## 🔴 PENDING USER ACTIONS — check these first
 
 0. ⬜ **Redeploy `persona-ai`** (Supabase → Edge Functions → paste
