@@ -12,6 +12,7 @@ import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } f
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { parsePlanText, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
+import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -5857,6 +5858,18 @@ function CheckInPanel({ sessionName, classType, onClose }) {
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [q, setQ] = useState("");
 
+  // P6 instrumentation (I4). The spec makes ≤5s/member a design law and A7 a kill
+  // criterion, and neither was measurable — the product could fail its own kill
+  // criterion silently. Refs, not state: recording a timestamp must not re-render
+  // the panel a coach is tapping through mid-class.
+  const openedAt = useRef(Date.now());
+  const stamps   = useRef([]);
+  useEffect(() => {
+    const opened = openedAt.current, marks = stamps.current;
+    // On unmount, not per check-in: one row per class, and no write in the tap path.
+    return () => { recordCheckinSession({ classInstanceId: ci.id, openedAt: opened, stamps: marks }); };
+  }, [ci.id]);
+
   const checkedIn = new Set(attendance.filter(a => a.classInstanceId === ci.id).map(a => a.memberId));
   const term  = q.trim().toLowerCase();
   const shown = members.filter(m => !term || (m.name || "").toLowerCase().includes(term));
@@ -5864,18 +5877,24 @@ function CheckInPanel({ sessionName, classType, onClose }) {
   // coach creates a duplicate roster row for a member who's simply mis-spelled.
   const canAdd = !!term && !members.some(m => (m.name || "").trim().toLowerCase() === term);
 
-  const check = (m) => setAttendance(store.recordAttendance({
-    classInstanceId: ci.id, memberId: m.id, source: "coach",
-  }).attendance);
+  // Only stamp when a check-in was ACTUALLY added. A double-tap on an
+  // already-checked-in member returns added:false, and counting it would inflate
+  // the member count with a zero-second gap — flattering the P6 number with work
+  // that never happened.
+  const check = (m) => {
+    const r = store.recordAttendance({ classInstanceId: ci.id, memberId: m.id, source: "coach" });
+    if (r.added) stamps.current.push(Date.now());
+    setAttendance(r.attendance);
+  };
 
   const quickAdd = () => {
     const name = q.trim();
     if (!name) return;
     const { member, members: next } = store.addMember(name);
     setMembers(next);
-    setAttendance(store.recordAttendance({
-      classInstanceId: ci.id, memberId: member.id, source: "coach",
-    }).attendance);
+    const r = store.recordAttendance({ classInstanceId: ci.id, memberId: member.id, source: "coach" });
+    if (r.added) stamps.current.push(Date.now());
+    setAttendance(r.attendance);
     setQ("");
   };
 
@@ -7316,6 +7335,7 @@ function RosterScreen({ onBack }) {
   const [members, setMembers] = useState(() => store.getMembers());
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [classes, setClasses] = useState(() => store.getClassInstances());
+  const [p6, setP6] = useState(() => p6Summary());
   const [csv, setCsv] = useState("");
   const [dayFirst, setDayFirst] = useState(true);
   const [analysis, setAnalysis] = useState(null);
@@ -7353,6 +7373,7 @@ function RosterScreen({ onBack }) {
     setMembers(store.getMembers());
     setAttendance(store.getAttendance());
     setClasses(store.getClassInstances());
+    setP6(p6Summary());
   };
   const onFile = e => {
     const f = e.target.files?.[0];
@@ -7381,6 +7402,30 @@ function RosterScreen({ onBack }) {
             <StatCard label="MEMBERS" value={String(members.length)}/>
             <StatCard label="CHECK-INS" value={String(attendance.length)}/>
             <StatCard label="CLASSES RUN" value={String(classes.length)}/>
+          </div>
+
+          {/* P6 instrument (I4). Shown even with no data, and explicitly as "not
+              measured yet" rather than a passing tick — the whole reason this
+              exists is that an unmeasured design law was indistinguishable from
+              a met one. */}
+          <div style={{...card,display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:"200px"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Check-in speed</div>
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginTop:"2px"}}>
+                {p6.medianSec == null
+                  ? `Not measured yet — check members in from the Class Runner and the typical time per member appears here. The target is under ${P6_TARGET_SEC}s.`
+                  : `Typical time per member across ${p6.sessions} class${p6.sessions===1?"":"es"} (${p6.members} check-in${p6.members===1?"":"s"}). Target is under ${P6_TARGET_SEC}s; long idle gaps are excluded.`}
+              </p>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
+                           color:p6.meetsTarget==null?"var(--muted)":p6.meetsTarget?"var(--green)":"var(--accent)"}}>
+                {p6.medianSec == null ? "—" : `${p6.medianSec}s`}
+              </div>
+              <div style={{fontSize:"10px",letterSpacing:"1px",fontWeight:"600",color:"var(--muted)"}}>
+                {p6.meetsTarget==null?"NO DATA":p6.meetsTarget?"MEETS TARGET":"OVER TARGET"}
+              </div>
+            </div>
           </div>
 
           {/* ── CSV backfill ───────────────────────────────────────────── */}
