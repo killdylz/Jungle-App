@@ -3,6 +3,10 @@
 _Last updated: 2026-07-18 (session 2)_
 
 > 📘 **READ THE AS-BUILT SPEC FIRST:** `Jungle - Functional, Design & Technical Spec (As-Built).md`
+> It now also carries **§7b (infra/fine-tuning backlog, I1–I15)**, **§7c (feature backlog — what
+> has NOT been built)**, and **§4.3.1 — why the Slides import uses an LLM at all, and why it
+> mostly shouldn't**. Those three sections answer "what's left and what should we improve"
+> without re-deriving it from the code.
 > — new this session. It mirrors the Fable spec's §2/§3/§4 headings section-for-section with
 > verified build status per item (✅ built / 🟡 partial / ⛔ not started / 🎭 flagged off), the
 > proposed `0007` schema, the full deprecation-list status, and §8 open questions written

@@ -1,6 +1,10 @@
 # Jungle — Functional, Design & Technical Specification (As-Built)
 
-**Status:** Living document · **Last verified against the codebase:** 2026-07-18 (`main` = `758878e`)
+**Status:** Living document · **Last verified against the codebase:** 2026-07-18 (`main` = `0a05d27`)
+
+**Contents:** §1 where we are · §2 Functional (F1–F6) · §3 Design (P1–P7) · §4 Technical
+(incl. **§4.3.1 why extraction uses an LLM, and why it mostly shouldn't**) · §5 deprecations ·
+§6 N1–N12 · §7 next moves · **§7b infra backlog** · **§7c feature backlog** · §8 open questions
 **Companion to:** `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` (2026-07-11, Fable)
 
 ---
@@ -287,6 +291,46 @@ daily quota in a single import. Current design:
 PAR-Q before individualized load; prompt-injection hygiene on member-supplied text entering
 prompts; **at-risk scoring is SQL, not LLM**.
 
+#### 4.3.1 Why extraction uses an LLM at all — and why it mostly shouldn't
+
+Worth stating plainly, because "importing from Google Slides" sounds like it should be a data
+transfer and is not.
+
+**The Slides API returns text, not data.** A deck is a bag of text runs with positions. Every
+fact that makes a slide *structured* — that `M1` is the primary lift, that `A1`/`A2` are a
+superset pair, that `5x5` is sets×reps, that `12-10-10-8` is a rep ladder, that `3min` is 180
+seconds, that `DB` means dumbbell — lives only in the coach's typographic convention. Something
+must infer structure from prose. Today the LLM does **all** of it.
+
+**Most of it does not need an LLM.** Walking the rules in `EXTRACT_SYSTEM`, the majority are
+pattern-matching a parser handles deterministically: rep ladders, `3x10`, minutes→seconds, RIR,
+RPE (including range→midpoint), A1/A2 pairing by label prefix, role assignment from label +
+keyword, per-side and regression markers. Non-programming slides are *already* filtered
+client-side by `looksLikeClassSlide` without any model.
+
+**The decisive fact: these are HOUSE FORMATS.** S360, GC and Enduro are the same notation
+repeated weekly across dozens of decks. This is not arbitrary natural language — it is a
+consistent private grammar, which is the textbook case for a parser rather than a language model.
+
+**What the current design costs:**
+
+| Cost | Detail |
+|---|---|
+| Quota | Every slide (now every batch) spends a metered free-tier request |
+| Latency | A network round trip and model inference per batch, vs. microseconds |
+| **Non-determinism** | **The real problem.** Re-importing the same deck can yield different output than last time. The corpus feeds a derived *style profile*, so extraction drift becomes persona drift — the coach's "learned style" quietly changes without the coach changing anything |
+| Testability | A model's output can't be pinned by a unit test; a parser's can |
+
+**Recommended architecture — deterministic-first, LLM fallback.** A parser attempts each slide
+and emits a **confidence**; only low-confidence slides fall through to Gemini. Expect ~70–90% of
+slides in an established house format to parse for free, instantly, reproducibly and under unit
+test, with the model reserved for genuinely idiosyncratic notation. Critically, the parser must
+**never silently guess** — below threshold it defers rather than inventing structure.
+
+A further step once a coach has a corpus: their notation is now *known*, so per-coach parse
+hints can be derived from already-extracted plans, pushing the deterministic share higher over
+time. The LLM becomes the cold-start tool it is good at being, not the steady-state engine.
+
 ### 4.4 Modularization status (§4.5 of the Fable spec)
 
 | Step | Target | State |
@@ -385,23 +429,105 @@ and all three would be resolved by the same `src/music/` + media-proxy work. The
 
 **Ranked by critical-path value, with cost and risk stated honestly.**
 
-1. **F4 attendance spine (N1)** — *needs migration `0007`.* The spine. Nothing in Phase 2, no
-   outcome tier, no honest member count, no floor roster, no member summary without it. Build
-   with P6 (≤5s) instrumented from the first commit, and with the RLS + immutability tests
-   written *alongside* the migration rather than after.
-2. **RLS + attendance-immutability tests** — the spec calls these non-negotiable, and F4 is
-   exactly the feature whose failure mode is invisible to manual testing. Cheapest moment to add
-   a test runner is immediately before the schema that needs it.
-3. **Screens split (§4.5 step 4)** — mechanical, zero-risk, and it attacks a recurring source of
-   real pain (stale builds, merge conflicts, a file too large to reason about).
-4. **`MusicProvider` shell + music quarantine (step 5)** — closes the last Phase-0 item and is
-   the natural home for fixing the three open client-side-token deprecations at once.
-5. **Member magic-link summary (N4)** — the only surface where the white-label thesis (F6, and
-   assumption A2) can actually be tested on a member. Currently F6 is validated only on surfaces
+1. ✅ **F4 attendance spine (N1)** — schema `0007` applied + RLS-verified; slice 1 (store layer +
+   coach roster sweep) shipped. **Remaining: CSV backfill, then the QR Edge Function.**
+2. ✅ **RLS + attendance-immutability tests** — done for `0007` (11/11). Extend the same pattern
+   to `0001`–`0006` (I5).
+3. **Error boundary (I1)** — promoted to the top of what's left. There is none, so any render
+   throw white-screens the whole app; this has already happened once in production.
+4. **Instrument check-in duration (I4)** — P6 (<5s) is a design law and A7 is a kill criterion,
+   and neither is currently measurable. Cheap now, retrofitted awkwardly later.
+5. **Deterministic Slides parser with LLM fallback (I2)** — see §4.3.1. Most quota use disappears
+   and extraction becomes reproducible, which matters because the corpus feeds a derived profile.
+6. **Screens split (§4.5 step 4)** — mechanical, zero-risk, attacks recurring stale-build pain.
+7. **`MusicProvider` shell + music quarantine (step 5)** — closes the last Phase-0 item and is
+   the natural home for fixing the three client-side-token deprecations at once.
+8. **Member magic-link summary (N4)** — the only surface where the white-label thesis (F6, and
+   assumption A2) can be tested on an actual member. F6 is currently validated only on surfaces
    members never see.
-6. **Tempo-guide extensions** — Floor board's no-music slot, Builder per-stage preview, tap-tempo.
-7. **Display P7 hardening** — an explicit display-side session cache and a reconnect path, so
+9. **Display P7 hardening** — an explicit display-side session cache and reconnect path, so
    "survives Wi-Fi loss for a full class" becomes a tested claim rather than an assumption.
+
+---
+
+## 7b. Infrastructure & fine-tuning backlog
+
+Everything here is **free** (no new paid service) unless marked. Ordered by value per unit of
+risk, not by size.
+
+### Tier 1 — cheap, high leverage, would have prevented real incidents
+
+| # | Item | Why it matters |
+|---|---|---|
+| I1 | **React error boundary** | **There is none.** Any render throw white-screens the entire app — exactly what the Mic Mode `ReferenceError` did to the Live runner mid-class. A boundary turns a total blackout into one broken panel with a Reload affordance. Perhaps 40 lines. |
+| I2 | **Deterministic Slides parser, LLM fallback** | See §4.3.1. Kills most quota use, makes extraction reproducible, and puts the corpus under unit test. |
+| I3 | **Extend the sync guard to the other 5 domains** | `_bgUpsert` failure + a server-wins `hydrate*` = silent data loss. Fixed for `persona_plans` and the F4 tables; `library_overrides`, `brand_profiles`, `user_prefs`, `coach_personas`, `persona_movements`, `persona_generations` still have the shape that cost a corpus on 2026-07-18. |
+| I4 | **Instrument check-in duration (P6)** | The spec names check-in rate the pilot's **#1 metric** and <5s a design law — and nothing measures either. A7 is a kill criterion we currently cannot evaluate. |
+| I5 | **RLS tests for `0001`–`0006`** | The self-test pattern exists and works; only `0007` is covered. Cross-tenant leaks are invisible from the app. |
+
+### Tier 2 — structural debt with compounding cost
+
+| # | Item | Why it matters |
+|---|---|---|
+| I6 | **Screens split (§4.5 step 4)** | `App.jsx` is **8,279 lines**. Mechanical, zero-risk, and it attacks the recurring stale-build/merge pain directly. |
+| I7 | **Music quarantine + `MusicProvider` (§4.5 step 5)** | ~2,000 lines, and the natural home for fixing I8 in one pass. Closes the last Phase-0 item. |
+| I8 | **Three client-side third-party accesses** | Spotify tokens in localStorage (`App.jsx:372–403`), user-supplied RapidAPI key (`:433`, UI `:5537`), client-side Deezer BPM (`:525–533`). A stated architectural constraint currently violated. |
+| I9 | **Code splitting** | Single **606 KB** bundle (166 KB gzip), no `React.lazy` anywhere. Route-level splitting would cut first paint materially — the room display is loaded on a TV over gym Wi-Fi. |
+| I10 | **Delta writes instead of whole-list upserts** | `save*` pushes the ENTIRE domain list on every change. Fine at today's volume; quadratic-feeling as a corpus grows, and it is why one bad row poisoned every plan. |
+
+### Tier 3 — correctness gaps to close before real users
+
+| # | Item | Why it matters |
+|---|---|---|
+| I11 | **Display offline cache (P7)** | "Survives Wi-Fi loss for a full class" is an assumption, not a tested claim. |
+| I12 | **Cross-device Realtime test** | Coded, never verified with two devices. |
+| I13 | **Retry loop for failed syncs** | Failures are recorded, but only retried on the next hydrate. A background retry would close the loop. |
+| I14 | **Hydrate pagination** | `attendance` hydrate caps at 2,000 rows; a busy studio passes that inside a year and silently truncates. |
+| I15 | **Persona LLM quality ceiling** *(free→paid)* | Extraction fidelity is bounded by free Gemini. Two secrets switch persona reasoning to Opus 4.8. Do it *before* ingesting a large corpus — re-extraction costs quota again. |
+
+---
+
+## 7c. Feature backlog — what has NOT been built
+
+Grouped by the spec's own numbering so it maps onto the Fable roadmap.
+
+### Phase 1 remainder (the current phase)
+
+| Item | State |
+|---|---|
+| **F4 slice 2 — CSV backfill** | Not started. Needs nothing from Dylan. |
+| **F4 slice 3 — QR self-check-in** | Not started. **Blocked on an Edge Function** (service-role write path; see F4's known gap). Needs a hand-deploy. |
+| **Members management screen** | Not started. Roster CRUD, status, joined date. Quick-add covers walk-ins today. |
+| **`class_instances` generator** | Not started. Nothing turns `class_schedule_rules` (recurring rules) into dated occurrences yet — the runner creates one ad hoc. |
+| **N4 — member magic-link summary** | Not started. **The only member-facing surface**, and the only place F6's white-label premium (A2) can actually be tested on a member. |
+| **Consent notice surface** | Not started. Deliberately: no consent record is written until a real notice exists, because fabricating one is worse than an empty ledger. |
+
+### Phase 2 — the outcome tier (unblocked once attendance rows accumulate)
+
+| Item | State |
+|---|---|
+| **N2 — 90-day cohort curve + benchmark overlay + revenue-at-risk** | Not started. `AnalyticsScreen` exists but is flagged off (its KPIs were fabricated); keep the layout as the target. |
+| **N3 — at-risk detection + outreach drafts** | Not started. Two SQL rules (<4 visits in month one; 14-day absence). **Arithmetic, not AI** — the LLM only drafts the message and explains the flag. |
+| **Alert dismiss/acted state** | Not started. Without it, A3 (do operators *act*?) is unmeasurable. |
+
+### Phase 3+ / deferred
+
+| Item | State |
+|---|---|
+| **F1 — session primitive** (`sessions`, `session_assignments`, XOR) | Not started. Deliberately excluded from `0007`. **No 1:1/PT path exists at all**, so P5 ("one primitive, two lenses") is unreachable. |
+| **PAR-Q screen** | Not started. Must land in the same change that introduces individualized load. |
+| **Server-side exercise media proxy** | Not started (see I8). |
+| **N6 — Soundtrack / personal-Spotify routing** | Not started; needs `MusicProvider`. |
+| **Tempo-guide extensions** | Floor board's no-music slot, Builder per-stage preview, tap-tempo. |
+| **N7–N11 — BLE HR, aggregator, Strava, Garmin, iOS** | Not started. Correctly gated behind the consent foundation. |
+| **N12 — coach self-serve tier** | Not started. Post-validation. |
+
+### Known-broken / honesty debt
+
+| Item | State |
+|---|---|
+| **Flagged-off mock surfaces** | `mockAnalytics`, `mockMembers`, `mockSchedule`, `attendeeShare`, `mockIntegrations`, `mockDiscover` — all default OFF and must each be replaced by real-data implementations, not merely re-enabled. |
+| **Brand Studio "LIVE PREVIEW" dashboard** | Intentionally illustrative; labelled. Leave as is. |
 
 ---
 
