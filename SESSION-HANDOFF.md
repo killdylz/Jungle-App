@@ -1,6 +1,65 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-18 (session 2)_
+_Last updated: 2026-07-18 (session 3)_
+
+## 🟢 Shipped 2026-07-18 SESSION 3 — `63e0f2b` → `e992d42`, all CI-green
+
+Brief was: **build the parser first, LLM as fallback** — plus keep shipping from the
+backlog. Four commits, each verified in the dev server before pushing.
+
+1. **I1 — React error boundary** (`e447f92`). There was none, so any render throw
+   white-screened the whole app — exactly what the Mic Mode `ReferenceError` did to the
+   Live runner mid-class. Two boundaries: root (`main.jsx`, outside `AuthGate`) and
+   **per-view in `App.jsx` keyed on `view`**. The second is the one that matters — the
+   crash stays inside the screen that threw, the nav survives, and navigating away is
+   itself a recovery path. Verified with a temporary throw in `GlossaryScreen`.
+
+2. **⭐ I2 — DETERMINISTIC SLIDES PARSER, LLM DEMOTED TO FALLBACK** (`fadf318`). The
+   session's headline. `src/lib/planParser.js`: pure, emits the extractor's exact shape
+   plus a **confidence** and **reasons**, and **defers below `PARSE_THRESHOLD` (0.72)
+   rather than guessing**. Wired into BOTH extraction call sites — the Slides import
+   parses locally first and only batches deferred slides to persona-ai, and **the
+   paste-deck path no longer needs Supabase at all** (it used to hard-fail without it).
+   Measured on the house-format fixtures: **S360 → 0.88, GC → 1.0, zero model calls.**
+   Provenance rides in `persona_plans.plan._extract`, deliberately NOT a new `source`
+   value. See spec **§4.3.2** for how it works and which two disambiguations do the work.
+
+3. **I3 — sync guard generalised to every domain** (`d0651cf`). The `_bgUpsert`-fails +
+   server-wins-hydrate pairing had cost live data three times in one day, and the fix
+   only covered `persona_plans`. Now two shared guards (`_guardList` for id-keyed lists,
+   `_blobStale` for single-row blobs) cover all of them, `saveUserClasses` finally
+   records failures at all (it console.warn'd only), and a new **`SyncBanner`** surfaces
+   any unsynced domain — a guard that works silently looks identical to no problem.
+
+4. **F4 slice 2 — CSV backfill + a real Members screen** (`e992d42`). `csvImport.js`
+   (parse → validate → preview) + `store.applyAttendanceImport` (FK order, idempotent,
+   `source='import'`). **`RosterScreen` replaces the flagged-off `MemberScreen` theatre**,
+   so `mockMembers` no longer gates a nav entry. Two-step by design: analysis writes
+   nothing, because `attendance` is append-only and a half-applied import can't be undone.
+
+**Testing: 44 → 121 tests.** Every behaviour was mutation-checked (33 mutations, all
+verified to fail the suite). That process earned its keep three times:
+- One test was **vacuous** — the unparsed-line penalty could be deleted with the suite
+  still green. Isolating it exposed a real bug (coverage double-counted exercise lines).
+- **Driving the real UI** caught three parser defects no fixture did: `DB Bench Press`
+  tagged `barbell`, a bare `Finisher` line entering the movement catalog as an exercise,
+  and a ladder-inferred set count overriding the coach's stated "3 rounds".
+- The same UI pass caught `<Btn primary>` leaking an unknown attribute to the DOM.
+
+**⭐ RECOMMENDED NEXT:**
+1. **I4 — instrument check-in duration.** P6 (<5s/member) is a design law and A7 is a
+   kill criterion, and neither is measurable. Now more valuable than before, because
+   `RosterScreen` + the backfill mean there is finally data to measure against.
+2. **Per-coach parse hints (§4.3.2 "next step").** `plan._extract` now records which
+   path produced every plan, so the deterministic share is **measurable** — feed the
+   already-parsed corpus back as per-coach notation hints and push it higher.
+3. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
+   backfill lands real rows.
+4. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
+5. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
+
+⚠️ **The QR self-check-in gap is UNCHANGED** — still needs an Edge Function with the
+service-role key. Do not fix it by loosening `0007`'s policies to `anon`.
 
 > 📘 **READ THE AS-BUILT SPEC FIRST:** `Jungle - Functional, Design & Technical Spec (As-Built).md`
 > It now also carries **§7b (infra/fine-tuning backlog, I1–I15)**, **§7c (feature backlog — what
@@ -49,6 +108,12 @@ management screen and the `class_instances` generator off `class_schedule_rules`
 unbuilt.
 
 ## 🔴 PENDING USER ACTIONS — check these first
+
+> ⚠️ **Re-read #0 and #1 below in light of session 3's parser.** They are both now
+> **much less urgent**: most slides never reach persona-ai at all any more, so the
+> quota pressure that made `extract_batch` important has largely gone, and a Slides
+> import no longer stalls on an exhausted daily quota unless a deck uses notation the
+> parser defers on. Still worth doing — just not blocking.
 
 0. ⬜ **Redeploy `persona-ai`** (Supabase → Edge Functions → paste
    `supabase/functions/persona-ai/index.ts` → Deploy) to activate **`task:"extract_batch"`**
