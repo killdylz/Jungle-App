@@ -10,6 +10,7 @@ import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
+import { parsePlanText, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -7295,6 +7296,19 @@ const SLIDE_BATCH = 5;
 // looksLikeClassSlide lives in src/lib/slidesImport.js (slide logic, and unit-tested
 // there — the heuristic is easy to break in a way no manual click would reveal).
 
+// Extraction provenance, stored INSIDE persona_plans.plan (free-form jsonb) rather
+// than as a new `source` value — persona_plans.source is CHECK-constrained to
+// google_slides|manual|jungle, and inventing a fourth value is exactly the mistake
+// that silently destroyed a corpus on 2026-07-18. Nothing downstream reads keys
+// other than `blocks`, so this rides along safely and makes it possible to tell,
+// later, which plans came from the parser and which from the model.
+const extractMeta = (via, confidence) => ({
+  via,                                   // "parser" | "llm"
+  confidence: via === "parser" ? confidence : null,
+  parserVersion: via === "parser" ? PARSER_VERSION : null,
+  at: new Date().toISOString(),
+});
+
 // Coach-first: a persona is a coach; class type (S360 / GC / Enduro…) is a
 // dimension within them. Open a coach → tab per class type → that class type's
 // derived profile + editable movement catalog + past plans + draft/generate.
@@ -7445,20 +7459,33 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     setShowAddPlan(false);
     if (ct) setActiveCT(ct);
   };
-  // Paste raw deck text → persona-ai (task:"extract") turns it into the { blocks }
-  // shape and folds it into the corpus. Needs the Edge Function; JSON paste is the
-  // offline fallback. In "text" mode planForm.json holds the raw text.
+  // Paste raw deck text → the DETERMINISTIC parser first (src/lib/planParser.js),
+  // with persona-ai (task:"extract") as the fallback for notation it can't read.
+  // See spec §4.3.1: these are house formats — a private grammar repeated weekly —
+  // so the model should be the cold-start tool, not the steady-state engine.
   const extractAndAdd = async () => {
     setPlanErr("");
     const text = (planForm.json || "").trim();
     if (!text) { setPlanErr("Paste the deck text to extract."); return; }
-    if (!(supabaseEnabled && supabase)) { setPlanErr("Extraction needs the persona-ai Edge Function. Switch to Paste JSON, or deploy it first."); return; }
     setPlanBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("persona-ai", { body: {
-        task: "extract", text, classType: planForm.classType.trim(), title: planForm.title.trim(), focus: planForm.focus.trim() } });
-      if (error) throw new Error(await fnErrorMessage(error));
-      if (data?.error) throw new Error(data.error);
+      let data = null, via = "parser", conf = 0;
+      const parsed = parsePlanText(text, { classTypeHint: planForm.classType.trim(), title: planForm.title.trim() });
+      if (parsed.confidence >= PARSE_THRESHOLD) {
+        data = parsed; conf = parsed.confidence;
+      } else {
+        // Below threshold the parser DEFERS rather than guessing. Without the Edge
+        // Function there is nothing to defer to, so say what the parser saw — that
+        // is more actionable than a bare "extraction needs the function".
+        if (!(supabaseEnabled && supabase)) {
+          throw new Error(`the built-in parser only understood ${Math.round(parsed.confidence * 100)}% of that text and the persona-ai fallback isn't available${parsed.reasons[0] ? ` (${parsed.reasons[0]})` : ""}`);
+        }
+        const r = await supabase.functions.invoke("persona-ai", { body: {
+          task: "extract", text, classType: planForm.classType.trim(), title: planForm.title.trim(), focus: planForm.focus.trim() } });
+        if (r.error) throw new Error(await fnErrorMessage(r.error));
+        if (r.data?.error) throw new Error(r.data.error);
+        data = r.data; via = "llm";
+      }
       const blocks = data?.plan?.blocks || [];
       if (!blocks.length) throw new Error("no blocks came back");
       const ct = (planForm.classType.trim() || data.classType || "").trim();
@@ -7467,7 +7494,8 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       // "extract" was silently failing every sync.
       const pl = { id: store.newId(), personaId: selectedId, source: "manual", sourceRef: "",
                    title: planForm.title.trim() || data.title || "Untitled plan", classType: ct,
-                   focus: planForm.focus.trim() || data.focus || "", planDate: "", plan: { blocks } };
+                   focus: planForm.focus.trim() || data.focus || "", planDate: "",
+                   plan: { blocks, _extract: extractMeta(via, conf) } };
       commitPlans([...plans, pl]);
       setPlanForm({ title:"", classType:"", focus:"", json:"" });
       setShowAddPlan(false);
@@ -7575,11 +7603,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     finally { setSlidesBusy(""); }
   };
   const importSlideDecks = async () => {
-    if (!(supabaseEnabled && supabase)) { setSlidesErr("Import needs the persona-ai Edge Function for extraction. Use Add plan → Paste deck text instead."); return; }
+    // No Supabase check up front any more: the deterministic parser handles most
+    // slides with no Edge Function at all, so refusing the whole import here would
+    // block work that no longer needs a server. Slides that the parser defers are
+    // reported individually below if persona-ai isn't reachable.
+    const canDefer = !!(supabaseEnabled && supabase);
     const chosen = (slideDecks || []).filter(d => deckSel.has(d.id));
     if (!chosen.length) { setSlidesErr("Select at least one deck to import."); return; }
     setSlidesErr(""); setSlidesBusy("import");
-    const added = []; const failed = []; let skipped = 0;
+    const added = []; const failed = []; let skipped = 0; let parsedCount = 0;
     try {
       const token = await getSlidesToken();
       // A deck often holds a whole HISTORY of classes — one class per slide. Pull each
@@ -7603,23 +7635,55 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       // (title cards, hype quotes, playlists) — those used to cost a full LLM call each
       // just to return zero blocks, and the free tier is metered per REQUEST.
       const unseen = units.filter(u => !importedRefs.has(u.ref));
-      const todo = unseen.filter(u => looksLikeClassSlide(u.text));
-      skipped += unseen.length - todo.length;
+      const classy = unseen.filter(u => looksLikeClassSlide(u.text));
+      skipped += unseen.length - classy.length;
 
-      // Turn a plan payload from either task into the corpus row shape.
-      const rowFor = (u, data) => ({
+      // Turn a plan payload from either path into the corpus row shape.
+      const rowFor = (u, data, via = "llm", conf = 0) => ({
         // "google_slides", not "slides" — persona_plans' CHECK constraint allows only
         // google_slides | manual | jungle, and the wrong value made every imported
         // plan fail to sync, then vanish on the next hydrate. See store.planSource.
         id: store.newId(), personaId: selectedId, source: "google_slides", sourceRef: u.ref,
         title: data.title || `${u.deck.name}${u.multi ? ` (slide ${u.n})` : ""}`,
         classType: (data.classType || "").trim(), focus: data.focus || "",
-        planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10), plan: { blocks: data.plan.blocks },
+        planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10),
+        plan: { blocks: data.plan.blocks, _extract: extractMeta(via, conf) },
       });
       // Persist what's extracted so far. A long import used to hold everything in
       // memory until the very end — closing the tab at slide 15 of 18 lost the lot.
       const flush = () => { if (added.length) commitPlans([...plans, ...added]); };
 
+      // ── DETERMINISTIC PASS (spec §4.3.1 / infra I2) ─────────────────────────
+      // These decks are HOUSE FORMATS: S360, GC and Enduro repeat the same private
+      // notation every week. Parse each slide locally first and only send what the
+      // parser could NOT confidently read to Gemini. Every slide that parses here
+      // costs zero quota, returns instantly, and — the point — is REPRODUCIBLE:
+      // re-importing a deck yields byte-identical output, so the derived style
+      // profile can no longer drift just because the model felt different today.
+      //
+      // The parser defers rather than guessing, so a low score means "ask the
+      // model", never "emit a half-understood plan".
+      const todo = [];
+      for (const u of classy) {
+        const p = parsePlanText(u.text, { classTypeHint: "", title: u.deck.name });
+        if (p.confidence >= PARSE_THRESHOLD && p.plan.blocks.length) {
+          added.push(rowFor(u, p, "parser", p.confidence));
+          parsedCount++;
+        } else {
+          todo.push(u);
+        }
+      }
+      if (parsedCount) {
+        console.log(`[slides-import] parsed ${parsedCount}/${classy.length} slide(s) locally — ${todo.length} deferred to persona-ai`);
+        flush();        // crash-safe: the free slides are already banked
+      }
+      // Deferred slides with nowhere to defer to. Report them rather than dropping
+      // them silently — an unimported slide the coach never hears about is the same
+      // class of bug as a plan that syncs into the void.
+      if (todo.length && !canDefer) {
+        failed.push(`${todo.length} slide(s) used notation the built-in parser couldn't read confidently, and persona-ai isn't available to fall back on — import them via Add plan → Paste deck text`);
+        todo.length = 0;
+      }
       // Batch WITHIN a deck: slide numbers and the deck title hint are per-deck.
       const batches = [];
       for (const d of chosen) {
@@ -7707,8 +7771,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       setDeckSel(new Set());
     }
     const skipNote = skipped ? `, skipped ${skipped} non-class slide${skipped === 1 ? "" : "s"}` : "";
-    if (failed.length) setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}. Failed: ${failed.join(" · ")}`);
-    else if (added.length) { setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}.`); setShowSlides(false); }
+    // Report the split. It is the honest accounting of what this import actually
+    // cost — and the only place a coach can see that most of their deck was read
+    // for free, reproducibly, without a model in the loop.
+    const aiCount = added.length - parsedCount;
+    const viaNote = parsedCount
+      ? ` (${parsedCount} read by the built-in parser${aiCount > 0 ? `, ${aiCount} by AI` : ""}, no AI quota used${aiCount > 0 ? " on those" : ""})`
+      : "";
+    if (failed.length) setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}${viaNote}. Failed: ${failed.join(" · ")}`);
+    else if (added.length) { setSlidesErr(`Imported ${added.length} plan${added.length === 1 ? "" : "s"}${skipNote}${viaNote}.`); setShowSlides(false); }
     else setSlidesErr(`Nothing imported${skipNote || " — no class plans found in the selected deck(s)"}.`);
   };
 
