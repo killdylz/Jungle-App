@@ -13,6 +13,16 @@ import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPr
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
+import ErrorBoundary from "./ui/ErrorBoundary.jsx";
+
+// Human labels for the per-view error boundary, so a crash reads "The Class Runner
+// panel stopped responding" rather than the internal view key.
+const VIEW_LABELS = {
+  dashboard:"Dashboard", templates:"Templates", builder:"Builder", personas:"Coach Personas",
+  library:"Exercise Library", live:"Class Runner", "room-tv":"Room TV", analytics:"Analytics",
+  glossary:"Glossary", calendar:"Schedule", music:"Music Hub", member:"Members",
+  integrations:"Integrations", "brand-studio":"Brand Studio", team:"Team",
+};
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
 (function injectFonts() {
@@ -8786,7 +8796,12 @@ export default function App() {
         </div>
       )}
 
+      {/* Per-view boundary (I1). The root boundary in main.jsx is the last resort;
+          this one keeps the crash INSIDE the screen that threw, so the sidebar and
+          nav survive and switching views is itself a recovery path. Keyed on `view`
+          so navigating away from a broken screen clears the error automatically. */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <ErrorBoundary key={view} name={VIEW_LABELS[view]||view}>
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
         {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
@@ -8814,6 +8829,7 @@ export default function App() {
         {view==="integrations"&&(FLAGS.mockIntegrations?<IntegrationsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Integrations" note="Real integrations (booking, payments, wearables) land in a later phase — the previous cards were demo theatre." onBack={()=>setView("dashboard")}/>)}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}
+        </ErrorBoundary>
       </div>
 
       {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid var(--border)`,background:"var(--card)",textAlign:"center"}}>
