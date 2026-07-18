@@ -331,6 +331,41 @@ A further step once a coach has a corpus: their notation is now *known*, so per-
 hints can be derived from already-extracted plans, pushing the deterministic share higher over
 time. The LLM becomes the cold-start tool it is good at being, not the steady-state engine.
 
+#### 4.3.2 ✅ BUILT (2026-07-18, `fadf318`) — how the parser actually works
+
+`src/lib/planParser.js`. Pure functions, no I/O, importable by the Edge Function later.
+
+**Pipeline.** Header pass (class type / focus / date) → block segmentation on label notation
+(`Warm Up`, `M1`, `A1`, `C3`, `AMRAP 12min`) → per-block scheme folding and exercise parsing →
+same-letter slot folding into supersets → confidence scoring.
+
+**Confidence is coverage-accounted**, which is what makes "never silently guess" enforceable
+rather than aspirational: every input line is either claimed by a rule or recorded in `reasons`
+as unclaimed, and unclaimed lines carry a penalty. Structural checks stack on top (a block with
+no exercises hard-zeros the score). Below `PARSE_THRESHOLD` the caller **must** defer.
+
+**Two disambiguations do most of the work**, and both were wrong in the first draft:
+
+| Ambiguity | Resolution |
+|---|---|
+| `A1`/`A2` (an S360 superset **pair**) vs `C1`/`C2`/`C3` (a GC **sequence**) — identical shape to a naive letter rule, opposite meaning | A run folds into a superset only if it is 2–3 members, **all "plain"** (no member names its own role, e.g. `C1 Warm Up`), and all carry movements. Folding GC's three stages into one superset destroyed the entire class structure. |
+| Role assignment | Keyword **first**, then scheme type, then the lettered-slot convention. GC labels its warmup `C1`, so the word "warm up" has to beat the letter rule. |
+
+**Testing.** 40 unit tests. Every behaviour was mutation-checked — and it mattered twice. One
+test was **vacuous**: the unparsed-line penalty could be deleted with the suite still green,
+because the coverage ratio alone carried the assertion. Isolating it also surfaced a real bug
+(coverage double-counted exercise lines, pinning half-understood slides at 1.0). Separately,
+driving the **real UI** found three defects no fixture caught — `DB Bench Press` tagged
+`barbell`, a bare `Finisher` line entering the movement catalog as an exercise, and a set count
+inferred from ladder length overriding the coach's stated "3 rounds".
+
+**Deliberate non-goal: blank beats a guess.** Unresolvable equipment stays `""`. The movement
+catalog already flags blank equipment as "needs equipment" for the coach to fill in, which is
+strictly better than a confident wrong value silently skewing aggregation.
+
+**Next step here** is the per-coach parse hints described above — now cheap, because
+`plan._extract` records which path produced every plan, so the deterministic share is measurable.
+
 ### 4.4 Modularization status (§4.5 of the Fable spec)
 
 | Step | Target | State |
@@ -459,8 +494,8 @@ risk, not by size.
 
 | # | Item | Why it matters |
 |---|---|---|
-| I1 | **React error boundary** | **There is none.** Any render throw white-screens the entire app — exactly what the Mic Mode `ReferenceError` did to the Live runner mid-class. A boundary turns a total blackout into one broken panel with a Reload affordance. Perhaps 40 lines. |
-| I2 | **Deterministic Slides parser, LLM fallback** | See §4.3.1. Kills most quota use, makes extraction reproducible, and puts the corpus under unit test. |
+| I1 | ✅ **DONE (`e447f92`) — React error boundary** | `src/ui/ErrorBoundary.jsx`, wired twice: root (`main.jsx`, outside `AuthGate` so its async mount can throw safely) and **per-view in `App.jsx`, keyed on `view`** — the latter is the one that matters, since the crash stays inside the screen that threw and the nav survives, making "navigate away" a recovery path. "Try again" re-mounts via a key bump; "Reload" is safe because store.js is local-first. Verified with a temporary throw in `GlossaryScreen`. |
+| I2 | ✅ **DONE (`fadf318`) — Deterministic Slides parser, LLM fallback** | `src/lib/planParser.js` — pure, no I/O, emits the extractor's exact shape plus `confidence` + `reasons`; **defers below `PARSE_THRESHOLD` (0.72) rather than guessing**. Wired into BOTH extraction call sites: the Slides import parses locally first and only batches deferred slides to persona-ai, and **the paste-deck path no longer needs Supabase at all**. Provenance rides in `persona_plans.plan._extract` (free-form jsonb) — deliberately NOT a new `source` value, which is CHECK-constrained. 40 unit tests, 15 mutations verified to fail the suite. Measured on the house-format fixtures: S360 → 0.88, GC → 1.0, both with zero model calls. |
 | I3 | **Extend the sync guard to the other 5 domains** | `_bgUpsert` failure + a server-wins `hydrate*` = silent data loss. Fixed for `persona_plans` and the F4 tables; `library_overrides`, `brand_profiles`, `user_prefs`, `coach_personas`, `persona_movements`, `persona_generations` still have the shape that cost a corpus on 2026-07-18. |
 | I4 | **Instrument check-in duration (P6)** | The spec names check-in rate the pilot's **#1 metric** and <5s a design law — and nothing measures either. A7 is a kill criterion we currently cannot evaluate. |
 | I5 | **RLS tests for `0001`–`0006`** | The self-test pattern exists and works; only `0007` is covered. Cross-tenant leaks are invisible from the app. |
