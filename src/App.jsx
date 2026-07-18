@@ -11,6 +11,7 @@ import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./dat
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate } from "./lib/slidesImport.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
+import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 
 // ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
@@ -6636,9 +6637,9 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       return `${window.location.origin}${window.location.pathname}?mode=attendee&data=${encoded}`;
     } catch { return ""; }
   })();
-  const qrSrc = attendeeUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(attendeeUrl)}&color=EEEEEE&bgcolor=060D18&margin=10`
-    : "";
+  // Generated locally (src/lib/qr.js) — no third party in the path, nothing
+  // encoded leaves the device. See the Fable deprecation list.
+  const qrSrc = useQrDataUrl(attendeeUrl);
 
   // F15: Esc exits display mode back to live
   useEffect(() => {
