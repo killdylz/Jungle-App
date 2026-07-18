@@ -73,10 +73,30 @@ Files touched: `src/App.jsx`, `src/AuthGate.jsx`, `src/config/flags.js` (new).
 >
 > ✅ **Brand Studio WCAG-AA contrast audit (Fable F6) — DONE (`e94ee7e`).** ✅ **Floor board honesty pass (Fable M3) — DONE (`eec038f`).** See "Shipped this session" at the top.
 >
-> **Next builds (no infra, free) — pick up here:**
-> 1. **Tempo guide — extend beyond the Coach display** (Fable §4.2 + N5). The `TempoGuide` component + silent BPM-pulse is LIVE in the coach `DisplayScreen` no-music state (`e9fd92f`). Natural follow-ups, all additive: surface it on the **Floor** RoomTV board (a corner pulse) and/or as a **Builder toggle** so a coach can preview a stage's tempo; optional **tap-tempo** to override the SCFG midpoint. Bigger architectural item still open: quarantine the ~2,000 lines of Spotify/DJ code behind a `MusicProvider` interface (`SoundtrackProvider` | `PersonalSpotifyProvider` | `TempoGuideProvider` | `NullProvider`) — but the user-facing tempo value already ships, so this is now a refactor, not a feature-blocker.
-> 2. **Persona brief flow polish** (Fable F2). The movement catalog got filter + equip quick-pick + coverage nudge this session (`fbb5498`). Still fiddly: the Generate brief (focus / duration / week X-of-N) is four bare inputs — could add focus **suggestions from the coach's own corpus** (recent foci as one-tap chips) and remember the last duration. Also consider surfacing the **derived category → builder class** mapping more prominently before Generate.
-> 3. **Reduced-motion — audit remaining surfaces** (Fable §3). Room displays are done (`9f71f61`). The DJ/Builder loaders (`animation:"spin"`) and the Brand-Studio/theme transitions are still unconditional; a lighter pass could gate the non-loader ones. Low priority (loaders spinning is expected even under reduce-motion).
+> ## 🎯 WHERE WE ACTUALLY ARE vs. THE FABLE ROADMAP (re-derived from the spec, 2026-07-18)
+>
+> | Fable phase | State |
+> |---|---|
+> | **0 — De-risk** | ✅ **DONE.** All mock/theatre surfaces flagged OFF (last 4 leaks closed `cb6e77f`). Deploy verification in place. *(Only leftover: the `MusicProvider` shell — but N5's user-facing value already shipped without it, so it's now a refactor, not a blocker.)* |
+> | **0.5 — Split slice** | ✅ **DONE** for §4.5 steps 1–3 (`src/data/`, `src/lib/store.js` seam, `src/ui/primitives.jsx`). Steps 4 (screens) + 5 (music quarantine) still open — optional, mechanical. |
+> | **1 — Data foundation ★** | 🟡 **~80%.** Schema+RLS (`0001`–`0006`) ✅, Realtime room channels ✅, localStorage→Postgres local-first sync ✅. **MISSING: F4 attendance capture (N1) + magic-link member view (N4).** |
+> | **2 — Make theatre real** | ⛔ **BLOCKED on F4.** N2 (cohort analytics) and N3 (at-risk + outreach) cannot start without attendance rows. |
+> | **3 — Experience deepening** | 🟢 Mostly done early: P1/P2 display polish ✅, WCAG-AA in Brand Studio (F6) ✅, reduced-motion ✅, tempo-guide (N5) ✅ first slice. |
+>
+> ### ⭐ THE NEXT BUILD IS **F4 / N1 — native attendance capture**. It needs Dylan's go-ahead (new migration).
+>
+> The spec is emphatic and repeats it three ways: *"Critical-path spine: Phase 1 → F4 attendance → F5 analytics — everything else hangs off it"*; *"capture is F4 and sits on the critical path; dashboards are downstream consumers"*; *"this feature is the entire retention thesis's oxygen supply."* It is also **M2**, one of the three MODIFY pillars, and **A7** — the assumption whose failure is a kill criterion (#3).
+>
+> **What it unlocks (all currently impossible):** real cohort/at-risk analytics (N2/N3 = the $349–499 outcome tier), the honest "active members" number I had to delete from the Dashboard this session, the floor-board's real roster + the "Find me / you're up" cue removed in `eec038f`, and the member magic-link summary (N4).
+>
+> **Scope when approved:** migration `0007` for `members`, `class_instances`, `attendance` (immutable, `source: qr|coach|import`), `consent_records` (append-only — the spec ships this in Phase 1 *even though biometrics don't*, as "cheap insurance"); QR self-check-in on the room screen; coach roster sweep in the Live runner; CSV backfill. **Design law P6: check-in ≤5s/member** — above that coaches skip it and the instrument starves (A7). QR must be generated **locally, not via `api.qrserver.com`** (deprecation list — no member data through a third-party URL).
+>
+> ### Free / no-infra work that can proceed in parallel (ranked)
+> 1. **Local QR generation** — swap `api.qrserver.com` for a local QR lib. Explicitly on the deprecation list, and a hard prerequisite for F4, so it de-risks the critical path *before* the migration is approved. (Adds one small client-side dep — confirm with Dylan.)
+> 2. **Screens split, §4.5 step 4** — `App.jsx` is ~8,590 lines again. Extract leaf-first (Glossary → Templates → Calendar → BrandStudio → Displays) into `src/screens/`. Zero-risk, mechanical, and directly reduces the recurring stale-build/merge pain.
+> 3. **`MusicProvider` shell + music quarantine (§4.5 step 5)** — move ~2,000 lines of Spotify/DJ into `src/music/` behind the interface (`Soundtrack | PersonalSpotify | TempoGuide | Null`). Closes the last Phase-0 item. Quarantine, don't refactor internals.
+> 4. **Tempo-guide extensions (N5)** — `TempoGuide` ships in the coach display's no-music state (`e9fd92f`). Additive follow-ups: the Floor board's "No track playing" slot has the identical gap; a Builder per-stage preview; optional tap-tempo override of the SCFG midpoint.
+> 5. **Persona brief-flow polish (F2)** — the Generate brief is four bare inputs; add one-tap **focus chips derived from the coach's own corpus** (past plan/generation foci) and remember the last duration.
 >
 > **Infra-gated (ASK DYLAN FIRST — needs a migration / paid tier):** F4 attendance spine (QR self-check-in + coach roster sweep — this is what brings the *real* floor-board roster and the "Find me / you're up" cue back) → F5 retention analytics; tighten `class_schedule_rules` RLS; upgrade persona LLM off free Gemini.
 
