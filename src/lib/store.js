@@ -80,12 +80,37 @@ export function connect({ gymId, userId } = {}) {
 }
 function _synced() { return supabaseEnabled && !!supabase && !!_ctx.gymId; }
 
-// Fire-and-forget writes — never block or throw into the caller; a failure just
-// leaves localStorage as the source of truth until the next successful sync.
+// Sync-failure ledger. "A failure just leaves localStorage as the source of truth"
+// was only half true: a hydrate that is server-wins will then happily overwrite that
+// localStorage with a server list which never received the failed rows — silently
+// destroying data whose only surviving copy was local. So failures are RECORDED
+// (and persisted, to survive a reload) and the hydrate path consults them before
+// overwriting anything. Cleared on the next successful write to that table.
+const SYNC_ERR_KEY = "jungle_sync_errors";
+function _noteSyncError(table, msg) {
+  try {
+    const all = readJSON(SYNC_ERR_KEY, {});
+    all[table] = { msg: String(msg || "unknown"), at: Date.now() };
+    writeJSON(SYNC_ERR_KEY, all);
+  } catch (_) { /* never let bookkeeping break a write */ }
+}
+function _clearSyncError(table) {
+  try {
+    const all = readJSON(SYNC_ERR_KEY, {});
+    if (all[table]) { delete all[table]; writeJSON(SYNC_ERR_KEY, all); }
+  } catch (_) { /* ignore */ }
+}
+// { msg, at } for the last failed write to `table`, or null when it last succeeded.
+export function syncErrorFor(table) { return readJSON(SYNC_ERR_KEY, {})[table] || null; }
+
+// Fire-and-forget writes — never block or throw into the caller.
 function _bgUpsert(table, row, onConflict) {
   supabase.from(table).upsert(row, { onConflict }).then(
-    ({ error }) => { if (error) console.warn(`[store] ${table} upsert failed:`, error.message); },
-    () => {});
+    ({ error }) => {
+      if (error) { console.warn(`[store] ${table} upsert failed:`, error.message); _noteSyncError(table, error.message); }
+      else _clearSyncError(table);
+    },
+    (e) => _noteSyncError(table, e?.message || e));
 }
 function _bgDelete(table, col, val) {
   supabase.from(table).delete().eq(col, val).then(
@@ -360,7 +385,15 @@ async function _hydratePrefs() {
 // Local persona shape: { id, name, kind, description, styleProfile:{}, profileUpdatedAt }
 // Local plan shape:    { id, personaId, source, sourceRef, title, classType, focus, planDate, plan:{blocks:[]} }
 export function getPersonas()     { return readJSON(KEYS.personas, []); }
-export function getPersonaPlans() { return readJSON(KEYS.personaPlans, []); }
+// Normalized on READ as well as write, so a corpus imported before the source fix
+// heals itself the moment it's loaded — the UI shows the right label and the next
+// save pushes a value the CHECK constraint accepts. See planSource() below.
+export function getPersonaPlans() {
+  return readJSON(KEYS.personaPlans, []).map(pl => {
+    const s = planSource(pl.source);
+    return s === pl.source ? pl : { ...pl, source: s };
+  });
+}
 
 function _personaToRow(p) {
   return { id: p.id, gym_id: _ctx.gymId, name: p.name, kind: p.kind || "coach",
@@ -371,8 +404,30 @@ function _rowToPersona(r) {
   return { id: r.id, name: r.name, kind: r.kind || "coach", description: r.description || "",
            styleProfile: r.style_profile || {}, profileUpdatedAt: r.profile_updated_at || null };
 }
+// persona_plans.source has a CHECK constraint (migration 0005) allowing exactly
+// these three values. Sending anything else fails the upsert — and because we
+// upsert the whole list in ONE call, a single bad row silently blocks EVERY plan
+// from syncing. hydratePersonas is server-wins, so the next visit to the Personas
+// screen then overwrites localStorage with a server list that never received them:
+// the coach's imported corpus disappears with no error anywhere but the console.
+//
+// That is exactly what happened — the importer wrote "slides" and the paste-deck
+// path wrote "extract", neither of which the constraint allows. Both call sites are
+// fixed, and this normalizer repairs rows ALREADY sitting in localStorage from
+// before the fix, so they sync on the next save instead of staying poisoned.
+const PLAN_SOURCES  = new Set(["google_slides", "manual", "jungle"]);
+const LEGACY_SOURCE = { slides: "google_slides", extract: "manual" };
+export function planSource(s) {
+  // Type-guard rather than `(s || "")`: a non-string source (corrupted localStorage,
+  // a number) would throw on .trim() INSIDE the save path — turning the function
+  // that exists to keep bad values out of the column into the thing that breaks the
+  // write. Caught by a test; worth the extra clause.
+  const v = (typeof s === "string" ? s : "").trim() || "manual";
+  return PLAN_SOURCES.has(v) ? v : (LEGACY_SOURCE[v] || "manual");
+}
+
 function _planToRow(pl) {
-  return { id: pl.id, gym_id: _ctx.gymId, persona_id: pl.personaId, source: pl.source || "manual",
+  return { id: pl.id, gym_id: _ctx.gymId, persona_id: pl.personaId, source: planSource(pl.source),
            source_ref: pl.sourceRef || null, title: pl.title || null, class_type: pl.classType || null,
            focus: pl.focus || null, plan_date: pl.planDate || null, plan: pl.plan || {},
            created_by: _ctx.userId || null };
@@ -514,11 +569,27 @@ export async function hydratePersonas() {
       if (serverGens !== null) savePersonaGenerations(getPersonaGenerations());
       return null;                         // keep local as-is (no flicker)
     }
+    // Server-wins is correct ONLY when the local writes actually landed. If the last
+    // persona_plans write failed, plans exist locally that the server has never seen,
+    // and overwriting would delete the coach's corpus with no way to get it back.
+    // In that case keep the local-only rows, re-push them, and let the next
+    // successful write clear the flag. (This is the guard that would have prevented
+    // the "imported plans vanish on exit" bug rather than merely reporting it.)
+    let plans = serverPlans;
+    if (syncErrorFor("persona_plans")) {
+      const onServer = new Set(serverPlans.map(pl => pl.id));
+      const localOnly = getPersonaPlans().filter(pl => !onServer.has(pl.id));
+      if (localOnly.length) {
+        console.warn(`[store] persona_plans: keeping ${localOnly.length} local plan(s) the server never received; retrying push`);
+        plans = [...serverPlans, ...localOnly];
+        savePersonaPlans(plans);   // writes local + retries the upsert
+      }
+    }
     writeJSON(KEYS.personas, serverPersonas);
-    writeJSON(KEYS.personaPlans, serverPlans);
+    writeJSON(KEYS.personaPlans, plans);
     writeJSON(KEYS.personaMoves, serverMoves);
     if (serverGens !== null) writeJSON(KEYS.personaGens, serverGens);
-    return { personas: serverPersonas, plans: serverPlans, movements: serverMoves,
+    return { personas: serverPersonas, plans, movements: serverMoves,
              generations: serverGens !== null ? serverGens : getPersonaGenerations() };
   } catch (e) {
     console.warn("[store] hydratePersonas error:", e?.message || e);

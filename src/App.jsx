@@ -7121,6 +7121,9 @@ const P_CARD = { background:"var(--card)", border:"1px solid var(--border)", bor
 const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)", borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
 const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Superset", circuit:"Circuit", finisher:"Finisher", recovery:"Recovery", cooldown:"Cool-down" };
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
+// persona_plans.source is a constrained enum (google_slides | manual | jungle) —
+// readable labels so the plan list doesn't show raw database values.
+const SOURCE_LABEL = { google_slides:"Google Slides", manual:"Manual", jungle:"Jungle" };
 const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
 const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rpe!=null?`RPE ${sc.rpe}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
@@ -7237,9 +7240,14 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   };
 
   const commitPersonas = list => { setPersonas(list); store.savePersonas(list); };
+  // Sync is fire-and-forget, so re-read the failure ledger shortly after each save
+  // to drive the banner. 1.2s comfortably covers a round trip without making the
+  // save feel blocking; a slower network just means the banner appears a beat late.
+  const [planSyncErr, setPlanSyncErr] = useState(() => store.syncErrorFor("persona_plans"));
   const commitPlans = (list, pid = selectedId) => {
     setPlans(list); store.savePersonaPlans(list);
     if (pid) recompute(list, movements, pid);
+    setTimeout(() => setPlanSyncErr(store.syncErrorFor("persona_plans")), 1200);
   };
 
   const createPersona = () => {
@@ -7323,7 +7331,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       const blocks = data?.plan?.blocks || [];
       if (!blocks.length) throw new Error("no blocks came back");
       const ct = (planForm.classType.trim() || data.classType || "").trim();
-      const pl = { id: store.newId(), personaId: selectedId, source: "extract", sourceRef: "",
+      // "manual" — the coach supplied the deck text themselves. MUST be one of the
+      // three values persona_plans' CHECK constraint allows (see store.planSource);
+      // "extract" was silently failing every sync.
+      const pl = { id: store.newId(), personaId: selectedId, source: "manual", sourceRef: "",
                    title: planForm.title.trim() || data.title || "Untitled plan", classType: ct,
                    focus: planForm.focus.trim() || data.focus || "", planDate: "", plan: { blocks } };
       commitPlans([...plans, pl]);
@@ -7466,7 +7477,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
 
       // Turn a plan payload from either task into the corpus row shape.
       const rowFor = (u, data) => ({
-        id: store.newId(), personaId: selectedId, source: "slides", sourceRef: u.ref,
+        // "google_slides", not "slides" — persona_plans' CHECK constraint allows only
+        // google_slides | manual | jungle, and the wrong value made every imported
+        // plan fail to sync, then vanish on the next hydrate. See store.planSource.
+        id: store.newId(), personaId: selectedId, source: "google_slides", sourceRef: u.ref,
         title: data.title || `${u.deck.name}${u.multi ? ` (slide ${u.n})` : ""}`,
         classType: (data.classType || "").trim(), focus: data.focus || "",
         planDate: u.date || (u.deck.modifiedTime || "").slice(0, 10), plan: { blocks: data.plan.blocks },
@@ -7578,6 +7592,17 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px 28px"}}>
+        {/* A failed plan sync used to be console-only, so the corpus could silently
+            stop persisting. Say it out loud — the plans are safe locally, but the
+            coach needs to know they only exist on this device. */}
+        {planSyncErr && (
+          <div style={{maxWidth:"1200px",margin:"0 auto 16px",padding:"10px 14px",borderRadius:"8px",
+                       border:"1px solid #F59E0B55",background:"#F59E0B14",fontSize:"12px",color:"var(--text)",lineHeight:"1.5"}}>
+            <strong>These plans haven’t synced to your account yet.</strong> They’re saved on this
+            device and Jungle will keep retrying, so nothing is lost — but they won’t appear on
+            another device until the sync succeeds. <span style={{color:"var(--muted)"}}>({planSyncErr.msg})</span>
+          </div>
+        )}
         <div style={{maxWidth:"1200px",margin:"0 auto",display:"grid",gridTemplateColumns:isTablet?"1fr":"320px 1fr",gap:"20px",alignItems:"start"}}>
 
           {/* ── Left: create + persona list ─────────────────────────────── */}
@@ -7821,7 +7846,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                         <div key={pl.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 0",borderTop:"1px solid var(--border)"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{pl.title}</div>
-                            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {pl.source}</div>
+                            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {SOURCE_LABEL[pl.source] || pl.source}</div>
                           </div>
                           <button onClick={()=>setEditingPlan(pl)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
                           <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
