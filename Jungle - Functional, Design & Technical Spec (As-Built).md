@@ -363,8 +363,22 @@ inferred from ladder length overriding the coach's stated "3 rounds".
 catalog already flags blank equipment as "needs equipment" for the coach to fill in, which is
 strictly better than a confident wrong value silently skewing aggregation.
 
-**Next step here** is the per-coach parse hints described above — now cheap, because
-`plan._extract` records which path produced every plan, so the deterministic share is measurable.
+**✅ Per-coach parse hints — BUILT (`9bb39e9`).** `deriveHints(plans, catalog)` collects a
+coach's movement vocabulary (catalog names + aliases + past plans' exercise names), class types
+and block labels, and both extraction call sites pass them in. Two effects: a movement the coach
+is known to program **overrides** the deliberately strict `looksLikeMovement` gate (which
+otherwise rejects real movements written descriptively), and a class type they already use is
+recognised even when it isn't ALL-CAPS-shaped.
+
+Hints only ever let the parser **recognise** more — never invent. A hinted line still has to
+exist in the source, confidence is still coverage-accounted, and prose beside a known movement is
+still left unparsed. ⚠️ **That last property had no test until the mutation run caught it**:
+making `hintedMovement` return `true` for every line left the suite green, which would have
+turned coaching notes into catalog exercises. `stats.hinted` reports how many lines parsed only
+because of the corpus, so the contribution is measured rather than assumed.
+
+Demonstrated end-to-end: the same deck text deferred at **53%** against the sample coach, then
+parsed at **1.0** once the movement was in their corpus.
 
 ### 4.4 Modularization status (§4.5 of the Fable spec)
 

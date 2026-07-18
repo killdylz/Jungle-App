@@ -54,15 +54,19 @@ verified to fail the suite). That process earned its keep three times:
    sweep: recorded `medianSec 2.002`, surfaced as "2s · MEETS TARGET". Local-only;
    persisting it needs a migration.
 
+6. **Per-coach parse hints** (`9bb39e9`). The §4.3.2 follow-on: `deriveHints` feeds a
+   coach's own movement vocabulary / class types back into the parser, so their notation
+   stops being unknown and the deterministic share grows with every import. Demonstrated
+   live: the same deck deferred at **53%**, then parsed at **1.0** once the movement was
+   in the coach's corpus. Hints only ever *recognise* more — never invent; the mutation
+   run caught that this safety property was untested.
+
 **⭐ RECOMMENDED NEXT:**
-1. **Per-coach parse hints (§4.3.2 "next step").** `plan._extract` now records which
-   path produced every plan, so the deterministic share is **measurable** — feed the
-   already-parsed corpus back as per-coach notation hints and push it higher.
-2. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
+1. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
    backfill lands real rows.
-3. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
-4. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
-5. **I9 — code splitting.** The bundle is now ~630 KB with no `React.lazy` anywhere, and
+2. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
+3. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
+4. **I9 — code splitting.** The bundle is now ~630 KB with no `React.lazy` anywhere, and
    the room display loads on a TV over gym Wi-Fi.
 
 ⚠️ **The QR self-check-in gap is UNCHANGED** — still needs an Edge Function with the
