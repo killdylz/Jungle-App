@@ -106,6 +106,52 @@ function _clearSyncError(table) {
 // { msg, at } for the last failed write to `table`, or null when it last succeeded.
 export function syncErrorFor(table) { return readJSON(SYNC_ERR_KEY, {})[table] || null; }
 
+// Tables whose last write failed. Drives the UI's "not synced" banner and lets a
+// caller ask the general question ("is anything unsynced?") rather than naming
+// each table — which is how domains kept getting missed.
+export function syncErrors() {
+  const all = readJSON(SYNC_ERR_KEY, {});
+  return Object.keys(all).map(table => ({ table, ...all[table] }));
+}
+
+// ── The two hydrate guards (infra backlog I3) ────────────────────────────────
+// `_bgUpsert` failure + a server-wins `hydrate*` = SILENT DATA LOSS. That pairing
+// destroyed a coach's imported corpus on 2026-07-18: the write failed a CHECK
+// constraint, the failure went to console.warn, and the next hydrate overwrote
+// localStorage with a server list that had never received the rows.
+//
+// The fix was applied to persona_plans alone. Every other domain still had the
+// same shape, so the guard is generalised here and applied to all of them. Two
+// shapes need two guards:
+
+// (1) ID-KEYED LISTS — keep rows the server has never seen and re-push them.
+// Returns the list the caller should write to localStorage.
+// Exported for tests: this is the last line of defence against silent data loss,
+// so it is worth pinning directly rather than through a hydrate that needs a
+// live Supabase. Same reasoning as _ciToRow.
+export function _guardList(table, serverRows, getLocal, resave, label = table) {
+  if (!syncErrorFor(table)) return serverRows;
+  const onServer = new Set((serverRows || []).map(r => r.id));
+  const localOnly = (getLocal() || []).filter(r => r && !onServer.has(r.id));
+  if (!localOnly.length) return serverRows;
+  console.warn(`[store] ${label}: keeping ${localOnly.length} local row(s) the server never received; retrying push`);
+  const merged = [...serverRows, ...localOnly];
+  resave(merged);                 // writes local + retries the upsert
+  return merged;
+}
+
+// (2) SINGLE-ROW BLOBS (one row per gym / per user: library_overrides,
+// brand_profiles, user_prefs). There are no per-row ids to diff, so the question
+// is simply "did our last write land?". If it did not, the server copy is STALE
+// and letting it win would silently revert the user's most recent change — the
+// same data loss, one row at a time. Keep local, re-push, and let the next
+// successful write clear the flag.
+export function _blobStale(table) {
+  if (!syncErrorFor(table)) return false;
+  console.warn(`[store] ${table}: last write failed, so the server copy is stale — keeping local and re-pushing`);
+  return true;
+}
+
 // Fire-and-forget writes — never block or throw into the caller.
 function _bgUpsert(table, row, onConflict) {
   supabase.from(table).upsert(row, { onConflict }).then(
@@ -157,10 +203,16 @@ export function saveUserClasses(classes) {
   if (!_synced()) return;
   const rows = (classes || []).map(_classToRow);
   if (!rows.length) return;
+  // Records into the sync-failure ledger like every other domain. This one used to
+  // console.warn ONLY, which meant hydrateUserClasses (server-wins) had no way to
+  // know a class the coach just added had never reached Postgres.
   supabase.from("class_schedule_rules")
     .upsert(rows, { onConflict: "gym_id,client_id" })
-    .then(({ error }) => { if (error) console.warn("[store] saveUserClasses push failed:", error.message); },
-          () => {});
+    .then(({ error }) => {
+      if (error) { console.warn("[store] saveUserClasses push failed:", error.message); _noteSyncError("class_schedule_rules", error.message); }
+      else _clearSyncError("class_schedule_rules");
+    },
+    (e) => _noteSyncError("class_schedule_rules", e?.message || e));
 }
 
 // One-time hydrate: pull the gym's classes from Postgres into localStorage and
@@ -179,8 +231,9 @@ export async function hydrateUserClasses() {
       saveUserClasses(local);   // seed server from pre-Supabase local data
       return null;              // keep local as-is (no flicker)
     }
-    writeJSON(KEYS.userClasses, serverRows);
-    return serverRows;
+    const rows = _guardList("class_schedule_rules", serverRows, getUserClasses, saveUserClasses);
+    writeJSON(KEYS.userClasses, rows);
+    return rows;
   } catch (e) {
     console.warn("[store] hydrateUserClasses error:", e?.message || e);
     return null;
@@ -207,6 +260,9 @@ async function _hydrateLibrary() {
       .select("data").eq("gym_id", _ctx.gymId).maybeSingle();
     if (error) { console.warn("[store] hydrate library failed:", error.message); return; }
     if (!data) { const local = getLibraryCustom(); if (local) _bgUpsert("library_overrides", { gym_id: _ctx.gymId, data: local }, "gym_id"); return; }
+    // Our last write failed → the server blob predates the coach's newest library
+    // edit, and overwriting local with it would silently revert that edit.
+    if (_blobStale("library_overrides")) { saveLibraryCustom(getLibraryCustom()); return; }
     writeJSON(KEYS.libraryCustom, data.data);
   } catch (e) { console.warn("[store] hydrate library error:", e?.message || e); }
 }
@@ -248,6 +304,14 @@ async function _hydrateBrand() {
       _bgUpsert("brand_profiles", { gym_id: _ctx.gymId, active_skin_id: getSkinId(),
         custom_skin_tokens: getCustomSkinTokens(), branding: getGymBranding() }, "gym_id");
       return null;
+    }
+    // A failed write means the server row is behind the studio's newest branding
+    // change. Letting it win would revert the coach's logo/colour edit with no
+    // error anywhere — re-push local instead and return it unchanged.
+    if (_blobStale("brand_profiles")) {
+      _bgUpsert("brand_profiles", { gym_id: _ctx.gymId, active_skin_id: getSkinId(),
+        custom_skin_tokens: getCustomSkinTokens(), branding: getGymBranding() }, "gym_id");
+      return { skinId: getSkinId(), customSkinTokens: getCustomSkinTokens(), branding: getGymBranding() };
     }
     if (data.active_skin_id) writeStr(KEYS.skinId, data.active_skin_id);
     if (data.custom_skin_tokens) writeJSON(KEYS.customSkin, data.custom_skin_tokens); else remove(KEYS.customSkin);
@@ -364,6 +428,12 @@ async function _hydratePrefs() {
         dj_follow_structure: getDjFollowStructure(), dj_take_requests: getDjTakeRequests(), dj_clean_edits: getDjCleanEdits(),
       }, "user_id");
       return null;
+    }
+    // Same rule as the other single-row blobs: if our last write failed, the server
+    // row is stale and server-wins would quietly undo the setting the user just
+    // changed. Return local so the App root setStates what the user actually chose.
+    if (_blobStale("user_prefs")) {
+      return { crossfade: Number(getCrossfade()) || 0, templateTracks: getTemplateTracks() };
     }
     writeJSON(KEYS.dispPrefs, { preset: data.display_preset || "full", fontScale: data.display_font_scale || "m" });
     writeStr(KEYS.crossfade, String(data.crossfade ?? 0));
@@ -572,28 +642,22 @@ export async function hydratePersonas() {
       if (serverGens !== null) savePersonaGenerations(getPersonaGenerations());
       return null;                         // keep local as-is (no flicker)
     }
-    // Server-wins is correct ONLY when the local writes actually landed. If the last
-    // persona_plans write failed, plans exist locally that the server has never seen,
-    // and overwriting would delete the coach's corpus with no way to get it back.
-    // In that case keep the local-only rows, re-push them, and let the next
-    // successful write clear the flag. (This is the guard that would have prevented
-    // the "imported plans vanish on exit" bug rather than merely reporting it.)
-    let plans = serverPlans;
-    if (syncErrorFor("persona_plans")) {
-      const onServer = new Set(serverPlans.map(pl => pl.id));
-      const localOnly = getPersonaPlans().filter(pl => !onServer.has(pl.id));
-      if (localOnly.length) {
-        console.warn(`[store] persona_plans: keeping ${localOnly.length} local plan(s) the server never received; retrying push`);
-        plans = [...serverPlans, ...localOnly];
-        savePersonaPlans(plans);   // writes local + retries the upsert
-      }
-    }
-    writeJSON(KEYS.personas, serverPersonas);
+    // Server-wins is correct ONLY when the local writes actually landed. Guard all
+    // FOUR persona tables, not just plans: a persona whose creation never synced is
+    // just as gone, and it takes its plans' foreign key with it. (Previously only
+    // persona_plans was guarded — the others still had the shape that caused the
+    // 2026-07-18 corpus loss.)
+    const personas  = _guardList("coach_personas", serverPersonas, getPersonas, savePersonas);
+    const plans     = _guardList("persona_plans", serverPlans, getPersonaPlans, savePersonaPlans);
+    const movements = _guardList("persona_movements", serverMoves, getPersonaMovements, savePersonaMovements);
+    const gens      = serverGens === null ? getPersonaGenerations()
+                    : _guardList("persona_generations", serverGens, getPersonaGenerations, savePersonaGenerations);
+
+    writeJSON(KEYS.personas, personas);
     writeJSON(KEYS.personaPlans, plans);
-    writeJSON(KEYS.personaMoves, serverMoves);
-    if (serverGens !== null) writeJSON(KEYS.personaGens, serverGens);
-    return { personas: serverPersonas, plans, movements: serverMoves,
-             generations: serverGens !== null ? serverGens : getPersonaGenerations() };
+    writeJSON(KEYS.personaMoves, movements);
+    if (serverGens !== null) writeJSON(KEYS.personaGens, gens);
+    return { personas, plans, movements, generations: gens };
   } catch (e) {
     console.warn("[store] hydratePersonas error:", e?.message || e);
     return null;

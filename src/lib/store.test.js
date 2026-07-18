@@ -15,6 +15,7 @@ import {
   planSource, attendanceSource, ATTENDANCE_SOURCES,
   getMembers, addMember, getAttendance, recordAttendance,
   ensureClassInstance, getClassInstances, _ciToRow,
+  _guardList, _blobStale, syncErrors,
 } from "./store.js";
 
 const ALLOWED = ["google_slides", "manual", "jungle"];
@@ -156,5 +157,89 @@ describe("ensureClassInstance", () => {
     const fresh = ensureClassInstance({ name: "Tuesday 6pm" }).instance;
     expect(fresh.id).not.toBe(instance.id);
     expect(getClassInstances()).toHaveLength(2);
+  });
+});
+
+// ── Hydrate guards (infra backlog I3) ────────────────────────────────────────
+// The pairing that has now cost live data three times in one day: a background
+// upsert fails, the failure only reaches console.warn, and the next server-wins
+// hydrate overwrites localStorage with a server copy that never received the
+// write. The guard was originally applied to persona_plans alone; these tests
+// pin the GENERALISED versions, because every other domain had the same shape.
+describe("_guardList — id-keyed domains", () => {
+  beforeEach(() => localStorage.clear());
+
+  const setSyncError = table =>
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({ [table]: { msg: "boom", at: Date.now() } }));
+
+  it("returns the server list untouched when the last write SUCCEEDED", () => {
+    const server = [{ id: "a" }];
+    const local = [{ id: "a" }, { id: "ghost" }];
+    let resaved = null;
+    // No sync error recorded → server-wins is correct, even though local has more.
+    // (A row missing from the server that we DID write is a real delete.)
+    const out = _guardList("t", server, () => local, r => { resaved = r; });
+    expect(out).toBe(server);
+    expect(resaved).toBeNull();
+  });
+
+  it("keeps and re-pushes local rows the server never received after a FAILED write", () => {
+    setSyncError("t");
+    const server = [{ id: "a" }];
+    const local = [{ id: "a" }, { id: "unsynced" }];
+    let resaved = null;
+    const out = _guardList("t", server, () => local, r => { resaved = r; });
+    expect(out.map(r => r.id)).toEqual(["a", "unsynced"]);
+    expect(resaved).toEqual(out);   // re-pushed, not just kept in memory
+  });
+
+  it("does not touch anything when a failed write left no local-only rows", () => {
+    setSyncError("t");
+    const server = [{ id: "a" }];
+    let resaved = null;
+    const out = _guardList("t", server, () => [{ id: "a" }], r => { resaved = r; });
+    expect(out).toBe(server);
+    expect(resaved).toBeNull();
+  });
+
+  it("is scoped per TABLE — one domain's failure must not alter another's hydrate", () => {
+    setSyncError("other_table");
+    const server = [{ id: "a" }];
+    const out = _guardList("t", server, () => [{ id: "a" }, { id: "unsynced" }], () => {});
+    expect(out).toBe(server);
+  });
+
+  it("survives a null/degenerate local list without throwing", () => {
+    setSyncError("t");
+    expect(_guardList("t", [{ id: "a" }], () => null, () => {})).toEqual([{ id: "a" }]);
+    expect(_guardList("t", [{ id: "a" }], () => [null, { id: "b" }], () => {}).map(r => r.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("_blobStale — single-row domains", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("is false when the last write landed, so the server may win", () => {
+    expect(_blobStale("brand_profiles")).toBe(false);
+  });
+
+  it("is true after a failed write, so a stale server row cannot revert local", () => {
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({ brand_profiles: { msg: "boom", at: Date.now() } }));
+    expect(_blobStale("brand_profiles")).toBe(true);
+    expect(_blobStale("user_prefs")).toBe(false);   // scoped per table
+  });
+});
+
+describe("syncErrors", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("lists every table with an outstanding failure", () => {
+    expect(syncErrors()).toEqual([]);
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({
+      persona_plans: { msg: "check violation", at: 1 },
+      user_prefs: { msg: "network", at: 2 },
+    }));
+    expect(syncErrors().map(e => e.table).sort()).toEqual(["persona_plans", "user_prefs"]);
+    expect(syncErrors().find(e => e.table === "persona_plans").msg).toBe("check violation");
   });
 });

@@ -7296,6 +7296,44 @@ const SLIDE_BATCH = 5;
 // looksLikeClassSlide lives in src/lib/slidesImport.js (slide logic, and unit-tested
 // there — the heuristic is easy to break in a way no manual click would reveal).
 
+// ─── Unsynced-data banner (infra backlog I3) ─────────────────────────────────
+// store.js now records EVERY failed background write to a persisted ledger, and
+// the hydrate guards stop a stale server copy overwriting local data. But a guard
+// that works silently is indistinguishable from no problem at all: the coach's
+// data is safe on this device and simply absent everywhere else, with nothing on
+// screen saying so. The Personas screen already had a per-domain banner; this is
+// the general one, so a failure in ANY domain is visible rather than only in the
+// one screen that happened to be instrumented.
+//
+// Deliberately calm: nothing is lost, retries are automatic, and a coach mid-class
+// must not be alarmed by a transient network blip.
+const SYNC_DOMAIN_LABELS = {
+  class_schedule_rules: "schedule", library_overrides: "exercise library",
+  brand_profiles: "branding", user_prefs: "preferences", coach_personas: "coach personas",
+  persona_plans: "class plans", persona_movements: "movement catalog",
+  persona_generations: "generated classes", members: "members",
+  class_instances: "classes", attendance: "attendance", session_history: "session history",
+};
+function SyncBanner() {
+  const [errs, setErrs] = useState(() => store.syncErrors());
+  useEffect(() => {
+    // Poll rather than subscribe: writes are fire-and-forget from ~30 call sites,
+    // and a localStorage read every 15s is far cheaper than threading a callback
+    // through all of them.
+    const t = setInterval(() => setErrs(store.syncErrors()), 15000);
+    return () => clearInterval(t);
+  }, []);
+  if (!errs.length) return null;
+  const names = [...new Set(errs.map(e => SYNC_DOMAIN_LABELS[e.table] || e.table))];
+  return (
+    <div style={{padding:"9px 24px",background:"#F59E0B14",borderBottom:"1px solid #F59E0B55",fontSize:"12px",color:"var(--text)",lineHeight:1.5}}>
+      <strong>Some changes haven’t synced yet</strong> ({names.join(", ")}). They’re saved on this
+      device and Jungle keeps retrying, so nothing is lost — but they won’t appear on another
+      device until the sync succeeds.
+    </div>
+  );
+}
+
 // Extraction provenance, stored INSIDE persona_plans.plan (free-form jsonb) rather
 // than as a new `source` value — persona_plans.source is CHECK-constrained to
 // google_slides|manual|jungle, and inventing a fourth value is exactly the mistake
@@ -8866,6 +8904,8 @@ export default function App() {
           <button onClick={()=>window.location.reload()} style={{padding:"5px 14px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"5px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>Refresh</button>
         </div>
       )}
+
+      {!isFullscreen&&<SyncBanner/>}
 
       {/* Per-view boundary (I1). The root boundary in main.jsx is the last resort;
           this one keeps the crash INSIDE the screen that threw, so the sidebar and
