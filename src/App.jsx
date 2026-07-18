@@ -10,7 +10,7 @@ import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
-import { parsePlanText, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
+import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
@@ -7748,7 +7748,13 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     setPlanBusy(true);
     try {
       let data = null, via = "parser", conf = 0;
-      const parsed = parsePlanText(text, { classTypeHint: planForm.classType.trim(), title: planForm.title.trim() });
+      const parsed = parsePlanText(text, {
+        classTypeHint: planForm.classType.trim(), title: planForm.title.trim(),
+        // Same per-coach hints as the Slides import — a pasted deck benefits from
+        // the coach's known vocabulary just as much as an imported one.
+        hints: deriveHints(plans.filter(pl => pl.personaId === selectedId),
+                           movements.filter(m => m.personaId === selectedId)),
+      });
       if (parsed.confidence >= PARSE_THRESHOLD) {
         data = parsed; conf = parsed.confidence;
       } else {
@@ -7941,9 +7947,16 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       //
       // The parser defers rather than guessing, so a low score means "ask the
       // model", never "emit a half-understood plan".
+      // Per-coach hints (§4.3.2): this coach's OWN corpus — their movement
+      // vocabulary, class types and block labels — is evidence about their
+      // notation, so slides the generic rules would defer can often be read for
+      // free. The share grows with every import, which is what makes the model a
+      // cold-start tool rather than the steady-state engine.
+      const hints = deriveHints(plans.filter(pl => pl.personaId === selectedId),
+                                movements.filter(m => m.personaId === selectedId));
       const todo = [];
       for (const u of classy) {
-        const p = parsePlanText(u.text, { classTypeHint: "", title: u.deck.name });
+        const p = parsePlanText(u.text, { classTypeHint: "", title: u.deck.name, hints });
         if (p.confidence >= PARSE_THRESHOLD && p.plan.blocks.length) {
           added.push(rowFor(u, p, "parser", p.confidence));
           parsedCount++;

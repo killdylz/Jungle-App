@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePlanText, parseExercise, inferEquip, PARSE_THRESHOLD, _internal } from "./planParser.js";
+import { parsePlanText, parseExercise, inferEquip, deriveHints, PARSE_THRESHOLD, _internal } from "./planParser.js";
 
 // Fixtures follow the three house formats documented in the spec (S360 strength,
 // GC Fundamental conditioning, Garage Enduro), in the notation those decks use.
@@ -372,5 +372,95 @@ describe("output shape compatibility with the LLM extractor", () => {
     [S360, GC, ENDURO].forEach(fx => {
       parsePlanText(fx).plan.blocks.forEach(b => expect(legal).toContain(b.scheme.type));
     });
+  });
+});
+
+// ── Per-coach parse hints (§4.3.2) ───────────────────────────────────────────
+// A coach's own corpus is EVIDENCE about their notation. Feeding it back turns
+// slides the generic rules would defer into slides that parse for free — which
+// is what makes the LLM a cold-start tool rather than the steady-state engine.
+describe("deriveHints", () => {
+  it("collects movement vocabulary from both the catalog and past plans", () => {
+    const h = deriveHints(
+      [{ classType: "S360", plan: { blocks: [{ label: "M1", exercises: [{ name: "Zercher Squat" }] }] } }],
+      [{ name: "Sandbag Carry", aliases: ["Bag Carry"] }],
+    );
+    expect(h.movements).toContain("zercher squat");
+    expect(h.movements).toContain("sandbag carry");
+    expect(h.movements).toContain("bag carry");     // aliases count as vocabulary
+    expect(h.classTypes).toEqual(["S360"]);
+    expect(h.labels).toContain("M1");
+  });
+
+  it("survives an empty or malformed corpus", () => {
+    expect(deriveHints()).toEqual({ movements: [], classTypes: [], labels: [] });
+    expect(deriveHints([{}, null], [null, {}])).toEqual({ movements: [], classTypes: [], labels: [] });
+  });
+});
+
+describe("hint-assisted parsing", () => {
+  // A real movement name long enough to fail the deliberately strict generic
+  // heuristic (it caps a movement line at 9 words, so prose doesn't reach the
+  // catalog). Coaches genuinely write names this descriptive.
+  const MOVE = "Half Kneeling Single Arm Landmine Press With Pause At Top";
+  const ODD = `Fundamental
+C1 Conditioning
+${MOVE} x8
+Row 500m`;
+
+  it("defers this slide WITHOUT hints", () => {
+    const r = parsePlanText(ODD);
+    expect(r.plan.blocks[0].exercises.map(e => e.name)).not.toContain(MOVE);
+    expect(r.reasons.some(x => x.startsWith("unparsed"))).toBe(true);
+  });
+
+  it("parses it once the coach's own corpus names that movement", () => {
+    const hints = deriveHints([], [{ name: MOVE }]);
+    const r = parsePlanText(ODD, { hints });
+    const names = r.plan.blocks.flatMap(b => b.exercises.map(e => e.name));
+    expect(names).toContain(MOVE);
+    expect(r.stats.hinted).toBeGreaterThan(0);
+  });
+
+  it("raises confidence — the hinted line is genuinely accounted for, not waved through", () => {
+    const hints = deriveHints([], [{ name: MOVE }]);
+    expect(parsePlanText(ODD, { hints }).confidence)
+      .toBeGreaterThan(parsePlanText(ODD).confidence);
+  });
+
+  it("recognises a class type this coach uses that the generic rule would miss", () => {
+    const hints = deriveHints([{ classType: "Fundamental" }], []);
+    expect(parsePlanText(ODD, { hints }).classType).toBe("Fundamental");
+    expect(parsePlanText(ODD).classType).not.toBe("Fundamental");
+  });
+
+  it("hints RECOGNISE, they do not wave everything through", () => {
+    // The safety property that keeps "never silently guess" true. With a vocabulary
+    // loaded, prose sitting in the same block as a known movement must STILL be
+    // unparsed — if hints made every line acceptable, coaching notes and logistics
+    // would enter the coach's movement catalog as exercises they never programmed.
+    const hints = deriveHints([], [{ name: MOVE }]);
+    const r = parsePlanText(`Fundamental
+C1 Conditioning
+${MOVE} x8
+Whoever is on the far rack needs the safety pins reset to hole seven please`, { hints });
+    const names = r.plan.blocks.flatMap(b => b.exercises.map(e => e.name));
+    expect(names).toContain(MOVE);
+    expect(names.join(" ")).not.toMatch(/safety pins/i);
+    expect(r.reasons.some(x => x.startsWith("unparsed"))).toBe(true);
+  });
+
+  it("hints NEVER invent structure — an empty slide stays empty and still defers", () => {
+    const hints = deriveHints([], [{ name: "Back Squat" }, { name: "Row" }]);
+    const r = parsePlanText("THE GARAGE\nStrength in numbers\n@thegarage", { hints });
+    expect(r.plan.blocks).toHaveLength(0);
+    expect(r.confidence).toBeLessThan(PARSE_THRESHOLD);
+  });
+
+  it("hints do not change a slide that already parsed cleanly", () => {
+    const hints = deriveHints([], [{ name: "Back Squat" }]);
+    const withHints = parsePlanText(S360, { hints });
+    const without = parsePlanText(S360);
+    expect(withHints.plan).toEqual(without.plan);
   });
 });

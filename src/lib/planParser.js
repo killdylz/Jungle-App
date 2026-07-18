@@ -32,6 +32,59 @@ export const PARSER_VERSION = 1;
 
 const ROLES = ["warmup", "primary_lift", "superset", "circuit", "finisher", "recovery", "cooldown"];
 
+// ── Per-coach parse hints (§4.3.2 "next step") ───────────────────────────────
+// Once a coach has a corpus, their notation is no longer unknown — it is
+// EVIDENCE. Their movement vocabulary, class types and block labels are all
+// sitting in plans already extracted, and feeding them back turns slides the
+// generic rules would defer into slides that parse for free.
+//
+// This is the mechanism that makes the LLM the cold-start tool it should be
+// rather than the steady-state engine: the first import of a new coach leans on
+// the model, and every import after that leans on it less.
+//
+// Hints only ever let the parser RECOGNISE more — they never invent structure.
+// A hinted line still has to be a real line in the source, and confidence is
+// still coverage-accounted, so a hint can raise the score only by genuinely
+// accounting for text that would otherwise have been unparsed.
+export function deriveHints(plans = [], catalog = []) {
+  const movements = new Set();
+  const classTypes = new Set();
+  const labels = new Set();
+  (catalog || []).forEach(m => {
+    if (m?.name) movements.add(norm(m.name));
+    (m?.aliases || []).forEach(a => a && movements.add(norm(a)));
+  });
+  (plans || []).forEach(pl => {
+    if (pl?.classType) classTypes.add(String(pl.classType).trim());
+    (pl?.plan?.blocks || []).forEach(b => {
+      if (b?.label) labels.add(String(b.label).trim());
+      (b?.exercises || []).forEach(ex => { if (ex?.name) movements.add(norm(ex.name)); });
+    });
+  });
+  movements.delete("");
+  return {
+    movements: [...movements],
+    classTypes: [...classTypes].filter(Boolean),
+    labels: [...labels].filter(Boolean),
+  };
+}
+
+const norm = s => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+// Does this line name a movement this coach is already known to program? Matched
+// on the line with its scheme tokens stripped, so "Zercher Squat 5x5" resolves
+// against a catalog entry of "Zercher Squat".
+function hintedMovement(line, hints) {
+  if (!hints?.movements?.length) return false;
+  const bare = norm(stripSchemeTokens(stripBullet(line))
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[x×]\s*\d+/gi, " ")
+    .replace(/\d+\s*(?:m|km|cal|s|sec|min|reps?)\b/gi, " ")
+    .replace(/\b\d+(?:\s*[-–]\s*\d+)+\b/g, " "));
+  if (!bare) return false;
+  return hints.movements.some(m => m && (bare === m || bare.includes(m)));
+}
+
 // ── Small helpers ────────────────────────────────────────────────────────────
 const clean = s => (s || "").replace(/ /g, " ").trim();
 // Leading bullets/dashes/numbering that carry no meaning ("• ", "- ", "1. ").
@@ -316,6 +369,8 @@ function roleFor({ label, text, scheme, slotLetter, slotPeers, isLast }) {
  */
 export function parsePlanText(text, opts = {}) {
   const reasons = [];
+  const hints = opts.hints || null;
+  let hintedLines = 0;          // reported in stats, so the hints' value is visible
   const rawLines = String(text || "").split(/\r?\n/);
   const lines = rawLines.map(clean).filter(Boolean);
 
@@ -335,6 +390,12 @@ export function parsePlanText(text, opts = {}) {
   const consumed = new Array(lines.length).fill(false);
   headerLines.forEach((h, idx) => {
     if (DATE_RE.test(h) || NOISE_RE.test(h)) { consumed[idx] = true; return; }
+    // A class type this coach already uses is recognised even when it isn't
+    // shaped like the generic ALL-CAPS rule ("Garage Enduro", "Fundamental").
+    if (!classType && hints?.classTypes?.length) {
+      const hit = hints.classTypes.find(ct => norm(ct) === norm(h));
+      if (hit) { classType = hit; consumed[idx] = true; hintedLines++; return; }
+    }
     // A short ALL-CAPS-ish token is the class type ("S360", "GC", "ENDURO").
     if (!classType && /^[A-Z][A-Z0-9]{1,9}$/.test(h.replace(/\s+/g, ""))) { classType = h.trim(); consumed[idx] = true; return; }
     if (!focus && h.length <= 60) { focus = h; consumed[idx] = true; return; }
@@ -394,9 +455,14 @@ export function parsePlanText(text, opts = {}) {
       // A line can be BOTH a movement and scheme-bearing ("M1 Back Squat 5x5") —
       // try the exercise too, unless the line is pure scheme prose.
       const schemeOnly = contributed && !looksLikeMovement(stripSchemeTokens(line));
-      if (!schemeOnly && looksLikeMovement(line)) {
+      // `looksLikeMovement` is deliberately strict, which means it also rejects
+      // real movements written unusually (a long name, a trailing coaching cue).
+      // A movement THIS COACH is already known to program is evidence the generic
+      // heuristic doesn't have, so it overrides — that is the whole point of hints.
+      const known = !schemeOnly && hintedMovement(line, hints);
+      if (known || (!schemeOnly && looksLikeMovement(line))) {
         const ex = parseExercise(line);
-        if (ex) { exercises.push(ex); consumed[idx] = true; return; }
+        if (ex) { exercises.push(ex); consumed[idx] = true; if (known) hintedLines++; return; }
       }
       if (contributed) { consumed[idx] = true; return; }
       if (NOISE_RE.test(line) || DATE_RE.test(line)) { consumed[idx] = true; return; }
@@ -494,7 +560,11 @@ export function parsePlanText(text, opts = {}) {
     plan: { blocks },
     confidence,
     reasons,
-    stats: { lines: meaningful, blocks: blocks.length, exercises: blocks.reduce((n, b) => n + b.exercises.length, 0) },
+    stats: { lines: meaningful, blocks: blocks.length,
+             exercises: blocks.reduce((n, b) => n + b.exercises.length, 0),
+             // How many lines only parsed BECAUSE of this coach's own corpus.
+             // Makes the hints' contribution measurable instead of assumed.
+             hinted: hintedLines },
   };
 }
 
@@ -506,7 +576,7 @@ function emptyResult(opts, reasons, confidence, extra = {}) {
     focus: extra.focus || "",
     plan: { blocks: [] },
     confidence, reasons,
-    stats: { lines: 0, blocks: 0, exercises: 0 },
+    stats: { lines: 0, blocks: 0, exercises: 0, hinted: 0 },
   };
 }
 // A line that is ONLY a regression/scaling note, e.g. "(DB Press regression)",
