@@ -46,17 +46,24 @@ verified to fail the suite). That process earned its keep three times:
   and a ladder-inferred set count overriding the coach's stated "3 rounds".
 - The same UI pass caught `<Btn primary>` leaking an unknown attribute to the DOM.
 
+5. **I4 — check-in duration instrumented** (`f3fda97`). P6 (<5s/member) and A7 (a kill
+   criterion) were both unmeasurable. `checkinMetrics.js` measures the gap between
+   consecutive check-ins, excludes-and-reports idle stretches >60s, and uses medians so
+   one fumbled search can't swamp the sample. **With no data it reads "NO DATA", never a
+   passing tick** — that was the whole point. Verified by driving a real 2s-cadence
+   sweep: recorded `medianSec 2.002`, surfaced as "2s · MEETS TARGET". Local-only;
+   persisting it needs a migration.
+
 **⭐ RECOMMENDED NEXT:**
-1. **I4 — instrument check-in duration.** P6 (<5s/member) is a design law and A7 is a
-   kill criterion, and neither is measurable. Now more valuable than before, because
-   `RosterScreen` + the backfill mean there is finally data to measure against.
-2. **Per-coach parse hints (§4.3.2 "next step").** `plan._extract` now records which
+1. **Per-coach parse hints (§4.3.2 "next step").** `plan._extract` now records which
    path produced every plan, so the deterministic share is **measurable** — feed the
    already-parsed corpus back as per-coach notation hints and push it higher.
-3. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
+2. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
    backfill lands real rows.
-4. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
-5. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
+3. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
+4. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
+5. **I9 — code splitting.** The bundle is now ~630 KB with no `React.lazy` anywhere, and
+   the room display loads on a TV over gym Wi-Fi.
 
 ⚠️ **The QR self-check-in gap is UNCHANGED** — still needs an Edge Function with the
 service-role key. Do not fix it by loosening `0007`'s policies to `anon`.
