@@ -1,0 +1,162 @@
+// ─── At-risk detection (N3 / F5) ─────────────────────────────────────────────
+//
+// The spec is emphatic and it is right: **at-risk v1 is SQL, not LLM.** Two
+// transparent rules. The model may later draft a win-back message and explain a
+// flag in prose — it does not decide who is at risk. An operator has to trust the
+// rule enough to phone a member about it, and a lawyer has to be able to read it.
+//
+// So everything here is arithmetic over attendance rows, every flag carries the
+// numbers that produced it, and `reason` states the rule in plain words rather
+// than asserting a conclusion.
+//
+// THE HONESTY PROBLEM THIS MODULE EXISTS TO AVOID
+// A naive absence rule ("last visit >14 days ago") flags EVERY member the moment
+// a studio imports historical attendance — the backfill is by definition old. A
+// screen of 400 false alarms on day one is worse than no screen: the operator
+// learns to ignore it, and A3 ("do operators act on alerts?") is answered "no"
+// by our own bug rather than by the market.
+//
+// So the absence rule is gated on the STUDIO having recent activity. If nothing
+// has been recorded lately, that is a fact about the data, not about the members,
+// and it is reported as such.
+
+export const ABSENCE_DAYS = 14;        // spec: 14-day absence
+export const NEW_MEMBER_WINDOW_DAYS = 30;
+export const NEW_MEMBER_MIN_VISITS = 4; // spec: <4 visits in month one
+export const NEW_MEMBER_GRACE_DAYS = 14; // don't judge someone who joined this week
+
+const DAY_MS = 86_400_000;
+const dayOf = iso => (iso ? String(iso).slice(0, 10) : "");
+const msOf = iso => { const t = Date.parse(iso); return Number.isNaN(t) ? null : t; };
+const daysBetween = (a, b) => Math.floor((a - b) / DAY_MS);
+
+/**
+ * Per-member attendance facts. Pure; no assumptions about ordering.
+ * @returns Map memberId -> { visits, firstMs, lastMs }
+ */
+export function attendanceIndex(attendance = []) {
+  const idx = new Map();
+  attendance.forEach(a => {
+    const ms = msOf(a?.checkedInAt);
+    if (!a?.memberId || ms == null) return;
+    const e = idx.get(a.memberId) || { visits: 0, firstMs: ms, lastMs: ms };
+    e.visits++;
+    if (ms < e.firstMs) e.firstMs = ms;
+    if (ms > e.lastMs) e.lastMs = ms;
+    idx.set(a.memberId, e);
+  });
+  return idx;
+}
+
+/**
+ * Is the studio currently recording attendance at all?
+ * Used to gate the absence rule — see the note at the top of this file.
+ */
+export function studioActivity(attendance = [], now = Date.now()) {
+  let latest = null;
+  attendance.forEach(a => { const ms = msOf(a?.checkedInAt); if (ms != null && (latest == null || ms > latest)) latest = ms; });
+  return {
+    lastCheckInMs: latest,
+    daysSince: latest == null ? null : daysBetween(now, latest),
+    recording: latest != null && daysBetween(now, latest) <= ABSENCE_DAYS,
+  };
+}
+
+/**
+ * The two rules. Returns one flag per at-risk member, most urgent first.
+ *
+ * Every flag carries the arithmetic that produced it (`visits`, `daysSince`,
+ * `since`) so the UI can show the operator WHY, and so the rule can be argued
+ * with rather than merely believed.
+ */
+export function atRiskMembers(members = [], attendance = [], opts = {}) {
+  const now = opts.now ?? Date.now();
+  const idx = attendanceIndex(attendance);
+  const activity = studioActivity(attendance, now);
+  const flags = [];
+
+  (members || []).forEach(m => {
+    if (!m?.id) return;
+    const e = idx.get(m.id);
+    const visits = e?.visits || 0;
+    const joinedMs = msOf(m.joinedAt) ?? e?.firstMs ?? null;
+
+    // ── Rule 1: a new member who isn't building a habit.
+    // Month one is when a membership is won or lost, so this fires while there is
+    // still time to act — but only after a grace period, because "joined three
+    // days ago and has been twice" is a good start, not a warning.
+    if (joinedMs != null) {
+      const age = daysBetween(now, joinedMs);
+      if (age >= NEW_MEMBER_GRACE_DAYS && age <= NEW_MEMBER_WINDOW_DAYS && visits < NEW_MEMBER_MIN_VISITS) {
+        flags.push({
+          memberId: m.id, name: m.name || "", rule: "new_member_low_visits",
+          reason: `Joined ${age} days ago and has attended ${visits} time${visits === 1 ? "" : "s"} — fewer than ${NEW_MEMBER_MIN_VISITS} in their first month.`,
+          visits, daysSince: e ? daysBetween(now, e.lastMs) : age,
+          since: dayOf(new Date(joinedMs).toISOString()),
+          severity: NEW_MEMBER_MIN_VISITS - visits + 2,   // fewer visits = more urgent
+        });
+        return;   // one flag per member: the more actionable rule wins
+      }
+    }
+
+    // ── Rule 2: a member who was attending and has stopped.
+    // Gated on the studio actually recording — otherwise a historical import
+    // flags the entire roster and the alert becomes noise (see the file header).
+    if (activity.recording && e && visits > 0) {
+      const daysSince = daysBetween(now, e.lastMs);
+      if (daysSince >= ABSENCE_DAYS) {
+        flags.push({
+          memberId: m.id, name: m.name || "", rule: "absence",
+          reason: `Last attended ${daysSince} days ago, after ${visits} visit${visits === 1 ? "" : "s"} — more than ${ABSENCE_DAYS} days away.`,
+          visits, daysSince, since: dayOf(new Date(e.lastMs).toISOString()),
+          severity: Math.min(10, Math.floor(daysSince / ABSENCE_DAYS) + 1),
+        });
+      }
+    }
+  });
+
+  return flags.sort((a, b) => b.severity - a.severity || b.daysSince - a.daysSince
+                              || (a.name || "").localeCompare(b.name || ""));
+}
+
+/**
+ * What the operator should be told, INCLUDING when the answer is "we can't tell".
+ * `state` is one of:
+ *   "no-data"      — nothing recorded; say so rather than showing a green all-clear
+ *   "not-recording"— rows exist but none recently; the absence rule is suppressed
+ *   "ok"           — recording, no members flagged
+ *   "flagged"      — recording, and these members meet a rule
+ */
+export function retentionSummary(members = [], attendance = [], opts = {}) {
+  const now = opts.now ?? Date.now();
+  const activity = studioActivity(attendance, now);
+  const flags = atRiskMembers(members, attendance, { now });
+
+  let state;
+  if (!attendance.length) state = "no-data";
+  else if (!activity.recording) state = "not-recording";
+  else state = flags.length ? "flagged" : "ok";
+
+  return {
+    state, flags, activity,
+    members: (members || []).length,
+    // Never claim a healthy roster we haven't measured. `null` means unknown,
+    // and the UI must render that differently from zero.
+    atRisk: state === "no-data" || state === "not-recording" ? null : flags.length,
+  };
+}
+
+// Human-readable one-liner for the UI. Kept here so the wording that explains a
+// rule lives next to the rule itself.
+export function describeRetention(s) {
+  switch (s.state) {
+    case "no-data":
+      return "No attendance recorded yet — at-risk detection starts once members are checked in.";
+    case "not-recording":
+      return `No check-ins in the last ${ABSENCE_DAYS} days, so absence alerts are paused. They resume once classes are being recorded again${s.activity.daysSince != null ? ` (last check-in was ${s.activity.daysSince} days ago)` : ""}.`;
+    case "ok":
+      return "No members currently meet an at-risk rule.";
+    default:
+      return `${s.flags.length} member${s.flags.length === 1 ? "" : "s"} meet an at-risk rule.`;
+  }
+}
