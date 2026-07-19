@@ -1,7 +1,7 @@
 # Jungle — Next Session Prompt
 
 _Paste this whole file as the opening message of the next session._
-_Written 2026-07-19, after session 3. `main` = `73068dc`._
+_Written 2026-07-19, after session 3. `main` = `a164fb7`._
 
 ---
 
@@ -20,7 +20,7 @@ theatre rather than shipping it.
 ## Start here
 
 - **Repo:** `C:\Users\dylan\jungle-app` (request folder access first).
-- **Confirm:** repo access, `git status`, `main` = `73068dc`, tree clean, CI green.
+- **Confirm:** repo access, `git status`, `main` = `a164fb7`, tree clean, CI green.
   Then **propose a plan before editing.**
 - **Read, in this order:**
   1. `SESSION-HANDOFF.md` — cold-start brief + everything sessions 1–3 shipped.
@@ -167,8 +167,11 @@ boring because it is nearly free:
 4. **UI language pass** — a sweep of every user-facing string.
 5. **PWA manifest + service worker** — closes I11/P7 as a side effect.
 
-Then hand to **Fable for review**. The open questions are in §8 of the as-built spec;
-add to them as you go.
+Then hand to **Fable for review**. Open questions are in **§8** (standing) and **§13** (new,
+written for this review) of the as-built spec — add to them as you go. The one worth settling
+early, because code hardens around it fast: **is `hyrox` a movement category or a class type?**
+It is currently modelled as a category so blueprint slots can request it, but Hyrox is a fixed
+8-station format, which argues for a blueprint preset instead. Possibly both.
 
 ---
 
