@@ -20,6 +20,15 @@
 // has been recorded lately, that is a fact about the data, not about the members,
 // and it is reported as such.
 
+// The rule identifiers, pinned in ONE place. These are written into a Postgres
+// CHECK constraint (0008), and a constrained column rejecting a client value is
+// this repo's recurring data-loss bug — three occurrences. Nothing may spell
+// these strings inline; a unit test asserts these exact contents.
+export const RETENTION_RULES = ["new_member_low_visits", "absence"];
+// Destructured from the list rather than re-typed, so a flag can never carry a
+// rule name the constraint does not know about.
+const [RULE_NEW_MEMBER, RULE_ABSENCE] = RETENTION_RULES;
+
 export const ABSENCE_DAYS = 14;        // spec: 14-day absence
 export const NEW_MEMBER_WINDOW_DAYS = 30;
 export const NEW_MEMBER_MIN_VISITS = 4; // spec: <4 visits in month one
@@ -89,7 +98,7 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
       const age = daysBetween(now, joinedMs);
       if (age >= NEW_MEMBER_GRACE_DAYS && age <= NEW_MEMBER_WINDOW_DAYS && visits < NEW_MEMBER_MIN_VISITS) {
         flags.push({
-          memberId: m.id, name: m.name || "", rule: "new_member_low_visits",
+          memberId: m.id, name: m.name || "", rule: RULE_NEW_MEMBER,
           reason: `Joined ${age} days ago and has attended ${visits} time${visits === 1 ? "" : "s"} — fewer than ${NEW_MEMBER_MIN_VISITS} in their first month.`,
           visits, daysSince: e ? daysBetween(now, e.lastMs) : age,
           since: dayOf(new Date(joinedMs).toISOString()),
@@ -106,7 +115,7 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
       const daysSince = daysBetween(now, e.lastMs);
       if (daysSince >= ABSENCE_DAYS) {
         flags.push({
-          memberId: m.id, name: m.name || "", rule: "absence",
+          memberId: m.id, name: m.name || "", rule: RULE_ABSENCE,
           reason: `Last attended ${daysSince} days ago, after ${visits} visit${visits === 1 ? "" : "s"} — more than ${ABSENCE_DAYS} days away.`,
           visits, daysSince, since: dayOf(new Date(e.lastMs).toISOString()),
           severity: Math.min(10, Math.floor(daysSince / ABSENCE_DAYS) + 1),
@@ -117,6 +126,52 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
 
   return flags.sort((a, b) => b.severity - a.severity || b.daysSince - a.daysSince
                               || (a.name || "").localeCompare(b.name || ""));
+}
+
+/**
+ * Apply the operator's own actions to a set of flags.
+ *
+ * The actions ledger is append-only (0008), so "current state" is the LATEST
+ * event per (member, rule) — the same shape consent_records uses, and for the
+ * same reason: A3 asks whether operators act on alerts, and a mutable row would
+ * destroy the very history that answers it.
+ *
+ * WHEN DOES AN ACTIONED FLAG COME BACK? This is the judgement call in the whole
+ * feature. Suppressing forever means a member who lapses, is called, returns,
+ * and lapses again is never flagged the second time — which is exactly the case
+ * an operator most wants to know about. Re-flagging immediately makes the
+ * dismiss button useless.
+ *
+ * So: an action suppresses its flag until the member is SEEN AGAIN. A check-in
+ * after the action closes that episode; a later lapse is a genuinely new one.
+ * A member who never returns stays suppressed, which is correct — the operator
+ * already dealt with them and does not need reminding forever.
+ *
+ * @returns { active, handled } — handled flags keep their action so the UI can
+ *          show what was done and when, rather than hiding the work.
+ */
+export function applyRetentionActions(flags = [], actions = [], attendance = [], opts = {}) {
+  const idx = opts.index || attendanceIndex(attendance);
+  const latest = new Map();
+  (actions || []).forEach(a => {
+    if (!a?.memberId || !a?.rule) return;
+    const ms = msOf(a.occurredAt);
+    if (ms == null) return;
+    const k = `${a.memberId}::${a.rule}`;
+    const prev = latest.get(k);
+    if (!prev || ms > prev.ms) latest.set(k, { ...a, ms });
+  });
+
+  const active = [], handled = [];
+  (flags || []).forEach(f => {
+    const act = latest.get(`${f.memberId}::${f.rule}`);
+    if (!act || act.action === "reopened") { active.push(f); return; }
+    const lastSeenMs = idx.get(f.memberId)?.lastMs ?? null;
+    // Seen since the action → the episode closed and this flag is a new one.
+    if (lastSeenMs != null && lastSeenMs > act.ms) { active.push(f); return; }
+    handled.push({ ...f, action: act.action, actionAt: act.occurredAt, actionNote: act.note || "" });
+  });
+  return { active, handled };
 }
 
 /**
@@ -148,7 +203,15 @@ export function retentionSummary(members = [], attendance = [], opts = {}) {
 
 // Human-readable one-liner for the UI. Kept here so the wording that explains a
 // rule lives next to the rule itself.
-export function describeRetention(s) {
+//
+// `counts` carries the post-action figures from applyRetentionActions. Without
+// them this sentence describes raw flags while the headline number describes
+// active ones, and the card says "2" next to "3 members meet an at-risk rule" —
+// caught by driving it. A screen that contradicts itself is not one an operator
+// will trust enough to phone a member about.
+export function describeRetention(s, counts = {}) {
+  const active = counts.active ?? s.flags.length;
+  const handled = counts.handled ?? 0;
   switch (s.state) {
     case "no-data":
       return "No attendance recorded yet — at-risk detection starts once members are checked in.";
@@ -156,7 +219,11 @@ export function describeRetention(s) {
       return `No check-ins in the last ${ABSENCE_DAYS} days, so absence alerts are paused. They resume once classes are being recorded again${s.activity.daysSince != null ? ` (last check-in was ${s.activity.daysSince} days ago)` : ""}.`;
     case "ok":
       return "No members currently meet an at-risk rule.";
-    default:
-      return `${s.flags.length} member${s.flags.length === 1 ? "" : "s"} meet an at-risk rule.`;
+    default: {
+      const done = handled ? ` ${handled} already handled.` : "";
+      // Everything flagged has been dealt with — say THAT, not "0 members".
+      if (active === 0) return `Every flagged member has been handled${handled ? ` (${handled})` : ""}.`;
+      return `${active} member${active === 1 ? "" : "s"} need${active === 1 ? "s" : ""} attention.${done}`;
+    }
   }
 }

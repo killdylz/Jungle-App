@@ -849,7 +849,7 @@ _Added 2026-07-19, consolidating Â§7b and Â§7c with the new work above._
 ### Now â€” finishing what is half-built
 | # | Item |
 |---|---|
-| N3-UI | At-risk list + per-flag "why" + **dismiss/acted state** (without it A3 is unmeasurable). Engine shipped `73068dc`, no surface yet |
+| N3-UI | âœ… **Built.** At-risk list on the Members screen, per-flag "why" with its numbers, and an append-only action ledger (`retention_actions`, migration **0008 â€” NOT YET APPLIED by Dylan**). A3 becomes measurable once it is applied |
 | U1 | **UI language pass** (Â§11) |
 | M1 | **Members CRUD** â€” `RosterScreen` reads but cannot edit; no status, no joined date |
 | I5 | **RLS tests for `0001`-`0006`** (only `0007` is covered) |

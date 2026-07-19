@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   atRiskMembers, retentionSummary, describeRetention, attendanceIndex, studioActivity,
+  applyRetentionActions, RETENTION_RULES,
   ABSENCE_DAYS, NEW_MEMBER_MIN_VISITS,
 } from "./retention.js";
+import { RETENTION_ACTIONS, retentionAction, retentionRule } from "./store.js";
 
 // A fixed "now" so every test is deterministic — a retention rule that drifts
 // with the wall clock is untestable, and this one has to be defensible to an
@@ -161,5 +163,140 @@ describe("studioActivity", () => {
     expect(studioActivity([visit("m1", 2)], NOW).recording).toBe(true);
     expect(studioActivity([visit("m1", 40)], NOW).recording).toBe(false);
     expect(studioActivity([], NOW)).toMatchObject({ recording: false, lastCheckInMs: null, daysSince: null });
+  });
+});
+
+// ── N3 surface: the operator's own actions ───────────────────────────────────
+// These two constants are written into 0008's CHECK constraints. A constrained
+// column rejecting a client value is this repo's recurring data-loss bug (three
+// occurrences), so both are pinned here and the SQL must be read alongside them.
+describe("constrained values shared with 0008", () => {
+  it("pins the rule names the CHECK constraint allows", () => {
+    expect(RETENTION_RULES).toEqual(["new_member_low_visits", "absence"]);
+  });
+
+  it("pins the action names the CHECK constraint allows", () => {
+    expect(RETENTION_ACTIONS).toEqual(["acted", "dismissed", "reopened"]);
+  });
+
+  it("every rule a flag can carry is a legal rule", () => {
+    // The flags and the constraint cannot drift: whatever atRiskMembers emits
+    // has to be insertable.
+    const members = [member("m1", "Ada", daysAgo(20)), member("m2", "Bea", daysAgo(200))];
+    const flags = atRiskMembers(members, [visit("m2", 40), visit("m2", 1), visit("m1", 19)], { now: NOW });
+    flags.forEach(f => expect(RETENTION_RULES).toContain(f.rule));
+  });
+
+  it("coerces an unknown action but REFUSES an unknown rule", () => {
+    // Opposite treatments on purpose: a bad action defaults to the conservative
+    // "acted", but a bad rule would file the action against the wrong alert,
+    // which is worse than not recording it at all.
+    expect(retentionAction("nonsense")).toBe("acted");
+    expect(retentionAction("dismissed")).toBe("dismissed");
+    expect(retentionRule("absence")).toBe("absence");
+    expect(retentionRule("nonsense")).toBeNull();
+  });
+});
+
+describe("applyRetentionActions", () => {
+  // "regular" keeps the studio RECORDING, without which the absence rule is
+  // correctly suppressed and there is no flag to action in the first place.
+  const members = [member("m1", "Ada", daysAgo(200)), member("regular", "Reg", daysAgo(200))];
+  const att = [visit("regular", 1), visit("m1", 30), visit("m1", 20)];   // m1 last seen 20d → absence
+  const flagsFor = () => atRiskMembers(members, att, { now: NOW }).filter(f => f.memberId === "m1");
+  const action = (action, d, rule = "absence") =>
+    ({ memberId: "m1", rule, action, occurredAt: daysAgo(d) });
+
+  it("leaves a flag active when nothing has been done about it", () => {
+    const { active, handled } = applyRetentionActions(flagsFor(), [], att);
+    expect(active).toHaveLength(1);
+    expect(handled).toHaveLength(0);
+  });
+
+  it("moves an actioned flag out of the active list", () => {
+    const { active, handled } = applyRetentionActions(flagsFor(), [action("acted", 2)], att);
+    expect(active).toHaveLength(0);
+    expect(handled).toHaveLength(1);
+    expect(handled[0].action).toBe("acted");
+  });
+
+  it("keeps WHAT was done and WHEN, rather than just hiding the flag", () => {
+    // A3 asks whether operators act on alerts. Hiding the flag without keeping
+    // the action would answer it by destroying the evidence.
+    const acts = [{ ...action("acted", 2), note: "called, coming Thursday" }];
+    const { handled } = applyRetentionActions(flagsFor(), acts, att);
+    expect(handled[0].actionNote).toBe("called, coming Thursday");
+    expect(handled[0].actionAt).toBe(daysAgo(2));
+  });
+
+  it("uses the LATEST action per member and rule", () => {
+    const acts = [action("acted", 10), action("dismissed", 2)];
+    expect(applyRetentionActions(flagsFor(), acts, att).handled[0].action).toBe("dismissed");
+  });
+
+  it("re-activates a flag that was explicitly reopened", () => {
+    const acts = [action("acted", 10), action("reopened", 2)];
+    const { active, handled } = applyRetentionActions(flagsFor(), acts, att);
+    expect(active).toHaveLength(1);
+    expect(handled).toHaveLength(0);
+  });
+
+  it("brings the flag back once the member is SEEN AGAIN after the action", () => {
+    // The judgement call in the whole feature. A member who lapses, is called,
+    // returns, and lapses again is exactly the case an operator wants to know
+    // about — so an action holds only until the next check-in.
+    const acts = [action("acted", 25)];               // actioned 25 days ago
+    const { active } = applyRetentionActions(flagsFor(), acts, att);   // seen 20 days ago
+    expect(active).toHaveLength(1);
+  });
+
+  it("keeps a never-returning member suppressed", () => {
+    // The mirror case: they never came back, the operator already dealt with
+    // them, and re-flagging forever is how an alert screen becomes wallpaper.
+    const acts = [action("acted", 2)];                // actioned after the last visit
+    expect(applyRetentionActions(flagsFor(), acts, att).active).toHaveLength(0);
+  });
+
+  it("does not let an action on one rule suppress a different rule", () => {
+    const acts = [action("dismissed", 2, "new_member_low_visits")];
+    expect(applyRetentionActions(flagsFor(), acts, att).active).toHaveLength(1);
+  });
+
+  it("does not let an action on one member suppress another", () => {
+    const acts = [{ ...action("dismissed", 2), memberId: "someone-else" }];
+    expect(applyRetentionActions(flagsFor(), acts, att).active).toHaveLength(1);
+  });
+
+  it("ignores malformed action rows rather than throwing", () => {
+    const acts = [{}, { memberId: "m1" }, { memberId: "m1", rule: "absence", action: "acted", occurredAt: "nope" }];
+    expect(applyRetentionActions(flagsFor(), acts, att).active).toHaveLength(1);
+  });
+});
+
+describe("describeRetention agrees with the number the operator sees", () => {
+  // Found by driving the UI: the card showed "2" beside "3 members meet an
+  // at-risk rule" because the sentence counted raw flags and the headline
+  // counted active ones. A screen that contradicts itself will not be trusted
+  // enough to phone a member about.
+  const members = [member("m1", "Ada", daysAgo(200)), member("m2", "Bea", daysAgo(200)), member("regular", "Reg", daysAgo(200))];
+  const att = [visit("regular", 1), visit("m1", 30), visit("m2", 95)];
+
+  it("counts only what is still active, and says how many were handled", () => {
+    const s = retentionSummary(members, att, { now: NOW });
+    expect(s.flags).toHaveLength(2);
+    const line = describeRetention(s, { active: 1, handled: 1 });
+    expect(line).toContain("1 member needs attention");
+    expect(line).toContain("1 already handled");
+    expect(line).not.toContain("2 members");
+  });
+
+  it("says everything is handled rather than reporting zero", () => {
+    const s = retentionSummary(members, att, { now: NOW });
+    expect(describeRetention(s, { active: 0, handled: 2 })).toMatch(/every flagged member has been handled/i);
+  });
+
+  it("still describes raw flags when no counts are supplied", () => {
+    const s = retentionSummary(members, att, { now: NOW });
+    expect(describeRetention(s)).toContain("2 members need attention");
   });
 });

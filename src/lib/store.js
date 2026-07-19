@@ -9,6 +9,7 @@
 // the backend later means changing the bodies here, not the ~30 call sites.
 
 import { supabase, supabaseEnabled } from "../supabase.js";
+import { RETENTION_RULES } from "./retention.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -35,6 +36,7 @@ const KEYS = {
   members:       "jungle_members",
   classInstances:"jungle_class_instances",
   attendance:    "jungle_attendance",
+  retentionActions:"jungle_retention_actions",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -692,6 +694,52 @@ export function attendanceSource(s) {
   return ATTENDANCE_SOURCES.includes(s) ? s : "coach";
 }
 
+// ── retention_actions: what the operator DID about a flag (N3) ──────────────
+// Append-only, mirroring attendance and consent_records: insert-only push, and
+// hydrate MERGES rather than letting the server win. Local shape:
+// { id, memberId, rule, action, note, occurredAt }.
+//
+// The two constrained columns in 0008. `rule` deliberately re-exports
+// RETENTION_RULES rather than restating it — the rule names belong to the rules
+// engine, and two copies is precisely how a CHECK constraint starts rejecting a
+// client value.
+export const RETENTION_ACTIONS = ["acted", "dismissed", "reopened"];
+export function retentionAction(a) {
+  return RETENTION_ACTIONS.includes(a) ? a : "acted";
+}
+export function retentionRule(r) {
+  return RETENTION_RULES.includes(r) ? r : null;
+}
+function _raToRow(a) {
+  return { id: a.id, gym_id: _ctx.gymId, member_id: a.memberId, rule: a.rule,
+           action: retentionAction(a.action), note: a.note || null,
+           occurred_at: a.occurredAt, recorded_by: _ctx.userId || null };
+}
+function _rowToRa(r) {
+  return { id: r.id, memberId: r.member_id, rule: r.rule, action: r.action,
+           note: r.note || "", occurredAt: r.occurred_at };
+}
+export function getRetentionActions() { return readJSON(KEYS.retentionActions, []); }
+
+// Record one action. Local write is immediate and unconditional so the operator
+// sees their own click land; the server insert rides along. An unknown rule is
+// REFUSED rather than coerced — coercing would file the action against the wrong
+// rule, which is worse than not recording it.
+export function recordRetentionAction({ memberId, rule, action, note = "" }) {
+  const r = retentionRule(rule);
+  if (!memberId || !r) return getRetentionActions();
+  const row = { id: newId(), memberId, rule: r, action: retentionAction(action),
+                note: String(note || ""), occurredAt: new Date().toISOString() };
+  const list = [...getRetentionActions(), row];
+  writeJSON(KEYS.retentionActions, list);
+  if (_synced()) {
+    supabase.from("retention_actions").insert([_raToRow(row)]).then(
+      ({ error }) => { if (error) _noteSyncError("retention_actions", error.message); },
+      (e) => _noteSyncError("retention_actions", e?.message || e));
+  }
+  return list;
+}
+
 // ── members: roster rows, NOT auth users ────────────────────────────────────
 // Local shape: { id, name, email, status, joinedAt, externalRef }
 function _memberToRow(m) {
@@ -916,6 +964,15 @@ export async function hydrateAttendance() {
       supabase.from("attendance").select("*").eq("gym_id", _ctx.gymId)
         .order("checked_in_at", { ascending: false }).limit(2000),
     ]);
+    // Retention actions are pulled defensively and separately, so a not-yet-applied
+    // 0008 degrades to "no actions recorded" instead of breaking attendance
+    // hydration outright — the same shape hydratePersonas uses for 0006.
+    let serverRa = null;
+    try {
+      const rRes = await supabase.from("retention_actions").select("*").eq("gym_id", _ctx.gymId)
+        .order("occurred_at", { ascending: false }).limit(2000);
+      if (!rRes.error) serverRa = (rRes.data || []).map(_rowToRa);
+    } catch (_) { /* table may not exist yet */ }
     if (mRes.error || cRes.error || aRes.error) {
       console.warn("[store] hydrateAttendance failed:", (mRes.error || cRes.error || aRes.error).message);
       return null;
@@ -936,10 +993,25 @@ export async function hydrateAttendance() {
     if (localOnlyAtt.length) _pushAttendance(localOnlyAtt);
     const attendance = [...serverAtt, ...localOnlyAtt];
 
+    // Same append-log rule as attendance: an action recorded offline is the only
+    // copy, so merge and push it up rather than letting the server win.
+    let retentionActions = getRetentionActions();
+    if (serverRa !== null) {
+      const seenRa = new Set(serverRa.map(a => a.id));
+      const localOnlyRa = retentionActions.filter(a => !seenRa.has(a.id));
+      if (localOnlyRa.length) {
+        supabase.from("retention_actions").insert(localOnlyRa.map(_raToRow)).then(
+          ({ error }) => { if (error) _noteSyncError("retention_actions", error.message); },
+          (e) => _noteSyncError("retention_actions", e?.message || e));
+      }
+      retentionActions = [...serverRa, ...localOnlyRa];
+      writeJSON(KEYS.retentionActions, retentionActions);
+    }
+
     writeJSON(KEYS.members, members);
     writeJSON(KEYS.classInstances, cis);
     writeJSON(KEYS.attendance, attendance);
-    return { members, classInstances: cis, attendance };
+    return { members, classInstances: cis, attendance, retentionActions };
   } catch (e) {
     console.warn("[store] hydrateAttendance error:", e?.message || e);
     return null;

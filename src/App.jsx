@@ -15,6 +15,7 @@ import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPr
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
+import { retentionSummary, describeRetention, applyRetentionActions } from "./lib/retention.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 import { useQrDataUrl } from "./lib/qr.js";
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -7349,15 +7350,27 @@ function RosterScreen({ onBack }) {
   const [analysis, setAnalysis] = useState(null);
   const [result, setResult] = useState(null);
   const [q, setQ] = useState("");
+  const [actions, setActions] = useState(() => store.getRetentionActions());
+  const [showHandled, setShowHandled] = useState(false);
 
   useEffect(() => {
     let alive = true;
     store.hydrateAttendance().then(r => {
       if (!alive || !r) return;
       setMembers(r.members); setAttendance(r.attendance); setClasses(r.classInstances);
+      if (r.retentionActions) setActions(r.retentionActions);
     });
     return () => { alive = false; };
   }, []);
+
+  // ── At-risk (N3) — the rules engine finally gets a surface ────────────────
+  // Arithmetic, not a model: every flag carries the numbers that produced it so
+  // the operator can argue with it rather than merely believe it.
+  const retention = retentionSummary(members, attendance);
+  const { active: atRiskActive, handled: atRiskHandled } =
+    applyRetentionActions(retention.flags, actions, attendance);
+  const act = (flag, action) =>
+    setActions(store.recordRetentionAction({ memberId: flag.memberId, rule: flag.rule, action }));
 
   const visitsFor = id => attendance.filter(a => a.memberId === id).length;
   const lastSeen = id => {
@@ -7410,6 +7423,58 @@ function RosterScreen({ onBack }) {
             <StatCard label="MEMBERS" value={String(members.length)}/>
             <StatCard label="CHECK-INS" value={String(attendance.length)}/>
             <StatCard label="CLASSES RUN" value={String(classes.length)}/>
+          </div>
+
+          {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
+              tell, say so — never a green all-clear over unmeasured data. */}
+          <div style={card}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Who&rsquo;s slipping away</div>
+              <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
+                           color:retention.atRisk==null?"var(--muted)":atRiskActive.length?"var(--accent)":"var(--green)"}}>
+                {retention.atRisk == null ? "—" : String(atRiskActive.length)}
+              </div>
+            </div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:atRiskActive.length?"12px":"0"}}>
+              {describeRetention(retention, { active: atRiskActive.length, handled: atRiskHandled.length })}
+            </p>
+
+            {atRiskActive.map(f => (
+              <div key={`${f.memberId}:${f.rule}`} style={{padding:"12px 0",borderTop:"1px solid var(--border)"}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:"8px",flexWrap:"wrap"}}>
+                  <span style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{f.name || "Unnamed member"}</span>
+                  <span style={{fontSize:"11px",color:"var(--muted)"}}>last in {f.daysSince} day{f.daysSince===1?"":"s"} ago · {f.visits} visit{f.visits===1?"":"s"}</span>
+                </div>
+                {/* The WHY, stated as the rule with its numbers. An operator has to
+                    be able to phone a member about this and defend it. */}
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.5,margin:"4px 0 8px"}}>{f.reason}</p>
+                <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                  <Btn onClick={()=>act(f,"acted")} style={{padding:"5px 11px"}}><Check size={13}/> I&rsquo;ve reached out</Btn>
+                  <Btn variant="ghost" onClick={()=>act(f,"dismissed")} style={{padding:"5px 11px"}}>Not a concern</Btn>
+                </div>
+              </div>
+            ))}
+
+            {/* Handled work stays visible rather than vanishing — partly so the
+                operator can undo, and partly because "we acted on 9 of 11" is the
+                measurement A3 actually asks for. */}
+            {atRiskHandled.length > 0 && (
+              <div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid var(--border)"}}>
+                <button onClick={()=>setShowHandled(s=>!s)} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px"}}>
+                  {showHandled ? "Hide" : "Show"} handled · {atRiskHandled.length}
+                </button>
+                {showHandled && atRiskHandled.map(f => (
+                  <div key={`${f.memberId}:${f.rule}`} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",flexWrap:"wrap"}}>
+                    <span style={{flex:1,minWidth:"140px",fontSize:"13px",color:"var(--text)"}}>{f.name || "Unnamed member"}</span>
+                    <span style={{fontSize:"11px",color:"var(--muted)"}}>
+                      {f.action === "acted" ? "Reached out" : "Not a concern"}
+                      {f.actionAt ? ` · ${new Date(f.actionAt).toLocaleDateString()}` : ""}
+                    </span>
+                    <button onClick={()=>act(f,"reopened")} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"600",padding:"3px 8px"}}>Undo</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* P6 instrument (I4). Shown even with no data, and explicitly as "not
