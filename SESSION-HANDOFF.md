@@ -1,6 +1,39 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-19 (end of session 3)_
+_Last updated: 2026-07-19 (end of session 4)_
+
+## 🟢 Shipped SESSION 4 — `fd75fb0` → `823a492`, 4 commits, all gates green, **NOT PUSHED**
+
+Persona depth, end to end. 164 → **295 tests**, every new test mutation-verified.
+
+| Commit | What |
+|---|---|
+| `c54d184` | **D1 — movement taxonomy.** `src/lib/movementTaxonomy.js`: `CATEGORIES`, `classifyMovement`, `categoryOf`. Ordered rules copied from `inferEquip`; unknowns return `""` and surface as **"needs category"**. Wired into `aggregateMovements` and `classCategory`; catalog gains a category picker. |
+| `4dd0e25` | **Dropped the `hyrox` category** on Dylan's call — *a circuit class can contain Hyrox movements*. Hyrox is a format, not a movement property. `HYROX_STATIONS` survives for the blueprint preset. Settles §13 Q8. |
+| `275099f` | **D2 — Class Blueprints ("class shape").** Derive → present → edit → **deterministic local drafting** from the coach's own catalog. Stored in `style_profile.blueprints` (no migration). Settles §13 Q7. |
+| `823a492` | **N3 UI.** At-risk list on Members, per-flag "why" with its numbers, append-only action ledger. **Migration 0008 written but NOT APPLIED.** |
+
+**Six defects were found by driving the real UI, none by unit tests** — consistent with session 3's
+lesson. Two more were found by mutation testing catching *weak tests*, not weak code:
+
+1. `Hanging Knee Raise` classified as strength (generic `raise` rule ate it).
+2. `categoryOf` trusted a stored value that goes stale forever — catalogs only re-aggregate when
+   *plans* change, so an existing coach would never see a rules improvement. It now re-derives.
+3. Blueprint slots were named `M1 — Deadlift`, baking one week's focus into a recurring slot.
+4. **The first blueprint draft put a Conventional Deadlift in the warm-up.** Slot categories are
+   legitimately broad; they are now ordered by prevalence and drafting reads that as priority.
+5. The at-risk card showed "2" beside "3 members meet an at-risk rule".
+6. `SkiErg` as one word returned blank after a refactor.
+
+**Two process notes worth carrying forward:**
+
+- **A mutation that appears "not caught" may simply not have applied.** Two did not, and looked
+  like weak tests. The helper now hard-errors when its target string is absent. Always confirm the
+  mutation landed before concluding a test is weak.
+- **Seven NUL bytes were written into `blueprints.js`** where spaces were intended, and the
+  resulting `join("\0")` *masked a real design bug* — slot keys contain spaces, so a real space
+  separator would have shredded them. Sequence identity is now JSON. A repo-wide NUL scan is part
+  of the pre-commit check now; re-run it if anything looks binary to git.
 
 > ### 👉 STARTING A NEW SESSION? Paste `NEXT-SESSION-PROMPT.md` as your opening message.
 > It is the cold-start brief: what Jungle is, what shipped, **the persona-depth build that is

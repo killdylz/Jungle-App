@@ -912,3 +912,58 @@ In addition to Â§8, which stands:
     to value in one click but teaches them Jungle's opinion rather than capturing theirs â€” which
     cuts against the entire persona thesis.
 
+
+---
+
+## 14. Commercial context — Singapore launch (added 2026-07-19)
+
+_New as of session 4. This section exists because it changes what "done" means, and because two
+things in this document are now factually wrong for the market we are launching into._
+
+### 14.1 The plan
+
+Dylan freelances at a gym in **Singapore** and intends to (a) launch Jungle there as the first
+deployment, (b) sell it to other gyms as a product, and (c) offer B2B services through that first
+gym. Target: development finished and the USP sharpened **within a week** of 2026-07-19.
+
+This is the first time the product has had a named customer, and it promotes several things from
+"good practice" to "blocking":
+
+| Was | Now |
+|---|---|
+| Sync verified twice, failed twice | **Blocking.** A gym's attendance cannot be lost. |
+| Offline (P7/I11) an untested assumption | **Blocking.** A real class will lose Wi-Fi. |
+| QR self-check-in blocked on RLS | **Blocking or cut.** Ship the Edge Function or remove the promise. |
+| Technical jargon in the UI (§11) | **Blocking.** A paying customer's staff will read these strings. |
+| No backups, no staging, no observability | **Blocking before member data is real.** |
+
+### 14.2 ⚠️ The compliance framing in this document is wrong for Singapore
+
+**§4.1 describes `consent_records` as "MHMDA-shaped", and the migrations reference GDPR erasure.**
+Those are US and EU instruments. Singapore's governing law is the **Personal Data Protection Act
+(PDPA)**, and the differences are material — notably the **mandatory data breach notification**
+regime, the **Data Protection Officer** requirement, and the **Do Not Call** provisions, which bear
+directly on the win-back messaging feature (N3/N5) because that feature contacts members who have
+stopped attending.
+
+Also unresolved: in PDPA terms the **gym** is almost certainly the organisation with obligations to
+its members and **Jungle is a data intermediary**. That framing determines the contract, the
+retention policy and parts of the architecture, and it has never been written down.
+
+**Nothing here should be read as legal advice, and none of it has been reviewed by a Singapore
+lawyer.** It is flagged as a gap, not answered. `FABLE-AUDIT-PROMPT.md` §2.3 asks for the analysis;
+the outcome should be folded back into this section and into §4.1.
+
+### 14.3 The IP question, which is not a technical one
+
+Software built by a freelancer while engaged at a gym can have a **contested owner**. This needs to
+be agreed in writing with the first gym *before* launch, not after it succeeds. Recorded here
+because it is the kind of thing that is cheap to settle early and expensive to settle late.
+
+### 14.4 What this section does not yet contain
+
+Pricing, unit economics, the addressable Singapore market, the first-gym commercial arrangement,
+integration priorities, and the scaling cost curve. All are requested in `FABLE-AUDIT-PROMPT.md`
+and should be folded in here when they come back — **with sources or an explicit note that a number
+is a guess.** The rule that governs this document applies to commercial figures too: an honest
+blank beats a confident wrong guess.
