@@ -4,6 +4,7 @@
 // to {} on the next sync. All three have actually happened in this codebase.
 import { describe, it, expect } from "vitest";
 import { classTypesOf, aggregateClassType, classCategory, aggregateMovements } from "./personaAggregate.js";
+import { categoryOf } from "./movementTaxonomy.js";
 
 // Shapes mirror the real Garage corpus: S360 = strength, GC = conditioning,
 // Enduro = periodized endurance.
@@ -63,6 +64,35 @@ describe("classCategory", () => {
       { role: "superset", scheme: { type: "rounds" }, exercises: [{ name: "Chin Up", equip: "bodyweight" }] },
     ] } };
     expect(classCategory([roleLed], "R")).toBe("strength");
+  });
+
+  it("lets the MOVEMENTS decide when the block container says otherwise", () => {
+    // Discriminating case for the §9.2 taxonomy vote, and the reason it exists:
+    // role and scheme describe the CONTAINER, not the contents. This class is
+    // labelled circuit + AMRAP throughout (cond 4) but every movement in it is a
+    // barbell lift (strength 4) — a strength session a coach happened to score
+    // for time. Only reading what the movements ARE can carry it to "strength".
+    // Verified by mutation: removing the taxonomy vote flips this to "conditioning".
+    const contentsLed = { classType: "H", plan: { blocks: [
+      { role: "circuit", scheme: { type: "amrap" }, exercises: [{ name: "Back Squat", equip: "barbell" }, { name: "Deadlift", equip: "barbell" }] },
+      { role: "circuit", scheme: { type: "amrap" }, exercises: [{ name: "Bench Press", equip: "barbell" }, { name: "Overhead Press", equip: "barbell" }] },
+    ] } };
+    expect(classCategory([contentsLed], "H")).toBe("strength");
+  });
+
+  it("scores hyrox stations as conditioning even in a strength-shaped block", () => {
+    // Discriminating for the `hyrox` arm specifically. Hyrox station work is
+    // often programmed like a lift — primary_lift role, sets/reps scheme — which
+    // votes strength 3 on container signals alone. Four loaded carries are still
+    // conditioning, and only the taxonomy knows that.
+    // Verified by mutation: dropping `hyrox` from the conditioning vote flips
+    // this to "strength".
+    const hyroxy = { classType: "HX", plan: { blocks: [
+      { role: "primary_lift", scheme: { type: "sets_reps" }, exercises: [
+        { name: "Sled Push" }, { name: "Sled Pull" }, { name: "Farmers Carry" }, { name: "Sandbag Lunge" },
+      ] },
+    ] } };
+    expect(classCategory([hyroxy], "HX")).toBe("conditioning");
   });
 
   it("only scores the requested class type", () => {
@@ -150,5 +180,44 @@ describe("aggregateMovements", () => {
       { role: "primary_lift", scheme: { type: "sets_reps" }, exercises: [{ name: "Back Squat", equip: "barbell" }] },
     ] } };
     expect(aggregateMovements([s360, twice])[0].name).toBe("Back Squat");
+  });
+
+  // ── Movement category (§9.2) ───────────────────────────────────────────────
+  it("derives a category for each movement", () => {
+    const cat = aggregateMovements([s360, gc]);
+    expect(cat.find(m => m.name === "Back Squat").category).toBe("strength");
+    expect(cat.find(m => m.name === "Burpee").category).toBe("conditioning");
+    expect(cat.find(m => m.name === "KB Swing").category).toBe("conditioning");
+  });
+
+  it("leaves the category blank when the movement is not recognised", () => {
+    // An honest blank the catalog can flag, never a confident wrong guess.
+    const plans = [{ classType: "S360", plan: { blocks: [
+      { role: "circuit", scheme: {}, exercises: [{ name: "Atlas Press", equip: "" }] },
+    ] } }];
+    expect(aggregateMovements(plans)[0].category).toBe("");
+  });
+
+  it("keeps the coach's category override through a recompute", () => {
+    // The whole point of storing the override in meta rather than in the derived
+    // `category` field: re-aggregation refreshes the derivation and must not
+    // touch the coach's decision. categoryOf() resolves the override at read time.
+    const plans = [{ classType: "GC", plan: { blocks: [
+      { role: "circuit", scheme: {}, exercises: [{ name: "Row", equip: "erg" }] },
+    ] } }];
+    const existing = [{ id: "m4", name: "Row", aliases: [], equip: "erg", meta: { category: "hyrox" } }];
+    const row = aggregateMovements(plans, existing).find(m => m.name === "Row");
+    expect(row.meta.category).toBe("hyrox");        // override survives
+    expect(row.category).toBe("conditioning");      // derivation still refreshes
+    expect(categoryOf(row)).toBe("hyrox");          // and the override is what wins
+  });
+
+  it("retains a row whose only edit is a category override", () => {
+    // A category-only edit is a manual edit. If it did not count as one, the row
+    // would vanish on the next recompute and take the coach's decision with it.
+    const edited = [{ id: "m5", name: "Retired Move", aliases: [], equip: "", meta: { category: "core" } }];
+    const kept = aggregateMovements([s360], edited).find(m => m.name === "Retired Move");
+    expect(kept).toBeDefined();
+    expect(categoryOf(kept)).toBe("core");
   });
 });

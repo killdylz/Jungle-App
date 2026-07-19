@@ -9,6 +9,8 @@
 // movements. Movement names are canonicalized through the catalog's aliases so
 // coach edits ("Conv Deadlift" → "Deadlift") feed back into aggregation.
 
+import { classifyMovement } from "./movementTaxonomy.js";
+
 const ROLE_ORDER = ["warmup", "primary_lift", "superset", "circuit", "finisher", "recovery", "cooldown"];
 const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
 const classTypeOf = pl => ((pl.classType || "").trim() || "Uncategorized");
@@ -93,6 +95,14 @@ export function classCategory(plans, classType) {
     if (type === "time") endur += 1;
     (b.exercises || []).forEach(ex => {
       if (ENDURANCE_RE.test(`${ex.name || ""} ${ex.equip || ""} ${ex.target || ""}`)) endur += 1;
+      // What the movement actually IS, not just what block it sits in (§9.2).
+      // Roles and scheme types describe the container; this reads the contents,
+      // so a "circuit" block full of barbell lifts stops voting conditioning.
+      // Deliberately weighted 1 — a supporting signal, not an override, so the
+      // existing role/scheme verdicts stand unless the movements clearly differ.
+      const cat = classifyMovement(ex.name, ex.equip);
+      if (cat === "strength") strength += 1;
+      else if (cat === "conditioning" || cat === "hyrox") cond += 1;
     });
   });
   if (Math.max(strength, cond, endur) === 0) return "mixed";
@@ -144,22 +154,31 @@ export function aggregateMovements(plans, catalog = []) {
   derived.forEach((d, canon) => {
     const ex = existingByName.get(norm(canon));
     const equip = ex?.equip || mode(Object.entries(d.equipVotes).flatMap(([k, n]) => Array(n).fill(k))) || "";
+    // Derived category (§9.2). Always recomputed, so a row picks up improvements
+    // to the rules — the coach's override is NOT stored here but in meta.category,
+    // which survives via the `...ex` spread and wins at read time in categoryOf().
+    // That split is what lets the derivation improve without ever overwriting a
+    // coach's decision.
+    const category = classifyMovement(canon, equip);
     if (ex) {
       usedExisting.add(norm(canon));
       // Local shape is camelCase (store maps to common_scheme on sync) — emitting
       // snake_case here previously hid the derived scheme from the catalog UI and
       // let savePersonaMovements clobber it to {} server-side.
-      out.push({ ...ex, equip, classTypes: d.classTypes,
+      out.push({ ...ex, equip, category, classTypes: d.classTypes,
                  commonScheme: ex.meta?._schemeEdited ? (ex.commonScheme || ex.common_scheme) : commonScheme(d.schemes) });
     } else {
-      out.push({ id: null, personaId: (catalog[0]?.personaId) || null, name: canon, aliases: [], equip,
+      out.push({ id: null, personaId: (catalog[0]?.personaId) || null, name: canon, aliases: [], equip, category,
                  classTypes: d.classTypes, commonScheme: commonScheme(d.schemes), glossaryRef: "", meta: {} });
     }
   });
   (catalog || []).forEach(m => {
     if (usedExisting.has(norm(m.name))) return;
+    // A category override is a manual edit like any other and keeps the row
+    // alive — it already counts via the meta key scan below, which is why that
+    // scan is written as "any key that isn't the internal _schemeEdited flag".
     const manual = (m.aliases?.length) || m.equip || (m.meta && Object.keys(m.meta).some(k => k !== "_schemeEdited")) || m.glossaryRef;
-    if (manual) out.push({ ...m, classTypes: {} });
+    if (manual) out.push({ ...m, category: classifyMovement(m.name, m.equip), classTypes: {} });
   });
   return out.sort((a, b) => totalCount(b.classTypes) - totalCount(a.classTypes) || a.name.localeCompare(b.name));
 }

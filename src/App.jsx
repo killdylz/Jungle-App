@@ -9,6 +9,7 @@ import { GLOSSARY } from "./data/glossary.js";
 import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
+import { CATEGORIES, categoryOf } from "./lib/movementTaxonomy.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
@@ -7242,7 +7243,10 @@ const ROLE_DUR_SEC  = { warmup:300, primary_lift:900, superset:600, circuit:600,
 // Persona class-type category → Builder class-type key (each must exist in WORKOUT_LIBRARY).
 // Item 9: a persona pushed to the Builder lands on the right class type, not "untyped".
 const CATEGORY_TO_BUILDER = { strength:"strength", conditioning:"circuit", endurance:"hyrox", mixed:"bootcamp" };
-const CATEGORY_LABEL = { strength:"Strength", conditioning:"Conditioning", endurance:"Endurance", mixed:"Mixed" };
+// Two different things are called "category" in this system, so both are named
+// explicitly: a CLASS category (what kind of session this is, from classCategory)
+// and a MOVEMENT category (what kind of movement this is, from the §9.2 taxonomy).
+const CLASS_CATEGORY_LABEL = { strength:"Strength", conditioning:"Conditioning", endurance:"Endurance", mixed:"Mixed" };
 function planToStages(plan) {
   const blocks = plan?.blocks || [];
   return blocks.map(b => {
@@ -7272,6 +7276,9 @@ function planToStages(plan) {
 const P_CARD = { background:"var(--card)", border:"1px solid var(--border)", borderRadius:"12px" };
 const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)", borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
 const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Superset", circuit:"Circuit", finisher:"Finisher", recovery:"Recovery", cooldown:"Cool-down" };
+// Movement categories (§9.2). Same rule as ROLE_LABEL: the internal key never
+// reaches a coach's eyes, only the plain word for the thing.
+const MOVEMENT_CATEGORY_LABEL = { warmup:"Warm-up", mobility:"Mobility", strength:"Strength", conditioning:"Conditioning", hyrox:"Hyrox", core:"Core", cooldown:"Cool-down" };
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
 // persona_plans.source is a constrained enum (google_slides | manual | jungle) —
 // readable labels so the plan list doesn't show raw database values.
@@ -8281,7 +8288,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
                         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
-                        <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CATEGORY_LABEL[category]}</Tag>
+                        <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
                         <span style={{fontSize:"11px",color:"var(--muted)"}}>→ builds as <b style={{color:"var(--text)"}}>{WORKOUT_LIBRARY[builderClass]?.label||builderClass}</b></span>
                       </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
@@ -8415,24 +8422,35 @@ const CATALOG_EQUIP = ["barbell","dumbbell","kettlebell","bodyweight","band","ma
 // because it grounds generation.
 function MovementCatalog({ movements, classType, onChange, onDelete }) {
   const [editId, setEditId] = useState(null);
-  const [draft, setDraft] = useState({ name:"", equip:"", aliases:"", notes:"" });
+  const [draft, setDraft] = useState({ name:"", equip:"", aliases:"", notes:"", category:"" });
   const [q, setQ] = useState("");
   if (!movements.length) return <p style={{fontSize:"13px",color:"var(--muted)"}}>No movements catalogued for {classType} yet — they populate from this class type's plans.</p>;
-  const start = m => { setEditId(m.id); setDraft({ name:m.name, equip:m.equip||"", aliases:(m.aliases||[]).join(", "), notes:m.meta?.notes||"" }); };
+  const start = m => { setEditId(m.id); setDraft({ name:m.name, equip:m.equip||"", aliases:(m.aliases||[]).join(", "), notes:m.meta?.notes||"", category:categoryOf(m) }); };
   const save = m => {
     const name = draft.name.trim() || m.name;
     const aliases = draft.aliases.split(",").map(s=>s.trim()).filter(Boolean);
     if (name.toLowerCase() !== m.name.toLowerCase() && !aliases.some(a=>a.toLowerCase()===m.name.toLowerCase())) aliases.push(m.name);
-    onChange({ ...m, name, equip:draft.equip.trim(), aliases, meta:{ ...(m.meta||{}), notes:draft.notes.trim() } });
+    // The category the coach picked is stored as an OVERRIDE in meta, never in
+    // the derived `category` field — so re-aggregation refreshes the derivation
+    // without ever overwriting their decision. Picking the value the rules
+    // already derived is not an override, so it is not recorded as one; that
+    // keeps the row free to improve as the rules do.
+    const picked = draft.category.trim();
+    const meta = { ...(m.meta||{}), notes:draft.notes.trim() };
+    if (picked && picked !== m.category) meta.category = picked; else delete meta.category;
+    onChange({ ...m, name, equip:draft.equip.trim(), aliases, meta });
     setEditId(null);
   };
   const needle = q.trim().toLowerCase();
-  const filtered = needle ? movements.filter(m => (`${m.name} ${(m.aliases||[]).join(" ")} ${m.equip||""}`).toLowerCase().includes(needle)) : movements;
+  const filtered = needle ? movements.filter(m => {
+    const cat = categoryOf(m);
+    return (`${m.name} ${(m.aliases||[]).join(" ")} ${m.equip||""} ${cat} ${MOVEMENT_CATEGORY_LABEL[cat]||""}`).toLowerCase().includes(needle);
+  }) : movements;
   return (
     <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
       {movements.length > 5 && (
         <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
-          <Input value={q} onChange={e=>setQ(e.target.value)} placeholder={`Filter ${movements.length} movements — name, alias or equipment`} style={{flex:1}}/>
+          <Input value={q} onChange={e=>setQ(e.target.value)} placeholder={`Filter ${movements.length} movements — name, alias, equipment or kind`} style={{flex:1}}/>
           {needle && <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0,whiteSpace:"nowrap"}}>{filtered.length} of {movements.length}</span>}
         </div>
       )}
@@ -8448,6 +8466,12 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
               <button key={eq} onClick={()=>setDraft(d=>({...d,equip:on?"":eq}))} style={{padding:"3px 9px",borderRadius:"12px",border:`1px solid ${on?"var(--accent)":"var(--border)"}`,background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--muted)",fontSize:"11px",fontWeight:"600",cursor:"pointer",textTransform:"capitalize"}}>{eq}</button>
             );})}
           </div>
+          <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"5px"}}>What kind of movement is this?</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"8px"}}>
+            {CATEGORIES.map(c => { const on = draft.category===c; return (
+              <button key={c} onClick={()=>setDraft(d=>({...d,category:on?"":c}))} style={{padding:"3px 9px",borderRadius:"12px",border:`1px solid ${on?"var(--accent)":"var(--border)"}`,background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--muted)",fontSize:"11px",fontWeight:"600",cursor:"pointer"}}>{MOVEMENT_CATEGORY_LABEL[c]}</button>
+            );})}
+          </div>
           <Input value={draft.aliases} onChange={e=>setDraft(d=>({...d,aliases:e.target.value}))} placeholder="Aliases (comma-separated)" style={{marginBottom:"8px"}}/>
           <Input value={draft.notes} onChange={e=>setDraft(d=>({...d,notes:e.target.value}))} placeholder="Notes / cue" style={{marginBottom:"10px"}}/>
           <div style={{display:"flex",gap:"8px"}}><Btn onClick={()=>save(m)}><Check size={13}/> Save</Btn><Btn variant="ghost" onClick={()=>setEditId(null)}>Cancel</Btn></div>
@@ -8455,7 +8479,10 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
       ) : (
         <div key={m.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderTop:"1px solid var(--border)"}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}{m.equip ? <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span> : <span style={{fontSize:"10px",fontWeight:"600",color:"#E0B85B",marginLeft:"8px"}}>needs equipment</span>}</div>
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}{m.equip ? <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span> : <span style={{fontSize:"10px",fontWeight:"600",color:"#E0B85B",marginLeft:"8px"}}>needs equipment</span>}
+              {/* Same amber flag as missing equipment: a blank category is an honest
+                  gap the coach can close in one tap, not a wrong guess to discover later. */}
+              {categoryOf(m) ? <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{MOVEMENT_CATEGORY_LABEL[categoryOf(m)]}</span> : <span style={{fontSize:"10px",fontWeight:"600",color:"#E0B85B",marginLeft:"8px"}}>needs category</span>}</div>
             <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
               {(m.classTypes?.[classType]||0)}× in {classType}
               {fmtScheme(m.commonScheme) && <span> · {fmtScheme(m.commonScheme)}</span>}

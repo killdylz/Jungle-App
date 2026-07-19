@@ -696,6 +696,32 @@ LLM fallback for genuinely unknown names, **batched into one call**. As with equ
 honest blank must beat a confident wrong guess: the catalog already surfaces "needs equipment"
 and should surface "needs category" the same way.
 
+#### Status â€” âœ… layers 1 and 2 built (`src/lib/movementTaxonomy.js`)
+
+Deterministic classifier + coach override shipped. The **LLM fallback is deliberately not
+built**: it is only worth batching once a real corpus of blanks exists to batch, and the
+catalog now surfaces every blank as `needs category` so those blanks are visible rather than
+guessed at.
+
+Four things worth carrying forward, all of them corrections to the prose above:
+
+- **`categoryOf()` re-derives at read time; it does not trust the stored `category`.** A
+  catalog is only re-aggregated when a persona's *plans* change, so a persisted category is a
+  snapshot that goes stale the moment the rules improve â€” an existing coach would never see the
+  improvement. Found by driving the UI, not by unit tests: `Hanging Knee Raise` stayed
+  `strength` across reloads after the rules were corrected to `core`.
+- **The coach's override lives in `persona_movements.meta.category`, not a column.** `meta` is
+  unconstrained jsonb and already syncs, so this needed no migration and carries no
+  CHECK-constraint risk. Derivation refreshes freely underneath it and can never overwrite it.
+- **Three of the eight Hyrox stations are deliberately NOT tagged `hyrox`.** Being a station is
+  not the same as being diagnostic of the format: Row, Run and Wall Balls are everyday
+  conditioning in every gym that has never heard of Hyrox, so tagging them would mislabel most
+  GC circuits in the corpus. `HYROX_STATIONS` remains the complete eight for the blueprint
+  preset; the classifier rules cover only the distinctive five.
+- **The eight stations, corrected.** The prose above lists `run` as a station and omits Wall
+  Balls. The race is 8 Ã— 1km run *between* eight stations â€” the run is connective tissue, not a
+  station â€” and the eighth station is Wall Balls.
+
 **What it unlocks:** blueprint slot filters; a much sharper `classCategory`; and "no ergs in a
 strength block" enforced **structurally** rather than by asking a model nicely in a prompt.
 
@@ -769,7 +795,7 @@ _Added 2026-07-19, consolidating Â§7b and Â§7c with the new work above._
 ### Now â€” persona depth (Â§9)
 | # | Item |
 |---|---|
-| D1 | **Movement taxonomy** â€” deterministic classifier + catalog override + batched LLM fallback |
+| D1 | **Movement taxonomy** â€” âœ… deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch) |
 | D2 | **Class Blueprints** â€” derive, present, edit, drive generation, feed the parser |
 | D3 | **Blueprint presets** â€” Strength / Circuit / Endurance-Hyrox, for cold start |
 | D4 | **Generation presets** â€” pick a blueprint and a preset, never type a prompt |
@@ -816,10 +842,11 @@ In addition to Â§8, which stands:
 7. **Blueprint vs. corpus authority.** When a coach edits a blueprint and their next imported
    deck contradicts it, which wins? Proposed: the edit always wins and the contradiction is
    surfaced, never silently reconciled â€” but this is a product judgement, not a technical one.
-8. **Is `hyrox` a movement category or a class type?** It is being modelled as a category so
-   slot filters can request it, but Hyrox is also a whole format with a fixed 8-station
-   structure â€” which would make it a blueprint preset instead. Possibly both; worth settling
-   before the taxonomy hardens.
+8. ~~**Is `hyrox` a movement category or a class type?**~~ **Settled 2026-07-19 (Dylan): both,
+   in sequence.** `hyrox` ships as a movement category so slot filters can request it, and the
+   eight stations live in one exported `HYROX_STATIONS` constant so the future blueprint preset
+   reuses that list rather than redefining it. Note the refinement the build forced: only the
+   five *distinctive* stations classify as `hyrox` â€” see Â§9.2 Status.
 9. **Does the member app need to exist before a store presence is worth anything?** Â§10 assumes
    yes (Capacitor waits for N4). If the coach-facing PWA is enough to sell, the order changes.
 10. **BLE heart-rate is the one thing that could force a native rewrite (N7).** Should that be
