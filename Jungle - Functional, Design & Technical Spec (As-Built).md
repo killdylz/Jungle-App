@@ -1,10 +1,18 @@
 # Jungle — Functional, Design & Technical Specification (As-Built)
 
-**Status:** Living document · **Last verified against the codebase:** 2026-07-18 (`main` = `0a05d27`)
+**Status:** Living document · **Last verified against the codebase:** 2026-07-19 (`main` = `73068dc`)
 
 **Contents:** §1 where we are · §2 Functional (F1–F6) · §3 Design (P1–P7) · §4 Technical
-(incl. **§4.3.1 why extraction uses an LLM, and why it mostly shouldn't**) · §5 deprecations ·
-§6 N1–N12 · §7 next moves · **§7b infra backlog** · **§7c feature backlog** · §8 open questions
+(incl. **§4.3.1 why extraction uses an LLM and why it mostly shouldn't**, **§4.3.2 how the
+parser works**) · §5 deprecations · §6 N1–N12 · §7 next moves · **§7b infra backlog** ·
+**§7c feature backlog** · §8 open questions · **§9 persona depth — the main build ahead** ·
+**§10 platform strategy (web/desktop/mobile)** · **§11 UI language** ·
+**§12 full feature backlog** · **§13 open questions for the Fable review**
+
+> **The one-line frame for everything below:** Jungle is an **experience layer**. Every item is
+> judged by whether it makes life better for the **trainer**, the **gym owner** or the **member**.
+> A feature that improves none of those three lives is theatre — and this codebase has a
+> documented history of deleting theatre rather than shipping it (`cb6e77f`).
 **Companion to:** `Jungle - Stress-Test Verdict & Architecture Spec (Fable).md` (2026-07-11, Fable)
 
 ---
@@ -612,3 +620,212 @@ These are the decisions this document cannot settle from the code alone.
 domains from `src/lib/store.js`, and deprecation items confirmed by line reference in
 `src/App.jsx`. Where something is marked coded-but-unproven (Realtime cross-device, display
 offline cache), that distinction is deliberate.*
+
+---
+
+## 9. Persona depth â€” the main build ahead
+
+_Added 2026-07-19. This section is the design brief for the next phase of Workstream D._
+
+The persona system can currently **read** a coach's history and **imitate** it. What it cannot
+do is let a coach *hold their format in their hands and change it*. That is the difference
+between a clever import tool and the thing a trainer actually wants â€” and it is the gap this
+section exists to close.
+
+### 9.1 Class Blueprints â€” structure recommended, then editable
+
+**The problem.** A plan today is a flat list of blocks whose structure is whatever extraction
+happened to produce. Generation mimics "typical structure" statistically. Nowhere can a coach
+say *"my circuit class is a warm-up and two circuits, in that order"* â€” even though that
+sentence is the most stable, most valuable thing they know about their own programming.
+
+**The object.** A `Blueprint` belongs to a coach Ã— class type and is an ordered list of slots:
+
+> **Garage Circuit** â€” `C1 = Warm-up` Â· `C2 = Circuit 1` Â· `C3 = Circuit 2`
+
+```
+Blueprint {
+  id, personaId, classType, name,
+  source: "recommended" | "edited",     // never silently overwrite an edited one
+  slots: [
+    { key:"C1", label:"Warm-up",   role:"warmup",  minutes:8,  movementCount:4,
+      schemeDefault:{ type:"rounds", sets:2 }, categories:["warmup","mobility"] },
+    { key:"C2", label:"Circuit 1", role:"circuit", minutes:12, movementCount:5,
+      schemeDefault:{ type:"amrap" },          categories:["conditioning","hyrox"] },
+    { key:"C3", label:"Circuit 2", role:"circuit", minutes:12, movementCount:5,
+      schemeDefault:{ type:"amrap" },          categories:["conditioning","hyrox"] },
+  ]
+}
+```
+
+**Four things it must do.**
+
+| Requirement | Why it matters |
+|---|---|
+| **Recommended, then editable** â€” derived from the coach's own corpus (labels, order, roles, durations) and offered as a starting point they can rename, reorder, add to, delete from | A fixed pipeline is a worse product than no pipeline. The coach's judgement is the asset; the derivation is a convenience, not an authority. `source:"edited"` must never be silently regenerated over. |
+| **Presets for cold start** â€” ship house blueprints (Strength, Circuit, Endurance/Hyrox) | A coach with no corpus currently faces an empty screen, which is exactly when they decide whether this product is for them. |
+| **Drives generation** â€” pick blueprint, fill each slot from the coach's catalog by category, coach approves | Structure is fixed by a human; the model only chooses movements within it. Vastly more controllable, and more trustworthy, than "the AI wrote you a class". |
+| **Drives parsing** â€” a blueprint tells the parser that for *this* coach `C1` is a warm-up | This is precisely the ambiguity Â§4.3.2 had to disambiguate heuristically (S360's `A1/A2` pair vs GC's `C1/C2/C3` sequence). A blueprint answers it outright, and is the natural successor to the per-coach hints already shipped. |
+
+### 9.2 Movement taxonomy â€” the parser must know what KIND of thing it is reading
+
+The parser recognises **structure** but not **meaning**. It cannot currently tell a warm-up
+movement from a strength lift from a Hyrox station, which is why blueprint slot filters,
+accurate `classCategory`, and structural category discipline are all impossible today.
+
+**Categories:**
+
+| Category | Examples |
+|---|---|
+| `warmup` / `mobility` | band pull apart, scap push-up, world's greatest stretch |
+| `strength` | back squat, bench press, deadlift, overhead press |
+| `conditioning` | burpee, wall ball, box jump, KB swing, thruster |
+| `hyrox` | sled push, sled pull, farmers carry, sandbag lunge, ski erg, row, run, burpee broad jump â€” a **defined 8-station format**, so this set is enumerable rather than fuzzy |
+| `core` | plank, hollow hold, pallof press |
+| `cooldown` | stretching, breathing |
+
+**And, distinctly, what is NOT a movement.** The parser must keep separating movement text from
+modifiers â€” rest wording (`rest 90s`, `walk-back recovery`), intensity markers (`RIR 2`,
+`RPE 7-8`, `%1RM`, tempo `31X1`) and structural cues (`3 rounds`, `go to B after`,
+`1st set as primer`). It already does this well (see `foldScheme` / `stripSchemeTokens` /
+`isBareRoleWord`); **the gap is movement to category, not modifier stripping.**
+
+**How to build it:** deterministic classifier (name + equipment rules, the same ordered-rules
+pattern as `inferEquip`), then a **coach-editable override in the movement catalog**, then an
+LLM fallback for genuinely unknown names, **batched into one call**. As with equipment, an
+honest blank must beat a confident wrong guess: the catalog already surfaces "needs equipment"
+and should surface "needs category" the same way.
+
+**What it unlocks:** blueprint slot filters; a much sharper `classCategory`; and "no ergs in a
+strength block" enforced **structurally** rather than by asking a model nicely in a prompt.
+
+### 9.3 The LLM's proper job
+
+The division of labour this whole workstream has been converging on:
+
+| The model SHOULD | The model SHOULD NOT |
+|---|---|
+| Classify movements it has never seen (batched, cheap) | Decide the structure of a class |
+| Suggest a blueprint for a coach with no corpus | Decide who is at risk (already correct â€” N3 is arithmetic) |
+| Draft a class **within a blueprint the coach fixed** | Invent structure the coach did not ask for |
+| Explain a flag, draft a win-back message, narrate | Be the steady-state engine for anything deterministic |
+
+**Preset configuration should be explicit and visible.** A coach picks a blueprint and a
+generation preset; they do not type a prompt. Prompt-writing is a developer's interface, and
+asking a trainer to do it is the same category of error as showing them a confidence percentage.
+
+---
+
+## 10. Platform strategy â€” web, desktop, mobile
+
+_Added 2026-07-19._ The recommendation is deliberately boring, because the boring option is
+nearly free and solves an outstanding spec requirement as a side effect.
+
+| Step | What | Why this order |
+|---|---|---|
+| **1. PWA** | Manifest + service worker on the existing build | Installable on iOS, Android **and** desktop with no store review; and the service worker delivers the **offline display cache the spec already demands** (P7 / I11 â€” *"survives Wi-Fi loss for a full class"* is currently an untested assumption, and a room TV on gym Wi-Fi is the exact case). Highest value per unit of work by a wide margin. |
+| **2. Capacitor** | Wrap the *same* build for the App Store / Play Store | Reuses essentially all the code. Worth doing once there is a **member-facing** surface worth installing â€” i.e. after **N4** (magic-link member view). Shipping a store app whose only users are staff is effort with no audience. |
+| **3. Tauri (not Electron)** | Desktop app for reception / studio TV | Far smaller than Electron. Honestly, the PWA probably covers this â€” do not build it speculatively. |
+| **4. React Native** | Full native | **This is a rewrite.** Only justified if BLE heart-rate (N7) genuinely demands native access. That is the one real forcing function and should be settled *before* anyone commits to a mobile direction. |
+
+**Surface-by-surface, what each device is actually for** â€” worth stating, because "mobile app"
+means three different things here:
+
+- **Coach's phone** â€” the runner and check-in. Needs offline (P7) and speed (P6). PWA covers it.
+- **Room TV / desktop** â€” the display. Needs offline, large type, and to never show browser
+  chrome. PWA in fullscreen covers it; a Tauri shell is a nicety.
+- **Member's phone** â€” QR self-check-in and the magic-link summary (N4). This is the one that
+  eventually wants a store presence, and the one **still blocked on the QR Edge Function**.
+
+---
+
+## 11. UI language â€” take the implementation out of the coach's way
+
+_Added 2026-07-19._ Jungle is an experience layer. Every leaked implementation term is a small
+failure of that promise, and they have accumulated. **Currently in the code:**
+
+| Shown to a coach today | The problem |
+|---|---|
+| `"Add to corpus"`, `"Paste JSON"`, `"Extract & add"`, `"Extracted:"` | Names the mechanism, not the outcome |
+| `"Each deck is read via the Google Slides API (read-only) and extracted by persona-ai into blocks, schemes and movements."` | Three implementation nouns and a service name in one sentence |
+| `"the built-in parser only understood 53% of that text and the persona-ai fallback isn't available"` | A confidence percentage and two internal components |
+| `"Not valid JSON â€” paste an extraction object like { blocks: [ ... ] }"` | Asks a trainer to write JSON |
+| `"Edge Function returned a non-2xx status code"`, `"no blocks came back"` | Says what failed internally, not what to do |
+| `"New persona"` / `"Coach Personas"` | Even the feature name is jargon |
+
+**The rule: name the outcome, not the mechanism.** "Add to corpus" becomes *"Save this class"*.
+"Extract & add" becomes *"Read this class"*. Confidence scores, parsers, functions, blocks,
+schemes and JSON should never reach a coach's eyes. Errors should say what to **do**.
+
+`ROLE_LABEL` in `App.jsx` is the pattern to copy â€” it already maps `primary_lift` to
+"Primary lift" so the raw enum never surfaces. Extend that discipline to every string.
+
+---
+
+## 12. Feature backlog â€” the full remaining picture
+
+_Added 2026-07-19, consolidating Â§7b and Â§7c with the new work above._
+
+### Now â€” persona depth (Â§9)
+| # | Item |
+|---|---|
+| D1 | **Movement taxonomy** â€” deterministic classifier + catalog override + batched LLM fallback |
+| D2 | **Class Blueprints** â€” derive, present, edit, drive generation, feed the parser |
+| D3 | **Blueprint presets** â€” Strength / Circuit / Endurance-Hyrox, for cold start |
+| D4 | **Generation presets** â€” pick a blueprint and a preset, never type a prompt |
+
+### Now â€” finishing what is half-built
+| # | Item |
+|---|---|
+| N3-UI | At-risk list + per-flag "why" + **dismiss/acted state** (without it A3 is unmeasurable). Engine shipped `73068dc`, no surface yet |
+| U1 | **UI language pass** (Â§11) |
+| M1 | **Members CRUD** â€” `RosterScreen` reads but cannot edit; no status, no joined date |
+| I5 | **RLS tests for `0001`-`0006`** (only `0007` is covered) |
+
+### Next â€” platform + reach (Â§10)
+| # | Item |
+|---|---|
+| P1 | **PWA** â€” manifest + service worker; closes I11/P7 |
+| N4 | **Member magic-link summary** â€” the only member-facing surface, and the only place F6's white-label premium (A2) can be tested on a member |
+| F4-QR | **QR self-check-in Edge Function** â€” service-role write path. **Blocked on a hand-deploy.** Do not loosen RLS to `anon` |
+| P2 | **Capacitor** wrap, once N4 exists |
+
+### Then â€” the outcome tier
+| # | Item |
+|---|---|
+| N2 | 90-day cohort curve + benchmark overlay + revenue-at-risk |
+| N3-LLM | Win-back message drafting (model drafts; rules decide) |
+| F1 | Session primitive (`sessions`, `session_assignments`, XOR) â€” **no 1:1/PT path exists at all**, so P5 is unreachable |
+| PAR-Q | Must land in the same change that introduces individualised load |
+
+### Structural debt (unchanged, still real)
+`I6` screens split (`App.jsx` ~8,600 lines) Â· `I7` music quarantine Â· `I8` three client-side
+third-party accesses Â· `I9` code splitting (~630 KB, no `React.lazy`) Â· `I10` delta writes Â·
+`I13` background retry Â· `I14` hydrate pagination Â· `I15` persona LLM quality ceiling
+
+### Deferred
+N6 soundtrack routing Â· tempo-guide extensions Â· N7-N11 (BLE HR, aggregator, Strava, Garmin,
+iOS) â€” correctly gated behind the consent foundation Â· N12 coach self-serve tier
+
+---
+
+## 13. Open questions for the Fable review (2026-07-19)
+
+In addition to Â§8, which stands:
+
+7. **Blueprint vs. corpus authority.** When a coach edits a blueprint and their next imported
+   deck contradicts it, which wins? Proposed: the edit always wins and the contradiction is
+   surfaced, never silently reconciled â€” but this is a product judgement, not a technical one.
+8. **Is `hyrox` a movement category or a class type?** It is being modelled as a category so
+   slot filters can request it, but Hyrox is also a whole format with a fixed 8-station
+   structure â€” which would make it a blueprint preset instead. Possibly both; worth settling
+   before the taxonomy hardens.
+9. **Does the member app need to exist before a store presence is worth anything?** Â§10 assumes
+   yes (Capacitor waits for N4). If the coach-facing PWA is enough to sell, the order changes.
+10. **BLE heart-rate is the one thing that could force a native rewrite (N7).** Should that be
+    spiked cheaply *now* to de-risk the mobile direction, even though the feature itself is
+    correctly gated behind consent and sits in a much later phase?
+11. **How much structure should a preset impose on a brand-new coach?** A strong preset gets them
+    to value in one click but teaches them Jungle's opinion rather than capturing theirs â€” which
+    cuts against the entire persona thesis.
+

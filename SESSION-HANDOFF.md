@@ -1,8 +1,45 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-18 (session 3)_
+_Last updated: 2026-07-19 (end of session 3)_
 
-## 🟢 Shipped 2026-07-18 SESSION 3 — `63e0f2b` → `e992d42`, all CI-green
+> ### 👉 STARTING A NEW SESSION? Paste `NEXT-SESSION-PROMPT.md` as your opening message.
+> It is the cold-start brief: what Jungle is, what shipped, **the persona-depth build that is
+> next** (editable Class Blueprints + a movement taxonomy), the UI-language pass, the
+> desktop/mobile plan, and every gotcha. This file is the detailed history behind it.
+>
+> **The frame that governs every decision here:** Jungle is an **experience layer**. It is judged
+> by whether it improves the lives of **trainers**, **gym owners** and **members**. Anything that
+> improves none of those three is theatre, and gets deleted rather than shipped.
+
+## 🧭 WHERE THIS IS GOING NEXT (read before picking up work)
+
+Sessions 1–3 built the machinery: a deterministic parser, an attendance spine, sync guards, an
+error boundary, retention rules. **The next phase is about giving that machinery back to the
+coach as something they can hold and change.** Full design in as-built spec **§9**; the shape:
+
+1. **Class Blueprints (D2).** A coach's format should be a first-class, *editable* object —
+   `Garage Circuit = C1 Warm-up · C2 Circuit 1 · C3 Circuit 2` — **recommended from their own
+   corpus, then edited by them**, never a fixed pipeline. Blueprints then drive generation (fill
+   slots from their catalog) *and* parsing (the blueprint tells the parser that `C1` is a warm-up
+   for this coach — exactly the ambiguity §4.3.2 had to guess at).
+2. **Movement taxonomy (D1).** The parser reads structure but not meaning. It must tell a warm-up
+   movement from a strength lift from a conditioning move from a **Hyrox** station — and keep all
+   of those separate from modifiers (rest wording, RIR, RPE, tempo, "3 rounds"). Deterministic
+   classifier → coach-editable override → batched LLM fallback for unknowns.
+3. **The LLM's proper job.** Classify unknown movements, suggest a blueprint at cold start, draft
+   *within* a blueprint the coach fixed, explain and narrate. **Not** decide structure, and not
+   decide who is at risk. Presets are picked, not prompted.
+4. **Take the technical language out of the UI (U1, §11).** "Add to corpus", "Paste JSON",
+   "Extract & add", "the parser only understood 53%", "Edge Function returned a non-2xx status
+   code" — a coach is not a developer. Name the outcome, not the mechanism.
+5. **Desktop + mobile (§10).** PWA first (free, installable everywhere, and its service worker
+   closes the untested offline-display assumption P7/I11) → Capacitor for the stores once N4 gives
+   members a reason to install → Tauri only if a real desktop app is ever needed. React Native is
+   a rewrite and only BLE heart-rate (N7) could justify it.
+
+Full remaining feature list: spec **§12**. Fable review questions: **§13**.
+
+## 🟢 Shipped SESSION 3 — `63e0f2b` → `73068dc`, 12 commits, all CI-green
 
 Brief was: **build the parser first, LLM as fallback** — plus keep shipping from the
 backlog. Four commits, each verified in the dev server before pushing.
@@ -37,7 +74,7 @@ backlog. Four commits, each verified in the dev server before pushing.
    so `mockMembers` no longer gates a nav entry. Two-step by design: analysis writes
    nothing, because `attendance` is append-only and a half-applied import can't be undone.
 
-**Testing: 44 → 121 tests.** Every behaviour was mutation-checked (33 mutations, all
+**Testing: 44 → 164 tests.** Every behaviour was mutation-checked (~60 mutations, all
 verified to fail the suite). That process earned its keep three times:
 - One test was **vacuous** — the unparsed-line penalty could be deleted with the suite
   still green. Isolating it exposed a real bug (coverage double-counted exercise lines).
@@ -61,13 +98,28 @@ verified to fail the suite). That process earned its keep three times:
    in the coach's corpus. Hints only ever *recognise* more — never invent; the mutation
    run caught that this safety property was untested.
 
-**⭐ RECOMMENDED NEXT:**
-1. **N3 — at-risk detection.** Two SQL rules, arithmetic not AI. Unblocked the moment a
-   backfill lands real rows.
-2. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
-3. **Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date yet.
-4. **I9 — code splitting.** The bundle is now ~630 KB with no `React.lazy` anywhere, and
-   the room display loads on a TV over gym Wi-Fi.
+7. **N3 — at-risk detection rules engine** (`73068dc`). `src/lib/retention.js`. Two
+   transparent rules (**<4 visits in month one**, **14-day absence**) — **arithmetic, not
+   AI**, exactly as the spec insists: an operator must trust the rule enough to phone a
+   member about it, and a lawyer must be able to read it. Every flag carries the numbers
+   that produced it. **The failure it is built around:** a naive absence rule flags the
+   ENTIRE roster the moment a studio imports history, because a backfill is old by
+   definition — 400 false alarms on day one teaches the operator to ignore the screen, and
+   A3 ("do operators act on alerts?") gets answered by our bug instead of the market. So
+   absence is gated on the studio recording recently; if it isn't, that's reported as a
+   fact about the *data* ("alerts paused"), and `atRisk` is `null` — never `0`.
+   ⚠️ **Engine only — no UI yet.** That's the first thing to finish (N3-UI in §12).
+
+**⭐ RECOMMENDED NEXT** — see the top of this file and `NEXT-SESSION-PROMPT.md`:
+1. **D1 — movement taxonomy.** The foundation blueprints stand on; immediately improves
+   parsing and generation.
+2. **D2/D3 — Class Blueprints + presets.** The main build.
+3. **N3-UI** — at-risk list, per-flag "why", and **dismiss/acted state** (without it A3
+   stays unmeasurable). The engine is already in.
+4. **U1 — UI language pass** (spec §11).
+5. **P1 — PWA** manifest + service worker; closes I11/P7 as a side effect.
+6. **I5 — RLS tests for `0001`–`0006`** (only `0007` is covered).
+7. **M1 — Members CRUD** — `RosterScreen` reads but can't edit; no status or joined date.
 
 ⚠️ **The QR self-check-in gap is UNCHANGED** — still needs an Edge Function with the
 service-role key. Do not fix it by loosening `0007`'s policies to `anon`.
