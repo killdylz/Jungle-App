@@ -679,8 +679,8 @@ accurate `classCategory`, and structural category discipline are all impossible 
 |---|---|
 | `warmup` / `mobility` | band pull apart, scap push-up, world's greatest stretch |
 | `strength` | back squat, bench press, deadlift, overhead press |
-| `conditioning` | burpee, wall ball, box jump, KB swing, thruster |
-| `hyrox` | sled push, sled pull, farmers carry, sandbag lunge, ski erg, row, run, burpee broad jump â€” a **defined 8-station format**, so this set is enumerable rather than fuzzy |
+| `conditioning` | burpee, wall ball, box jump, KB swing, thruster â€” **and** the loaded carries: sled push, sled pull, farmers carry, sandbag lunge, ski erg |
+| ~~`hyrox`~~ | **Removed â€” see Â§13 Q8.** Hyrox is a format, not a movement property; a circuit class can contain Hyrox movements. The stations are `conditioning`; the format lives in the blueprint preset. |
 | `core` | plank, hollow hold, pallof press |
 | `cooldown` | stretching, breathing |
 
@@ -713,11 +713,18 @@ Four things worth carrying forward, all of them corrections to the prose above:
 - **The coach's override lives in `persona_movements.meta.category`, not a column.** `meta` is
   unconstrained jsonb and already syncs, so this needed no migration and carries no
   CHECK-constraint risk. Derivation refreshes freely underneath it and can never overwrite it.
-- **Three of the eight Hyrox stations are deliberately NOT tagged `hyrox`.** Being a station is
-  not the same as being diagnostic of the format: Row, Run and Wall Balls are everyday
-  conditioning in every gym that has never heard of Hyrox, so tagging them would mislabel most
-  GC circuits in the corpus. `HYROX_STATIONS` remains the complete eight for the blueprint
-  preset; the classifier rules cover only the distinctive five.
+- **There is no `hyrox` category.** The examples table above lists one; it was built that way
+  and then removed the same day on Dylan's call â€” *a circuit class can contain Hyrox
+  movements*, so the format must not be stamped onto the movement. The stations classify as
+  `conditioning`, and `HYROX_STATIONS` belongs to the blueprint preset. See Â§13 Q8 for the
+  full reasoning and the design smell that flagged it. **The live category set is the six in
+  `CATEGORIES`: `warmup`, `mobility`, `strength`, `conditioning`, `core`, `cooldown`.**
+- **Loaded carries need their own rule anyway**, one row above the strength rules: `Sandbag
+  Lunge` is otherwise eaten by the generic `lunge`, and `Sled Push` / `Farmers Carry` match
+  nothing in the general conditioning rule and come back blank.
+- **`categoryOf()` rejects an override outside `CATEGORIES`.** This is now load-bearing rather
+  than defensive: a catalog written by the earlier build can carry `meta.category = "hyrox"`,
+  and the guard makes those rows fall back to the derivation instead of poisoning slot filters.
 - **The eight stations, corrected.** The prose above lists `run` as a station and omits Wall
   Balls. The race is 8 Ã— 1km run *between* eight stations â€” the run is connective tissue, not a
   station â€” and the eighth station is Wall Balls.
@@ -842,11 +849,19 @@ In addition to Â§8, which stands:
 7. **Blueprint vs. corpus authority.** When a coach edits a blueprint and their next imported
    deck contradicts it, which wins? Proposed: the edit always wins and the contradiction is
    surfaced, never silently reconciled â€” but this is a product judgement, not a technical one.
-8. ~~**Is `hyrox` a movement category or a class type?**~~ **Settled 2026-07-19 (Dylan): both,
-   in sequence.** `hyrox` ships as a movement category so slot filters can request it, and the
-   eight stations live in one exported `HYROX_STATIONS` constant so the future blueprint preset
-   reuses that list rather than redefining it. Note the refinement the build forced: only the
-   five *distinctive* stations classify as `hyrox` â€” see Â§9.2 Status.
+8. ~~**Is `hyrox` a movement category or a class type?**~~ **Settled 2026-07-19 (Dylan):
+   NEITHER â€” Hyrox is a format, and there is no `hyrox` movement category.** The reasoning is
+   Dylan's and it is decisive: *a circuit class can contain Hyrox movements.* A sled push is a
+   loaded carry whoever is pushing it, so tagging the movement with the format would mislabel
+   every ordinary circuit class that happens to own a sled. The stations classify as
+   `conditioning` like anything else. `HYROX_STATIONS` survives as an exported list belonging
+   to the Hyrox **blueprint preset** (Â§9.1), which is where the format legitimately lives.
+
+   _(An earlier pass the same day shipped `hyrox` as a category and had already begun
+   contorting itself â€” only five of the eight stations were tagged, because Row, Run and Wall
+   Balls are obviously everyday conditioning. That carve-out was the design telling us the
+   category was wrong. Recorded because the smell is reusable: when a category needs
+   exceptions to avoid mislabelling ordinary cases, the category is the problem.)_
 9. **Does the member app need to exist before a store presence is worth anything?** Â§10 assumes
    yes (Capacitor waits for N4). If the coach-facing PWA is enough to sell, the order changes.
 10. **BLE heart-rate is the one thing that could force a native rewrite (N7).** Should that be

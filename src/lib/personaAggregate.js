@@ -102,7 +102,7 @@ export function classCategory(plans, classType) {
       // existing role/scheme verdicts stand unless the movements clearly differ.
       const cat = classifyMovement(ex.name, ex.equip);
       if (cat === "strength") strength += 1;
-      else if (cat === "conditioning" || cat === "hyrox") cond += 1;
+      else if (cat === "conditioning") cond += 1;
     });
   });
   if (Math.max(strength, cond, endur) === 0) return "mixed";

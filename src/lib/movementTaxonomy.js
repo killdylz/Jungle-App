@@ -18,13 +18,17 @@
 // bug is a constrained column rejecting a client value (three occurrences), so
 // nothing anywhere else may spell these strings inline — import CATEGORIES.
 // A unit test asserts these exact contents.
-export const CATEGORIES = ["warmup", "mobility", "strength", "conditioning", "hyrox", "core", "cooldown"];
+export const CATEGORIES = ["warmup", "mobility", "strength", "conditioning", "core", "cooldown"];
 
-// Hyrox is a DEFINED 8-station format, which is what makes it enumerable rather
-// than fuzzy — the one category that can be listed exhaustively. Exported on its
-// own so the Hyrox blueprint preset (§9.1) reuses this list instead of redefining
-// it and drifting. (§13 Q8 — modelled as a category so slot filters can request
-// it; that does not foreclose it also being a blueprint preset.)
+// Hyrox is a FORMAT, not a property of a movement (§13 Q8, settled 2026-07-19).
+// There is deliberately no `hyrox` category: a circuit class can use a sled or a
+// farmers carry without being Hyrox in any sense, so tagging the movement with
+// the format would mislabel every ordinary circuit that owns a sled. A sled push
+// is a loaded carry whoever is pushing it — it classifies as `conditioning`.
+//
+// The station list still matters, because the format is real; it just belongs to
+// the Hyrox blueprint PRESET (§9.1), not to the movement taxonomy. Exported here
+// so that preset reuses this list rather than redefining it and drifting.
 //
 // NOTE: §9.2's prose lists "run" as a station and omits Wall Balls. The actual
 // race is 8 × 1km run BETWEEN eight stations — the run is the connective tissue,
@@ -37,21 +41,20 @@ export const HYROX_STATIONS = [
 
 // ORDER IS LOAD-BEARING, exactly as in inferEquip's EQUIP_RULES — the more
 // specific claim must be tested before the more general one, or the general rule
-// eats it. "Sled Push" is a Hyrox station AND a pushing movement; "Burpee Broad
-// Jump" is a Hyrox station AND a burpee. Hyrox therefore goes first.
+// eats it.
 const CATEGORY_RULES = [
-  // ── Hyrox: only the DISTINCTIVELY Hyrox stations ───────────────────────────
-  // Three of the eight are deliberately absent, because being a station is not
-  // the same as being diagnostic of the format. Row, Run and Wall Balls are
-  // everyday conditioning in every gym that has never heard of Hyrox — §9.2's
-  // own examples table lists wall ball under `conditioning` — so tagging them
-  // `hyrox` would mislabel most GC circuits in the corpus. They fall through to
-  // conditioning; HYROX_STATIONS above stays the complete eight for the preset.
-  [/\b(?:sled\s*(?:push|pull|drag)|prowler\s*push)\b/i, "hyrox"],
-  [/\b(?:farmer'?s?\s*(?:carry|walk|hold)|suitcase\s*carry)\b/i, "hyrox"],
-  [/\bsandbag\s*(?:lunge|carry|clean)\b/i, "hyrox"],
-  [/\bburpee\s*broad\s*jump\b/i, "hyrox"],
-  [/\bski\s*erg\b|\bskierg\b/i, "hyrox"],
+  // ── Loaded carries and sled work → conditioning ────────────────────────────
+  // These are the movements a Hyrox class is built from, but they are NOT tagged
+  // with the format: a circuit class can own a sled without being Hyrox, and a
+  // farmers carry is a loaded carry whoever is carrying it. See HYROX_STATIONS.
+  //
+  // They need their own rule rather than falling through, for two reasons:
+  // "Sandbag Lunge" would otherwise be eaten by the generic `lunge` in the
+  // strength rule below, and "Sled Push" / "Farmers Carry" match nothing at all
+  // in the general conditioning rule and would come back blank.
+  [/\b(?:sled\s*(?:push|pull|drag)|prowler\s*push)\b/i, "conditioning"],
+  [/\b(?:farmer'?s?\s*(?:carry|walk|hold)|suitcase\s*carry|yoke\s*(?:carry|walk))\b/i, "conditioning"],
+  [/\bsandbag\s*(?:lunge|carry|clean|over\s*shoulder)\b/i, "conditioning"],
 
   // ── Cool-down / mobility: checked before strength, because "Couch Stretch"
   // and "Hamstring Floss" must not be read as leg work. ──────────────────────
@@ -101,7 +104,9 @@ const CATEGORY_RULES = [
   // NOT a catch-all — an unmatched name still returns "". Only names that are
   // positively conditioning land here.
   [/\b(?:burpee|box\s*jump|kb\s*swing|kettlebell\s*swing|swing|thruster|air\s*squat|wall\s*ball(?:s|\s*shots?)?|mountain\s*climber|jumping\s*jack|battle\s*rope|slam\s*ball|devil'?s\s*press|man\s*maker|bear\s*crawl|tuck\s*jump|high\s*knee|skater|double\s*unders?)\b/i, "conditioning"],
-  [/\b(?:erg|rower|rowing|assault\s*bike|echo\s*bike|air\s*bike|bike|treadmill|run(?:ning)?|jog|sprint|shuttle)\b/i, "conditioning"],
+  // `skierg` as one word is spelled out: the `\berg\b` alternative does not match
+  // inside it, and it is how coaches most often write the machine's name.
+  [/\b(?:erg|skierg|rower|rowing|assault\s*bike|echo\s*bike|air\s*bike|bike|treadmill|run(?:ning)?|jog|sprint|shuttle)\b/i, "conditioning"],
   // Bare "Row" is the erg — but ONLY when bare. It has to be anchored to the end
   // of the name (optionally trailed by "erg") or followed by a number, or it
   // swallows every unrecognised strength row: "Serpent Row Variation Two" came

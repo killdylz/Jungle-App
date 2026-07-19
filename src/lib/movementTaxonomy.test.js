@@ -12,7 +12,14 @@ describe("CATEGORIES", () => {
   // this repo's recurring data-loss bug (three occurrences). If this test fails,
   // every consumer of the set has to be checked before it is changed.
   it("is exactly the legal set, in order", () => {
-    expect(CATEGORIES).toEqual(["warmup", "mobility", "strength", "conditioning", "hyrox", "core", "cooldown"]);
+    expect(CATEGORIES).toEqual(["warmup", "mobility", "strength", "conditioning", "core", "cooldown"]);
+  });
+
+  it("has no `hyrox` category — Hyrox is a format, not a movement property", () => {
+    // A circuit class can own a sled without being Hyrox in any sense. Tagging
+    // the movement with the format would mislabel every ordinary circuit that
+    // uses one. The format lives in the blueprint preset (HYROX_STATIONS).
+    expect(CATEGORIES).not.toContain("hyrox");
   });
 
   it("only ever emits a category from the legal set", () => {
@@ -29,29 +36,24 @@ describe("HYROX_STATIONS", () => {
   });
 });
 
-describe("classifyMovement — hyrox", () => {
-  // The distinctively-Hyrox stations. Being a station is not the same as being
-  // diagnostic: Row, Run and Wall Balls are everyday conditioning and are
-  // deliberately NOT tagged hyrox (see the rules comment).
+describe("classifyMovement — loaded carries and sled work", () => {
+  // Every one of these is a Hyrox station, and every one classifies as plain
+  // conditioning. That is the point: the movement is what it is regardless of
+  // the format it appears in, and a circuit class that owns a sled is not Hyrox.
   it.each([
-    ["Sled Push", "hyrox"],
-    ["Sled Pull", "hyrox"],
-    ["Heavy Sled Drag", "hyrox"],
-    ["Farmers Carry", "hyrox"],
-    ["Farmer's Walk", "hyrox"],
-    ["Sandbag Lunge", "hyrox"],
-    ["Burpee Broad Jump", "hyrox"],
-    ["Ski Erg", "hyrox"],
-    ["SkiErg", "hyrox"],
-  ])("classifies %s as %s", (name, cat) => {
-    expect(classifyMovement(name)).toBe(cat);
+    "Sled Push", "Sled Pull", "Heavy Sled Drag", "Prowler Push",
+    "Farmers Carry", "Farmer's Walk", "Suitcase Carry",
+    "Sandbag Lunge", "Sandbag Carry",
+    "Burpee Broad Jump", "Ski Erg", "SkiErg",
+    "Wall Balls", "Row", "400m Run",
+  ])("classifies %s as conditioning", name => {
+    expect(classifyMovement(name)).toBe("conditioning");
   });
 
-  it("does NOT tag the everyday-conditioning stations as hyrox", () => {
-    // Tagging these hyrox would mislabel most GC circuits in the corpus.
-    expect(classifyMovement("Wall Balls")).toBe("conditioning");
-    expect(classifyMovement("Row")).toBe("conditioning");
-    expect(classifyMovement("400m Run")).toBe("conditioning");
+  it("never emits `hyrox` for any of the eight stations", () => {
+    // The regression guard for §13 Q8. HYROX_STATIONS exists for the blueprint
+    // preset; it must not leak back into the taxonomy as a category.
+    HYROX_STATIONS.forEach(s => expect(classifyMovement(s)).not.toBe("hyrox"));
   });
 });
 
@@ -105,17 +107,21 @@ describe("classifyMovement — ordering is load-bearing", () => {
   // Each of these is a name that matches TWO rules. The more specific one has to
   // win, and it only does because of rule order — the same trap EQUIP_RULES
   // documents at planParser.js:242.
-  it("reads Sled Push as hyrox, not a press", () => {
-    expect(classifyMovement("Sled Push")).toBe("hyrox");
+  it("reads Sandbag Lunge as conditioning, not a lunge", () => {
+    // The carry rules sit above the strength rule precisely for this: the
+    // generic `lunge` would otherwise claim it as leg strength.
+    expect(classifyMovement("Sandbag Lunge")).toBe("conditioning");
+    expect(classifyMovement("Walking Lunge")).toBe("strength");   // the general case still works
   });
 
-  it("reads Burpee Broad Jump as hyrox, not a burpee", () => {
-    expect(classifyMovement("Burpee Broad Jump")).toBe("hyrox");
-    expect(classifyMovement("Burpee")).toBe("conditioning");   // the general case still works
+  it("reads Sled Push as conditioning, not a press", () => {
+    expect(classifyMovement("Sled Push")).toBe("conditioning");
+    expect(classifyMovement("Bench Press")).toBe("strength");
   });
 
-  it("reads Sandbag Lunge as hyrox, not a lunge", () => {
-    expect(classifyMovement("Sandbag Lunge")).toBe("hyrox");
+  it("reads Burpee Broad Jump as conditioning, like a plain burpee", () => {
+    expect(classifyMovement("Burpee Broad Jump")).toBe("conditioning");
+    expect(classifyMovement("Burpee")).toBe("conditioning");
   });
 
   it("reads Pallof Press as core, not a press", () => {
@@ -150,8 +156,8 @@ describe("classifyMovement — ordering is load-bearing", () => {
     expect(classifyMovement("Row", "erg")).toBe("conditioning");
   });
 
-  it("reads Ski Erg as hyrox but a plain erg as conditioning", () => {
-    expect(classifyMovement("Ski Erg")).toBe("hyrox");
+  it("reads every erg variant as conditioning", () => {
+    expect(classifyMovement("Ski Erg")).toBe("conditioning");
     expect(classifyMovement("Assault Bike")).toBe("conditioning");
   });
 });
@@ -185,7 +191,7 @@ describe("classifyMovement — the honest blank", () => {
 describe("categoryOf", () => {
   it("prefers the coach's override over the derived value", () => {
     // The coach's judgement is the asset; derivation is a convenience.
-    expect(categoryOf({ name: "Row", category: "conditioning", meta: { category: "hyrox" } })).toBe("hyrox");
+    expect(categoryOf({ name: "Row", category: "conditioning", meta: { category: "strength" } })).toBe("strength");
   });
 
   it("falls back to the derived value when there is no override", () => {
@@ -207,8 +213,11 @@ describe("categoryOf", () => {
   });
 
   it("ignores an override that is not a legal category", () => {
-    // Guards against a stale or hand-edited meta blob poisoning slot filters.
+    // Guards against a stale or hand-edited meta blob poisoning slot filters —
+    // including `hyrox`, which WAS a legal category before §13 Q8 was settled,
+    // so a catalog written by the earlier build can still carry one.
     expect(categoryOf({ name: "Row", category: "conditioning", meta: { category: "cardio" } })).toBe("conditioning");
+    expect(categoryOf({ name: "Sled Push", category: "conditioning", meta: { category: "hyrox" } })).toBe("conditioning");
   });
 
   it("returns blank when nothing is known", () => {

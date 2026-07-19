@@ -80,13 +80,11 @@ describe("classCategory", () => {
     expect(classCategory([contentsLed], "H")).toBe("strength");
   });
 
-  it("scores hyrox stations as conditioning even in a strength-shaped block", () => {
-    // Discriminating for the `hyrox` arm specifically. Hyrox station work is
-    // often programmed like a lift — primary_lift role, sets/reps scheme — which
-    // votes strength 3 on container signals alone. Four loaded carries are still
-    // conditioning, and only the taxonomy knows that.
-    // Verified by mutation: dropping `hyrox` from the conditioning vote flips
-    // this to "strength".
+  it("scores loaded carries as conditioning even in a strength-shaped block", () => {
+    // Carry and sled work is often programmed like a lift — primary_lift role,
+    // sets/reps scheme — which votes strength 3 on container signals alone. Four
+    // loaded carries are still conditioning, and only the taxonomy knows that.
+    // Verified by mutation: removing the conditioning vote flips this to "strength".
     const hyroxy = { classType: "HX", plan: { blocks: [
       { role: "primary_lift", scheme: { type: "sets_reps" }, exercises: [
         { name: "Sled Push" }, { name: "Sled Pull" }, { name: "Farmers Carry" }, { name: "Sandbag Lunge" },
@@ -205,11 +203,11 @@ describe("aggregateMovements", () => {
     const plans = [{ classType: "GC", plan: { blocks: [
       { role: "circuit", scheme: {}, exercises: [{ name: "Row", equip: "erg" }] },
     ] } }];
-    const existing = [{ id: "m4", name: "Row", aliases: [], equip: "erg", meta: { category: "hyrox" } }];
+    const existing = [{ id: "m4", name: "Row", aliases: [], equip: "erg", meta: { category: "strength" } }];
     const row = aggregateMovements(plans, existing).find(m => m.name === "Row");
-    expect(row.meta.category).toBe("hyrox");        // override survives
+    expect(row.meta.category).toBe("strength");     // override survives
     expect(row.category).toBe("conditioning");      // derivation still refreshes
-    expect(categoryOf(row)).toBe("hyrox");          // and the override is what wins
+    expect(categoryOf(row)).toBe("strength");       // and the override is what wins
   });
 
   it("retains a row whose only edit is a category override", () => {

@@ -7278,7 +7278,7 @@ const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--na
 const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Superset", circuit:"Circuit", finisher:"Finisher", recovery:"Recovery", cooldown:"Cool-down" };
 // Movement categories (§9.2). Same rule as ROLE_LABEL: the internal key never
 // reaches a coach's eyes, only the plain word for the thing.
-const MOVEMENT_CATEGORY_LABEL = { warmup:"Warm-up", mobility:"Mobility", strength:"Strength", conditioning:"Conditioning", hyrox:"Hyrox", core:"Core", cooldown:"Cool-down" };
+const MOVEMENT_CATEGORY_LABEL = { warmup:"Warm-up", mobility:"Mobility", strength:"Strength", conditioning:"Conditioning", core:"Core", cooldown:"Cool-down" };
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
 // persona_plans.source is a constrained enum (google_slides | manual | jungle) —
 // readable labels so the plan list doesn't show raw database values.
