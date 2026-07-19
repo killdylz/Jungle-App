@@ -10,6 +10,7 @@ import { SEED_PERSONAS } from "./data/personas.seed.js";
 import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "./lib/movementTaxonomy.js";
+import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "./lib/blueprints.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
@@ -7816,6 +7817,36 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const ctMoves = movements.filter(m => m.personaId === selectedId && (m.classTypes?.[curCT] || 0) > 0);
   const extracted = selected?.styleProfile?.byClassType?.[curCT] || {};
   const countFor = id => plans.filter(pl => pl.personaId === id).length;
+
+  // ── Class shape (§9.1) — the coach's format as an editable object ──────────
+  // Derived from their own corpus, then reconciled with whatever they have
+  // edited. The edit ALWAYS wins; a divergence rides along as `contradiction`
+  // for the card to surface rather than resolve (§13 Q7).
+  const derivedBp = curCT ? deriveBlueprint(selPlans, curCT, ctMoves) : null;
+  const blueprint = curCT ? reconcileBlueprint(selected?.styleProfile?.blueprints?.[curCT] || null, derivedBp) : null;
+  const saveBlueprint = bp => {
+    if (!selectedId || !curCT) return;
+    // `contradiction` is a transient view concern computed on each reconcile —
+    // persisting it would freeze one moment's drift into the coach's own record.
+    const { contradiction: _drop, ...clean } = bp || {};
+    commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: {
+      ...(p.styleProfile || {}),
+      blueprints: { ...((p.styleProfile || {}).blueprints || {}), [curCT]: clean },
+    } } : p));
+  };
+  // Deterministic drafting from the coach's shape — no model involved. The
+  // structure is theirs, the movements are theirs, the selection is arithmetic
+  // (§9.3). Unlike generateForCT this works with Supabase off.
+  const draftFromShape = () => {
+    if (!blueprint) return;
+    const { blocks } = draftFromBlueprint(blueprint, ctMoves, { classType: curCT, recent: recentGens });
+    if (!blocks.length) return;
+    const label = `${curCT} — from your class shape`;
+    setGenerations(store.appendPersonaGeneration({ personaId: selectedId, classType: curCT, category,
+      title: label, focus: "", brief: {}, movements: blockMovementNames(blocks), plan: { blocks } }));
+    onDraftToBuilder(planToStages({ blocks }), label, builderClass);
+  };
+
   // Deterministic fallback: seed the Builder from the coach's most recent plan for
   // this class type. Used when the Edge Function is absent or errors.
   const draftFromRecent = () => { const src = ctPlans[0]; if (src) onDraftToBuilder(planToStages(src.plan), `${curCT} — draft`, builderClass); };
@@ -7840,7 +7871,11 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
           weekN: brief.weekN ? Number(brief.weekN) : undefined,
         },
         profile: prof,
-        catalog: ctMoves.map(m => ({ name: m.name, equip: m.equip || "", aliases: m.aliases || [] })),
+        // The coach's fixed structure (§9.3): the model fills slots, it does not
+        // decide the shape of the class. NOTE: unverified — the generate path
+        // needs persona-ai redeployed and cannot be exercised locally at all.
+        blueprint: blueprint ? { name: blueprint.name, slots: blueprint.slots } : undefined,
+        catalog: ctMoves.map(m => ({ name: m.name, equip: m.equip || "", category: categoryOf(m), aliases: m.aliases || [] })),
         examples: ctPlans.slice(0, 3).map(pl => ({ title: pl.title, focus: pl.focus || "", plan: pl.plan })),
         // Items 6–8: what's already been recommended to THIS coach for THIS class type,
         // so the model produces something meaningfully different.
@@ -8330,6 +8365,10 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                     )}
                   </div>
 
+                  {/* Class shape — the coach's format, editable (§9.1) */}
+                  <ClassShapeCard blueprint={blueprint} classType={curCT} onSave={saveBlueprint}
+                                  onDraft={draftFromShape} draftable={ctMoves.length > 0}/>
+
                   {/* Movement catalog */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Movements <span style={{color:"var(--text)"}}>· {ctMoves.length}</span>{(() => { const n = ctMoves.filter(m=>!(m.equip&&m.equip.trim())).length; return n>0 ? <span style={{color:"#E0B85B"}}> · {n} need equipment</span> : null; })()}</p>
@@ -8406,6 +8445,123 @@ function PersonaProfilePanel({ prof, extracted }) {
       ) : null}
       {!prof.structure?.length && !prof.schemes?.length && !extracted.conventions?.length && (
         <p style={{fontSize:"13px",color:"var(--muted)"}}>Add plans for {prof.classType} and the structure, schemes and defaults are learned automatically.</p>
+      )}
+    </div>
+  );
+}
+
+// ── Class shape (§9.1) ───────────────────────────────────────────────────────
+// A coach's format, held in their hands and changeable. Recommended from their
+// own corpus, then theirs — the derivation is a convenience, never an authority.
+//
+// Called "class shape" on screen, never "blueprint" (§11): the coach reads the
+// outcome, not the mechanism.
+const SLOT_ROLES = ["warmup", "primary_lift", "superset", "circuit", "finisher", "recovery", "cooldown"];
+const shapeChips = slots => (slots || []).map(s => s.label || s.key).join(" · ");
+
+function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable }) {
+  const [editing, setEditing] = useState(false);
+  const [rows, setRows] = useState([]);
+  const start = () => { setRows((blueprint?.slots || []).map(s => ({ ...s, categories: [...(s.categories || [])] }))); setEditing(true); };
+  const commit = () => {
+    const slots = rows.filter(r => (r.label || r.key || "").trim())
+                      .map(r => ({ ...r, key: (r.key || r.label || "").trim(), label: (r.label || r.key || "").trim() }));
+    if (!slots.length) return;
+    // Saving marks it `edited`, which is what permanently protects it from
+    // being regenerated over on the next recompute.
+    onSave({ classType, name: blueprint?.name || classType, source: "edited", slots });
+    setEditing(false);
+  };
+  const move = (i, d) => setRows(rs => { const n = [...rs]; const j = i + d; if (j < 0 || j >= n.length) return rs; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const patch = (i, k, v) => setRows(rs => rs.map((r, x) => x === i ? { ...r, [k]: v } : r));
+  const toggleCat = (i, c) => setRows(rs => rs.map((r, x) => x !== i ? r
+    : { ...r, categories: (r.categories || []).includes(c) ? r.categories.filter(y => y !== c) : [...(r.categories || []), c] }));
+
+  // Cold start: no corpus and nothing saved. Presets are PICKED, not prompted.
+  if (!blueprint && !editing) return (
+    <div style={{...P_CARD,padding:"18px 20px"}}>
+      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>{classType} — class shape</p>
+      <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"12px"}}>How this class is built, in order. Start from one of these and change anything — or add plans and it&rsquo;s worked out from them.</p>
+      <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+        {BLUEPRINT_PRESETS.map(p => (
+          <button key={p.name} onClick={()=>{ setRows(p.slots.map(s=>({...s,categories:[...s.categories]}))); setEditing(true); }}
+            style={{textAlign:"left",padding:"10px 12px",borderRadius:"10px",border:"1px solid var(--border)",background:"var(--navy)",cursor:"pointer",maxWidth:"260px"}}>
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>{p.name}</div>
+            <div style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.4"}}>{shapeChips(p.slots)}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{...P_CARD,padding:"18px 20px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"6px"}}>
+        <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{classType} — class shape</p>
+        {!editing && (
+          <div style={{display:"flex",gap:"8px"}}>
+            {draftable && <Btn variant="ghost" onClick={onDraft} style={{padding:"6px 12px"}}><Layers size={13}/> Draft from this shape</Btn>}
+            <Btn variant="ghost" onClick={start} style={{padding:"6px 12px"}}>Change</Btn>
+          </div>
+        )}
+      </div>
+
+      {!editing && (
+        <>
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"8px"}}>
+            {(blueprint.slots || []).map((s,i) => (
+              <span key={i} style={{...P_CHIP,background:"var(--navy)",color:"var(--text)",margin:0}}>{s.label || s.key}
+                <span style={{color:"var(--muted)",fontWeight:"600"}}> · {ROLE_LABEL[s.role]||s.role}</span></span>
+            ))}
+          </div>
+          {/* Honest provenance: say how much of their history this actually describes. */}
+          <p style={{fontSize:"11px",color:"var(--muted)"}}>
+            {blueprint.source === "edited" ? "Your shape — saved, and kept as you left it."
+              : blueprint.matched != null ? `Suggested from ${blueprint.matched} of your ${blueprint.total} ${classType} class${blueprint.total===1?"":"es"}. Change anything.`
+              : "A starting point. Change anything."}
+          </p>
+          {/* §13 Q7: the edit stands, the divergence is shown, nothing is auto-applied. */}
+          {blueprint.contradiction && (
+            <div style={{marginTop:"10px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #E0B85B",background:"color-mix(in srgb, #E0B85B 10%, transparent)"}}>
+              <p style={{fontSize:"12px",color:"var(--text)",fontWeight:"600",marginBottom:"3px"}}>Your recent classes have been running a different shape.</p>
+              <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>{shapeChips(blueprint.contradiction.slots)}</p>
+              <Btn variant="ghost" onClick={()=>onSave({ ...blueprint.contradiction, source:"edited" })} style={{padding:"4px 10px"}}>Use this instead</Btn>
+            </div>
+          )}
+        </>
+      )}
+
+      {editing && (
+        <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+          {rows.map((r,i) => (
+            <div key={i} style={{padding:"10px 12px",background:"var(--navy)",borderRadius:"10px"}}>
+              <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"8px"}}>
+                <Input value={r.label||""} onChange={e=>patch(i,"label",e.target.value)} placeholder="What this part is called" style={{flex:1}}/>
+                <button onClick={()=>move(i,-1)} title="Move up" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↑</button>
+                <button onClick={()=>move(i,1)} title="Move down" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↓</button>
+                <button onClick={()=>setRows(rs=>rs.filter((_,x)=>x!==i))} title="Remove" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px",marginBottom:"8px"}}>
+                <Select value={r.role||"circuit"} onChange={e=>patch(i,"role",e.target.value)}>
+                  {SLOT_ROLES.map(x => <option key={x} value={x}>{ROLE_LABEL[x]||x}</option>)}
+                </Select>
+                <Input type="number" value={r.minutes??""} onChange={e=>patch(i,"minutes",Number(e.target.value)||0)} placeholder="Minutes"/>
+                <Input type="number" value={r.movementCount??""} onChange={e=>patch(i,"movementCount",Number(e.target.value)||0)} placeholder="How many moves"/>
+              </div>
+              <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"5px"}}>What goes in here</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                {CATEGORIES.map(c => { const on = (r.categories||[]).includes(c); return (
+                  <button key={c} onClick={()=>toggleCat(i,c)} style={{padding:"3px 9px",borderRadius:"12px",border:`1px solid ${on?"var(--accent)":"var(--border)"}`,background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--muted)",fontSize:"11px",fontWeight:"600",cursor:"pointer"}}>{MOVEMENT_CATEGORY_LABEL[c]}</button>
+                );})}
+              </div>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            <Btn variant="ghost" onClick={()=>setRows(rs=>[...rs,{key:"",label:"",role:"circuit",minutes:10,movementCount:4,schemeDefault:"",categories:[]}])}><Plus size={13}/> Add a part</Btn>
+            <Btn onClick={commit}><Check size={13}/> Save shape</Btn>
+            <Btn variant="ghost" onClick={()=>setEditing(false)}>Cancel</Btn>
+          </div>
+        </div>
       )}
     </div>
   );

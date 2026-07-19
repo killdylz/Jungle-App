@@ -15,12 +15,15 @@ const ROLE_ORDER = ["warmup", "primary_lift", "superset", "circuit", "finisher",
 const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
 const classTypeOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 
-function mode(arr) {
+// Exported for blueprints.js, whose slot aggregation needs exactly these — the
+// modal role across plans, the median movement count. Same statistics, so they
+// stay in one place rather than drifting into a second copy.
+export function mode(arr) {
   const m = new Map(); let best, bestN = 0;
   arr.forEach(v => { if (v == null || v === "") return; const n = (m.get(v) || 0) + 1; m.set(v, n); if (n > bestN) { bestN = n; best = v; } });
   return best;
 }
-function median(arr) {
+export function median(arr) {
   const a = arr.filter(v => v != null).map(Number).filter(v => !Number.isNaN(v)).sort((x, y) => x - y);
   if (!a.length) return null;
   const mid = Math.floor(a.length / 2);

@@ -667,6 +667,45 @@ Blueprint {
 | **Drives generation** â€” pick blueprint, fill each slot from the coach's catalog by category, coach approves | Structure is fixed by a human; the model only chooses movements within it. Vastly more controllable, and more trustworthy, than "the AI wrote you a class". |
 | **Drives parsing** â€” a blueprint tells the parser that for *this* coach `C1` is a warm-up | This is precisely the ambiguity Â§4.3.2 had to disambiguate heuristically (S360's `A1/A2` pair vs GC's `C1/C2/C3` sequence). A blueprint answers it outright, and is the natural successor to the per-coach hints already shipped. |
 
+#### Status â€” âœ… derive + edit + deterministic drafting built (`src/lib/blueprints.js`)
+
+Stored at `coach_personas.style_profile.blueprints[classType]` â€” that jsonb column already
+existed and already synced, so this needed no migration. Called **"class shape"** on screen,
+never "blueprint" (Â§11).
+
+- **Derivation takes the MODAL SEQUENCE**, not a positional alignment. Plans differ in length
+  and in whether an optional block ran; aligning them invents correspondences that are not in
+  the data. The card states the honest number: *"Suggested from 6 of your 8 S360 classes."*
+- **A slot is named after what RECURS** â€” the key (`M1`), not the modal full label
+  (`M1 â€” Deadlift`). Naming it from the full label bakes one week's focus into the shape and
+  reads as a lie the week it is a squat. Found by driving the real corpus.
+- **A slot's categories are ordered by prevalence within that slot, and that order is
+  load-bearing.** A real warm-up contains the odd strength-ish movement, so the category set is
+  legitimately broad; the ordering is what stops broad becoming anything-goes. Drafting reads
+  it as priority and only reaches down the list to top up. Found by running it: the first draft
+  put a Conventional Deadlift in the warm-up.
+- **`minutes` is NOT derived.** Blocks carry no duration and only occasional prose in
+  `scheme.note` hints at one; parsing that would be a guess dressed as data. It starts from the
+  house `ROLE_DUR_SEC` map and is the coach's to set.
+- **Deterministic drafting** (`draftFromBlueprint`) fills each slot from the coach's own
+  catalog by category. No model: the structure is theirs, the movements are theirs, the
+  selection is arithmetic. This is Â§9.3 taken to its conclusion, and unlike the persona-ai path
+  it works with Supabase off â€” which is the only reason it could be verified at all.
+- **A slot the catalog cannot fill emits an EMPTY block**, and an uncategorised movement is
+  never drafted. Same rule as the taxonomy's blank: an honest gap the coach can see beats a
+  wrong movement they might not.
+
+**Not done, and worth being plain about:** the blueprint is passed to persona-ai's `generate`
+payload but **that path is unverified** â€” it needs the function redeployed and cannot be
+exercised locally. And Â§9.1's fourth requirement, **blueprint-driven PARSING** (telling the
+parser that for this coach `C1` is a warm-up), is not built.
+
+**Cold-start presets are narrower than Â§9.1 implies.** They appear when a class type exists but
+no shape can be derived from it â€” e.g. a pasted plan whose blocks carry no labels. A coach with
+*no plans at all* has no class type, so no card and no presets: Â§9.1's "empty screen" case is
+still open. Serving it properly means letting a coach name a class and choose its shape
+*before* importing anything, which is a persona-level surface that does not exist yet.
+
 ### 9.2 Movement taxonomy â€” the parser must know what KIND of thing it is reading
 
 The parser recognises **structure** but not **meaning**. It cannot currently tell a warm-up
@@ -803,8 +842,8 @@ _Added 2026-07-19, consolidating Â§7b and Â§7c with the new work above._
 | # | Item |
 |---|---|
 | D1 | **Movement taxonomy** â€” âœ… deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch) |
-| D2 | **Class Blueprints** â€” derive, present, edit, drive generation, feed the parser |
-| D3 | **Blueprint presets** â€” Strength / Circuit / Endurance-Hyrox, for cold start |
+| D2 | **Class Blueprints** â€” âœ… derive, present, edit **and drive deterministic drafting**. Still open: blueprint-driven **parsing**, and the persona-ai `generate` path is wired but **unverified** |
+| D3 | **Blueprint presets** â€” ðŸŸ¡ built and reachable when a class type yields no derivable shape; the true no-corpus cold start still needs a persona-level surface (Â§9.1 Status) |
 | D4 | **Generation presets** â€” pick a blueprint and a preset, never type a prompt |
 
 ### Now â€” finishing what is half-built
@@ -846,9 +885,11 @@ iOS) â€” correctly gated behind the consent foundation Â· N12 coach self-
 
 In addition to Â§8, which stands:
 
-7. **Blueprint vs. corpus authority.** When a coach edits a blueprint and their next imported
-   deck contradicts it, which wins? Proposed: the edit always wins and the contradiction is
-   surfaced, never silently reconciled â€” but this is a product judgement, not a technical one.
+7. ~~**Blueprint vs. corpus authority.**~~ **Settled 2026-07-19 (Dylan): the edit always wins,
+   and the contradiction is surfaced.** Built in `reconcileBlueprint` â€” an `edited` blueprint is
+   returned untouched and the freshly derived shape rides along as `contradiction` only when it
+   actually differs, so the card can say *"Your recent classes have been running a different
+   shape"* with a **Use this instead** action. Never auto-applied, never silently reconciled.
 8. ~~**Is `hyrox` a movement category or a class type?**~~ **Settled 2026-07-19 (Dylan):
    NEITHER â€” Hyrox is a format, and there is no `hyrox` movement category.** The reasoning is
    Dylan's and it is decisive: *a circuit class can contain Hyrox movements.* A sled push is a
