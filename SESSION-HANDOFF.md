@@ -1,6 +1,92 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-19 (end of session 4)_
+_Last updated: 2026-07-20 (end of session 5)_
+
+## 🟢 Shipped SESSION 5 — `1b18442` → `ee29861`, 6 commits, all gates green, **NOT PUSHED**
+
+Days 1–4 of `WEEK-PLAN.md`. App.jsx **9,463 → 8,650 lines**; 295 → **314 tests**; bundle
+665 KB → **598 KB**.
+
+| Commit | What |
+|---|---|
+| `a125536` | **Day 1 — cut & quarantine.** Deleted MemberScreen, IntegrationsScreen, DiscoverTab + the fake packs rail, BASE_SCHEDULE, and the b64 attendee route. Music quarantined behind `FLAGS.music=false`. White-label leaks fixed (footer, title, favicon, "Shoreditch"). Fantasy movements renamed. Templates + Glossary retired from nav. |
+| `5bb0392` | **Folds + a data-loss fix.** Templates → "Jungle presets" in the Builder picker; Glossary cues → Library rows. **The Builder's class was never persisted** — planned a class, closed the tab, lost it. `store.getDraftClass/saveDraftClass`. |
+| `262c83f` | **Day 2 — mobile.** Bottom tab bar below 900px (Run · Build · Members · Brand · More), bottom sheet, safe-area insets. |
+| `77cbb0b` | **Day 3 — PWA.** Self-hosted fonts (both CDN loaders gone), manifest, icons, hand-written service worker + build-time precache injection. |
+| `9a83cc5` | **Day 4a — U1 language pass.** Label maps extracted to `src/ui/labels.js` **with a test that enforces the no-jargon rule**. "Coaches" rename, `SCHEME_LABEL`, all error rewrites. |
+| `ee29861` | **Day 4b — D3 cold start.** A coach with zero classes can name a class type, pick a preset shape, and land in the Builder. |
+
+### ⚠️ Three things in the audit docs that were WRONG — corrected here
+
+1. **"4 commits unpushed" (SESSION-5-PROMPT ⛔ item 1, REGRESSION §3 item 1) was already false.**
+   `origin/main` equalled `1b18442` at the start of this session. Session 4 *was* deployed.
+   **Session 5's six commits are the ones now unpushed.**
+2. **AUDIT-FINDINGS 1.1's headline measurement does not reproduce.** It says the 238px sidebar
+   "stays a sticky 238px column — 63% of the screen" at 375px. It does not: `isMobile` was
+   `vw < 480`, so at 375px a hamburger drawer was already in play. The reading almost certainly
+   came from **resizing the window without reloading** — `useWindowWidth`'s listener did not
+   repaint that component, and the same stale render appeared here before reloading. The real gap
+   was the **480–900px band** (40% of a 600px screen, 31% of a 768px tablet) plus a top-left
+   hamburger being the wrong corner for a thumb. The prescribed fix was right; the number was not.
+3. **Retiring the Templates nav orphaned class export/import** — that screen was the only route to
+   either. Caught by re-reading the diff, fixed in `5bb0392` (now "Save to file" / "Open" in the
+   Builder). A worked example of the audit's own point that a fold is not the same as a deletion.
+
+### Defects found by driving the UI (again, none by unit tests)
+
+1. **The Builder's working class was never persisted.** Plan a class, reload, gone — behind a
+   Dashboard button offering to "Resume building" it. Every other domain already persisted.
+2. **`<AttendeeView/>` was referenced but never written.** Behind `FLAGS.attendeeShare=false`, so
+   it had never thrown — and the Room TV's "Attendee QR" pointed at that route, promising members
+   "scan to see today's session on your phone".
+3. **Service worker `res.clone()` was called after the body was read**, so the asset cache stayed
+   silently empty. Cloning must be synchronous.
+4. **`Vary: Origin` broke font caching.** Precache entries are stored from a request with no
+   `Origin`; the browser fetches `@font-face` in CORS mode *with* one, so every font missed the
+   cache. Offline the app rendered perfectly **in system sans** — the worst kind of half-working.
+   Fixed with `caches.match(..., { ignoreVary: true })`.
+5. **The Builder nav icon was `🏻`** — a lone skin-tone modifier, rendering as a bare colour
+   swatch reading "Builder".
+6. **D3's preset could be picked and then did nothing**, because drafting was gated on the
+   movement catalog, which is empty by definition for a new coach.
+
+### Still NOT done from WEEK-PLAN (in priority order)
+
+- **Playwright (Day 1b / REGRESSION §1)** — not started. Still the biggest gap in the safety net;
+  every defect above was found by hand.
+- **Day 5 — N4 magic-link member view + share card.** Not started. Needs the Edge Function Dylan
+  deploys, so it cannot be fully verified from here anyway.
+- **Day 6 — trust pass.** I5 RLS tests for 0001–0006, Sentry, UptimeRobot, `wa.me` win-back
+  drafts. Not started.
+- `SPEC-PATCHES.md` not yet applied to the as-built spec.
+- Room TV floor board still shows two "coming soon" panels (Benchmark, Output) to the room. Out of
+  scope for the music cut, but the same member-facing-absence problem — worth a decision.
+
+### Verified this session, in the running app
+
+PIN → Dashboard → Builder → preset → Runner → Room TV → Check-in, at 375 / 600 / 1280px, no
+console errors. **Offline proven with the preview server stopped**: app boots, both skin fonts
+report loaded, PIN unlocks, Runner renders, and a check-in for a new member writes to localStorage
+with `source='coach'`. The sync path is still not exercisable locally.
+
+### ⛔ Dylan queue, as of end of session 5 — supersedes the list in `SESSION-5-PROMPT.md`
+
+| # | Action | Note |
+|---|---|---|
+| 1 | **`git push`** — 6 commits sit local | Session 4's 4 commits were ALREADY pushed; the prompt's blocker was stale |
+| 2 | **Apply migration 0008** | Unchanged. Until then the at-risk action ledger is local-only and A3 stays unmeasurable |
+| 3 | **LIVE SYNC CHECK ×3** | Unchanged, still the most important. Has failed twice; stays manual until it passes 3× |
+| 4 | **Physical offline soak** — router off 5 min mid-class | **Now worth doing**: the PWA + self-hosted fonts landed, so this can pass for the first time. P7 flips to ✅ only after it does |
+| 5 | Cross-device Room TV **Follow** test | Unchanged, coded and never verified |
+| 6 | Redeploy `persona-ai` (v8) | Unchanged. Blocks verifying the blueprint→generate path |
+| 7 | Staging Supabase project + 0001–0008; prod → Pro | Unchanged |
+| 8 | Lawyer (IP letter + templates); gym pilot conversation | Unchanged, long-lead |
+
+**Install the PWA when you next open the live site** (Add to Home Screen on the phone, and on the
+room TV's browser) — that is the fastest way to sanity-check the manifest and icons on real
+hardware before the soak test.
+
+---
 
 ## 🟢 Shipped SESSION 4 — `fd75fb0` → `823a492`, 4 commits, all gates green, **NOT PUSHED**
 
