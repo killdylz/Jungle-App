@@ -10,10 +10,10 @@ _Last updated: 2026-07-20 (end of session 6)_
 > playwright install → test:e2e → build`, every step success. That was session 6's first
 > question and it needs no further attention.
 
-## 🟢 Shipped SESSION 6 — `f2990b6` → `dcef7ee`, 4 commits, all gates green, **NOT PUSHED**
+## 🟢 Shipped SESSION 6 — `f2990b6` → `df59547`, 6 commits, all gates green, **NOT PUSHED**
 
-**Gates: `lint:crash` 0 · 369 unit tests (was 348) · 21 e2e (was 20 + 1 `fixme`) · build 605 KB.**
-App.jsx **8,779 → 8,567** lines.
+**Gates: `lint:crash` 0 · 373 unit tests (was 348) · 30 e2e (was 20 + 1 `fixme`) · build 605 KB.**
+App.jsx **8,779 → 7,854** lines (−925).
 
 | Commit | What |
 |---|---|
@@ -21,6 +21,39 @@ App.jsx **8,779 → 8,567** lines.
 | `f3931ae` | **SPEC-PATCHES applied** (the last untouched WEEK-PLAN item) **+ 77 mojibake sequences repaired** in the as-built spec. |
 | `e95be19` | **Floor board cut** — both "coming soon" panels gone, **plus a real z-index defect the new test found.** |
 | `dcef7ee` | **Decomposition stage 1** — `src/lib/colors.js` extracted with 19 tests. |
+| `d6a99a7` | **Stage 2a** — `AdminTeamScreen` out, **plus a TEAM_ROLES guard** against the DB enum. |
+| `df59547` | **Stage 2** — Calendar + Roster out, **plus `e2e/screens.spec.js` closing a hole in the crash gate.** |
+
+### 🔴 READ THIS FIRST: `lint:crash` cannot see undefined JSX components
+
+**`no-undef` resolves plain identifiers but NOT JSX element names.** `const a = Foo` is caught;
+`<Foo/>` is not. Verified with a probe file containing both — only the first is reported.
+
+This is the `9f71f61` class of bug the gate was *built* for, in the one form it cannot see, and it
+bit during this session: `RosterScreen` was extracted missing five JSX imports, and `lint:crash`,
+373 unit tests and `vite build` were all green while the Members panel threw
+`ReferenceError: ArrowLeft is not defined` on open. The error boundary turned it into a calm
+"Something broke".
+
+**Two things follow, and the second is a decision for Dylan:**
+
+1. **A liveness check that does not name the error boundary will call a dead screen healthy.** An
+   earlier check in this same session recorded that broken screen as `rendered: true` — the
+   boundary renders, the root has children, and the word "Members" is in the sidebar. `e2e/screens.spec.js`
+   now asserts the boundary is *absent* on all nine screens, plus each screen's own content.
+2. **⛔ DECISION: add `eslint-plugin-react` for `react/jsx-no-undef`?** It is the only way to close
+   the gate itself, and it is a **new dev dependency**, so it was not taken unilaterally. The e2e
+   suite covers the same ground with existing tooling and is arguably the better guard (it asserts
+   the screen *renders*, not that its identifiers resolve) — but it only covers screens someone
+   remembered to list.
+
+### 🟠 A dormant instance of that bug already in the repo — NOT fixed
+
+**`<SpotifySearchModal/>` is used at `App.jsx:4353` and `:5018` and is defined nowhere.** It has
+never thrown only because both call sites sit behind `FLAGS.music`, which is false — *exactly* how
+`<AttendeeView/>` hid until session 5 found it. Left alone because music is explicitly out of scope,
+but it is real, and it is the second confirmed case of the JSX blind spot letting one through.
+Anyone flipping `FLAGS.music` should expect a white screen.
 
 ### The judgement call the prompt asked for, and why the data changed the answer
 
@@ -90,16 +123,29 @@ earns its panel back. The board now reads as nothing but what is happening in th
 
 - **N4 magic-link — untouched and still correctly blocked** on the Edge Function. Not started,
   deliberately: building the page first would repeat the `<AttendeeView/>` mistake.
-- **Decomposition stages 2–3** (leaf screens, music quarantine). Stage 1 is now complete —
-  `src/ui/labels.js` (session 5) + `src/lib/colors.js` (this session). Stages 4–5 stay deferred.
+- **Decomposition stages 1 and 2 are COMPLETE.** Stage 1: `src/ui/labels.js` (session 5) +
+  `src/lib/colors.js`. Stage 2: `AdminTeamScreen`, `CalendarScreen`, `RosterScreen` in
+  `src/screens/`. **Stage 3 (music quarantine into `src/music/`) is next** and is where
+  `<SpotifySearchModal/>` above will have to be resolved. Stages 4–5 stay deferred.
+- **Two dead functions and one dead const**, moved-but-flagged rather than deleted during the
+  extractions: `nudgeForContrast` and `resolveSubBrand` (FR-H8, implemented, never wired) in
+  `colors.js`, and `SLOT_LABELS` in `CalendarScreen`. Deleting is a separate decision from
+  relocating; they should not sit flagged indefinitely.
+- **`TEAM_ROLES` is now guarded** against the `membership_role` Postgres enum by a test that
+  READS the migration. That was a fourth unguarded instance of this repo's recurring
+  constrained-column data-loss shape. **Worth auditing whether a fifth exists.**
 - Sentry and UptimeRobot — still decisions/actions for Dylan, unchanged.
 - REGRESSION §1 tests 1, 3, 5 still unwritten.
 
 ### ⛔ Dylan queue — unchanged from session 5 except where noted
 
 Nothing was completed on Dylan's behalf; the list below is still the one that matters.
-**One correction:** item 4 (cross-device Follow) was **blocked by defect 1 above** and is only
-now genuinely testable. **`git push` is NOT done — session 6's four commits are unpushed.**
+**One correction:** item 4 (cross-device Follow) was **blocked by the z-index defect above** and is
+only now genuinely testable. **`git push` is NOT done — session 6's six commits are unpushed.**
+
+**One item added:** decide on `eslint-plugin-react` (see the crash-gate section above). It is a
+dev-only dependency, not a sub-processor like the Sentry question, so it is a much smaller call —
+but it changes a CI gate, so it is still a call.
 
 ---
 
