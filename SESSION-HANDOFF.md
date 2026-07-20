@@ -1,11 +1,107 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-20 (end of session 5)_
+_Last updated: 2026-07-20 (end of session 6)_
 
-> **▶ STARTING A NEW SESSION? Paste `SESSION-6-PROMPT.md` as your opening message.**
-> It supersedes `SESSION-5-PROMPT.md` and `NEXT-SESSION-PROMPT.md`, both now history.
-> First thing it asks you to do: **check CI** — session 5 added Playwright to the deploy
-> workflow and that run has never been observed on a Linux runner.
+> **▶ STARTING A NEW SESSION?** `SESSION-6-PROMPT.md` is now largely spent — all five of its
+> build-order items are done or resolved. Read this block first, then that file for context.
+>
+> **CI is answered: it is GREEN on Linux, Playwright and all.** Session 5's unobserved deploy
+> run passed at `14be355`, `6d64aaa` and `f2990b6` — the workflow ran `lint:crash → test →
+> playwright install → test:e2e → build`, every step success. That was session 6's first
+> question and it needs no further attention.
+
+## 🟢 Shipped SESSION 6 — `f2990b6` → `dcef7ee`, 4 commits, all gates green, **NOT PUSHED**
+
+**Gates: `lint:crash` 0 · 369 unit tests (was 348) · 21 e2e (was 20 + 1 `fixme`) · build 605 KB.**
+App.jsx **8,779 → 8,567** lines.
+
+| Commit | What |
+|---|---|
+| `ad45510` | **The open defect — fixed in the TAXONOMY, not the drafter.** A banded good morning is a primer, not a lift. `test.fixme` removed, unweakened. |
+| `f3931ae` | **SPEC-PATCHES applied** (the last untouched WEEK-PLAN item) **+ 77 mojibake sequences repaired** in the as-built spec. |
+| `e95be19` | **Floor board cut** — both "coming soon" panels gone, **plus a real z-index defect the new test found.** |
+| `dcef7ee` | **Decomposition stage 1** — `src/lib/colors.js` extracted with 19 tests. |
+
+### The judgement call the prompt asked for, and why the data changed the answer
+
+The `fixme` offered two fixes and said choosing deliberately was the task. **Option (a) — "stop
+the drafter back-filling past a slot's PRIMARY categories" — cannot work**, and that only shows
+up if you print the derived slot rather than reasoning about it:
+
+```
+Warm Up  role=warmup  want=4  cats=[warmup, mobility, strength, conditioning]
+```
+
+**All four categories tie at a count of 1.** There is no prevalence signal separating `strength`
+from `mobility` here — the visible ordering comes entirely from the `CATEGORIES` tie-break. Any
+rule that keeps a top tier and drops the rest either keeps `strength` (it ties for top) or drops
+the coach's real mobility and conditioning warm-up movements with it.
+
+Option (b) was simply true: the taxonomy was wrong. The rule is narrow on purpose — a banded hip
+thrust is activation, but a banded *deadlift* is accommodating resistance on a loaded bar. Both
+claims are pinned by tests. The warm-up now drafts as exactly the four movements the coach warms
+up with, and every other slot fills better as a side effect (B1+B2 and C1 were under-filled
+because the warm-up had been eating their movements).
+
+### Defects found this session — again, none by a unit test
+
+1. **The Room TV mode switch was unreachable in its default mode.** `OverviewDisplayScreen`
+   ("Plan") renders `position:fixed inset:0` at `zIndex:500`; the mode bar sat at `zIndex:80`, so
+   the Plan screen painted over it. Plan is the default whenever a class is not playing, so a
+   coach opening Room TV *before* starting the class could not reach Floor, Coach, Follow or
+   Exit — only the overview's own "← Esc" worked, making it read as "the switch does nothing".
+   **This also made the cross-device Follow toggle unreachable in exactly the state you would set
+   it up from — read this before attempting queue item 4.** Fixed at `zIndex:550` (above every
+   display surface, below every modal). Found by writing an e2e assertion, not by looking.
+2. **A regex bug in my own fix.** `banded?` reads as `"bande"` + optional `"d"` and never matches
+   a plain "Band Good Morning". Caught by the unit test before commit; wants `band(?:ed)?`.
+3. **The as-built spec was mojibake-corrupted** across §9–§13 — 77 sequences (`â€"`→`—`,
+   `âœ…`→`✅`, `Â§`→`§`, `Â·`, `Ã—`, `ðŸŸ¡`) from an earlier session writing UTF-8 through a
+   CP1252 round-trip. **The same trap bit live this session**: a PowerShell
+   `Get-Content`/`Set-Content` round-trip corrupted `movementTaxonomy.js` mid-edit and had to be
+   restored from a byte-exact copy. **Use the editor, not shell round-trips, on UTF-8 source.**
+4. **Two dead functions** in the colour code: `nudgeForContrast` (superseded by the
+   direction-aware `nudgeContrast`) and `resolveSubBrand` (FR-H8, implemented, never wired).
+   Moved flagged rather than deleted — relocating is not the moment to decide a feature's fate.
+
+### What mutation testing showed about the accessibility clamp — worth knowing
+
+The clamp in `generateSkinFromPalette` **currently never fires.** The base construction already
+lands text at 14–16:1 and muted at 4.9–6.8:1 for every seed tried, so removing the clamp entirely
+changes no output. Breaking the other layer instead (text lightness `0.92 → 0.30`) also passes,
+because the clamp then repairs 2.33:1 back to passing.
+
+They are **redundant layers**, so `colors.test.js` asserts the *guarantee* — a generated skin is
+accessible — rather than either mechanism. Breaking both fails it loudly. Pinning either
+mechanism would break on a legitimate refactor while saying nothing about whether a coach can
+read the screen. **The first version of that test passed with the clamp deleted**, which is the
+lesson: a test that looks meaningful and has never been seen to fail is not evidence.
+
+### The Room TV floor board — the decision, made
+
+**Both "coming soon" panels are cut.** Same rule as the "No tracks" cut three lines above them in
+the same component, and they were the worse offence: both were addressed to the **operator**
+("Set a weekly benchmark WOD", "Connect a wearable/erg feed") while being projected at a wall
+members read mid-class. Neither idea is deleted — a real benchmark board needs the PR data F1/N2
+will produce, and a real output panel needs BLE (N7). When either has something true to say it
+earns its panel back. The board now reads as nothing but what is happening in the room.
+
+### Still NOT done
+
+- **N4 magic-link — untouched and still correctly blocked** on the Edge Function. Not started,
+  deliberately: building the page first would repeat the `<AttendeeView/>` mistake.
+- **Decomposition stages 2–3** (leaf screens, music quarantine). Stage 1 is now complete —
+  `src/ui/labels.js` (session 5) + `src/lib/colors.js` (this session). Stages 4–5 stay deferred.
+- Sentry and UptimeRobot — still decisions/actions for Dylan, unchanged.
+- REGRESSION §1 tests 1, 3, 5 still unwritten.
+
+### ⛔ Dylan queue — unchanged from session 5 except where noted
+
+Nothing was completed on Dylan's behalf; the list below is still the one that matters.
+**One correction:** item 4 (cross-device Follow) was **blocked by defect 1 above** and is only
+now genuinely testable. **`git push` is NOT done — session 6's four commits are unpushed.**
+
+---
 
 ## 🟢 Shipped SESSION 5 — `1b18442` → `14be355`, 13 commits, all gates green, **PUSHED**
 
