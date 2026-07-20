@@ -70,6 +70,24 @@ test.describe("smoke: the path a coach walks every class", () => {
     // Nothing on a member-facing screen may advertise an internal absence.
     await expect(page.getByText(/No tracks|0 tracks/)).toHaveCount(0);
 
+    // ── The FLOOR board, which is the surface members actually read mid-class ──
+    // It used to carry two panels promising features that do not exist, both
+    // phrased as instructions to the COACH ("Set a weekly benchmark WOD",
+    // "Connect a wearable/erg feed") while facing a room full of members. Same
+    // rule as the "No tracks" cut above, on the surface where it matters most.
+    // The mode switch is a TRANSIENT overlay that hides itself after 4.5s (Fable
+    // P1/P2 — the running surface keeps the whole screen). That is deliberate, so
+    // wake it the way a coach does rather than working around it: without this the
+    // click lands on a detaching element and the failure reads like a flake.
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Floor", exact: true }).click();
+    await expect(page.getByText(/clockwise · \d+ stations/)).toBeVisible();
+
+    for (const promise of [/coming soon/i, /benchmark of the week/i, /avg watts/i,
+                           /connect a wearable/i, /set a weekly benchmark/i]) {
+      await expect(page.getByText(promise)).toHaveCount(0);
+    }
+
     expectNoConsoleErrors(errors);
   });
 

@@ -4923,13 +4923,24 @@ function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlayi
       {mode==="studio" && <OverviewDisplayScreen stages={S} sessionName={SN} liveState={LS} onBack={onExit}/>}
       {mode==="floor"  && <FloorLiveScreen stages={S} liveState={LS} nowPlaying={NP} onBack={onExit}/>}
       {mode==="coach"  && <DisplayScreen stages={S} liveState={LS} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={NP} onPlayPause={onPlayPause}/>}
+      {/* zIndex must clear the DISPLAY SURFACES below it. `OverviewDisplayScreen`
+          ("Plan") renders position:fixed inset:0 at zIndex:500, so at the old
+          zIndex:80 it painted straight over this bar — and Plan is the DEFAULT
+          mode when a class is not playing. The effect was that a coach who opened
+          Room TV before starting the class could not reach Floor, Coach, Follow
+          or Exit at all; only the overview's own "← Esc" still worked, so it read
+          as "the mode switch does nothing" rather than as something covering it.
+          Notably this also made the untested cross-device Follow toggle
+          unreachable in the exact state you would set it up from.
+          550 sits above the display surfaces (max 500) and below every modal
+          (600+), which must still be able to cover this bar. */}
       {follow && !remoteLive && (
-        <div style={{position:"absolute",bottom:"18px",left:"50%",transform:"translateX(-50%)",zIndex:80,padding:"10px 18px",borderRadius:"10px",background:"rgba(10,14,20,0.72)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",fontSize:"14px",fontWeight:"700"}}>
+        <div style={{position:"absolute",bottom:"18px",left:"50%",transform:"translateX(-50%)",zIndex:550,padding:"10px 18px",borderRadius:"10px",background:"rgba(10,14,20,0.72)",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.85)",fontSize:"14px",fontWeight:"700"}}>
           Following this room — waiting for the coach's runner to start…
         </div>
       )}
       {ctl && (
-        <div style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:80,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
+        <div style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:550,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
           {[["studio","Plan"],["floor","Floor"],["coach","Coach"]].map(([m,lbl]) => (
             <button key={m} onClick={()=>onMode(m)} style={{padding:"10px 20px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"15px",fontWeight:"800",letterSpacing:"0.5px",background:mode===m?"var(--accent)":"transparent",color:mode===m?"var(--on-accent)":"rgba(255,255,255,0.85)"}}>{lbl}</button>
           ))}
@@ -5826,21 +5837,28 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
       {/* This board faces the FLOOR — members read it mid-class. The NOW PLAYING
           panel printed "No track playing." to the whole room for the entire
           session (audit 2.1). Dropped with music; the grid closes up rather than
-          leaving a hole. */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":(FLAGS.music?"1fr 1fr 1fr":"1fr 1fr"),gap:"12px"}}>
-        {FLAGS.music && <div style={panel}>
+          leaving a hole.
+
+          BENCHMARK OF THE WEEK and OUTPUT · avg watts are now cut for the same
+          reason, and they were the worse offence: both were addressed to the
+          OPERATOR — "Set a weekly benchmark WOD", "Connect a wearable/erg feed"
+          — while being projected at a wall members look at mid-class. A room
+          full of people spent the session reading a to-do list for the coach and
+          an advertisement for two features that do not exist.
+
+          Neither is deleted as an idea: a real benchmark board needs the PR data
+          F1/N2 will produce, and a real output panel needs BLE (N7), which is
+          gated behind the consent foundation. When either has something true to
+          say it earns its panel back. Until then the honest board is the one
+          that only shows what is actually happening in the room.
+
+          The whole row therefore renders only when music is on. */}
+      {FLAGS.music && <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr",gap:"12px"}}>
+        <div style={panel}>
           <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>NOW PLAYING</div>
           {npName ? <div><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>{npName}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{npArtist}</div></div> : <div style={{fontSize:"12px",color:"var(--muted)"}}>No track playing.</div>}
-        </div>}
-        <div style={panel}>
-          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>BENCHMARK OF THE WEEK</div>
-          <div style={{fontSize:"12px",color:"var(--muted)"}}>Set a weekly benchmark WOD to track PRs and attempts on the floor. Coming soon.</div>
         </div>
-        <div style={panel}>
-          <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>OUTPUT · avg watts</div>
-          <div style={{fontSize:"12px",color:"var(--muted)"}}>Connect a wearable/erg feed to show live output.</div>
-        </div>
-      </div>
+      </div>}
 
     </div>
   );
