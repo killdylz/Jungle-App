@@ -718,6 +718,21 @@ export function attendanceSource(s) {
   return ATTENDANCE_SOURCES.includes(s) ? s : "coach";
 }
 
+// The three values 0007's CHECK allows on members.status. Same rule, same reason.
+//
+// Note the vocabulary trap this one carries: the column says **"cancelled"**, with
+// two Ls, while the sibling `entity_status` enum in 0001 says **"canceled"** with
+// one. Both spellings are legal — in different columns. Anyone who normalises
+// them by eye will break one of the two, so neither is written inline anywhere;
+// `dbConstraints.test.js` checks each against its own migration.
+//
+// "archived"/"inactive" are NOT legal here, which is the shape a Members CRUD
+// status dropdown reaches for by default.
+export const MEMBER_STATUSES = ["active", "paused", "cancelled"];
+export function memberStatus(s) {
+  return MEMBER_STATUSES.includes(s) ? s : "active";
+}
+
 // ── retention_actions: what the operator DID about a flag (N3) ──────────────
 // Append-only, mirroring attendance and consent_records: insert-only push, and
 // hydrate MERGES rather than letting the server win. Local shape:
