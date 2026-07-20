@@ -23,6 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Playwright output — traces and screenshots are per-run diagnostics, uploaded
+# as a CI artifact on failure rather than committed.
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Planning docs (kept local, not shipped)
 Jungle - Delta & Backlog Breakdown.md
 Jungle - Work Item Tracker.xlsx

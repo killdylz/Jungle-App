@@ -70,4 +70,14 @@ export default defineConfig([
       'no-unreachable': 'error',
     },
   },
+  {
+    // Node-side files: the Playwright config/specs and the build scripts run in
+    // Node, not a browser, so `process`, `console` and friends are legitimately
+    // defined. Declaring the correct environment is NOT relaxing the gate — it
+    // still runs `no-undef` here, it just now knows which globals exist. Getting
+    // this wrong in the other direction would be worse: without it the gate
+    // reports six false positives, and a gate that cries wolf gets ignored.
+    files: ['playwright.config.js', 'e2e/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ])

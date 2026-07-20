@@ -34,6 +34,27 @@ jobs:
       # SILENT — a miscategorised class type, a lost movement alias, a slide quietly
       # dropped before extraction. Manual testing cannot surface any of them.
       - run: npm test
+      # End-to-end on the local no-Supabase build (REGRESSION-PLAN §1). Unit
+      # tests pin logic; they cannot see wiring, state, or the STORED object —
+      # which is where every defect this repo has shipped actually lived. The
+      # console-error assertion is the one that catches the white-screen class:
+      # an identifier that resolves and then throws, which `lint:crash` cannot
+      # see and `vite build` compiles happily.
+      #
+      # `--with-deps` installs the Linux libraries headless Chromium needs; only
+      # chromium is downloaded, to keep this off the critical path.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      # The traces/screenshots from a failed run are the difference between
+      # "e2e went red in CI" and knowing why, so they outlive the job.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
