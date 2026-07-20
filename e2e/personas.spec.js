@@ -99,41 +99,28 @@ test.describe("Coaches — catalog, shape, draft", () => {
     expectNoConsoleErrors(errors);
   });
 
-  // ⚠️ FAILING ON PURPOSE — an OPEN DEFECT, not a flaky test. Marked `fixme` so
-  // CI stays green and the finding is not lost. DO NOT delete or weaken it to
-  // get a green run; fix the drafter (or the taxonomy) and remove the marker.
+  // Was `fixme` — a real defect that drafted a **Chest-Supported Row into the
+  // warm-up**. FIXED in the TAXONOMY, not the drafter, and the reason is worth
+  // keeping: the two candidate fixes were not equally good, and the data said so.
   //
-  // What it found: drafting the sample coach's S360 shape puts a
-  // **Chest-Supported Row in the warm-up**. Session 4 fixed the same shape of
-  // bug for Conventional Deadlift by ordering slot categories by prevalence, so
-  // the ordering works — but a different lift still gets through.
+  // The chain was: the warm-up slot's categories are derived from the coach's own
+  // warm-up block (Assault Bike, Banded Good Morning, Glute Bridge, World's
+  // Greatest Stretch); `Banded Good Morning` classified as **strength**; so
+  // `strength` became legal for the slot; the slot wants 4 and only 2 were
+  // genuinely warm-up movements, so the drafter reached down the list for lifts.
   //
-  // The chain, as far as I traced it:
-  //   1. The warm-up slot's categories are DERIVED from the coach's own warm-up
-  //      block: Assault Bike, Banded Good Morning, Glute Bridge, World's
-  //      Greatest Stretch.
-  //   2. `Banded Good Morning` classifies as **strength** — movementTaxonomy's
-  //      rule matches `good morning` — so `strength` becomes a legal category
-  //      for that slot.
-  //   3. The slot wants 4 movements. The catalog has only 2 the coach actually
-  //      warms up with (Glute Bridge = warmup, World's Greatest Stretch =
-  //      mobility), so the drafter reaches down the category list to fill the
-  //      remaining 2 and picks strength movements.
+  // The proposed drafter fix — "stop back-filling past the slot's PRIMARY
+  // categories" — CANNOT fix this, which only shows up if you print the derived
+  // slot. All four categories tie at a count of 1, so there is no prevalence
+  // signal separating `strength` from `mobility` here; the visible ordering comes
+  // entirely from the CATEGORIES tie-break. Any rule that keeps the top tier and
+  // drops the rest either keeps `strength` (it ties for top) or drops the coach's
+  // real mobility and conditioning warm-up movements with it.
   //
-  // So it is explainable, but it is still wrong on screen, and blueprints.test.js
-  // already pins the intended principle: "emits an EMPTY block rather than an
-  // out-of-category movement". Under-filling a warm-up is the honest outcome;
-  // putting a barbell row in it is not.
-  //
-  // Two candidate fixes, and the choice is a judgement call worth making
-  // deliberately rather than by whoever picks this up first:
-  //   (a) Drafter: stop back-filling past the slot's PRIMARY categories — emit
-  //       fewer movements instead. Matches the existing empty-block principle.
-  //   (b) Taxonomy: a banded good morning is activation, not a lift. Narrowing
-  //       the `good morning` rule to unbanded/barbell would stop `strength`
-  //       entering the warm-up slot at the source.
-  // (a) is the safer general fix; (b) is also true and helps other coaches.
-  test.fixme("drafting from the shape puts no lift in the warm-up", async ({ page }) => {
+  // The taxonomy was simply wrong: a BANDED good morning is a primer, not a lift.
+  // Correcting it removes `strength` from the slot at source, and the warm-up now
+  // drafts as exactly the four movements the coach actually warms up with.
+  test("drafting from the shape puts no lift in the warm-up", async ({ page }) => {
     const errors = watchConsole(page);
     await loadSampleCoach(page);
 

@@ -143,6 +143,31 @@ describe("classifyMovement — ordering is load-bearing", () => {
     expect(classifyMovement("Couch Stretch")).toBe("cooldown");
   });
 
+  it("splits the good morning by implement — banded is a primer, loaded is a lift", () => {
+    // Found by driving the sample coach's real draft, not by a unit test: this
+    // classifying as `strength` made `strength` a legal category for the S360
+    // WARM-UP slot, and the drafter then filled that slot with a
+    // Chest-Supported Row. The e2e in personas.spec.js pins the symptom; this
+    // pins the cause.
+    expect(classifyMovement("Banded Good Morning")).toBe("warmup");
+    expect(classifyMovement("Band Good Morning")).toBe("warmup");
+    // `equip` is appended to the name before the rules run, so the same coach
+    // writing the name plainly with a band selected must land in the same place.
+    expect(classifyMovement("Good Morning", "band")).toBe("warmup");
+
+    // The loaded versions are untouched — this rule is narrow on purpose.
+    expect(classifyMovement("Good Morning")).toBe("strength");
+    expect(classifyMovement("Barbell Good Morning")).toBe("strength");
+  });
+
+  it("does not generalise `banded` across the rest of the hinge family", () => {
+    // A banded DEADLIFT is accommodating resistance on a loaded bar — a strength
+    // variation, not a warm-up. "Banded X is always activation" would be exactly
+    // the confident wrong guess this module exists to avoid.
+    expect(classifyMovement("Banded Deadlift")).toBe("strength");
+    expect(classifyMovement("Banded Romanian Deadlift")).toBe("strength");
+  });
+
   it("reads Air Squat as conditioning, not a squat lift", () => {
     expect(classifyMovement("Air Squat")).toBe("conditioning");
     expect(classifyMovement("Back Squat")).toBe("strength");

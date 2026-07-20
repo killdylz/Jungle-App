@@ -77,6 +77,22 @@ const CATEGORY_RULES = [
   // foldScheme already lifts into the block note, and matching it here let a
   // stray modifier acquire a category and ride into the catalog as a movement.
   [/\b(?:warm\s*up|warmup|activation|band\s*pull\s*apart|scap(?:ular)?\s*(?:push|pull|row)|glute\s*bridge|monster\s*walk|clamshell|inchworm|leg\s*swing|arm\s*circle|jump\s*rope|single\s*unders?)\b/i, "warmup"],
+  // A BANDED good morning is a primer, not a lift — the implement is what decides
+  // it. Must be tested before the strength rule's bare `good morning` below, which
+  // would otherwise take it and is correct only for the loaded version.
+  //
+  // This is narrow ON PURPOSE, and does not generalise to the rest of the hinge
+  // family in that rule: a banded HIP THRUST is indeed activation, but a banded
+  // DEADLIFT is accommodating resistance on a loaded bar — a strength variation,
+  // not a warm-up. "Banded X is always a warm-up" is exactly the confident wrong
+  // guess this module exists to avoid, so each one is claimed individually.
+  //
+  // Both spellings are matched because `equip` is appended to the name before the
+  // rules run: a coach may write "Banded Good Morning", or "Good Morning" with
+  // equip `band`.
+  // `band(?:ed)?` and NOT `banded?` — the latter reads as "bande" + optional "d"
+  // and silently never matches a plain "Band Good Morning". Caught by the test.
+  [/\b(?:band(?:ed)?|mini[\s-]?band)\s+good\s*morning\b|\bgood\s*morning\b(?=.*\bband(?:ed)?\b)/i, "warmup"],
 
   // ── Core ───────────────────────────────────────────────────────────────────
   // Before strength so "Pallof Press" is core, not a press.
