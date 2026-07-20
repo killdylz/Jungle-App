@@ -16,6 +16,7 @@ import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./l
 import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "./lib/retention.js";
+import { winBackLink, winBackBlockedReason } from "./lib/winback.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
@@ -6468,6 +6469,10 @@ function RosterScreen({ onBack }) {
     applyRetentionActions(retention.flags, actions, attendance);
   const act = (flag, action) =>
     setActions(store.recordRetentionAction({ memberId: flag.memberId, rule: flag.rule, action }));
+  // The win-back draft is signed by the GYM, because the gym is the sender and
+  // the organisation responsible for it. Read from the store rather than
+  // threaded as a prop, matching the other components that need branding.
+  const gymName = store.getGymBranding()?.gymName || "";
 
   const visitsFor = id => attendance.filter(a => a.memberId === id).length;
   const lastSeen = id => {
@@ -6545,7 +6550,25 @@ function RosterScreen({ onBack }) {
                 {/* The WHY, stated as the rule with its numbers. An operator has to
                     be able to phone a member about this and defend it. */}
                 <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.5,margin:"4px 0 8px"}}>{f.reason}</p>
-                <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
+                  {/* Jungle DRAFTS; the coach sends, from their own WhatsApp, to
+                      a contact they pick. The link carries no phone number
+                      because Jungle stores none (LEGAL §1). Opening a draft
+                      records NOTHING — writing the message is not reaching out,
+                      and the ledger has to mean what it says, so "I've reached
+                      out" stays a separate, deliberate click. */}
+                  {(() => {
+                    const m = members.find(x => x.id === f.memberId);
+                    const blocked = winBackBlockedReason(m);
+                    return blocked ? (
+                      <span title={blocked} style={{fontSize:"11px",color:"var(--muted)",maxWidth:"320px",lineHeight:1.4}}>{blocked}</span>
+                    ) : (
+                      <Btn variant="ghost" onClick={()=>window.open(winBackLink(f, m, gymName), "_blank", "noopener")}
+                           style={{padding:"5px 11px"}} title="Opens WhatsApp with a message ready — you choose who it goes to">
+                        Draft a WhatsApp
+                      </Btn>
+                    );
+                  })()}
                   <Btn onClick={()=>act(f,"acted")} style={{padding:"5px 11px"}}><Check size={13}/> I&rsquo;ve reached out</Btn>
                   <Btn variant="ghost" onClick={()=>act(f,"dismissed")} style={{padding:"5px 11px"}}>Not a concern</Btn>
                 </div>

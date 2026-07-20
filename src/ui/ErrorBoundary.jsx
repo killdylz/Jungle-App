@@ -18,6 +18,46 @@
 //                  rehydrates rather than loses.
 import { Component, Fragment } from "react";
 
+// ── Device-local crash log ───────────────────────────────────────────────────
+// A crash in a gym at 6am is invisible to us: the console is gone by the time
+// anyone asks, and "it went blank once" is not a bug report. This keeps the last
+// few on the device so a coach can be asked to read them out.
+//
+// DELIBERATELY NOT a telemetry service. Sentry (or anything like it) would be a
+// new SUB-PROCESSOR, and a crash payload can carry member names straight out of
+// component props — that has to be named in the gym's DPA and is Dylan's call,
+// not a library import (LEGAL-AND-SECURITY §6). Nothing here leaves the device.
+//
+// Everything is wrapped: this runs on the error path, and a crash logger that
+// throws replaces a recoverable panel error with a white screen.
+export const CRASH_LOG_KEY = "jungle_crash_log";
+const CRASH_LOG_MAX = 5;
+
+export function recordCrash(name, error, info) {
+  try {
+    const entry = {
+      at: new Date().toISOString(),
+      panel: name || "app",
+      message: String(error?.message || error || "unknown"),
+      // Truncated: a full stack plus component stack can be tens of KB, and
+      // filling localStorage would break the app far more thoroughly than the
+      // crash being logged.
+      stack: String(error?.stack || "").slice(0, 2000),
+      componentStack: String(info?.componentStack || "").slice(0, 1000),
+    };
+    const prev = JSON.parse(localStorage.getItem(CRASH_LOG_KEY) || "[]");
+    const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, CRASH_LOG_MAX);
+    localStorage.setItem(CRASH_LOG_KEY, JSON.stringify(next));
+  } catch (_) { /* never let logging a crash cause one */ }
+}
+
+export function getCrashLog() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CRASH_LOG_KEY) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch (_) { return []; }
+}
+
 const wrap = {
   minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center",
   padding: "32px", background: "#060D18", color: "#EEEEEE",
@@ -42,9 +82,9 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    // No telemetry service yet, so the console is the only record. Keep the
-    // component stack — it is what identifies WHICH panel died.
+    // Keep the component stack — it is what identifies WHICH panel died.
     console.error(`[jungle] render error in <${this.props.name || "app"}>`, error, info?.componentStack);
+    recordCrash(this.props.name, error, info);
     this.props.onError?.(error, info);
   }
 
