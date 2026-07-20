@@ -21,6 +21,7 @@ const KEYS = {
   dispPrefs:     "jungle_disp_prefs",
   crossfade:     "jungle_crossfade",
   templateTracks:"jungle_tmpl_tracks",
+  draftClass:    "jungle_draft_class",
   exdbKey:       "jungle_exdb_key",
   djEnergy:      "dj_energy",
   djBpmMin:      "dj_bpmMin",
@@ -388,6 +389,29 @@ export function getTemplateTracks() { return readJSON(KEYS.templateTracks, {}); 
 export function saveTemplateTracks(tracks) {
   writeJSON(KEYS.templateTracks, tracks);
   if (_synced()) _bgUpsert("user_prefs", { user_id: _ctx.userId, template_tracks: tracks || {} }, "user_id");
+}
+
+// ── The class currently open in the Builder ──────────────────────────────────
+// Found by driving the UI: `stages`/`sessionName` were plain useState with no
+// persistence, so a coach who planned a class and closed the tab lost the work —
+// while the Dashboard offered them a "Resume building" button for it. Everything
+// else in the app persists; this, the thing a trainer spends the most time on,
+// did not.
+//
+// LOCAL ONLY, deliberately. There is no table for an in-progress draft and
+// adding one is an infra change that is Dylan's call, so this never touches
+// Supabase. A finished class becomes session history, which does sync.
+//
+// Returns null (not a default class) when nothing is stored, so the caller keeps
+// owning what "a new class" means rather than this module inventing one.
+export function getDraftClass() {
+  const d = readJSON(KEYS.draftClass, null);
+  if (!d || !Array.isArray(d.stages) || d.stages.length === 0) return null;
+  return { name: typeof d.name === "string" ? d.name : "", stages: d.stages, classChoice: d.classChoice || null };
+}
+export function saveDraftClass(draft) {
+  if (!draft || !Array.isArray(draft.stages)) return;
+  writeJSON(KEYS.draftClass, { name: draft.name || "", stages: draft.stages, classChoice: draft.classChoice || null });
 }
 
 export function getExerciseDbKey() {

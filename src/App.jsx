@@ -1932,199 +1932,6 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
     </div>
   );
 }
-function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImportTemplate}) {
-  const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  const isTablet = vw < 900;
-  const [selClassType, setSelClassType] = useState(null);
-  const [selStyle, setSelStyle]         = useState(null);
-  const [search, setSearch]             = useState("");
-  const fileRef = useRef(null);
-  const handleImportFile = (e) => {
-    const f = e.target.files && e.target.files[0]; if(!f) return;
-    const reader = new FileReader();
-    reader.onload = () => { try { const data = JSON.parse(reader.result); onImportTemplate && onImportTemplate(data); } catch(_) { alert("Could not read that file - please choose a valid Jungle template JSON."); } };
-    reader.readAsText(f);
-    e.target.value = "";
-  };
-  const classTypes = Object.entries(WORKOUT_LIBRARY);
-
-  const filteredTypes = search
-    ? classTypes.filter(([,cls]) => cls.label.toLowerCase().includes(search.toLowerCase()) || cls.description.toLowerCase().includes(search.toLowerCase()))
-    : classTypes;
-
-  // When class type changes, default to first style
-  const handleTypeClick = key => {
-    setSelClassType(key);
-    const firstSub = Object.keys(WORKOUT_LIBRARY[key].subTypes)[0];
-    setSelStyle(firstSub || null);
-  };
-
-  const selCls = selClassType ? WORKOUT_LIBRARY[selClassType] : null;
-
-  const totalStyles = classTypes.reduce((a,[,cls])=>a+Object.keys(cls.subTypes).length,0);
-
-  return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Page header */}
-      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
-        <div style={{flex:1,minWidth:0}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>CLASS TEMPLATES</p>
-          <p style={{fontSize:"12px",color:"var(--muted)"}}>Where a class starts — pick a discipline and a style, Jungle pre-fills the stages, exercises and soundtrack shape</p>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
-          <input ref={fileRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:"none"}}/>
-          <button onClick={()=>fileRef.current&&fileRef.current.click()} title="Import a Jungle template JSON" style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"600"}}><Upload size={14}/>Import</button>
-          <button onClick={()=>{ if(selClassType&&selStyle) onExportTemplate&&onExportTemplate(selClassType,selStyle); }} disabled={!(selClassType&&selStyle)} title={selClassType&&selStyle?"Export selected style as JSON":"Pick a class type and style first"} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 12px",background:(selClassType&&selStyle)?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--navy)",border:`1px solid ${(selClassType&&selStyle)?"color-mix(in srgb, var(--accent) 25%, transparent)":"var(--border)"}`,borderRadius:"8px",cursor:(selClassType&&selStyle)?"pointer":"not-allowed",color:(selClassType&&selStyle)?"var(--accent)":"var(--muted)",fontSize:"12px",fontWeight:"600"}}><Download size={14}/>Export</button>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
-
-        {/* ── Left panel: class type grid ── */}
-        <div style={{flex:isMobile?1:"1.5",display:"flex",flexDirection:"column",overflow:"hidden",borderRight:isMobile?"none":`1px solid var(--border)`}}>
-          {/* Panel header */}
-          <div style={{flexShrink:0,padding:"18px 22px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
-            <div>
-              <p style={{fontSize:"20px",fontWeight:"700",color:"var(--text)",fontFamily:"var(--display)"}}>Choose a class type</p>
-              <p style={{fontSize:"12px",color:"var(--muted)"}}>{classTypes.length} disciplines · {totalStyles}+ ready-made styles</p>
-            </div>
-            {/* Search */}
-            <div style={{display:"flex",alignItems:"center",gap:"8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"999px",padding:"8px 16px",minWidth:0,flex:"0 0 220px"}}>
-              <Search size={14} color={"var(--muted)"}/>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates…"
-                style={{background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:"13px",width:"100%"}}/>
-            </div>
-          </div>
-
-          {/* Cards grid */}
-          <div style={{flex:1,overflowY:"auto",padding:"0 22px 22px"}}>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":isTablet?"1fr 1fr":"1fr 1fr 1fr",gap:"12px"}}>
-              {filteredTypes.map(([key,cls]) => {
-                const isSelected = selClassType === key;
-                return (
-                  <div key={key} onClick={()=>handleTypeClick(key)}
-                    style={{
-                      padding:"18px",borderRadius:"14px",cursor:"pointer",
-                      position:"relative",overflow:"hidden",
-                      border:isSelected?`1px solid ${cls.color}`:`1px solid var(--border)`,
-                      background:isSelected?`linear-gradient(160deg,var(--navy),var(--card))`:`var(--card)`,
-                      boxShadow:isSelected?`0 0 0 3px ${cls.color}18`:"none",
-                      transition:"border-color 0.2s,box-shadow 0.2s"
-                    }}
-                    onMouseEnter={e=>{if(!isSelected){e.currentTarget.style.borderColor=cls.color+"90"; e.currentTarget.style.filter="brightness(1.07)";}}}
-                    onMouseLeave={e=>{if(!isSelected){e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.filter="brightness(1)";}}}
-                  >
-                    {/* 3px top accent bar */}
-                    <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:cls.color,borderRadius:"14px 14px 0 0"}}/>
-
-                    {/* Icon tile */}
-                    <div style={{
-                      width:"40px",height:"40px",borderRadius:"11px",
-                      background:`${cls.color}20`,
-                      display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:"20px",marginBottom:"12px",marginTop:"4px"
-                    }}>{cls.icon}</div>
-
-                    <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{cls.label}</p>
-                    <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"14px"}}>{cls.description}</p>
-
-                    {/* Footer */}
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <span style={{fontSize:"11px",color:cls.color,fontWeight:"600"}}>{Object.keys(cls.subTypes).length} styles</span>
-                      <ChevronRight size={14} color={isSelected?cls.color:"var(--muted)"}/>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Right panel: style picker ── (hidden on mobile when no selection) */}
-        {(!isMobile || selClassType) && (
-          <div style={{
-            width:isMobile?"100%":"380px",flexShrink:0,
-            display:"flex",flexDirection:"column",overflow:"hidden",
-            background:"var(--card)",
-            position:isMobile?"fixed":"relative",
-            inset:isMobile?"0":undefined,
-            zIndex:isMobile?600:undefined
-          }}>
-            {selCls ? (
-              <>
-                {/* Right panel header */}
-                <div style={{flexShrink:0,padding:"20px 22px 16px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"flex-start",gap:"14px"}}>
-                  <div style={{
-                    width:"40px",height:"40px",borderRadius:"11px",flexShrink:0,
-                    background:`${selCls.color}20`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px"
-                  }}>{selCls.icon}</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>{selCls.label}</p>
-                    <p style={{fontSize:"12px",color:"var(--muted)"}}>Pick a style to pre-fill your class</p>
-                  </div>
-                  {isMobile && (
-                    <button onClick={()=>setSelClassType(null)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px"}}><X size={18}/></button>
-                  )}
-                </div>
-
-                {/* Styles list */}
-                <div style={{flex:1,overflowY:"auto",padding:"14px"}}>
-                  {Object.entries(selCls.subTypes).map(([subKey,sub]) => {
-                    const stageCount = (CLASS_STAGE_TEMPLATES[selClassType]?.[subKey] || []).length;
-                    const isSelStyle = selStyle === subKey;
-                    return (
-                      <div key={subKey} onClick={()=>setSelStyle(subKey)}
-                        style={{
-                          padding:"16px",borderRadius:"11px",marginBottom:"8px",cursor:"pointer",
-                          border:isSelStyle?`1px solid ${selCls.color}`:`1px solid var(--border)`,
-                          background:isSelStyle?`linear-gradient(160deg,var(--navy),var(--card))`:"transparent",
-                          boxShadow:isSelStyle?`0 0 0 3px ${selCls.color}12`:"none",
-                          transition:"border-color 0.15s,background 0.15s"
-                        }}
-                        onMouseEnter={e=>{if(!isSelStyle){e.currentTarget.style.borderColor=selCls.color+"60";}}}
-                        onMouseLeave={e=>{if(!isSelStyle){e.currentTarget.style.borderColor="var(--border)";}}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
-                          <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{sub.label}</p>
-                          {stageCount>0 && <span style={{fontSize:"10px",padding:"2px 8px",background:`${selCls.color}25`,color:selCls.color,borderRadius:"999px",fontWeight:"700"}}>{stageCount} stages</span>}
-                        </div>
-                        <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>{sub.description}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Sticky CTA */}
-                <div style={{flexShrink:0,padding:"14px",borderTop:`1px solid var(--border)`}}>
-                  <button
-                    disabled={!selStyle}
-                    onClick={()=>{ if(selStyle){ onSelectClassStyle(selClassType,selStyle); setSelClassType(null); }}}
-                    style={{
-                      width:"100%",padding:"14px",borderRadius:"10px",border:"none",cursor:selStyle?"pointer":"not-allowed",
-                      background:selStyle?`linear-gradient(135deg,${selCls.color},${selCls.color}CC)`:`var(--border)`,
-                      color:selStyle?"#fff":"var(--muted)",fontSize:"14px",fontWeight:"700",
-                      transition:"opacity 0.15s"
-                    }}>
-                    {selStyle ? `Build from ${selCls.subTypes[selStyle]?.label||selStyle}` : "Select a style above"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px",textAlign:"center",gap:"12px"}}>
-                <div style={{fontSize:"40px",opacity:0.3}}>👈</div>
-                <p style={{fontSize:"14px",fontWeight:"600",color:"var(--muted)"}}>Select a class type</p>
-                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5"}}>Pick a discipline on the left to see available styles</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── AnalyticsScreen ──────────────────────────────────────────────────────────
 function AnalyticsScreen({onBack}) {
@@ -2379,121 +2186,6 @@ function AnalyticsScreen({onBack}) {
   );
 }
 
-// ─── GlossaryScreen ───────────────────────────────────────────────────────────
-function GlossaryScreen({onBack}) {
-  const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  const [openGroups, setOpenGroups] = useState({"Upper Body":true});
-  const [search, setSearch] = useState("");
-
-  const allGroups = Object.entries(GLOSSARY);
-  const totalMovements = allGroups.reduce((a,[,exs])=>a+exs.length,0);
-
-  const toggleGroup = grp => setOpenGroups(prev=>({...prev,[grp]:!prev[grp]}));
-
-  const diffStyle = diff => {
-    // `var(--accent)` is a non-empty string, so the old `|| "#7BE3A4"` fallback was
-    // unreachable — the brand token is always the value. Dropped, not "fixed".
-    if (diff==="Advanced")     return {bg:"rgba(123,227,164,.18)",color:"var(--accent)"};
-    if (diff==="Intermediate") return {bg:"rgba(224,184,91,.15)", color:"#E0B85B"};
-    return                            {bg:"rgba(123,227,164,.15)",color:"var(--accent)"};
-  };
-
-  return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Page header bar */}
-      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
-        <div>
-          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE GLOSSARY</p>
-          <p style={{fontSize:"12px",color:"var(--muted)"}}>Coaching reference — every movement with target muscles, difficulty and a one-line cue</p>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px 28px"}}>
-        <div style={{maxWidth:"1200px",margin:"0 auto"}}>
-          {/* Search bar + count */}
-          <div style={{
-            display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",
-            padding:"12px 18px",marginBottom:"20px",gap:"12px"
-          }}>
-            <div style={{display:"flex",alignItems:"center",gap:"10px",flex:1}}>
-              <Search size={15} color={"var(--muted)"}/>
-              <input value={search} onChange={e=>setSearch(e.target.value)}
-                placeholder="Search exercises or muscles…"
-                style={{background:"none",border:"none",outline:"none",color:"var(--text)",fontSize:"14px",width:"100%"}}/>
-            </div>
-            <span style={{fontSize:"12px",color:"var(--muted)",flexShrink:0,fontWeight:"600"}}>
-              {allGroups.length} groups · {totalMovements} movements
-            </span>
-          </div>
-
-          {/* Accordion groups */}
-          {allGroups.map(([grp, exs]) => {
-            const filtered = search
-              ? exs.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())||e.muscles.toLowerCase().includes(search.toLowerCase()))
-              : exs;
-            if (!filtered.length) return null;
-            const isOpen = search ? true : !!openGroups[grp];
-            return (
-              <div key={grp} style={{marginBottom:"10px",background:"var(--card)",borderRadius:"12px",border:`1px solid var(--border)`,overflow:"hidden"}}>
-                {/* Group header */}
-                <button onClick={()=>toggleGroup(grp)}
-                  style={{
-                    width:"100%",padding:"15px 20px",background:"none",border:"none",cursor:"pointer",
-                    display:"flex",alignItems:"center",justifyContent:"space-between"
-                  }}>
-                  <span style={{fontSize:"14px",fontWeight:"700",color:isOpen?"var(--text)":"var(--muted)"}}>
-                    {grp} <span style={{fontSize:"12px",fontWeight:"400",color:"var(--muted)",marginLeft:"6px"}}>({filtered.length})</span>
-                  </span>
-                  <ChevronRight size={16} color={isOpen?"var(--accent)":"var(--muted)"}
-                    style={{transform:isOpen?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
-                </button>
-
-                {/* Exercise cards */}
-                {isOpen && (
-                  <div style={{
-                    display:"grid",
-                    gridTemplateColumns:isMobile?"1fr":"1fr 1fr",
-                    gap:"1px",
-                    borderTop:`1px solid var(--border)`
-                  }}>
-                    {filtered.map((ex,i) => {
-                      const ds = diffStyle(ex.diff);
-                      return (
-                        <div key={i} style={{
-                          padding:"15px 18px",
-                          background:"var(--card)",
-                          borderRight: (!isMobile && i%2===0) ? `1px solid var(--border)` : "none",
-                          borderBottom: i < filtered.length - (isMobile?1:2) ? `1px solid var(--border)` : "none"
-                        }}>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{ex.name}</p>
-                          <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>
-                            {ex.muscles.split(/[,·]/).map(m=>m.trim()).join(" · ")}
-                          </p>
-                          <span style={{
-                            display:"inline-block",fontSize:"10px",fontWeight:"700",
-                            padding:"2px 8px",borderRadius:"6px",marginBottom:"8px",
-                            background:ds.bg,color:ds.color
-                          }}>{ex.diff}</span>
-                          <p style={{fontSize:"12px",color:"var(--accent)",fontStyle:"italic",lineHeight:"1.45",margin:0}}>
-                            "{ex.cues}"
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── CalendarScreen (Planning & Schedule Board) ───────────────────────────────
 function CalendarScreen({onBack}) {
@@ -3915,6 +3607,30 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   );
 }
 
+// ─── Glossary, folded into the Library (audit 2.3) ───────────────────────────
+// The Glossary was its own nav destination showing muscles + a coaching cue for
+// ~28 movements. That content is real and worth keeping; a separate screen for
+// it was not, because it forced a coach to remember which of two places a
+// movement lives in. The cue now rides on the movement's Library row.
+//
+// Matching is on a normalised name so "Push-Up", "push up" and "Push Up" all
+// resolve. A miss returns null and NOTHING renders — the library is per-gym and
+// mostly larger than the glossary, so an absent cue is the normal case, not an
+// error to apologise for.
+const GLOSSARY_BY_NAME = (() => {
+  const map = new Map();
+  for (const entries of Object.values(GLOSSARY)) {
+    for (const e of entries) map.set(normMovementName(e.name), e);
+  }
+  return map;
+})();
+function normMovementName(n) {
+  return String(n || "").toLowerCase().replace(/[\s\-_]+/g, " ").trim();
+}
+function glossaryEntry(name) {
+  return GLOSSARY_BY_NAME.get(normMovementName(name)) || null;
+}
+
 // ─── LibraryBrowserModal ──────────────────────────────────────────────────────
 function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const vw = useWindowWidth();
@@ -4143,10 +3859,19 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                             {/* Drag handle */}
                             <div style={{color:"var(--muted)",fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
-                            {/* Info */}
+                            {/* Info. `g` is the folded-in Glossary entry (or null).
+                                It only fills gaps — a gym's own muscles text and
+                                notes always win over the built-in reference. */}
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontSize:"14px",fontWeight:"600",color:"var(--text)",marginBottom:"2px"}}>{ex.n}</p>
-                              {ex.muscles && <p style={{fontSize:"11px",color:"var(--muted)"}}>{ex.muscles}</p>}
+                              {(ex.muscles || glossaryEntry(ex.n)?.muscles) && (
+                                <p style={{fontSize:"11px",color:"var(--muted)"}}>{ex.muscles || glossaryEntry(ex.n).muscles}</p>
+                              )}
+                              {(ex.notes || glossaryEntry(ex.n)?.cues) && (
+                                <p style={{fontSize:"11px",color:"var(--muted)",opacity:0.85,marginTop:"3px",lineHeight:"1.45"}}>
+                                  {ex.notes || glossaryEntry(ex.n).cues}
+                                </p>
+                              )}
                             </div>
                             {/* Tags */}
                             <div style={{display:"flex",gap:"5px",flexShrink:0,alignItems:"center"}}>
@@ -4552,7 +4277,21 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
 }
 
 
-function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange}) {
+function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass}) {
+  // Export/import moved here from the retired Templates screen. Without this the
+  // feature would have been orphaned by the nav change rather than folded.
+  const importFileRef = useRef(null);
+  const handleImportFile = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { onImportClass?.(JSON.parse(reader.result)); }
+      catch { alert("Could not read that file — please choose a Jungle class file (.json)."); }
+    };
+    reader.readAsText(file);
+    e.target.value = ""; // let the same file be picked twice in a row
+  };
   const vw = useWindowWidth();
   const isMobile  = vw < 480;
   const isTablet  = vw < 768;
@@ -4757,6 +4496,15 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         {/* Right: action buttons */}
         {!isMobile && (
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
+            <input ref={importFileRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:"none"}}/>
+            <button onClick={()=>importFileRef.current?.click()} title="Open a class file saved from Jungle"
+              style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--muted)",fontWeight:"600",fontSize:"13px",padding:"9px 13px",borderRadius:"9px",cursor:"pointer"}}>
+              Open
+            </button>
+            <button onClick={onExportClass} title="Save this class as a file you can keep or send to another coach"
+              style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--muted)",fontWeight:"600",fontSize:"13px",padding:"9px 13px",borderRadius:"9px",cursor:"pointer"}}>
+              Save to file
+            </button>
             <button onClick={onOverviewDisplay} style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
               Preview on TV
             </button>
@@ -4782,6 +4530,22 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
+        {/* Jungle presets — the six starter classes that used to be their own
+            Templates nav destination (audit 2.3). They belong beside Class and
+            Style: all three answer "what shape is this class", and a coach with
+            no plans yet needs a ready-made one right here, not in another screen.
+            Picking one REPLACES the current stages, so it stays on "—" until
+            chosen rather than showing a preset the coach did not pick. */}
+        {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Preset</span>}
+        <select value="" onChange={e=>{
+            const t = TEMPLATES.find(x=>x.id===e.target.value);
+            if (t) onImportClass?.({ name:t.name, stages:t.stages });
+          }}
+          title="Start from a ready-made Jungle class"
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          <option value="">Jungle presets…</option>
+          {TEMPLATES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.name} · {t.tag}</option>)}
+        </select>
         <button onClick={()=>setShowLibraryModal(true)}
           style={{padding:"5px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           📚 {!isMobile && "Browse "}Library
@@ -8423,7 +8187,13 @@ export default function App() {
   }, [gymBranding?.gymName]);
 
   // ── State ─────────────────────────────────────────────────────────────────
+  // Read the saved draft ONCE, before the three pieces of state it seeds — they
+  // must agree with each other, and calling store.getDraftClass() separately in
+  // three initialisers would re-read (and could disagree after a mid-init write).
+  const savedDraft = useRef(store.getDraftClass()).current;
+
   const [classChoice, setClassChoice] = useState(() => {
+    if (savedDraft?.classChoice?.classType) return savedDraft.classChoice;
     const fc = Object.keys(WORKOUT_LIBRARY)[0];
     return { classType:fc, subType:Object.keys(WORKOUT_LIBRARY[fc]?.subTypes||{})[0]||null };
   });
@@ -8435,11 +8205,17 @@ export default function App() {
   // Realtime room: a Room TV on another device can FOLLOW the active runner.
   const [followRoom,  setFollowRoom]  = useState(false);
   const [remoteRoom,  setRemoteRoom]  = useState(null);      // last broadcast { stages, sessionName, liveState, nowPlaying, at }
-  const [stages,      setStages]      = useState(mkStages);
-  const [sessionName, setSessionName] = useState("My Workout");
+  const [stages,      setStages]      = useState(() => savedDraft?.stages || mkStages());
+  const [sessionName, setSessionName] = useState(() => savedDraft?.name || "My Workout");
   const [liveState,   setLiveState]   = useState({ playing:false, idx:0, elapsed:0 });
   const [showProfile, setShowProfile] = useState(false);
   const [djProgress,  setDjProgress]  = useState(null);
+  // Persist the working class on every change, so closing the tab mid-plan is
+  // not a data-loss event. Local only — see store.saveDraftClass.
+  useEffect(() => {
+    store.saveDraftClass({ name: sessionName, stages, classChoice });
+  }, [stages, sessionName, classChoice]);
+
   const [templateTracks, setTemplateTracks] = useState(() => store.getTemplateTracks());
   useEffect(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
   const [sessionHistory, setSessionHistory] = useState(() => store.getHistory());
@@ -8589,21 +8365,19 @@ export default function App() {
     }
     setView("builder");
   };
-  const handleSelectClassStyle = (ctk, stk) => {
-    const stageDefs = CLASS_STAGE_TEMPLATES[ctk]?.[stk]||[];
-    const init = stageDefs.map(s=>({...s,id:uid(),exercises:[],tracks:[]}));
-    const withEx = distributeLibraryExercises(ctk, stk, init);
-    const cls = WORKOUT_LIBRARY[ctk]; const sub = cls?.subTypes?.[stk];
-    setStages(withEx); setSessionName(`${cls?.label||ctk} — ${sub?.label||stk}`);
-    setClassChoice({classType:ctk,subType:stk}); setView("builder");
-  };
-  const handleExportTemplate = (ctk, stk) => {
-    const stageDefs = CLASS_STAGE_TEMPLATES[ctk]?.[stk]||[];
-    const init = stageDefs.map(s=>({...s,id:uid(),exercises:[],tracks:[]}));
-    const withEx = distributeLibraryExercises(ctk, stk, init);
-    const cls = WORKOUT_LIBRARY[ctk]; const sub = cls?.subTypes?.[stk];
-    const data = { jungleTemplate:true, version:1, name:`${cls?.label||ctk} — ${sub?.label||stk}`, classType:ctk, subType:stk, stages:withEx };
-    downloadJson(data, `jungle-template-${ctk}-${stk}.json`);
+  // (`handleSelectClassStyle` and `handleExportTemplate` lived here. Both took a
+  //  class/sub-type key and only the Templates screen ever supplied one, so both
+  //  went with it. The Builder's own Class/Style selects already cover selecting
+  //  a shape; export now works on the open class instead — see below.)
+
+  // Export the class the coach is actually looking at, exercises and all.
+  const handleExportClass = () => {
+    const data = {
+      jungleTemplate: true, version: 1, name: sessionName,
+      classType: classChoice.classType, subType: classChoice.subType, stages,
+    };
+    const slug = (sessionName || "class").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    downloadJson(data, `jungle-class-${slug || "untitled"}.json`);
   };
   const handleImportTemplate = (data) => {
     if(!data || !Array.isArray(data.stages)) { alert("That file isn't a Jungle template (no stages found)."); return; }
@@ -8752,8 +8526,7 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <ErrorBoundary key={view} name={VIEW_LABELS[view]||view}>
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
-        {view==="templates"&&<TemplatesScreen onSelectClassStyle={handleSelectClassStyle} onBack={()=>setView("dashboard")} onExportTemplate={handleExportTemplate} onImportTemplate={handleImportTemplate}/>}
-        {view==="builder"&&<BuilderScreen stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
+        {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="live"&&(
@@ -8771,7 +8544,6 @@ export default function App() {
         )}
         {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
-        {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
         {view==="music"&&(!FLAGS.music
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>

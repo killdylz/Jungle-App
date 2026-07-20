@@ -16,6 +16,7 @@ import {
   getMembers, addMember, getAttendance, recordAttendance,
   ensureClassInstance, getClassInstances, _ciToRow,
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
+  getDraftClass, saveDraftClass,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -305,5 +306,49 @@ Sarah Chen,sarah@example.com,2026-03-06,Thursday 6pm,GC`;
     const bad = analyzeAttendanceCsv("class,date\nTuesday,2026-03-04", []);
     expect(applyAttendanceImport(bad).ok).toBe(false);
     expect(getAttendance()).toHaveLength(0);
+  });
+});
+
+// The Builder's working class. Found by driving the UI, not by a unit test: this
+// was plain useState with no persistence, so a coach who planned a class and
+// closed the tab lost the work — behind a Dashboard button offering to "Resume
+// building" it. Every other domain in this module already persisted.
+describe("draft class", () => {
+  beforeEach(() => localStorage.clear());
+
+  const DRAFT = {
+    name: "Circuit Surge",
+    stages: [{ id: "s1", name: "Activation", type: "warmup", dur: 300, exercises: [{ n: "Bear Crawl Sprint" }] }],
+    classChoice: { classType: "crossfit", subType: "wod" },
+  };
+
+  it("round-trips the class a coach was working on", () => {
+    saveDraftClass(DRAFT);
+    const back = getDraftClass();
+    expect(back.name).toBe("Circuit Surge");
+    expect(back.stages).toHaveLength(1);
+    expect(back.stages[0].exercises[0].n).toBe("Bear Crawl Sprint");
+    expect(back.classChoice).toEqual({ classType: "crossfit", subType: "wod" });
+  });
+
+  it("returns null when nothing has been saved", () => {
+    expect(getDraftClass()).toBeNull();
+  });
+
+  // The caller decides what "a new class" means. Inventing a default here would
+  // put stages a coach never chose in front of them after a reload.
+  it("returns null rather than a default for an empty or malformed draft", () => {
+    saveDraftClass({ name: "x", stages: [] });
+    expect(getDraftClass()).toBeNull();
+    localStorage.setItem("jungle_draft_class", JSON.stringify({ name: "x" }));
+    expect(getDraftClass()).toBeNull();
+    localStorage.setItem("jungle_draft_class", "not json");
+    expect(getDraftClass()).toBeNull();
+  });
+
+  it("ignores a save with no stages array instead of clobbering a good draft", () => {
+    saveDraftClass(DRAFT);
+    saveDraftClass({ name: "clobber" });
+    expect(getDraftClass().name).toBe("Circuit Surge");
   });
 });
