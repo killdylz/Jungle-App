@@ -2,7 +2,12 @@
 
 _Last updated: 2026-07-20 (end of session 5)_
 
-## 🟢 Shipped SESSION 5 — `1b18442` → `f03a207`, 12 commits, all gates green, **NOT PUSHED**
+> **▶ STARTING A NEW SESSION? Paste `SESSION-6-PROMPT.md` as your opening message.**
+> It supersedes `SESSION-5-PROMPT.md` and `NEXT-SESSION-PROMPT.md`, both now history.
+> First thing it asks you to do: **check CI** — session 5 added Playwright to the deploy
+> workflow and that run has never been observed on a Linux runner.
+
+## 🟢 Shipped SESSION 5 — `1b18442` → `14be355`, 13 commits, all gates green, **PUSHED**
 
 **All seven days of `WEEK-PLAN.md`, except the half of N4 that needs an Edge Function.**
 App.jsx **9,463 → 8,700 lines**; 295 → **348 unit tests**, plus **16 Playwright e2e**;
@@ -93,9 +98,9 @@ with `source='coach'`. The sync path is still not exercisable locally.
 
 | # | Action | Note |
 |---|---|---|
-| 1 | **`git push`** — 12 commits sit local | Session 4's 4 commits were ALREADY pushed; the prompt's blocker was stale |
-| 1b | **Run `supabase/tests/0001_0006_rls_selftest.sql`** in the SQL editor | NEW. 13 checks. LEGAL §3 hole #2, due before real member data — and it is what makes "verified policies" true in the one-project decision (LEGAL §5). Expect PASS or SKIP on every row |
-| 2 | **Apply migration 0008** | Unchanged. Until then the at-risk action ledger is local-only and A3 stays unmeasurable |
+| ~~1~~ | ~~`git push`~~ | ✅ **Done** — pushed at `14be355` |
+| ~~1b~~ | ~~Run `0001_0006_rls_selftest.sql`~~ | ✅ **Done** |
+| ~~2~~ | ~~Apply migration 0008~~ | ✅ **Done** — the at-risk action ledger now persists, so A3 is measurable |
 | 3 | **LIVE SYNC CHECK ×3** | Unchanged, still the most important. Has failed twice; stays manual until it passes 3× |
 | 4 | **Physical offline soak** — router off 5 min mid-class | **Now worth doing**: the PWA + self-hosted fonts landed, so this can pass for the first time. P7 flips to ✅ only after it does |
 | 5 | Cross-device Room TV **Follow** test | Unchanged, coded and never verified |
