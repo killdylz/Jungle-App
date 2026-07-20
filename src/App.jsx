@@ -21,11 +21,13 @@ import { onRoomState, sendRoomState } from "./lib/room.js";
 // is the QR's first honest destination.
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
+import { ROLE_LABEL, MOVEMENT_CATEGORY_LABEL, CLASS_CATEGORY_LABEL, SOURCE_LABEL,
+         KIND_LABEL, schemeTypeLabel, readErrorMessage } from "./ui/labels.js";
 
 // Human labels for the per-view error boundary, so a crash reads "The Class Runner
 // panel stopped responding" rather than the internal view key.
 const VIEW_LABELS = {
-  dashboard:"Dashboard", templates:"Templates", builder:"Builder", personas:"Coach Personas",
+  dashboard:"Dashboard", templates:"Templates", builder:"Builder", personas:"Coaches",
   library:"Exercise Library", live:"Class Runner", "room-tv":"Room TV", analytics:"Analytics",
   glossary:"Glossary", calendar:"Schedule", music:"Music Hub", member:"Members",
   integrations:"Integrations", "brand-studio":"Brand Studio", team:"Team",
@@ -1144,7 +1146,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                   <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleLogoUpload}/>
                   <button onClick={()=>fileRef.current?.click()}
                     style={{width:"100%",padding:"9px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",marginBottom:"6px"}}>
-                    {extracting ? "⏳ Extracting colours…" : draft.logo ? "🔄 Change Logo" : "📁 Upload Logo"}
+                    {extracting ? "⏳ Reading your logo…" : draft.logo ? "🔄 Change Logo" : "📁 Upload Logo"}
                   </button>
                   {draft.logo && (
                     <button onClick={()=>setDraft(d=>({...d,logo:null}))}
@@ -2761,7 +2763,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   React.useEffect(() => { setDraftTokens(currentTokens); }, [activeSkinId]);
 
   const analyzeSteps = [
-    "Extracting colour palette from logo…",
+    "Reading the colours in your logo…",
     "Deriving background & surface tones…",
     "Checking accessibility contrast…",
     "Composing your custom identity…",
@@ -3003,7 +3005,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {/* Extracted palette preview */}
             {palette && (
               <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-                <div style={{fontSize:"10px",color:"var(--muted)",fontWeight:"600",marginRight:"4px",lineHeight:"24px"}}>Extracted:</div>
+                <div style={{fontSize:"10px",color:"var(--muted)",fontWeight:"600",marginRight:"4px",lineHeight:"24px"}}>From your logo:</div>
                 {palette.map((c,i)=>(
                   <div key={i} title={c} style={{width:"24px",height:"24px",borderRadius:"6px",background:c,border:"1px solid rgba(255,255,255,.12)",cursor:"default"}}/>
                 ))}
@@ -3087,7 +3089,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
           {/* Smart recommendation */}
           <div style={sectionStyle}>
             <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"10px"}}>SMART RECOMMENDATION</div>
-            <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}>Describe your gym or pick a type - I will suggest a contrast-safe scheme that drops straight into the swatches below.</div>
+            <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}>Describe your gym or pick a type — get a suggested palette that passes accessibility checks, straight into the swatches below.</div>
             <div style={{display:"flex",gap:"8px",marginBottom:"10px"}}>
               <input value={recPrompt} onChange={e=>setRecPrompt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!recBusy&&runRecommend()} disabled={recBusy} placeholder="e.g. high-intensity hyrox gym, industrial" style={{flex:1,minWidth:0,padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
               <button onClick={runRecommend} disabled={recBusy} style={{padding:"9px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:recBusy?"default":"pointer",opacity:recBusy?0.7:1,fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap"}}>{recBusy?"Thinking…":"Recommend"}</button>
@@ -6342,7 +6344,7 @@ const CATEGORY_TO_BUILDER = { strength:"strength", conditioning:"circuit", endur
 // Two different things are called "category" in this system, so both are named
 // explicitly: a CLASS category (what kind of session this is, from classCategory)
 // and a MOVEMENT category (what kind of movement this is, from the §9.2 taxonomy).
-const CLASS_CATEGORY_LABEL = { strength:"Strength", conditioning:"Conditioning", endurance:"Endurance", mixed:"Mixed" };
+// CLASS_CATEGORY_LABEL now lives in src/ui/labels.js with the other label maps.
 function planToStages(plan) {
   const blocks = plan?.blocks || [];
   return blocks.map(b => {
@@ -6371,17 +6373,12 @@ function planToStages(plan) {
 // Shared styling + labels for the persona surfaces.
 const P_CARD = { background:"var(--card)", border:"1px solid var(--border)", borderRadius:"12px" };
 const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)", borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
-const ROLE_LABEL = { warmup:"Warm-up", primary_lift:"Primary lift", superset:"Superset", circuit:"Circuit", finisher:"Finisher", recovery:"Recovery", cooldown:"Cool-down" };
-// Movement categories (§9.2). Same rule as ROLE_LABEL: the internal key never
-// reaches a coach's eyes, only the plain word for the thing.
-const MOVEMENT_CATEGORY_LABEL = { warmup:"Warm-up", mobility:"Mobility", strength:"Strength", conditioning:"Conditioning", core:"Core", cooldown:"Cool-down" };
+// Label maps live in src/ui/labels.js so the "no jargon reaches a coach" rule
+// can be unit-tested rather than eyeballed (see labels.test.js).
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
-// persona_plans.source is a constrained enum (google_slides | manual | jungle) —
-// readable labels so the plan list doesn't show raw database values.
-const SOURCE_LABEL = { google_slides:"Google Slides", manual:"Manual", jungle:"Jungle" };
 const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
-const fmtScheme = sc => [sc?.type, sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rpe!=null?`RPE ${sc.rpe}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
+const fmtScheme = sc => [schemeTypeLabel(sc?.type), sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rpe!=null?`RPE ${sc.rpe}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
 // Distinct exercise names across a plan's blocks — the novelty signature stored in
 // the generation ledger and used to steer the next generation away from repeats.
 const blockMovementNames = blocks => { const s = new Set(); (blocks||[]).forEach(b => (b.exercises||[]).forEach(ex => { const n=(ex.name||"").trim(); if (n) s.add(n); })); return [...s]; };
@@ -6395,6 +6392,9 @@ async function fnErrorMessage(error) {
     return JSON.stringify(body);
   } catch { return error?.message || String(error); }
 }
+
+// readErrorMessage / READ_ERRORS moved to src/ui/labels.js — see labels.test.js,
+// which asserts no message leaks jargon at a coach.
 
 // Free Gemini tiers cap requests-per-minute (e.g. 5/min for 2.5-flash), so a
 // deck with many slides trips "quota exceeded … retry in Ns". Recognise those
@@ -6892,9 +6892,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
     setPlanErr("");
     let parsed;
     try { parsed = JSON.parse(planForm.json); }
-    catch (e) { setPlanErr("Not valid JSON — paste an extraction object like { \"blocks\": [ … ] }."); return; }
+    catch (e) { setPlanErr("That doesn't look like a class. Paste the class text instead — Jungle will read it."); return; }
     const planObj = Array.isArray(parsed) ? { blocks: parsed } : (parsed.blocks ? parsed : { blocks: [] });
-    if (!Array.isArray(planObj.blocks) || !planObj.blocks.length) { setPlanErr("No blocks found in that JSON."); return; }
+    if (!Array.isArray(planObj.blocks) || !planObj.blocks.length) { setPlanErr("No exercises found in that text. Check it includes the movements and sets, then try again."); return; }
     const ct = planForm.classType.trim();
     const pl = { id: store.newId(), personaId: selectedId, source: "manual", sourceRef: "",
                  title: planForm.title.trim() || "Untitled plan", classType: ct,
@@ -6911,7 +6911,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const extractAndAdd = async () => {
     setPlanErr("");
     const text = (planForm.json || "").trim();
-    if (!text) { setPlanErr("Paste the deck text to extract."); return; }
+    if (!text) { setPlanErr("Paste the class text first."); return; }
     setPlanBusy(true);
     try {
       let data = null, via = "parser", conf = 0;
@@ -6928,8 +6928,11 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         // Below threshold the parser DEFERS rather than guessing. Without the Edge
         // Function there is nothing to defer to, so say what the parser saw — that
         // is more actionable than a bare "extraction needs the function".
+        // A coach is never shown a confidence percentage or the name of a
+        // service (UI-UX §4). They are told what to DO. The parser's own reason
+        // is kept out of the message for the same reason — it is written for us.
         if (!(supabaseEnabled && supabase)) {
-          throw new Error(`the built-in parser only understood ${Math.round(parsed.confidence * 100)}% of that text and the persona-ai fallback isn't available${parsed.reasons[0] ? ` (${parsed.reasons[0]})` : ""}`);
+          throw new Error("PARTIAL_READ");
         }
         const r = await supabase.functions.invoke("persona-ai", { body: {
           task: "extract", text, classType: planForm.classType.trim(), title: planForm.title.trim(), focus: planForm.focus.trim() } });
@@ -6938,7 +6941,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         data = r.data; via = "llm";
       }
       const blocks = data?.plan?.blocks || [];
-      if (!blocks.length) throw new Error("no blocks came back");
+      if (!blocks.length) throw new Error("NO_EXERCISES");
       const ct = (planForm.classType.trim() || data.classType || "").trim();
       // "manual" — the coach supplied the deck text themselves. MUST be one of the
       // three values persona_plans' CHECK constraint allows (see store.planSource);
@@ -6952,7 +6955,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       setShowAddPlan(false);
       if (ct) setActiveCT(ct);
     } catch (e) {
-      setPlanErr(`Extraction failed: ${e.message || e}. Switch to Paste JSON to add it manually.`);
+      setPlanErr(readErrorMessage(e));
     } finally { setPlanBusy(false); }
   };
   const savePlanEdit = updated => { commitPlans(plans.map(pl => pl.id === updated.id ? updated : pl)); setEditingPlan(null); };
@@ -7063,7 +7066,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   // presentations → per-deck slide text → persona-ai task:"extract" → fold into
   // the corpus. sourceRef carries the presentation id so re-imports dedupe;
   // the folder is remembered on the persona (styleProfile syncs to Supabase).
-  // Add plan → Paste deck text stays as the manual fallback.
+  // Add class → Paste deck text stays as the manual fallback.
   const importedRefs = new Set(selPlans.map(pl => pl.sourceRef).filter(Boolean));
   const openSlides = () => {
     setShowSlides(s => !s);
@@ -7173,7 +7176,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       // them silently — an unimported slide the coach never hears about is the same
       // class of bug as a plan that syncs into the void.
       if (todo.length && !canDefer) {
-        failed.push(`${todo.length} slide(s) used notation the built-in parser couldn't read confidently, and persona-ai isn't available to fall back on — import them via Add plan → Paste deck text`);
+        failed.push(`${todo.length} class${todo.length===1?"":"es"} couldn't be read automatically. Open ${todo.length===1?"it":"them"} in Slides, copy the text, and use Add class → Paste class text.`);
         todo.length = 0;
       }
       // Batch WITHIN a deck: slide numbers and the deck title hint are per-deck.
@@ -7280,8 +7283,8 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
         <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACH PERSONAS</p>
-          <p style={{fontSize:"12px",color:"var(--muted)"}}>Pick a coach, connect their class plans, then draft a new class in their style</p>
+          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACHES</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Every coach's classes, style and formats — Jungle learns them and drafts new classes to match</p>
         </div>
       </div>
 
@@ -7302,22 +7305,22 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
           {/* ── Left: create + persona list ─────────────────────────────── */}
           <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
             <div style={{...P_CARD,padding:"16px"}}>
-              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"10px"}}>New persona</p>
+              <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"10px"}}>Add a coach</p>
               <Input placeholder="Name — e.g. Coach Mike" value={form.name}
                      onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{marginBottom:"8px"}}/>
               <Select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
-                <option value="coach">Coach — an individual</option>
-                <option value="house">House — whole-facility style</option>
-                <option value="format">Format — a single class type</option>
+                <option value="coach">A coach</option>
+                <option value="house">The house style</option>
+                <option value="format">A class format</option>
               </Select>
               <Input placeholder="Description (optional)" value={form.description}
                      onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{marginBottom:"10px"}}/>
-              <Btn onClick={createPersona} style={{width:"100%",justifyContent:"center"}}><Plus size={14}/> Create persona</Btn>
+              <Btn onClick={createPersona} style={{width:"100%",justifyContent:"center"}}><Plus size={14}/> Add coach</Btn>
             </div>
 
             {personas.length === 0 ? (
               <div style={{...P_CARD,padding:"16px",textAlign:"center"}}>
-                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"12px"}}>No personas yet. Load a sample coach (S360 example) to see the layout, or create one above.</p>
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"12px"}}>No coaches yet. Add one above, or load a sample coach to see how it works.</p>
                 <Btn variant="ghost" onClick={seedSample} style={{width:"100%",justifyContent:"center"}}><Zap size={14}/> Load sample coach</Btn>
               </div>
             ) : (
@@ -7332,8 +7335,8 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:"13px",fontWeight:on?"700":"600",color:on?"var(--accent)":"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
                         <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
-                          <span style={{color:KIND_COLOR[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{p.kind}</span>
-                          {"  ·  "}{countFor(p.id)} plan{countFor(p.id)===1?"":"s"}
+                          <span style={{color:KIND_COLOR[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{KIND_LABEL[p.kind]||p.kind}</span>
+                          {"  ·  "}{countFor(p.id)} class{countFor(p.id)===1?"":"es"}
                         </div>
                       </div>
                       <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} title="Delete persona"
@@ -7349,7 +7352,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
           {!selected ? (
             <div style={{...P_CARD,padding:"40px 24px",textAlign:"center",color:"var(--muted)"}}>
               <Users size={28} style={{opacity:0.5,marginBottom:"10px"}}/>
-              <p style={{fontSize:"13px"}}>Select or create a coach persona to view their class types and plans.</p>
+              <p style={{fontSize:"13px"}}>Pick a coach to see their class types and classes.</p>
             </div>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
@@ -7366,7 +7369,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"6px"}}>
                         <h2 style={{fontSize:"20px",fontWeight:"800",color:"var(--text)",margin:0}}>{selected.name}</h2>
-                        <Tag color={KIND_COLOR[selected.kind]||"var(--navy)"}>{selected.kind}</Tag>
+                        <Tag color={KIND_COLOR[selected.kind]||"var(--navy)"}>{KIND_LABEL[selected.kind]||selected.kind}</Tag>
                       </div>
                       {selected.description && <p style={{fontSize:"13px",color:"var(--muted)",lineHeight:"1.6"}}>{selected.description}</p>}
                     </div>
@@ -7375,11 +7378,11 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   </div>
                 )}
                 <div style={{display:"flex",alignItems:"center",gap:"10px",marginTop:"14px",flexWrap:"wrap"}}>
-                  <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add plan</Btn>
+                  <Btn variant="ghost" onClick={()=>setShowAddPlan(s=>!s)} style={{padding:"6px 12px"}}><Plus size={13}/> Add class</Btn>
                   <button onClick={openSlides} style={{display:"inline-flex",alignItems:"center",gap:"6px",background:"transparent",border:`1px solid ${showSlides?"var(--accent)":"var(--border)"}`,borderRadius:"6px",cursor:"pointer",color:showSlides?"var(--accent)":"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"6px 12px"}}><Upload size={13}/> Import from Google Slides</button>
                 </div>
                 {showSlides && (!slidesEnabled ? (
-                  <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Slides import isn't configured in this build (<b>VITE_GOOGLE_SLIDES_CLIENT_ID</b> missing at build time). Use <b>Add plan → Paste deck text</b> instead.</p>
+                  <p style={{fontSize:"12px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.6",background:"var(--navy)",borderRadius:"8px",padding:"10px 12px"}}>Google Slides import isn't switched on for this version of Jungle. Use <b>Add class → Paste class text</b> instead — copy the text from your slides and paste it in.</p>
                 ) : (
                   <div style={{marginTop:"12px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
                     <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>Import from this coach's Google Slides</p>
@@ -7410,14 +7413,14 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                         <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center",flexWrap:"wrap"}}>
                           <Btn onClick={importSlideDecks} disabled={!!slidesBusy || deckSel.size===0}>
                             {slidesBusy==="import" ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>}
-                            {slidesBusy==="import" && slidesProg ? ` Extracting ${slidesProg.done+1}/${slidesProg.total}…` : ` Import ${deckSel.size} deck${deckSel.size===1?"":"s"}`}
+                            {slidesBusy==="import" && slidesProg ? ` Reading class ${slidesProg.done+1} of ${slidesProg.total}…` : ` Import ${deckSel.size} deck${deckSel.size===1?"":"s"}`}
                           </Btn>
                           {slidesBusy==="import" && slidesProg && <span style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"260px"}}>{slidesProg.current}</span>}
                         </div>
                       </div>
                     )}
                     {slidesErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0",lineHeight:"1.5"}}>{slidesErr}</p>}
-                    <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Each deck is read via the Google Slides API (read-only) and extracted by persona-ai into blocks, schemes and movements. Already-imported decks are detected and skipped by default.</p>
+                    <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Jungle reads each deck from Google Slides (view-only — nothing is changed) and turns it into classes. Decks you've already brought in are skipped.</p>
                   </div>
                 ))}
               </div>
@@ -7425,7 +7428,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
               {showAddPlan && (
                 <div style={{...P_CARD,padding:"16px",background:"var(--navy)"}}>
                   <div style={{display:"flex",gap:"6px",marginBottom:"10px"}}>
-                    {[["text","Paste deck text"],["json","Paste JSON"]].map(([m,lbl]) => {
+                    {[["text","Paste class text"],["json","Paste JSON"]].map(([m,lbl]) => {
                       const on = planMode === m;
                       return (
                         <button key={m} onClick={()=>{setPlanMode(m);setPlanErr("");}} style={{
@@ -7442,15 +7445,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                     <Input placeholder="Focus (optional)" value={planForm.focus} onChange={e=>setPlanForm(f=>({...f,focus:e.target.value}))}/>
                   </div>
                   <textarea placeholder={planMode==="text"
-                    ? "Paste the deck's text / coach notes — persona-ai extracts the blocks, schemes and movements. The class-type hint above helps."
-                    : 'Paste extraction JSON — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'}
+                    ? "Paste the class as text — Jungle reads the exercises, sets and reps for you."
+                    : 'For developers: paste a class object — { "blocks": [ { "label":"…", "role":"primary_lift", "scheme":{…}, "exercises":[…] } ] }'}
                     value={planForm.json} onChange={e=>setPlanForm(f=>({...f,json:e.target.value}))}
                     style={{width:"100%",boxSizing:"border-box",minHeight:"120px",padding:"10px 12px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"12px",fontFamily:planMode==="json"?"monospace":"inherit",outline:"none",resize:"vertical"}}/>
                   {planErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{planErr}</p>}
                   <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center"}}>
                     {planMode==="text"
-                      ? <Btn onClick={extractAndAdd} disabled={planBusy}>{planBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {planBusy ? "Extracting…" : "Extract & add"}</Btn>
-                      : <Btn onClick={addPlan}><Check size={14}/> Add to corpus</Btn>}
+                      ? <Btn onClick={extractAndAdd} disabled={planBusy}>{planBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {planBusy ? "Reading…" : "Read this class"}</Btn>
+                      : <Btn onClick={addPlan}><Check size={14}/> Save class</Btn>}
                     <Btn variant="ghost" onClick={()=>{setShowAddPlan(false);setPlanErr("");}}>Cancel</Btn>
                   </div>
                 </div>
@@ -7458,7 +7461,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
 
               {classTypes.length === 0 ? (
                 <div style={{...P_CARD,padding:"30px 24px",textAlign:"center",color:"var(--muted)"}}>
-                  <p style={{fontSize:"13px"}}>No plans yet. Use <b>Add plan</b> to connect this coach's programming — each plan's <i>class type</i> (S360, GC, Enduro…) groups it here.</p>
+                  <p style={{fontSize:"13px"}}>No classes yet. Use <b>Add class</b> to bring in this coach's programming — Jungle groups them by the class type you give each one (S360, GC, Enduro…).</p>
                 </div>
               ) : (
                 <>
@@ -7481,9 +7484,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-                        <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} plan{prof.planCount===1?"":"s"}</span></p>
+                        <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} class{prof.planCount===1?"":"es"}</span></p>
                         <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
-                        <span style={{fontSize:"11px",color:"var(--muted)"}}>→ builds as <b style={{color:"var(--text)"}}>{WORKOUT_LIBRARY[builderClass]?.label||builderClass}</b></span>
+                        <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{WORKOUT_LIBRARY[builderClass]?.label||builderClass}</b></span>
                       </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>
@@ -7537,14 +7540,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
 
                   {/* Plans for this class type */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
-                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>{curCT} plans <span style={{color:"var(--text)"}}>· {ctPlans.length}</span></p>
+                    <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>{curCT} classes <span style={{color:"var(--text)"}}>· {ctPlans.length}</span></p>
                     {ctPlans.map(pl => {
                       const nBlocks = (pl.plan?.blocks || []).length;
                       return (
                         <div key={pl.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"12px 0",borderTop:"1px solid var(--border)"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{pl.title}</div>
-                            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} block{nBlocks===1?"":"s"} · {SOURCE_LABEL[pl.source] || pl.source}</div>
+                            {/* "blocks" is our word, not a coach's (UI-UX §4). */}
+                            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} section{nBlocks===1?"":"s"} · {SOURCE_LABEL[pl.source] || pl.source}</div>
                           </div>
                           <button onClick={()=>setEditingPlan(pl)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
                           <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
@@ -7577,7 +7581,9 @@ function PersonaProfilePanel({ prof, extracted }) {
   const restEntries = Object.entries(prof.defaults?.restByRole || {});
   return (
     <div>
-      {extracted.focus && <div style={{marginBottom:"12px"}}><span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginRight:"8px"}}>FOCUS</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)",textTransform:"capitalize"}}>{extracted.focus}</span></div>}
+      {/* "FOCUS" + value ran together as "FOCUSstrength" — the all-caps label
+          needs to read as a label, so it gets a colon and real spacing. */}
+      {extracted.focus && <div style={{marginBottom:"12px"}}><span style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginRight:"8px"}}>Focus:</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)",textTransform:"capitalize"}}>{extracted.focus}</span></div>}
       {prof.structure?.length ? (
         <div style={{marginBottom:"12px"}}>
           <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Structure</div>
@@ -7587,7 +7593,7 @@ function PersonaProfilePanel({ prof, extracted }) {
       {prof.schemes?.length ? (
         <div style={{marginBottom:"12px"}}>
           <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",marginBottom:"6px"}}>Schemes</div>
-          <div>{prof.schemes.map((s,i)=><span key={i} style={P_CHIP}>{s.type} <span style={{opacity:0.6}}>×{s.count}</span></span>)}</div>
+          <div>{prof.schemes.map((s,i)=><span key={i} style={P_CHIP}>{schemeTypeLabel(s.type)} <span style={{opacity:0.6}}>×{s.count}</span></span>)}</div>
         </div>
       ) : null}
       {chips("Conventions", extracted.conventions)}
@@ -7603,7 +7609,7 @@ function PersonaProfilePanel({ prof, extracted }) {
         </div>
       ) : null}
       {!prof.structure?.length && !prof.schemes?.length && !extracted.conventions?.length && (
-        <p style={{fontSize:"13px",color:"var(--muted)"}}>Add plans for {prof.classType} and the structure, schemes and defaults are learned automatically.</p>
+        <p style={{fontSize:"13px",color:"var(--muted)"}}>Add classs for {prof.classType} and the structure, schemes and defaults are learned automatically.</p>
       )}
     </div>
   );
@@ -7862,7 +7868,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
               <div><label style={lbl}>Scheme</label>
                 <Select value={b.scheme?.type||""} onChange={e=>upScheme(i,{type:e.target.value||undefined})}>
                   <option value="">—</option>
-                  {["sets_reps","rounds","time","interval","amrap"].map(t=><option key={t} value={t}>{t}</option>)}
+                  {["sets_reps","rounds","time","interval","amrap"].map(t=><option key={t} value={t}>{schemeTypeLabel(t)}</option>)}
                 </Select>
               </div>
               <div><label style={lbl}>Sets</label><Input type="number" value={b.scheme?.sets??""} onChange={e=>upScheme(i,{sets:num(e.target.value)})}/></div>
@@ -7896,7 +7902,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
 function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
   const nav = [
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
-    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coach Personas",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
+    {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coaches",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle,cap:"class:view"}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
@@ -8051,7 +8057,7 @@ function AdminTeamScreen({ onBack }) {
   if (!supabaseEnabled) return (
     <div style={{ padding:"40px", maxWidth:"640px", margin:"0 auto" }}>
       <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"16px" }}>← Back</button>
-      <div style={card}><div style={label}>Team</div><div style={{ fontSize:"13px", color:"var(--muted)", lineHeight:1.6 }}>Team management needs the Supabase backend. It's disabled in local mode.</div></div>
+      <div style={card}><div style={label}>Team</div><div style={{ fontSize:"13px", color:"var(--muted)", lineHeight:1.6 }}>Team accounts are available on the online version of Jungle.</div></div>
     </div>
   );
   if (!canManage) return (
@@ -8485,7 +8491,7 @@ export default function App() {
     // colour swatch ("\ud83c\udffbBuilder") because the weightlifter it was meant to
     // modify is not there.
     {key:"builder",      label:"Builder",      icon:"\ud83c\udfcb\ufe0f",  group:"Main",     cap:"class:view"},
-    {key:"personas",     label:"Personas",     icon:"\ud83c\udf99\ufe0f",  group:"Main", cap:"class:view"},
+    {key:"personas",     label:"Coaches",      icon:"\ud83c\udf99\ufe0f",  group:"Main", cap:"class:view"},
     {key:"templates",    label:"Templates",    icon:"\ud83d\udccb",  group:"Main",     cap:"templates:view"},
     {key:"analytics",    label:"Analytics",    icon:"\ud83d\udcca",  group:"Insights", cap:"analytics:view"},
     {key:"calendar",     label:"Schedule",     icon:"\ud83d\udcc5",  group:"Insights", cap:"schedule:view"},

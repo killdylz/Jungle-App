@@ -16,7 +16,7 @@ export const SEED_PERSONAS = [
   {
     name: "Example Coach — The Garage",
     kind: "coach",
-    description: "Sample coach persona (S360 strength format). Replace by importing your coaches' Google Slides.",
+    description: "A sample coach so you can see how this works. Replace it with your own — import a coach's Google Slides, or paste a class in.",
     styleProfile: {
       byClassType: {
         S360: {
