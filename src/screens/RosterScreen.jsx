@@ -1,0 +1,316 @@
+// ─── Members / roster (AUDIT-FINDINGS §3.1, decomposition stage 2) ───────────
+// A leaf screen: `onBack` in, everything else imported.
+//
+// This is the owner's morning screen — the at-risk list and the "why" behind
+// each flag — so its imports are the retention and check-in libraries rather
+// than anything visual. M1 (roster CRUD) is still open: it reads but cannot
+// edit, with no member status and no joined date.
+//
+// Lifted from App.jsx unchanged.
+
+import React, { useState, useEffect } from "react";
+import * as store from "../lib/store.js";
+import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
+import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
+import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
+import { p6Summary, P6_TARGET_SEC } from "../lib/checkinMetrics.js";
+import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
+// NOTE: `lint:crash` CANNOT see these. `no-undef` resolves plain identifiers but
+// not JSX element names, so a missing icon import compiles, lints clean, and
+// throws `ReferenceError` the moment a coach opens the screen. That is exactly
+// what happened here — the extraction shipped a dead Members panel past a green
+// gate. The e2e added alongside this commit is what actually catches it.
+import { ArrowLeft, Check, Upload } from "lucide-react";
+
+export function RosterScreen({ onBack }) {
+  const vw = useWindowWidth();
+  const isMobile = vw < 640;
+  const [members, setMembers] = useState(() => store.getMembers());
+  const [attendance, setAttendance] = useState(() => store.getAttendance());
+  const [classes, setClasses] = useState(() => store.getClassInstances());
+  const [p6, setP6] = useState(() => p6Summary());
+  const [csv, setCsv] = useState("");
+  const [dayFirst, setDayFirst] = useState(true);
+  const [analysis, setAnalysis] = useState(null);
+  const [result, setResult] = useState(null);
+  const [q, setQ] = useState("");
+  const [actions, setActions] = useState(() => store.getRetentionActions());
+  const [showHandled, setShowHandled] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    store.hydrateAttendance().then(r => {
+      if (!alive || !r) return;
+      setMembers(r.members); setAttendance(r.attendance); setClasses(r.classInstances);
+      if (r.retentionActions) setActions(r.retentionActions);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // ── At-risk (N3) — the rules engine finally gets a surface ────────────────
+  // Arithmetic, not a model: every flag carries the numbers that produced it so
+  // the operator can argue with it rather than merely believe it.
+  const retention = retentionSummary(members, attendance);
+  const { active: atRiskActive, handled: atRiskHandled } =
+    applyRetentionActions(retention.flags, actions, attendance);
+  const act = (flag, action) =>
+    setActions(store.recordRetentionAction({ memberId: flag.memberId, rule: flag.rule, action }));
+  // The win-back draft is signed by the GYM, because the gym is the sender and
+  // the organisation responsible for it. Read from the store rather than
+  // threaded as a prop, matching the other components that need branding.
+  const gymName = store.getGymBranding()?.gymName || "";
+
+  const visitsFor = id => attendance.filter(a => a.memberId === id).length;
+  const lastSeen = id => {
+    const ts = attendance.filter(a => a.memberId === id).map(a => a.checkedInAt).sort();
+    return ts.length ? ts[ts.length - 1].slice(0, 10) : "";
+  };
+  const term = q.trim().toLowerCase();
+  const shown = members
+    .filter(m => !term || (m.name || "").toLowerCase().includes(term) || (m.email || "").toLowerCase().includes(term))
+    .sort((a, b) => visitsFor(b.id) - visitsFor(a.id) || (a.name || "").localeCompare(b.name || ""));
+
+  const analyze = () => {
+    setResult(null);
+    setAnalysis(analyzeAttendanceCsv(csv, members, { dayFirst }));
+  };
+  const apply = () => {
+    const r = store.applyAttendanceImport(analysis);
+    setResult(r);
+    setAnalysis(null);
+    setCsv("");
+    setMembers(store.getMembers());
+    setAttendance(store.getAttendance());
+    setClasses(store.getClassInstances());
+    setP6(p6Summary());
+  };
+  const onFile = e => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { setCsv(String(reader.result || "")); setAnalysis(null); setResult(null); };
+    reader.readAsText(f);
+  };
+
+  const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
+        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <div style={{flex:1,minWidth:0}}>
+          <h1 style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"22px",fontWeight:"800",color:"var(--text)"}}>Members</h1>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Your roster and the attendance history behind it</p>
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px"}}>
+        <div style={{maxWidth:"1000px",margin:"0 auto",display:"flex",flexDirection:"column",gap:"18px"}}>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:"12px"}}>
+            <StatCard label="MEMBERS" value={String(members.length)}/>
+            <StatCard label="CHECK-INS" value={String(attendance.length)}/>
+            <StatCard label="CLASSES RUN" value={String(classes.length)}/>
+          </div>
+
+          {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
+              tell, say so — never a green all-clear over unmeasured data. */}
+          <div style={card}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Who&rsquo;s slipping away</div>
+              <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
+                           color:retention.atRisk==null?"var(--muted)":atRiskActive.length?"var(--accent)":"var(--green)"}}>
+                {retention.atRisk == null ? "—" : String(atRiskActive.length)}
+              </div>
+            </div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:atRiskActive.length?"12px":"0"}}>
+              {describeRetention(retention, { active: atRiskActive.length, handled: atRiskHandled.length })}
+            </p>
+
+            {atRiskActive.map(f => (
+              <div key={`${f.memberId}:${f.rule}`} style={{padding:"12px 0",borderTop:"1px solid var(--border)"}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:"8px",flexWrap:"wrap"}}>
+                  <span style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{f.name || "Unnamed member"}</span>
+                  <span style={{fontSize:"11px",color:"var(--muted)"}}>last in {f.daysSince} day{f.daysSince===1?"":"s"} ago · {f.visits} visit{f.visits===1?"":"s"}</span>
+                </div>
+                {/* The WHY, stated as the rule with its numbers. An operator has to
+                    be able to phone a member about this and defend it. */}
+                <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.5,margin:"4px 0 8px"}}>{f.reason}</p>
+                <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
+                  {/* Jungle DRAFTS; the coach sends, from their own WhatsApp, to
+                      a contact they pick. The link carries no phone number
+                      because Jungle stores none (LEGAL §1). Opening a draft
+                      records NOTHING — writing the message is not reaching out,
+                      and the ledger has to mean what it says, so "I've reached
+                      out" stays a separate, deliberate click. */}
+                  {(() => {
+                    const m = members.find(x => x.id === f.memberId);
+                    const blocked = winBackBlockedReason(m);
+                    return blocked ? (
+                      <span title={blocked} style={{fontSize:"11px",color:"var(--muted)",maxWidth:"320px",lineHeight:1.4}}>{blocked}</span>
+                    ) : (
+                      <Btn variant="ghost" onClick={()=>window.open(winBackLink(f, m, gymName), "_blank", "noopener")}
+                           style={{padding:"5px 11px"}} title="Opens WhatsApp with a message ready — you choose who it goes to">
+                        Draft a WhatsApp
+                      </Btn>
+                    );
+                  })()}
+                  <Btn onClick={()=>act(f,"acted")} style={{padding:"5px 11px"}}><Check size={13}/> I&rsquo;ve reached out</Btn>
+                  <Btn variant="ghost" onClick={()=>act(f,"dismissed")} style={{padding:"5px 11px"}}>Not a concern</Btn>
+                </div>
+              </div>
+            ))}
+
+            {/* Handled work stays visible rather than vanishing — partly so the
+                operator can undo, and partly because "we acted on 9 of 11" is the
+                measurement A3 actually asks for. */}
+            {atRiskHandled.length > 0 && (
+              <div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid var(--border)"}}>
+                <button onClick={()=>setShowHandled(s=>!s)} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px"}}>
+                  {showHandled ? "Hide" : "Show"} handled · {atRiskHandled.length}
+                </button>
+                {showHandled && atRiskHandled.map(f => (
+                  <div key={`${f.memberId}:${f.rule}`} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",flexWrap:"wrap"}}>
+                    <span style={{flex:1,minWidth:"140px",fontSize:"13px",color:"var(--text)"}}>{f.name || "Unnamed member"}</span>
+                    <span style={{fontSize:"11px",color:"var(--muted)"}}>
+                      {f.action === "acted" ? "Reached out" : "Not a concern"}
+                      {f.actionAt ? ` · ${new Date(f.actionAt).toLocaleDateString()}` : ""}
+                    </span>
+                    <button onClick={()=>act(f,"reopened")} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"600",padding:"3px 8px"}}>Undo</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* P6 instrument (I4). Shown even with no data, and explicitly as "not
+              measured yet" rather than a passing tick — the whole reason this
+              exists is that an unmeasured design law was indistinguishable from
+              a met one. */}
+          <div style={{...card,display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:"200px"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Check-in speed</div>
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginTop:"2px"}}>
+                {p6.medianSec == null
+                  ? `Not measured yet — check members in from the Class Runner and the typical time per member appears here. The target is under ${P6_TARGET_SEC}s.`
+                  : `Typical time per member across ${p6.sessions} class${p6.sessions===1?"":"es"} (${p6.members} check-in${p6.members===1?"":"s"}). Target is under ${P6_TARGET_SEC}s; long idle gaps are excluded.`}
+              </p>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
+                           color:p6.meetsTarget==null?"var(--muted)":p6.meetsTarget?"var(--green)":"var(--accent)"}}>
+                {p6.medianSec == null ? "—" : `${p6.medianSec}s`}
+              </div>
+              <div style={{fontSize:"10px",letterSpacing:"1px",fontWeight:"600",color:"var(--muted)"}}>
+                {p6.meetsTarget==null?"NO DATA":p6.meetsTarget?"MEETS TARGET":"OVER TARGET"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── CSV backfill ───────────────────────────────────────────── */}
+          <div style={card}>
+            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
+              Bring past check-ins across from your previous system. A CSV with a <strong>member name
+              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
+              are used when present. Nothing is written until you review what was read.
+            </p>
+
+            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
+                <Upload size={14}/> Choose CSV
+                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
+              </label>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
+                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
+                Dates are day/month (e.g. 03/04 = 3 April)
+              </label>
+            </div>
+
+            <textarea
+              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
+              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
+              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
+            />
+
+            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
+              {/* Btn's prop is `variant` (default "primary") — passing a bare
+                  `primary` leaks an unknown attribute to the DOM. Once a preview
+                  exists, Import is the primary action and the other two step back. */}
+              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
+                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
+              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
+              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
+            </div>
+
+            {/* Preview. Everything the apply will do, before it does any of it. */}
+            {analysis && !analysis.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #F5576C55",background:"#F5576C14",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                {analysis.error}
+              </div>
+            )}
+            {analysis?.ok && (
+              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
+                {analysis.newMembers.length > 0 && (
+                  <div style={{color:"var(--muted)"}}>
+                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
+                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
+                  </div>
+                )}
+                {analysis.problems.length > 0 && (
+                  <details style={{marginTop:"6px"}}>
+                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
+                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
+                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {result?.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #7BE3A455",background:"#7BE3A414",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
+                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
+                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
+              </div>
+            )}
+          </div>
+
+          {/* ── Roster ─────────────────────────────────────────────────── */}
+          <div style={card}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Roster · {members.length}</div>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
+                style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+            </div>
+            {members.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
+                No members yet. Import a CSV above, or check people in from the Class Runner —
+                a name is all that’s needed and the roster row is created for you.
+              </p>
+            ) : shown.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                {shown.slice(0, 200).map(m => (
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name||"(no name)"}</div>
+                      {m.email&&<div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.email}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)"}}>{visitsFor(m.id)}</div>
+                      <div style={{fontSize:"10px",color:"var(--muted)"}}>{lastSeen(m.id)||"never"}</div>
+                    </div>
+                  </div>
+                ))}
+                {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
