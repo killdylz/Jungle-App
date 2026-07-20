@@ -2,10 +2,11 @@
 
 _Last updated: 2026-07-20 (end of session 5)_
 
-## 🟢 Shipped SESSION 5 — `1b18442` → `ee29861`, 6 commits, all gates green, **NOT PUSHED**
+## 🟢 Shipped SESSION 5 — `1b18442` → `f03a207`, 12 commits, all gates green, **NOT PUSHED**
 
-Days 1–4 of `WEEK-PLAN.md`. App.jsx **9,463 → 8,650 lines**; 295 → **314 tests**; bundle
-665 KB → **598 KB**.
+**All seven days of `WEEK-PLAN.md`, except the half of N4 that needs an Edge Function.**
+App.jsx **9,463 → 8,700 lines**; 295 → **348 unit tests**, plus **16 Playwright e2e**;
+bundle 665 KB → **598 KB**.
 
 | Commit | What |
 |---|---|
@@ -15,6 +16,10 @@ Days 1–4 of `WEEK-PLAN.md`. App.jsx **9,463 → 8,650 lines**; 295 → **314 t
 | `77cbb0b` | **Day 3 — PWA.** Self-hosted fonts (both CDN loaders gone), manifest, icons, hand-written service worker + build-time precache injection. |
 | `9a83cc5` | **Day 4a — U1 language pass.** Label maps extracted to `src/ui/labels.js` **with a test that enforces the no-jargon rule**. "Coaches" rename, `SCHEME_LABEL`, all error rewrites. |
 | `ee29861` | **Day 4b — D3 cold start.** A coach with zero classes can name a class type, pick a preset shape, and land in the Builder. |
+| `a652a3e` `32f706d` | Docs, audit corrections, and a stale Library subtitle found on a smoke walk. |
+| `6a12123` | **Day 1b — Playwright.** 16 e2e tests, ~17s, in CI after `npm test`. Smoke path, at-risk consistency, mobile, and offline against the **production** build. |
+| `8ea9517` | **Day 6 — trust pass.** `wa.me` win-back drafts, RLS self-test for 0001–0006 (I5), device-local crash log. |
+| `f03a207` | **Day 5 (half) — share card.** Gym-branded 1080×1920 PNG, client-side. |
 
 ### ⚠️ Three things in the audit docs that were WRONG — corrected here
 
@@ -50,17 +55,32 @@ Days 1–4 of `WEEK-PLAN.md`. App.jsx **9,463 → 8,650 lines**; 295 → **314 t
 6. **D3's preset could be picked and then did nothing**, because drafting was gated on the
    movement catalog, which is empty by definition for a new coach.
 
-### Still NOT done from WEEK-PLAN (in priority order)
+### Still NOT done, and the two that need a DECISION rather than time
 
-- **Playwright (Day 1b / REGRESSION §1)** — not started. Still the biggest gap in the safety net;
-  every defect above was found by hand.
-- **Day 5 — N4 magic-link member view + share card.** Not started. Needs the Edge Function Dylan
-  deploys, so it cannot be fully verified from here anyway.
-- **Day 6 — trust pass.** I5 RLS tests for 0001–0006, Sentry, UptimeRobot, `wa.me` win-back
-  drafts. Not started.
+- **N4 magic-link member page — the only genuinely blocked item.** It needs an Edge Function to
+  issue a signed token (design in LEGAL §4's shape), which only Dylan can deploy. Building the
+  page now would mean a route pointing at something that does not exist — exactly the
+  `<AttendeeView/>` mistake deleted this session. **The share card half shipped** (`f03a207`),
+  because it needs no backend. The Room TV's QR also stays removed until the link is real.
+- **Sentry — a decision, not a task.** It would be a new **sub-processor**, and a crash payload
+  can carry member names straight out of component props; LEGAL §6 requires sub-processors to be
+  named in the gym's DPA. Not added unilaterally. The device-local crash log (`8ea9517`,
+  `jungle_crash_log`, last 5) is the part that needed no third party — ask a coach to read it out.
+- **UptimeRobot** — 5 minutes of Dylan's time on a live URL; nothing to build.
 - `SPEC-PATCHES.md` not yet applied to the as-built spec.
 - Room TV floor board still shows two "coming soon" panels (Benchmark, Output) to the room. Out of
   scope for the music cut, but the same member-facing-absence problem — worth a decision.
+- REGRESSION §1 tests 1, 3 and 5 (import→catalog truth, class-shape derivation, draft→Builder)
+  are not written; 2, 4 and 6 are, plus mobile, offline, win-back and share-card suites.
+
+### The e2e suite — what it is for
+
+`npm run test:e2e` · 16 tests · ~17s · runs in CI after `npm test`.
+Every test asserts **no console errors**, which is the assertion that catches the white-screen
+class: an identifier that resolves and then throws, which `lint:crash` cannot see and
+`vite build` compiles happily. All four suites were mutation-verified — flipping `FLAGS.music`,
+removing draft persistence, removing `ignoreVary` from the service worker, and putting an
+undefined identifier in `e2e/helpers.js` each failed the right test.
 
 ### Verified this session, in the running app
 
@@ -73,7 +93,8 @@ with `source='coach'`. The sync path is still not exercisable locally.
 
 | # | Action | Note |
 |---|---|---|
-| 1 | **`git push`** — 6 commits sit local | Session 4's 4 commits were ALREADY pushed; the prompt's blocker was stale |
+| 1 | **`git push`** — 12 commits sit local | Session 4's 4 commits were ALREADY pushed; the prompt's blocker was stale |
+| 1b | **Run `supabase/tests/0001_0006_rls_selftest.sql`** in the SQL editor | NEW. 13 checks. LEGAL §3 hole #2, due before real member data — and it is what makes "verified policies" true in the one-project decision (LEGAL §5). Expect PASS or SKIP on every row |
 | 2 | **Apply migration 0008** | Unchanged. Until then the at-risk action ledger is local-only and A3 stays unmeasurable |
 | 3 | **LIVE SYNC CHECK ×3** | Unchanged, still the most important. Has failed twice; stays manual until it passes 3× |
 | 4 | **Physical offline soak** — router off 5 min mid-class | **Now worth doing**: the PWA + self-hosted fonts landed, so this can pass for the first time. P7 flips to ✅ only after it does |
@@ -81,6 +102,8 @@ with `source='coach'`. The sync path is still not exercisable locally.
 | 6 | Redeploy `persona-ai` (v8) | Unchanged. Blocks verifying the blueprint→generate path |
 | 7 | Staging Supabase project + 0001–0008; prod → Pro | Unchanged |
 | 8 | Lawyer (IP letter + templates); gym pilot conversation | Unchanged, long-lead |
+| 9 | **Decide on Sentry** | It is a sub-processor with member data in crash payloads — a DPA question, not a library choice |
+| 10 | **Deploy a `checkin-token`-style Edge Function** if the member link matters for the pilot | The only thing blocking the other half of N4 |
 
 **Install the PWA when you next open the live site** (Add to Home Screen on the phone, and on the
 room TV's browser) — that is the fastest way to sanity-check the manifest and icons on real
