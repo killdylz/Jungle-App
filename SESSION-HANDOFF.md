@@ -10,10 +10,19 @@ _Last updated: 2026-07-20 (end of session 6)_
 > playwright install → test:e2e → build`, every step success. That was session 6's first
 > question and it needs no further attention.
 
-## 🟢 Shipped SESSION 6 — `f2990b6` → `df59547`, 6 commits, all gates green, **NOT PUSHED**
+## 🟢 Shipped SESSION 6 — `f2990b6` → `fd98b5f`, 9 commits, all gates green
 
-**Gates: `lint:crash` 0 · 373 unit tests (was 348) · 30 e2e (was 20 + 1 `fixme`) · build 605 KB.**
-App.jsx **8,779 → 7,854** lines (−925).
+**Gates: `lint:crash` 0 · 399 unit tests (was 348) · 35 e2e (was 20 + 1 `fixme`) · build 610 KB.**
+App.jsx **8,779 → 7,854** lines (−925). Deployed and CI-green on Linux at `9cd0e08`;
+the last three commits push on top of that.
+
+### The three that landed after the first push
+
+| Commit | What |
+|---|---|
+| `a3a7f06` | **Constrained-column audit** — `dbConstraints.test.js` reads the MIGRATIONS and compares, instead of restating the list in a second copy. |
+| `9ac7250` | **M1 Members CRUD** — add, inline edit (name · email · joined · status), active-only count. |
+| `fd98b5f` | **I14 hydrate paging** — kills a silent truncation *and* a permanent re-push loop. |
 
 | Commit | What |
 |---|---|
@@ -150,6 +159,13 @@ only now genuinely testable. **`git push` is NOT done — session 6's six commit
 **One item added:** decide on `eslint-plugin-react` (see the crash-gate section above). It is a
 dev-only dependency, not a sub-processor like the Sentry question, so it is a much smaller call —
 but it changes a CI gate, so it is still a call.
+
+**⚠️ Item 1 (live sync check ×3) now has MORE to verify, not less.** `fd98b5f` changed how
+`hydrateAttendance` fetches: it pages with `.range()` instead of `.limit(2000)`, and it only
+re-pushes rows it can prove the server lacks. That path **cannot be exercised locally** — it needs a
+live Supabase — so the pure merge decision is unit-tested and the I/O around it is not. When you run
+the sync check, watch that attendance rows still land AND that a second hydrate does not re-push
+rows that are already up there.
 
 ---
 
