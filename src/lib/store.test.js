@@ -17,6 +17,7 @@ import {
   ensureClassInstance, getClassInstances, _ciToRow,
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
+  updateMember, memberStatus, MEMBER_STATUSES,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -350,5 +351,97 @@ describe("draft class", () => {
     saveDraftClass(DRAFT);
     saveDraftClass({ name: "clobber" });
     expect(getDraftClass().name).toBe("Circuit Surge");
+  });
+});
+
+// ── M1: editing a member ─────────────────────────────────────────────────────
+// The roster could be read and added to but never corrected. A misspelled name
+// captured mid-class was permanent, and there was no way to mark someone as
+// having left — so "active members" counted people who quit months ago, and the
+// at-risk list kept flagging them forever.
+describe("updateMember", () => {
+  beforeEach(() => localStorage.clear());
+
+  const seed = () => addMember("Ada Lovelace", { email: "ada@example.com" }).member;
+
+  it("patches only the fields it is given", () => {
+    const m = seed();
+    const { member } = updateMember(m.id, { name: "Ada L." });
+    expect(member.name).toBe("Ada L.");
+    // The whole point of a patch: email survives untouched.
+    expect(member.email).toBe("ada@example.com");
+    expect(member.id).toBe(m.id);
+    expect(getMembers()[0].name).toBe("Ada L.");
+  });
+
+  it("persists, so a correction survives a reload", () => {
+    const m = seed();
+    updateMember(m.id, { email: "ada@newdomain.com" });
+    expect(getMembers()[0].email).toBe("ada@newdomain.com");
+  });
+
+  it("coerces an illegal status instead of persisting it", () => {
+    // "archived" is the value a status dropdown reaches for by default, and
+    // members.status rejects it. It must never reach localStorage either — a bad
+    // local value comes back on the next read and re-attempts the failed write.
+    const m = seed();
+    const { member } = updateMember(m.id, { status: "archived" });
+    expect(member.status).toBe("active");
+    expect(MEMBER_STATUSES).toContain(member.status);
+    expect(getMembers()[0].status).toBe("active");
+  });
+
+  it("accepts every status the database allows", () => {
+    const m = seed();
+    for (const s of MEMBER_STATUSES) {
+      expect(updateMember(m.id, { status: s }).member.status).toBe(s);
+    }
+  });
+
+  it("refuses to blank a member's name", () => {
+    // A nameless member cannot be found in the check-in list or searched for —
+    // it is unreachable, not merely untidy.
+    const m = seed();
+    const res = updateMember(m.id, { name: "   " });
+    expect(res.member).toBeNull();
+    expect(res.error).toMatch(/name/i);
+    expect(getMembers()[0].name).toBe("Ada Lovelace");   // unchanged
+  });
+
+  it("drops unknown keys rather than riding them into a fixed column set", () => {
+    const m = seed();
+    const { member } = updateMember(m.id, { name: "Ada", nickname: "The Countess" });
+    expect(member.nickname).toBeUndefined();
+  });
+
+  it("returns null for an id that is not on the roster, without touching it", () => {
+    seed();
+    const res = updateMember("no-such-id", { name: "Ghost" });
+    expect(res.member).toBeNull();
+    expect(res.members).toHaveLength(1);
+    expect(getMembers()[0].name).toBe("Ada Lovelace");
+  });
+
+  it("edits the right member when several share a first name", () => {
+    const a = addMember("Sam Reed").member;
+    addMember("Sam Torres");
+    updateMember(a.id, { status: "cancelled" });
+    const byId = Object.fromEntries(getMembers().map(m => [m.name, m.status]));
+    expect(byId["Sam Reed"]).toBe("cancelled");
+    expect(byId["Sam Torres"]).toBe("active");
+  });
+});
+
+describe("memberStatus", () => {
+  it("passes through the legal values and falls back for anything else", () => {
+    MEMBER_STATUSES.forEach(s => expect(memberStatus(s)).toBe(s));
+    ["archived", "inactive", "canceled", "", null, undefined, 7].forEach(bad =>
+      expect(MEMBER_STATUSES).toContain(memberStatus(bad)));
+  });
+
+  it("rejects the ONE-L spelling, which is legal only on a different column", () => {
+    // entity_status (0001) allows "canceled"; members.status (0007) wants
+    // "cancelled". Mixing them up is a silent failed write.
+    expect(memberStatus("canceled")).toBe("active");
   });
 });

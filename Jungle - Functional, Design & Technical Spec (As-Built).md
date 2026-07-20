@@ -870,7 +870,7 @@ _Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now 
 | N4 | **Member magic-link summary** — the only member-facing surface, and the only place F6's white-label premium (A2) can be tested on a member. **Share-card half ✅ shipped** (needs no backend); the link half is **blocked on an Edge Function** to issue a signed class token |
 | I5 | **RLS tests for `0001`-`0006`** — ✅ **shipped** and run by Dylan |
 | N3-UI | ✅ **Built**, and migration **0008 is now APPLIED** — the append-only action ledger (`retention_actions`) persists, so A3 is measurable |
-| M1 | **Members CRUD** — `RosterScreen` reads but cannot edit; no status, no joined date |
+| M1 | **Members CRUD** — ✅ **shipped.** Add, inline edit (name · email · joined date · status), and a roster count that reads ACTIVE members rather than list length, so it can go down. Status is `MEMBER_STATUSES`, pinned against 0007's CHECK. **No delete, deliberately:** `attendance.member_id` cascades, so deleting a member destroys the attendance history the retention analytics run on — leaving is `status: 'cancelled'`, and erasure deserves its own PDPA flow |
 
 ### Next — platform + reach (§10)
 | # | Item |

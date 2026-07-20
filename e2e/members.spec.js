@@ -97,3 +97,127 @@ test.describe("Members — the owner's morning number", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── M1: Members CRUD ─────────────────────────────────────────────────────────
+// The roster could be read and added to, never corrected. A name misspelled
+// during a mid-class check-in was permanent, and there was no way to record that
+// someone had left — so the members count included people who quit months ago,
+// and the at-risk list kept flagging them.
+//
+// Driven through the UI and asserted on the STORED object, because a form that
+// renders the right thing and persists the wrong thing is this repo's recurring
+// shape (the Builder's class was never persisted at all until session 5).
+test.describe("Members — editing the roster", () => {
+  const seedRoster = (page, members) =>
+    page.evaluate(m => localStorage.setItem("jungle_members", JSON.stringify(m)), members);
+
+  const stored = (page) =>
+    page.evaluate(() => JSON.parse(localStorage.getItem("jungle_members") || "[]"));
+
+  test("corrects a misspelled name and persists it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedRoster(page, [
+      { id: "m1", name: "Ada Lovelacce", email: "ada@example.com", status: "active", joinedAt: "2026-01-05", externalRef: "" },
+    ]);
+    await page.reload();
+    await nav(page, "Members");
+
+    await page.getByRole("button", { name: /Edit Ada/ }).click();
+    const name = page.getByPlaceholder("Name", { exact: true });
+    await name.fill("Ada Lovelace");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    const rows = await stored(page);
+    expect(rows[0].name).toBe("Ada Lovelace");
+    // A patch, not a replace: the fields the form did not touch must survive.
+    expect(rows[0].email).toBe("ada@example.com");
+    expect(rows[0].joinedAt).toBe("2026-01-05");
+    expect(rows[0].id).toBe("m1");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the status dropdown offers only values the database accepts", async ({ page }) => {
+    // members.status is CHECK-constrained to ('active','paused','cancelled').
+    // This dropdown is precisely where a rejected value would be born, and a
+    // rejected write fails silently — the repo's most expensive bug class.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedRoster(page, [{ id: "m1", name: "Ada", email: "", status: "active", joinedAt: "", externalRef: "" }]);
+    await page.reload();
+    await nav(page, "Members");
+
+    await page.getByRole("button", { name: /Edit Ada/ }).click();
+    const values = await page.locator("select").first().locator("option").evaluateAll(
+      (opts) => opts.map((o) => o.value));
+    expect(values).toEqual(["active", "paused", "cancelled"]);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("marking someone as left takes them out of the active count, and keeps them", async ({ page }) => {
+    // The number an owner reads as "how big is my gym" must be able to go DOWN.
+    // Nothing is deleted: attendance.member_id cascades, so a delete would
+    // destroy the history the retention analytics are computed from.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedRoster(page, [
+      { id: "m1", name: "Ada", email: "", status: "active", joinedAt: "", externalRef: "" },
+      { id: "m2", name: "Sam", email: "", status: "active", joinedAt: "", externalRef: "" },
+    ]);
+    await page.reload();
+    await nav(page, "Members");
+    await expect(page.getByText(/Roster · 2/)).toBeVisible();
+
+    await page.getByRole("button", { name: /Edit Ada/ }).click();
+    await page.locator("select").first().selectOption("cancelled");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(page.getByText(/Roster · 1/)).toBeVisible();
+    await expect(page.getByText(/1 not active/)).toBeVisible();
+
+    const rows = await stored(page);
+    expect(rows).toHaveLength(2);                                   // kept, not deleted
+    expect(rows.find(r => r.id === "m1").status).toBe("cancelled");
+    expect(rows.find(r => r.id === "m2").status).toBe("active");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("adds a member with only a name", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Members");
+
+    await page.getByRole("button", { name: "Add member" }).click();
+    await page.getByPlaceholder("Name (required)").fill("Grace Hopper");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+
+    const rows = await stored(page);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Grace Hopper");
+    expect(rows[0].status).toBe("active");
+    expect(rows[0].id).toBeTruthy();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("refuses to blank a name, and leaves the roster untouched", async ({ page }) => {
+    // A nameless member cannot be found in the check-in list or searched for.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedRoster(page, [{ id: "m1", name: "Ada", email: "", status: "active", joinedAt: "", externalRef: "" }]);
+    await page.reload();
+    await nav(page, "Members");
+
+    await page.getByRole("button", { name: /Edit Ada/ }).click();
+    await page.getByPlaceholder("Name", { exact: true }).fill("   ");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(page.getByText(/needs a name/i)).toBeVisible();
+    expect((await stored(page))[0].name).toBe("Ada");
+
+    expectNoConsoleErrors(errors);
+  });
+});

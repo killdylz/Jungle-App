@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
+import { MEMBER_STATUSES, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
@@ -21,6 +22,18 @@ import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
 // what happened here — the extraction shipped a dead Members panel past a green
 // gate. The e2e added alongside this commit is what actually catches it.
 import { ArrowLeft, Check, Upload } from "lucide-react";
+
+const EMPTY_FORM = { name: "", email: "", joinedAt: "", status: "active" };
+
+// Plain words for the three values `members.status` allows. The UI never shows a
+// raw enum (U1), and the map lives beside the constant so a new status cannot be
+// added to one without the other going blank. "Cancelled" is deliberately not
+// called "deleted": nothing is deleted, and the attendance history stays.
+const MEMBER_STATUS_LABEL = {
+  active:    "Active",
+  paused:    "Paused",
+  cancelled: "Left",
+};
 
 export function RosterScreen({ onBack }) {
   const vw = useWindowWidth();
@@ -36,6 +49,10 @@ export function RosterScreen({ onBack }) {
   const [q, setQ] = useState("");
   const [actions, setActions] = useState(() => store.getRetentionActions());
   const [showHandled, setShowHandled] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formErr, setFormErr] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +110,39 @@ export function RosterScreen({ onBack }) {
   };
 
   const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
+  const fieldStyle = { padding:"7px 10px", borderRadius:"7px", border:`1px solid var(--border)`, background:"var(--card)", color:"var(--text)", fontSize:"12px", outline:"none", flex:"1 1 140px", minWidth:0 };
+  const primaryBtn = { padding:"7px 14px", borderRadius:"7px", border:"none", background:"var(--accent)", color:"var(--on-accent)", fontSize:"12px", fontWeight:"700", cursor:"pointer", flexShrink:0 };
+  const ghostBtn   = { padding:"6px 11px", borderRadius:"7px", border:`1px solid var(--border)`, background:"transparent", color:"var(--muted)", fontSize:"11px", fontWeight:"600", cursor:"pointer", flexShrink:0 };
+
+  // ── M1: add / edit ────────────────────────────────────────────────────────
+  // The roster was read-only: a name misspelled during a mid-class check-in was
+  // permanent, and nobody could be marked as having left — so "members" counted
+  // people who quit months ago and the at-risk list flagged them forever.
+  const startEdit = (m) => {
+    setAdding(false); setFormErr("");
+    setEditId(m.id);
+    setForm({ name: m.name || "", email: m.email || "", joinedAt: m.joinedAt || "", status: memberStatus(m.status) });
+  };
+  const cancelForm = () => { setEditId(null); setAdding(false); setFormErr(""); setForm(EMPTY_FORM); };
+
+  const submitEdit = (id) => {
+    const res = store.updateMember(id, form);
+    if (!res.member) { setFormErr(res.error || "That change could not be saved."); return; }
+    setMembers(res.members);
+    cancelForm();
+  };
+  const submitAdd = () => {
+    const name = form.name.trim();
+    if (!name) { setFormErr("A member needs a name."); return; }
+    const res = store.addMember(name, { email: form.email.trim(), joinedAt: form.joinedAt || undefined });
+    setMembers(res.members);
+    cancelForm();
+  };
+
+  // Counted on `status`, not on list length. This is the number an owner reads as
+  // "how big is my gym", and including cancelled members makes it a flattering
+  // lie that never goes down.
+  const activeCount = members.filter(m => memberStatus(m.status) === "active").length;
 
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -280,10 +330,39 @@ export function RosterScreen({ onBack }) {
           {/* ── Roster ─────────────────────────────────────────────────── */}
           <div style={card}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
-              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Roster · {members.length}</div>
-              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
-                style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>
+                Roster · {activeCount}
+                {members.length !== activeCount &&
+                  <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"7px"}}>
+                    ({members.length - activeCount} not active)
+                  </span>}
+              </div>
+              <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
+                  style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+                <button onClick={()=>{ setAdding(a=>!a); setEditId(null); setFormErr(""); }}
+                  style={{padding:"7px 12px",borderRadius:"7px",border:`1px solid var(--border)`,background:adding?"var(--accent)":"transparent",color:adding?"var(--on-accent)":"var(--text)",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
+                  {adding ? "Cancel" : "Add member"}
+                </button>
+              </div>
             </div>
+
+            {/* Add. Only a name is required — the same bar as the mid-class
+                quick-add, because a roster the owner refuses to start is worse
+                than one with blank emails. */}
+            {adding && (
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"8px",background:"var(--bg)",marginBottom:"10px"}}>
+                <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Name (required)" style={fieldStyle}/>
+                <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Email (optional)" style={fieldStyle}/>
+                <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
+                  title="Joined" style={fieldStyle}/>
+                <button onClick={submitAdd} style={primaryBtn}>Add</button>
+              </div>
+            )}
+            {formErr && <div style={{fontSize:"12px",color:"#EF4444",marginBottom:"10px"}}>{formErr}</div>}
+
             {members.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
                 No members yet. Import a CSV above, or check people in from the Class Runner —
@@ -293,16 +372,54 @@ export function RosterScreen({ onBack }) {
               <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
             ) : (
               <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-                {shown.slice(0, 200).map(m => (
-                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)"}}>
+                {shown.slice(0, 200).map(m => editId === m.id ? (
+                  /* ── Editing ── an inline row, not a modal: the owner is
+                     usually correcting a name they can see misspelled in the
+                     list, and a dialog would hide the thing being compared. */
+                  <div key={m.id} style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"7px",background:"var(--bg)",border:`1px solid var(--accent)`}}>
+                    <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
+                      placeholder="Name" style={fieldStyle}/>
+                    <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
+                      placeholder="Email" style={fieldStyle}/>
+                    <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
+                      title="Joined" style={fieldStyle}/>
+                    {/* Options come from MEMBER_STATUSES, never spelled inline —
+                        members.status is CHECK-constrained and this dropdown is
+                        exactly where a value the DB rejects would be born. */}
+                    <select value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}
+                      title="Status" style={{...fieldStyle,cursor:"pointer",flex:"0 0 auto"}}>
+                      {MEMBER_STATUSES.map(s => <option key={s} value={s}>{MEMBER_STATUS_LABEL[s]}</option>)}
+                    </select>
+                    <button onClick={()=>submitEdit(m.id)} style={primaryBtn}>Save</button>
+                    <button onClick={cancelForm} style={ghostBtn}>Cancel</button>
+                  </div>
+                ) : (
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)",opacity:m.status&&m.status!=="active"?0.62:1}}>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.name||"(no name)"}</div>
+                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        {m.name||"(no name)"}
+                        {/* Only NON-active states are badged. Tagging every row
+                            "active" is noise on the common case. */}
+                        {m.status && m.status !== "active" && (
+                          <span style={{marginLeft:"7px",fontSize:"9px",fontWeight:"800",letterSpacing:"0.5px",textTransform:"uppercase",padding:"2px 6px",borderRadius:"4px",border:`1px solid var(--border)`,color:"var(--muted)"}}>
+                            {MEMBER_STATUS_LABEL[m.status] || m.status}
+                          </span>
+                        )}
+                      </div>
                       {m.email&&<div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.email}</div>}
                     </div>
                     <div style={{textAlign:"right",flexShrink:0}}>
                       <div style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)"}}>{visitsFor(m.id)}</div>
                       <div style={{fontSize:"10px",color:"var(--muted)"}}>{lastSeen(m.id)||"never"}</div>
                     </div>
+                    {/* aria-label, not title: a title does NOT override text
+                        content for the accessible name, so every one of these
+                        buttons announced itself as just "Edit" — indistinguishable
+                        in a 200-row roster to a screen reader, and ambiguous to
+                        any test. The label names who is being edited. */}
+                    <button onClick={()=>startEdit(m)} aria-label={`Edit ${m.name||"member"}`} style={ghostBtn}>Edit</button>
                   </div>
                 ))}
                 {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}

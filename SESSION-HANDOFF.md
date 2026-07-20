@@ -135,7 +135,11 @@ earns its panel back. The board now reads as nothing but what is happening in th
   READS the migration. That was a fourth unguarded instance of this repo's recurring
   constrained-column data-loss shape. **Worth auditing whether a fifth exists.**
 - Sentry and UptimeRobot — still decisions/actions for Dylan, unchanged.
-- REGRESSION §1 tests 1, 3, 5 still unwritten.
+- ~~REGRESSION §1 tests 1, 3, 5 still unwritten.~~ **This was STALE — all six §1 items are
+  covered.** 1 = "the movement catalog says what the class actually contains", 2 = "a category
+  stored under older rules is re-derived", 3 = "slot keys are the format" + "no lift in the
+  warm-up", 4 = the at-risk consistency pair, 5 = "a drafted class arrives in the Builder intact",
+  6 = the smoke path. Session 5 wrote most of them and the note was never updated.
 
 ### ⛔ Dylan queue — unchanged from session 5 except where noted
 

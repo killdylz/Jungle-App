@@ -783,7 +783,13 @@ export function recordRetentionAction({ memberId, rule, action, note = "" }) {
 // Local shape: { id, name, email, status, joinedAt, externalRef }
 function _memberToRow(m) {
   return { id: m.id, gym_id: _ctx.gymId, name: m.name, email: m.email || null,
-           status: m.status || "active", joined_at: m.joinedAt || null,
+           // Through memberStatus(), not `|| "active"`. The old form passed any
+           // string straight into a CHECK-constrained column, so one caller
+           // writing "archived" would fail the write silently — the exact shape
+           // that cost persona_plans data. Same reasoning as _asText below: this
+           // mapper is the last line of defence before Postgres, so it coerces
+           // rather than trusting the caller.
+           status: memberStatus(m.status), joined_at: m.joinedAt || null,
            external_ref: m.externalRef || null, created_by: _ctx.userId || null };
 }
 function _rowToMember(r) {
@@ -808,6 +814,47 @@ export function addMember(name, extra = {}) {
   saveMembers(list);
   return { member: m, members: list };
 }
+
+// ── M1: edit an existing member ─────────────────────────────────────────────
+// Patch-shaped rather than whole-object, so a caller cannot blank a field it
+// never meant to touch by round-tripping a stale copy. Unknown keys are dropped:
+// `members` has a fixed column set, and an extra key would ride into
+// _memberToRow and be rejected by Postgres.
+//
+// `status` goes through memberStatus() here as well as in _memberToRow. That is
+// deliberate belt-and-braces — this one keeps the LOCAL copy honest too, so a
+// bad value never reaches localStorage and cannot come back on the next read.
+export function updateMember(id, patch = {}) {
+  const list = getMembers();
+  const i = list.findIndex(m => m && m.id === id);
+  if (i < 0) return { member: null, members: list };
+
+  const cur = list[i];
+  const next = { ...cur };
+  if ("name" in patch)        next.name = String(patch.name || "").trim();
+  if ("email" in patch)       next.email = String(patch.email || "").trim();
+  if ("joinedAt" in patch)    next.joinedAt = patch.joinedAt || "";
+  if ("externalRef" in patch) next.externalRef = String(patch.externalRef || "").trim();
+  if ("status" in patch)      next.status = memberStatus(patch.status);
+
+  // A member with no name is unusable in the runner's check-in list and cannot
+  // be searched for — refuse rather than persist something unreachable.
+  if (!next.name) return { member: null, members: list, error: "A member needs a name." };
+
+  const out = [...list];
+  out[i] = next;
+  saveMembers(out);
+  return { member: next, members: out };
+}
+
+// NOTE: there is deliberately no `deleteMember`. `attendance.member_id` cascades
+// on delete (0007) — by design, because PDPA erasure has to reach the attendance
+// rows too. That makes deletion the right primitive for an ERASURE REQUEST and
+// the wrong one for "this person left the gym": a trash icon beside a name would
+// quietly destroy the attendance history the retention analytics are computed
+// from, and the owner would never connect the two. Leaving is `status:
+// 'cancelled'`, which keeps the history. Erasure deserves its own deliberate
+// flow, with the consent ledger involved.
 
 // ── class_instances: one dated occurrence ───────────────────────────────────
 // Local shape: { id, startsAt, name, classType, coachName, durationMin }
