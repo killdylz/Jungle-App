@@ -17,6 +17,7 @@ import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "./lib/retention.js";
 import { winBackLink, winBackBlockedReason } from "./lib/winback.js";
+import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
@@ -4269,7 +4270,7 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
 }
 
 
-function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass}) {
+function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass, onShareCard}) {
   // Export/import moved here from the retired Templates screen. Without this the
   // feature would have been orphaned by the nav change rather than folded.
   const importFileRef = useRef(null);
@@ -4496,6 +4497,12 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             <button onClick={onExportClass} title="Save this class as a file you can keep or send to another coach"
               style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--muted)",fontWeight:"600",fontSize:"13px",padding:"9px 13px",borderRadius:"9px",cursor:"pointer"}}>
               Save to file
+            </button>
+            {/* The gym's own marketing, not ours — the card carries their name
+                and colours and no Jungle mark (UI-UX §5). */}
+            <button onClick={onShareCard} title="Download a story-sized image of this class, in your gym's colours"
+              style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--muted)",fontWeight:"600",fontSize:"13px",padding:"9px 13px",borderRadius:"9px",cursor:"pointer"}}>
+              Share card
             </button>
             <button onClick={onOverviewDisplay} style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
               Preview on TV
@@ -8527,6 +8534,29 @@ export default function App() {
   //  went with it. The Builder's own Class/Style selects already cover selecting
   //  a shape; export now works on the open class instead — see below.)
 
+  // The gym's share card (UI-UX §5). Colours and fonts are read from the LIVE
+  // CSS custom properties rather than from PRESET_SKINS, so the card matches
+  // exactly what is on the Room TV right now — including a custom palette a gym
+  // built in Brand Studio, which has no entry in the preset table.
+  const handleShareCard = () => {
+    const model = shareCardModel({ stages, sessionName, gymName: gymBranding?.gymName || "" });
+    if (model.isEmpty) { alert("Add some exercises first — a share card with no movements isn't worth posting."); return; }
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n, f) => (cs.getPropertyValue(n) || "").trim() || f;
+    const canvas = document.createElement("canvas");
+    drawShareCard(canvas, model,
+      { bg:v("--bg","#0A0F0C"), text:v("--text","#E8EFE9"), muted:v("--muted","#8AA294"), accent:v("--accent","#7BE3A4") },
+      { display:v("--display","sans-serif"), body:v("--body","sans-serif") });
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), { href:url, download:shareCardFilename(model) });
+      a.click();
+      // Revoking immediately can beat the download on some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    }, "image/png");
+  };
+
   // Export the class the coach is actually looking at, exercises and all.
   const handleExportClass = () => {
     const data = {
@@ -8696,7 +8726,7 @@ export default function App() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <ErrorBoundary key={view} name={VIEW_LABELS[view]||view}>
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
-        {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
+        {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="live"&&(
