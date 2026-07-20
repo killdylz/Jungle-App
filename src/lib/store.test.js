@@ -17,7 +17,7 @@ import {
   ensureClassInstance, getClassInstances, _ciToRow,
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
-  updateMember, memberStatus, MEMBER_STATUSES,
+  updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -443,5 +443,79 @@ describe("memberStatus", () => {
     // entity_status (0001) allows "canceled"; members.status (0007) wants
     // "cancelled". Mixing them up is a silent failed write.
     expect(memberStatus("canceled")).toBe("active");
+  });
+});
+
+// ── I14: paged hydrate + the merge that decides what gets re-pushed ──────────
+// `.limit(2000)` on an append-only log was a silent truncation with a date on
+// it. A studio at 20 classes/week x 12 heads generates ~12,500 attendance rows a
+// year, so the cap was reached inside twelve months and then TWO things went
+// wrong at once, neither visibly:
+//
+//   1. a newly signed-in device saw only the newest 2,000 rows, so every
+//      retention number was computed on a truncated history and was simply wrong
+//   2. the merge read "not in the response" as "the server never got it", so
+//      every row outside the window looked local-only and was RE-PUSHED on every
+//      hydrate — a permanent, growing rewrite of the whole back-catalogue
+//
+// `_mergeAppendLog` is where (2) is decided, so it is tested directly rather
+// than through a hydrate that would need a live Supabase — the same reasoning
+// that already exports _guardList and _ciToRow.
+describe("_mergeAppendLog", () => {
+  const row = (id) => ({ id, checkedInAt: `2026-01-${String(id).padStart(2, "0")}` });
+
+  it("keeps every row from both sides", () => {
+    const { merged } = _mergeAppendLog([row(1), row(2)], [row(2), row(3)], true);
+    expect(merged.map(r => r.id).sort()).toEqual([1, 2, 3]);
+  });
+
+  it("never duplicates a row present on both sides", () => {
+    // The id is the identity. A duplicated check-in inflates every visit count
+    // and every retention number derived from it.
+    const { merged } = _mergeAppendLog([row(1), row(2)], [row(1), row(2)], true);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("pushes rows the server provably lacks when the fetch was COMPLETE", () => {
+    const { toPush } = _mergeAppendLog([row(1)], [row(1), row(2)], true);
+    expect(toPush.map(r => r.id)).toEqual([2]);
+  });
+
+  it("pushes NOTHING when the fetch was truncated, but still keeps the rows", () => {
+    // The heart of the fix. With an incomplete view, a local row missing from the
+    // response proves nothing — it is far more likely to be older than the window
+    // than genuinely unsynced. Keeping it costs nothing; re-pushing it every
+    // hydrate rewrites the entire history forever.
+    const { merged, toPush } = _mergeAppendLog([row(1)], [row(1), row(2), row(3)], false);
+    expect(toPush).toEqual([]);
+    expect(merged.map(r => r.id).sort()).toEqual([1, 2, 3]);   // nothing lost
+  });
+
+  it("keeps an offline-only check-in, which may be the only copy in existence", () => {
+    const { merged, toPush } = _mergeAppendLog([], [row(9)], true);
+    expect(merged.map(r => r.id)).toEqual([9]);
+    expect(toPush.map(r => r.id)).toEqual([9]);
+  });
+
+  it("survives empty and missing inputs rather than throwing mid-hydrate", () => {
+    expect(_mergeAppendLog([], [], true)).toEqual({ merged: [], toPush: [] });
+    expect(_mergeAppendLog(null, null, true)).toEqual({ merged: [], toPush: [] });
+    expect(_mergeAppendLog(undefined, [row(1)], false).merged).toHaveLength(1);
+  });
+
+  it("ignores a null row in the local list instead of poisoning the push", () => {
+    const { merged, toPush } = _mergeAppendLog([row(1)], [null, row(2)], true);
+    expect(merged.map(r => r.id).sort()).toEqual([1, 2]);
+    expect(toPush.map(r => r.id)).toEqual([2]);
+  });
+
+  it("prefers the SERVER copy when the same id exists on both sides", () => {
+    // Attendance rows are immutable once written, so this is a tie-break rather
+    // than a policy — but it must be deterministic, not insertion-order luck.
+    const server = { id: 1, source: "coach" };
+    const local  = { id: 1, source: "qr" };
+    const { merged } = _mergeAppendLog([server], [local], true);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe("coach");
   });
 });

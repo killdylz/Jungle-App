@@ -1035,6 +1035,63 @@ export function recordConsent({ memberId, scope = "roster_attendance", granted =
   }, (e) => _noteSyncError("consent_records", e?.message || e));
 }
 
+// ── I14: paged fetch ────────────────────────────────────────────────────────
+// `.limit(2000)` on an append-only log is a silent truncation with a date on it.
+// A studio running 20 classes a week at 12 heads generates ~12,500 attendance
+// rows a year, so the cap is reached inside twelve months and then two things go
+// wrong at once, neither of them visibly:
+//
+//   1. A newly signed-in device sees only the newest 2,000 rows, so every
+//      retention number — cohort curves, "last seen", who is slipping away — is
+//      computed on a truncated history and is simply wrong, with nothing saying so.
+//   2. Worse, the merge below treats "not in the server response" as "the server
+//      never got it", so every row outside the window looks local-only and is
+//      RE-PUSHED on every single hydrate. Not a one-off cost: a permanent,
+//      growing rewrite of the entire back-catalogue on every login.
+//
+// Paging fixes (1). `complete` is what fixes (2): it records whether we actually
+// reached the end, so the merge can tell "the server has never seen this" from
+// "we simply have not looked that far back yet".
+const PAGE_SIZE = 1000;
+const HARD_CAP  = 50_000;   // ~4 years for the studio above; a stop, not a target.
+
+async function _fetchPaged(table, orderCol) {
+  const rows = [];
+  for (let from = 0; from < HARD_CAP; from += PAGE_SIZE) {
+    const { data, error } = await supabase.from(table).select("*")
+      .eq("gym_id", _ctx.gymId)
+      .order(orderCol, { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) return { rows, error, complete: false };
+    rows.push(...(data || []));
+    // A short page means the end of the table — the only honest "complete".
+    if (!data || data.length < PAGE_SIZE) return { rows, error: null, complete: true };
+  }
+  // Hit the ceiling. We are truncated and we KNOW it, which is the whole point:
+  // an honest "I cannot see all of this" beats a confident wrong merge.
+  console.warn(`[store] ${table}: more than ${HARD_CAP} rows; history is truncated for this session`);
+  return { rows, error: null, complete: false };
+}
+
+// Merge an append-only log. Pure, and exported for tests: this is a last line of
+// defence against both data loss and a runaway re-push, and the hydrate around it
+// needs a live Supabase — the same reasoning as _guardList and _ciToRow.
+//
+// `serverComplete` is load-bearing. When we have NOT seen the whole table, a
+// local row missing from the response proves nothing, so it is kept (never lose
+// a check-in) but NOT pushed (it is probably already up there, just older than
+// the window).
+export function _mergeAppendLog(serverRows, localRows, serverComplete) {
+  const seen = new Set((serverRows || []).map(r => r.id));
+  const missing = (localRows || []).filter(r => r && !seen.has(r.id));
+  const byId = new Map([...(serverRows || []), ...missing].map(r => [r.id, r]));
+  return {
+    merged: [...byId.values()],
+    // Only rows we can prove the server lacks are worth pushing.
+    toPush: serverComplete ? missing : [],
+  };
+}
+
 // ── hydrate ─────────────────────────────────────────────────────────────────
 // members + class_instances are server-wins but guarded (same shape as
 // hydratePersonas): if their last write failed, local-only rows are kept and
@@ -1043,29 +1100,30 @@ export function recordConsent({ memberId, scope = "roster_attendance", granted =
 export async function hydrateAttendance() {
   if (!_synced()) return null;
   try {
-    const [mRes, cRes, aRes] = await Promise.all([
+    const [mRes, cPaged, aPaged] = await Promise.all([
       supabase.from("members").select("*").eq("gym_id", _ctx.gymId),
-      supabase.from("class_instances").select("*").eq("gym_id", _ctx.gymId)
-        .order("starts_at", { ascending: false }).limit(200),
-      supabase.from("attendance").select("*").eq("gym_id", _ctx.gymId)
-        .order("checked_in_at", { ascending: false }).limit(2000),
+      // class_instances is paged too: at 20 classes a week the old limit of 200
+      // covered ten weeks, so after a fresh sign-in a check-in against an older
+      // class had no occurrence to hang off.
+      _fetchPaged("class_instances", "starts_at"),
+      _fetchPaged("attendance", "checked_in_at"),
     ]);
     // Retention actions are pulled defensively and separately, so a not-yet-applied
     // 0008 degrades to "no actions recorded" instead of breaking attendance
     // hydration outright — the same shape hydratePersonas uses for 0006.
     let serverRa = null;
+    let raComplete = false;
     try {
-      const rRes = await supabase.from("retention_actions").select("*").eq("gym_id", _ctx.gymId)
-        .order("occurred_at", { ascending: false }).limit(2000);
-      if (!rRes.error) serverRa = (rRes.data || []).map(_rowToRa);
+      const rPaged = await _fetchPaged("retention_actions", "occurred_at");
+      if (!rPaged.error) { serverRa = (rPaged.rows || []).map(_rowToRa); raComplete = rPaged.complete; }
     } catch (_) { /* table may not exist yet */ }
-    if (mRes.error || cRes.error || aRes.error) {
-      console.warn("[store] hydrateAttendance failed:", (mRes.error || cRes.error || aRes.error).message);
+    if (mRes.error || cPaged.error || aPaged.error) {
+      console.warn("[store] hydrateAttendance failed:", (mRes.error || cPaged.error || aPaged.error).message);
       return null;
     }
     const serverMembers = (mRes.data || []).map(_rowToMember);
-    const serverCis     = (cRes.data || []).map(_rowToCi);
-    const serverAtt     = (aRes.data || []).map(_rowToAtt);
+    const serverCis     = (cPaged.rows || []).map(_rowToCi);
+    const serverAtt     = (aPaged.rows || []).map(_rowToAtt);
 
     // Uses the shared _guardList (I3) rather than the local copy this once had —
     // one implementation means a fix to the guard reaches every domain, which is
@@ -1073,24 +1131,26 @@ export async function hydrateAttendance() {
     const members = _guardList("members", serverMembers, getMembers, saveMembers);
     const cis     = _guardList("class_instances", serverCis, getClassInstances, saveClassInstances);
 
-    // Append log: never drop a local check-in the server hasn't got. Push it up.
-    const seen = new Set(serverAtt.map(a => a.id));
-    const localOnlyAtt = getAttendance().filter(a => !seen.has(a.id));
-    if (localOnlyAtt.length) _pushAttendance(localOnlyAtt);
-    const attendance = [...serverAtt, ...localOnlyAtt];
+    // Append log: never drop a local check-in the server hasn't got. Push up only
+    // what we can PROVE it lacks — see _mergeAppendLog on why `complete` matters.
+    const att = _mergeAppendLog(serverAtt, getAttendance(), aPaged.complete);
+    if (att.toPush.length) _pushAttendance(att.toPush);
+    const attendance = att.merged;
 
     // Same append-log rule as attendance: an action recorded offline is the only
     // copy, so merge and push it up rather than letting the server win.
     let retentionActions = getRetentionActions();
     if (serverRa !== null) {
-      const seenRa = new Set(serverRa.map(a => a.id));
-      const localOnlyRa = retentionActions.filter(a => !seenRa.has(a.id));
-      if (localOnlyRa.length) {
-        supabase.from("retention_actions").insert(localOnlyRa.map(_raToRow)).then(
+      // Same merge as attendance, through the same function rather than a second
+      // copy of the logic — a fix to one has to reach both, which is exactly why
+      // _guardList was generalised.
+      const ra = _mergeAppendLog(serverRa, retentionActions, raComplete);
+      if (ra.toPush.length) {
+        supabase.from("retention_actions").insert(ra.toPush.map(_raToRow)).then(
           ({ error }) => { if (error) _noteSyncError("retention_actions", error.message); },
           (e) => _noteSyncError("retention_actions", e?.message || e));
       }
-      retentionActions = [...serverRa, ...localOnlyRa];
+      retentionActions = ra.merged;
       writeJSON(KEYS.retentionActions, retentionActions);
     }
 
