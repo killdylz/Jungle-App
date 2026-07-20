@@ -2,8 +2,8 @@
 
 _Last updated: 2026-07-20 (end of session 6)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-6-PROMPT.md` is now largely spent — all five of its
-> build-order items are done or resolved. Read this block first, then that file for context.
+> **▶ STARTING A NEW SESSION? Paste `SESSION-7-PROMPT.md` as your opening message.**
+> It supersedes `SESSION-6-PROMPT.md`, now history. Every session-6 build item is done.
 >
 > **CI is answered: it is GREEN on Linux, Playwright and all.** Session 5's unobserved deploy
 > run passed at `14be355`, `6d64aaa` and `f2990b6` — the workflow ran `lint:crash → test →
