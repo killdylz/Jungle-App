@@ -3686,7 +3686,10 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
         <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
           <div>
             <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>EXERCISE LIBRARY</p>
-            <p style={{fontSize:"12px",color:"var(--muted)"}}>The studio's movement catalogue — editable per gym, with a Discover feed of community packs</p>
+            {/* Was "…with a Discover feed of community packs" — still advertising
+                the marketplace after the feed itself was deleted. The Glossary's
+                muscles and cues fold in here now, so the copy says that. */}
+            <p style={{fontSize:"12px",color:"var(--muted)"}}>The studio's movement catalogue — editable per gym, with muscles and coaching cues</p>
           </div>
           <button onClick={onClose} style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"6px 12px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
             <X size={13}/> Close
