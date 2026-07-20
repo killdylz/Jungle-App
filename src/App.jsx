@@ -6769,6 +6769,9 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   const [generations, setGenerations] = useState(() => store.getPersonaGenerations());
   const [selectedId, setSelectedId] = useState(() => store.getPersonas()[0]?.id || null);
   const [activeCT, setActiveCT] = useState(null);
+  // D3 cold start: the class type a brand-new coach is naming before they have
+  // imported anything.
+  const [coldCT, setColdCT] = useState("");
   const [form, setForm] = useState({ name:"", kind:"coach", description:"" });
   const [editHead, setEditHead] = useState(false);
   const [headForm, setHeadForm] = useState({ name:"", description:"" });
@@ -6969,7 +6972,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
 
   const selected = personas.find(p => p.id === selectedId) || null;
   const selPlans = plans.filter(pl => pl.personaId === selectedId);
-  const classTypes = classTypesOf(selPlans);
+  // Class types come from two places, not one. A coach who has imported classes
+  // gets them from those; a BRAND-NEW coach (D3 cold start) has named a class
+  // type and picked a shape for it before importing anything, and that shape is
+  // stored on the persona. Deriving from plans alone is why a new coach used to
+  // see nothing but "import something first".
+  const classTypes = [...new Set([
+    ...classTypesOf(selPlans),
+    ...Object.keys(selected?.styleProfile?.blueprints || {}),
+  ])];
   const curCT = (activeCT && classTypes.includes(activeCT)) ? activeCT : (classTypes[0] || null);
   const ctPlans = selPlans.filter(pl => ctOf(pl) === curCT);
   const prof = curCT ? aggregateClassType(selPlans, curCT) : null;
@@ -6996,6 +7007,28 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
       blueprints: { ...((p.styleProfile || {}).blueprints || {}), [curCT]: clean },
     } } : p));
   };
+  // D3 cold start. A coach with zero classes still has to be able to run one:
+  // name the class type, pick the shape it usually takes, and get a draft. This
+  // writes the preset as that class type's shape and switches to it — from
+  // there the screen is identical to a coach who imported a season of decks,
+  // except the movement catalog is empty until they add some.
+  const startClassTypeFromPreset = (preset) => {
+    const name = coldCT.trim();
+    if (!selectedId || !name || !preset) return;
+    commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: {
+      ...(p.styleProfile || {}),
+      blueprints: {
+        ...((p.styleProfile || {}).blueprints || {}),
+        // `source: "preset"` matters: reconcileBlueprint only defends an
+        // "edited" shape from re-derivation, so a preset correctly gives way
+        // once the coach's own classes arrive and a real shape can be derived.
+        [name]: { ...preset, source: "preset", slots: preset.slots.map(s => ({ ...s, categories: [...s.categories] })) },
+      },
+    } } : p));
+    setActiveCT(name);
+    setColdCT("");
+  };
+
   // Deterministic drafting from the coach's shape — no model involved. The
   // structure is theirs, the movements are theirs, the selection is arithmetic
   // (§9.3). Unlike generateForCT this works with Supabase off.
@@ -7460,8 +7493,34 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
               )}
 
               {classTypes.length === 0 ? (
-                <div style={{...P_CARD,padding:"30px 24px",textAlign:"center",color:"var(--muted)"}}>
-                  <p style={{fontSize:"13px"}}>No classes yet. Use <b>Add class</b> to bring in this coach's programming — Jungle groups them by the class type you give each one (S360, GC, Enduro…).</p>
+                /* D3 cold start. This screen used to be a dead end that told a
+                   new coach to go and import something — at exactly the moment
+                   they are deciding whether this product is for them. Now they
+                   can name the class they teach, pick the shape it takes, and
+                   have a draft in the Builder before importing anything. */
+                <div style={{...P_CARD,padding:"22px 24px"}}>
+                  <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Start with a class this coach teaches</p>
+                  <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.6",marginBottom:"14px"}}>
+                    Name it however they do — S360, Engine, Saturday Grind. Then pick the shape it usually takes.
+                    You can change every part of it afterwards, and it will reshape itself once their real classes come in.
+                  </p>
+                  <Input placeholder="Class type — e.g. S360" value={coldCT}
+                         onChange={e=>setColdCT(e.target.value)} style={{marginBottom:"12px",maxWidth:"320px"}}/>
+                  <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
+                    {BLUEPRINT_PRESETS.map(p => (
+                      <button key={p.name} onClick={()=>startClassTypeFromPreset(p)} disabled={!coldCT.trim()}
+                        title={coldCT.trim() ? `Use the ${p.name} shape for ${coldCT.trim()}` : "Name the class type first"}
+                        style={{textAlign:"left",padding:"12px 14px",borderRadius:"10px",border:"1px solid var(--border)",
+                                background:"var(--navy)",cursor:coldCT.trim()?"pointer":"not-allowed",
+                                opacity:coldCT.trim()?1:0.5,maxWidth:"260px"}}>
+                        <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>{p.name}</div>
+                        <div style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.4"}}>{shapeChips(p.slots)}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"14px",lineHeight:"1.5"}}>
+                    Already have their classes written down? <b>Add class</b> reads them straight in, and Jungle learns the real shape from those instead.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -7528,8 +7587,15 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                   </div>
 
                   {/* Class shape — the coach's format, editable (§9.1) */}
+                  {/* Draftable whenever there IS a shape, not only once the
+                      catalog has movements. A brand-new coach's draft is the
+                      shape with empty slots — the class skeleton, named and
+                      timed, ready to fill from the Library one click away.
+                      Gating this on movements is what made D3 a dead end: the
+                      preset could be picked and then did nothing. */}
                   <ClassShapeCard blueprint={blueprint} classType={curCT} onSave={saveBlueprint}
-                                  onDraft={draftFromShape} draftable={ctMoves.length > 0}/>
+                                  onDraft={draftFromShape} draftable={!!blueprint}
+                                  emptyCatalog={ctMoves.length === 0}/>
 
                   {/* Movement catalog */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
@@ -7624,7 +7690,7 @@ function PersonaProfilePanel({ prof, extracted }) {
 const SLOT_ROLES = ["warmup", "primary_lift", "superset", "circuit", "finisher", "recovery", "cooldown"];
 const shapeChips = slots => (slots || []).map(s => s.label || s.key).join(" · ");
 
-function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable }) {
+function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable, emptyCatalog = false }) {
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState([]);
   const start = () => { setRows((blueprint?.slots || []).map(s => ({ ...s, categories: [...(s.categories || [])] }))); setEditing(true); };
@@ -7665,7 +7731,9 @@ function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable }) {
         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{classType} — class shape</p>
         {!editing && (
           <div style={{display:"flex",gap:"8px"}}>
-            {draftable && <Btn variant="ghost" onClick={onDraft} style={{padding:"6px 12px"}}><Layers size={13}/> Draft from this shape</Btn>}
+            {draftable && <Btn variant="ghost" onClick={onDraft} style={{padding:"6px 12px"}}
+              title={emptyCatalog ? "Opens this shape in the Builder with the sections named and timed, ready to fill" : "Fill this shape with this coach's own movements"}>
+              <Layers size={13}/> {emptyCatalog ? "Start a class from this shape" : "Draft from this shape"}</Btn>}
             <Btn variant="ghost" onClick={start} style={{padding:"6px 12px"}}>Change</Btn>
           </div>
         )}
