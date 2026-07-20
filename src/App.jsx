@@ -7936,6 +7936,67 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
   );
 }
 
+// ─── BottomNav — the phone/tablet navigation (audit 1.1, UI-UX §3) ───────────
+// Below COMPACT_NAV_PX the 238px sidebar is replaced by a bottom tab bar.
+//
+// Why a bar and not the drawer that was here: most of this app is used on a
+// phone, in a loud room, mid-class, one-handed. The drawer costs two taps and a
+// stretch to the top-left corner — the furthest point from a thumb. The four
+// things a coach touches while a class is running sit on the bar itself; the
+// rest live behind More.
+//
+// The breakpoint is 900 rather than 480 because the sidebar was still taking
+// 40% of a 600px screen and 31% of a 768px tablet. Measured in the running app:
+// at 375px the drawer was already in play, so the band that actually broke was
+// 480–900.
+const COMPACT_NAV_PX = 900;
+
+// Deliberately four + More. Run and Build are the coach's day; Members is the
+// owner's morning number; Brand is what a prospect gets shown. Everything else
+// is a considered decision, not a mid-class reach.
+const BOTTOM_NAV = [
+  { key:"live",         label:"Run",     Icon:PlayCircle, cap:"class:view"   },
+  { key:"builder",      label:"Build",   Icon:Layers,     cap:"class:view"   },
+  { key:"member",       label:"Members", Icon:Users,      cap:"members:view" },
+  { key:"brand-studio", label:"Brand",   Icon:Palette,    cap:"brand:view"   },
+];
+
+function BottomNav({ view, onNavigate, onMore, moreOpen, can=(()=>true) }) {
+  const items = BOTTOM_NAV.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.key));
+  const tab = (on) => ({
+    flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+    gap:"3px", padding:"7px 2px 4px", background:"transparent", border:"none", cursor:"pointer",
+    color:on?"var(--accent)":"var(--muted)", fontSize:"10px", fontWeight:on?"700":"600",
+    // 44px is the minimum comfortable touch target; the bar is taller so a
+    // mis-tap mid-burpee does not change screen.
+    minHeight:"52px",
+  });
+  return (
+    <nav style={{
+      // Sits ABOVE the More sheet's overlay (z 200). The sheet's scrim spans the
+      // whole viewport, so at a lower z-index it swallowed taps on the very
+      // button that opened the sheet — More has to be able to close it again.
+      position:"fixed", left:0, right:0, bottom:0, zIndex:250,
+      display:"flex", alignItems:"stretch",
+      background:"var(--card)", borderTop:"1px solid var(--border)",
+      // iOS home-indicator inset — without this the last row of tabs sits under
+      // the system gesture bar on any modern iPhone.
+      paddingBottom:"env(safe-area-inset-bottom, 0px)",
+    }}>
+      {items.map(it => (
+        <button key={it.key} onClick={()=>onNavigate(it.key)} style={tab(view===it.key && !moreOpen)} aria-current={view===it.key?"page":undefined}>
+          <it.Icon size={19}/>
+          <span>{it.label}</span>
+        </button>
+      ))}
+      <button onClick={onMore} style={tab(moreOpen)} aria-expanded={moreOpen}>
+        <List size={19}/>
+        <span>More</span>
+      </button>
+    </nav>
+  );
+}
+
 // ── Admin: Team management (invite via allowlist + manage member roles) ──────
 const TEAM_ROLES = ["admin","manager","coach","frontdesk","member"];
 const ROLE_BLURB = {
@@ -8127,6 +8188,10 @@ export default function App() {
 
   const vw = useWindowWidth();
   const isMobile = vw < 480;
+  // `isCompact` drives NAVIGATION only (sidebar vs bottom bar). It is separate
+  // from `isMobile`, which drives type/padding inside screens — a 700px tablet
+  // wants the bottom bar but not phone-sized text.
+  const isCompact = vw < COMPACT_NAV_PX;
 
   const { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices,
           nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
@@ -8424,7 +8489,10 @@ export default function App() {
   } : profile;
   const allNavItems = [
     {key:"dashboard",    label:"Dashboard",    icon:"\ud83c\udfe0",  group:"Main"},
-    {key:"builder",      label:"Builder",      icon:"\ud83c\udffb",  group:"Main",     cap:"class:view"},
+    // Was "\ud83c\udffb" \u2014 a lone skin-tone modifier, which renders as a bare
+    // colour swatch ("\ud83c\udffbBuilder") because the weightlifter it was meant to
+    // modify is not there.
+    {key:"builder",      label:"Builder",      icon:"\ud83c\udfcb\ufe0f",  group:"Main",     cap:"class:view"},
     {key:"personas",     label:"Personas",     icon:"\ud83c\udf99\ufe0f",  group:"Main", cap:"class:view"},
     {key:"templates",    label:"Templates",    icon:"\ud83d\udccb",  group:"Main",     cap:"templates:view"},
     {key:"analytics",    label:"Analytics",    icon:"\ud83d\udcca",  group:"Insights", cap:"analytics:view"},
@@ -8448,13 +8516,26 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
     <div style={{display:"flex",flexDirection:"row",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
-      {!isFullscreen && !isMobile && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={displayProfile} can={can}/>}
-      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:"100vh"}}>
+      {!isFullscreen && !isCompact && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={displayProfile} can={can}/>}
+      {/* Reserve the bar's height so the last card on a screen is not trapped
+          underneath it — a scroll container cannot reveal what a fixed element
+          covers. */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:"100vh",
+                   paddingBottom:(!isFullscreen && isCompact) ? "calc(56px + env(safe-area-inset-bottom, 0px))" : 0}}>
 
+      {/* The "More" sheet. On compact widths it rises from the BOTTOM, next to
+          the thumb that opened it, rather than sliding in from the top-left
+          corner — the hardest place to reach one-handed. */}
+      {/* The overlay is padded up by the bar's height so the sheet sits ABOVE the
+          tab bar rather than covering it — the same "More" button has to be able
+          to close it again. */}
       {showNav && !isFullscreen && (
-        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
+        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:isCompact?"flex-end":"stretch",
+                     paddingBottom:isCompact?"calc(56px + env(safe-area-inset-bottom, 0px))":0,boxSizing:"border-box"}}>
           <div onClick={()=>setShowNav(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
-          <div style={{position:"relative",width:"260px",background:"var(--card)",borderRight:`1px solid var(--border)`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
+          <div style={isCompact
+            ? {position:"relative",width:"100%",maxHeight:"72vh",background:"var(--card)",borderTop:`1px solid var(--border)`,borderRadius:"16px 16px 0 0",display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto",paddingBottom:"calc(12px + env(safe-area-inset-bottom, 0px))"}
+            : {position:"relative",width:"260px",background:"var(--card)",borderRight:`1px solid var(--border)`,display:"flex",flexDirection:"column",zIndex:1,overflowY:"auto"}}>
             <div style={{padding:"18px 20px 12px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
                 <BrandLogo size={26} showName/>
@@ -8489,12 +8570,9 @@ export default function App() {
 
       {!isFullscreen && (
         <header style={{display:"flex",alignItems:"center",gap:"8px",padding:isMobile?"10px 14px":"12px 20px",borderBottom:`1px solid var(--border)`,background:"var(--card)",position:"sticky",top:0,zIndex:100}}>
-          {isMobile && <button onClick={()=>setShowNav(true)} title="Menu" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex",flexShrink:0,borderRadius:"6px"}}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <line x1="1" y1="3" x2="17" y2="3"/><line x1="1" y1="9" x2="17" y2="9"/><line x1="1" y1="15" x2="17" y2="15"/>
-            </svg>
-          </button>}
-          {isMobile && <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
+          {/* No hamburger: "More" on the bottom bar is the one way in, so there
+              is a single mental model for navigation rather than two. */}
+          {isCompact && <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
             <BrandLogo size={22} showName={false} gymBranding={gymBranding}/>
           </div>}
           <div style={{flex:1}}/>
@@ -8555,7 +8633,9 @@ export default function App() {
         </ErrorBoundary>
       </div>
 
-      {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid var(--border)`,background:"var(--card)",textAlign:"center"}}>
+      {/* The footer is desktop-only. On a phone it was one more thing between the
+          coach and the class, and the bottom bar now owns that edge. */}
+      {!isFullscreen&&!isCompact&&<footer style={{padding:"10px 24px",borderTop:`1px solid var(--border)`,background:"var(--card)",textAlign:"center"}}>
         {/* White-label: a gym paying for this must never read someone else's
             copyright line on their own screens (audit 1.2). Their name leads;
             the Jungle credit is a quiet trailer, and only on staff surfaces. */}
@@ -8563,6 +8643,11 @@ export default function App() {
           {gymBranding?.gymName ? `${gymBranding.gymName} · ` : ""}Powered by Jungle
         </p>
       </footer>}
+
+      {!isFullscreen&&isCompact&&(
+        <BottomNav view={view} onNavigate={k=>{setShowNav(false);navTo(k);}}
+          onMore={()=>setShowNav(v=>!v)} moreOpen={showNav} can={can}/>
+      )}
 
       {showProfile&&<ProfileModal profile={displayProfile||{display_name:"Coach"}} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
