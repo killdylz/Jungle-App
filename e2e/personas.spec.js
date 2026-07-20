@@ -1,0 +1,191 @@
+import { test, expect } from "@playwright/test";
+import { freshApp, nav, stored, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+
+// REGRESSION-PLAN §1, tests 1, 2, 3 and 5 — the persona depth built in session 4,
+// where six defects were found by driving the UI and none by unit tests.
+//
+// The fixture is the app's own sample coach (data/personas.seed.js): one S360
+// class with a warm-up, a primary lift, two supersets and a finisher. Using the
+// SHIPPED seed rather than a bespoke fixture is deliberate — it is the first
+// thing a new gym sees, so a defect in how it renders is a defect in the demo.
+
+async function loadSampleCoach(page) {
+  await freshApp(page);
+  await nav(page, "Coaches");
+  await page.getByRole("button", { name: /Load sample coach/ }).click();
+  await expect(page.getByText("S360 — CLASS SHAPE")).toBeVisible();
+}
+
+test.describe("Coaches — catalog, shape, draft", () => {
+  // ── REGRESSION §1.1 · import → catalog truth ──────────────────────────────
+  test("the movement catalog says what the class actually contains", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    const body = await page.locator("body").innerText();
+
+    // Equipment and category, per movement. These are the two derived fields a
+    // coach is asked to trust, and both had defects in session 4.
+    for (const [name, equip, category] of [
+      ["Conventional Deadlift", "barbell", "Strength"],
+      ["Romanian Deadlift", "barbell", "Strength"],
+      ["Chest-Supported Row", "dumbbell", "Strength"],   // a strength row, not the erg
+      ["Assault Bike", "erg", "Conditioning"],
+      ["Kettlebell Swing", "kettlebell", "Conditioning"],
+      ["Glute Bridge", "bodyweight", "Warm-up"],
+      ["World's Greatest Stretch", "bodyweight", "Mobility"], // a warm-up flow, not a cool-down
+      ["Hanging Knee Raise", "bodyweight", "Core"],           // NOT strength — the generic
+    ]) {                                                      // `raise` rule used to eat this
+      const row = body.match(new RegExp(`${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}[^\\n]*`))?.[0] || "";
+      expect(row, `no catalog row for ${name}`).toBeTruthy();
+      expect(row, `${name}: wrong equipment`).toContain(equip);
+      expect(row, `${name}: wrong category`).toContain(category);
+    }
+
+    // No raw enum reached the screen.
+    expect(body).not.toMatch(/\b(sets_reps|primary_lift|conditioning|warmup|cooldown)\b/);
+
+    // The STORED catalog must agree with the rendered rows. Session 4's lesson:
+    // a screen can be right while the object behind it is wrong, and it is the
+    // object that syncs to Postgres.
+    const movements = await stored(page, "jungle_persona_movements");
+    const byName = Object.fromEntries((movements || []).map((m) => [m.name, m]));
+    expect(byName["Conventional Deadlift"]?.equip).toBe("barbell");
+    expect(byName["Hanging Knee Raise"]?.category).toBe("core");
+    expect(byName["Assault Bike"]?.category).toBe("conditioning");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // ── REGRESSION §1.2 · rules re-derivation ─────────────────────────────────
+  test("a category stored under older rules is re-derived, not trusted", async ({ page }) => {
+    // Catalogs are only re-aggregated when a coach's PLANS change, so a row
+    // written under older rules would keep its stale value forever and no coach
+    // would ever see a rules improvement. `categoryOf` reads through the rules
+    // at render; this is that behaviour at the screen.
+    await loadSampleCoach(page);
+
+    await page.evaluate(() => {
+      const key = "jungle_persona_movements";
+      const list = JSON.parse(localStorage.getItem(key) || "[]");
+      const hkr = list.find((m) => m.name === "Hanging Knee Raise");
+      hkr.category = "strength";          // what the OLD rules produced
+      localStorage.setItem(key, JSON.stringify(list));
+    });
+    await page.reload();
+    await nav(page, "Coaches");
+
+    const row = (await page.locator("body").innerText())
+      .match(/Hanging Knee Raise[^\n]*/)?.[0] || "";
+    expect(row, "a stale stored category was rendered instead of the derived one").toContain("Core");
+    expect(row).not.toContain("Strength");
+  });
+
+  // ── REGRESSION §1.3 · class shape ─────────────────────────────────────────
+  test("slot keys are the format, not one week's focus", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    // The shape is a RECURRING format. Session 4 derived slots named
+    // "M1 — Deadlift", baking one week's focus into every future class — the
+    // next deadlift-free week would still have said Deadlift.
+    const body = await page.locator("body").innerText();
+    const shape = body.slice(body.indexOf("S360 — CLASS SHAPE"), body.indexOf("MOVEMENTS"));
+    expect(shape).toContain("M1");
+    expect(shape, "the slot key carries this week's focus").not.toContain("Deadlift");
+    expect(shape).toMatch(/Warm.?Up/i);
+    expect(shape).toMatch(/A1 \+ A2/);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // ⚠️ FAILING ON PURPOSE — an OPEN DEFECT, not a flaky test. Marked `fixme` so
+  // CI stays green and the finding is not lost. DO NOT delete or weaken it to
+  // get a green run; fix the drafter (or the taxonomy) and remove the marker.
+  //
+  // What it found: drafting the sample coach's S360 shape puts a
+  // **Chest-Supported Row in the warm-up**. Session 4 fixed the same shape of
+  // bug for Conventional Deadlift by ordering slot categories by prevalence, so
+  // the ordering works — but a different lift still gets through.
+  //
+  // The chain, as far as I traced it:
+  //   1. The warm-up slot's categories are DERIVED from the coach's own warm-up
+  //      block: Assault Bike, Banded Good Morning, Glute Bridge, World's
+  //      Greatest Stretch.
+  //   2. `Banded Good Morning` classifies as **strength** — movementTaxonomy's
+  //      rule matches `good morning` — so `strength` becomes a legal category
+  //      for that slot.
+  //   3. The slot wants 4 movements. The catalog has only 2 the coach actually
+  //      warms up with (Glute Bridge = warmup, World's Greatest Stretch =
+  //      mobility), so the drafter reaches down the category list to fill the
+  //      remaining 2 and picks strength movements.
+  //
+  // So it is explainable, but it is still wrong on screen, and blueprints.test.js
+  // already pins the intended principle: "emits an EMPTY block rather than an
+  // out-of-category movement". Under-filling a warm-up is the honest outcome;
+  // putting a barbell row in it is not.
+  //
+  // Two candidate fixes, and the choice is a judgement call worth making
+  // deliberately rather than by whoever picks this up first:
+  //   (a) Drafter: stop back-filling past the slot's PRIMARY categories — emit
+  //       fewer movements instead. Matches the existing empty-block principle.
+  //   (b) Taxonomy: a banded good morning is activation, not a lift. Narrowing
+  //       the `good morning` rule to unbanded/barbell would stop `strength`
+  //       entering the warm-up slot at the source.
+  // (a) is the safer general fix; (b) is also true and helps other coaches.
+  test.fixme("drafting from the shape puts no lift in the warm-up", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    await page.getByRole("button", { name: /Draft from this shape/ }).click();
+    await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
+
+    const draft = await stored(page, "jungle_draft_class");
+    const warmup = draft.stages.find((s) => /warm/i.test(s.name));
+    expect(warmup, "the draft has no warm-up section").toBeTruthy();
+
+    const LIFTS = ["Conventional Deadlift", "Romanian Deadlift", "Walking Lunge", "Chest-Supported Row"];
+    const inWarmup = (warmup.exercises || []).map((e) => e.n);
+    for (const lift of LIFTS) {
+      expect(inWarmup, `${lift} was drafted into the warm-up`).not.toContain(lift);
+    }
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // ── REGRESSION §1.5 · draft → Builder ─────────────────────────────────────
+  test("a drafted class arrives in the Builder intact and correctly typed", async ({ page }) => {
+    // "Item 9": a persona pushed to the Builder used to land as "untyped",
+    // so Smart Distribute and the stage templates then worked from the wrong
+    // class. The stored object is checked, not just the rendering.
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    // Draft the coach's actual saved class rather than a generated one — this is
+    // the path that works with Supabase off.
+    await page.getByRole("button", { name: "Draft", exact: true }).first().click();
+    await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
+
+    const draft = await stored(page, "jungle_draft_class");
+
+    // S360 is a strength format, so it must land on the Builder's strength class
+    // type — NOT the first key in WORKOUT_LIBRARY.
+    expect(draft.classChoice?.classType).toBe("strength");
+
+    // Every block became a stage, in order, with its label preserved.
+    expect(draft.stages.map((s) => s.name)).toEqual([
+      "Warm Up", "M1 — Deadlift", "A1 + A2 — Superset", "B1 + B2 — Superset", "C1 — Finisher",
+    ]);
+
+    // And the exercises came with them, with the scheme folded onto the row —
+    // a stage that arrives with the right name and no work in it is the same
+    // defect wearing a disguise.
+    const m1 = draft.stages.find((s) => s.name.startsWith("M1"));
+    expect(m1.exercises.map((e) => e.n)).toContain("Conventional Deadlift");
+    expect(m1.exercises[0].s).toBe("5");          // 5 sets
+    expect(m1.exercises[0].rest).toBe("180s");
+    expect(m1.exercises[0].notes).toMatch(/RIR 2/);
+
+    expectNoConsoleErrors(errors);
+  });
+});
