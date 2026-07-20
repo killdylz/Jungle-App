@@ -2,15 +2,15 @@
 // Extracted from App.jsx (Fable §4.5 step 1: data constants → src/data/).
 export const GLOSSARY = {
   "Upper Body": [
-    { name:"Atlas Press",         muscles:"Shoulders, Triceps, Upper Traps", diff:"Intermediate", cues:"Drive from shoulder, full lockout overhead, ribs down." },
-    { name:"Serpent Row",         muscles:"Lats, Rhomboids, Biceps",         diff:"Intermediate", cues:"Hinge 45°, row to lower chest, squeeze scapula at top." },
-    { name:"Cobra Push-Up",       muscles:"Chest, Triceps, Serratus",        diff:"Beginner",     cues:"Wide hands, lower slow, explosive push, protract at top." },
+    { name:"Overhead Press",      muscles:"Shoulders, Triceps, Upper Traps", diff:"Intermediate", cues:"Drive from shoulder, full lockout overhead, ribs down." },
+    { name:"Single-Arm DB Row",   muscles:"Lats, Rhomboids, Biceps",         diff:"Intermediate", cues:"Hinge 45°, row to lower chest, squeeze scapula at top." },
+    { name:"Push-Up",             muscles:"Chest, Triceps, Serratus",        diff:"Beginner",     cues:"Wide hands, lower slow, explosive push, protract at top." },
     { name:"Renegade Row",        muscles:"Lats, Core, Shoulders",           diff:"Advanced",     cues:"Plank position, minimal hip rotation, row to ribcage." },
     { name:"Spider Curl",         muscles:"Biceps, Brachialis",              diff:"Beginner",     cues:"Incline bench 45°, arm hangs free, curl to shoulder." },
     { name:"JM Press",            muscles:"Triceps, Chest",                  diff:"Advanced",     cues:"Bar to nose, elbows 45°, press explosively to lockout." },
   ],
   "Lower Body": [
-    { name:"Primal Squat",        muscles:"Quads, Glutes, Hamstrings",       diff:"Beginner",     cues:"Feet hip-width, chest tall, break parallel, drive through heels." },
+    { name:"Back Squat",          muscles:"Quads, Glutes, Hamstrings",       diff:"Beginner",     cues:"Feet hip-width, chest tall, break parallel, drive through heels." },
     { name:"Nordic Curl",         muscles:"Hamstrings (eccentric)",          diff:"Advanced",     cues:"Anchor feet, lower body slow with hamstrings, pull back up." },
     { name:"Pistol Squat",        muscles:"Quads, Glutes, Hamstrings, Core", diff:"Advanced",     cues:"Weighted or assisted, contralateral leg extended, hip depth." },
     { name:"Skater Bound",        muscles:"Glutes, Quads, Hamstrings, Core", diff:"Intermediate", cues:"Bound lateral, drive off rear leg, land stacked knee." },

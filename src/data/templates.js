@@ -13,8 +13,8 @@ export const TEMPLATES = [
   { id:"t2", name:"Iron Protocol",   tag:"60 min", emoji:"🏋️", desc:"Compound lifts, progressive overload structure",   color:"#8B5CF6",
     stages:[
       { type:"warmup",   name:"Mobility Prime", dur:600,  exercises:[{n:"Hip 90/90 Flow",s:"",r:"3 min",rest:""},{n:"Thoracic CAR",s:"2",r:"10",rest:""}],          tracks:[] },
-      { type:"strength", name:"Primary Lift",   dur:1200, exercises:[{n:"Primal Squat",s:"5",r:"5",rest:"3 min"},{n:"Atlas Press",s:"4",r:"6",rest:"2 min"}],         tracks:[] },
-      { type:"strength", name:"Accessory Work", dur:900,  exercises:[{n:"Nordic Curl",s:"3",r:"6",rest:"90s"},{n:"Serpent Row",s:"4",r:"8",rest:"90s"}],              tracks:[] },
+      { type:"strength", name:"Primary Lift",   dur:1200, exercises:[{n:"Back Squat",s:"5",r:"5",rest:"3 min"},{n:"Overhead Press",s:"4",r:"6",rest:"2 min"}],         tracks:[] },
+      { type:"strength", name:"Accessory Work", dur:900,  exercises:[{n:"Nordic Curl",s:"3",r:"6",rest:"90s"},{n:"Single-Arm DB Row",s:"4",r:"8",rest:"90s"}],              tracks:[] },
       { type:"recovery", name:"Active Rest",    dur:300,  exercises:[{n:"Dead Bug",s:"3",r:"10",rest:"60s"},{n:"Shoulder CARs",s:"2",r:"8",rest:""}],                 tracks:[] },
       { type:"cooldown", name:"Restore",        dur:600,  exercises:[{n:"Pigeon Flow",s:"",r:"90s each",rest:""},{n:"Hollow Rock",s:"2",r:"30s",rest:"30s"}],          tracks:[] },
     ]

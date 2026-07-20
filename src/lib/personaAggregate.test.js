@@ -190,8 +190,10 @@ describe("aggregateMovements", () => {
 
   it("leaves the category blank when the movement is not recognised", () => {
     // An honest blank the catalog can flag, never a confident wrong guess.
+    // "Nonesuch Press" is deliberately fictional — never rename it to a real
+    // movement, or this assertion silently stops testing anything.
     const plans = [{ classType: "S360", plan: { blocks: [
-      { role: "circuit", scheme: {}, exercises: [{ name: "Atlas Press", equip: "" }] },
+      { role: "circuit", scheme: {}, exercises: [{ name: "Nonesuch Press", equip: "" }] },
     ] } }];
     expect(aggregateMovements(plans)[0].category).toBe("");
   });

@@ -357,7 +357,9 @@ describe("draftFromBlueprint", () => {
   it("never drafts a movement the coach has not categorised", () => {
     // Uncategorised means we do not know what it is. Slotting it would be the
     // confident wrong guess the whole taxonomy exists to avoid.
-    const unknown = [{ name: "Atlas Press", equip: "", classTypes: { S360: 99 } }];
+    // "Nonesuch Press" is deliberately fictional — it must never be renamed to a
+    // real movement, or this assertion silently stops testing anything.
+    const unknown = [{ name: "Nonesuch Press", equip: "", classTypes: { S360: 99 } }];
     const { blocks } = draftFromBlueprint(bp, unknown);
     expect(blocks.flatMap(b => b.exercises)).toEqual([]);
   });

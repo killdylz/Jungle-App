@@ -68,6 +68,8 @@ describe("classifyMovement — categories", () => {
     ["Overhead Press", "strength"],
     ["Power Clean", "strength"],
     ["Pull-Up", "strength"],
+    ["Push-Up", "strength"],
+    ["Push Up", "strength"],
     ["Walking Lunge", "strength"],
     // conditioning
     ["Burpee", "conditioning"],
@@ -166,9 +168,14 @@ describe("classifyMovement — the honest blank", () => {
   // An unmatched name returns "" and the catalog flags it "needs category" for
   // the coach. A confident wrong guess would skew aggregation with nothing to
   // flag it — the same reasoning as inferEquip's "Chest Supported Row" → "".
+  // These fixture names are DELIBERATELY fictional and must stay that way. They
+  // were "Atlas Press" / "Serpent Row Variation Two" until those invented
+  // movements were renamed out of the product data (audit 1.4); a find/replace
+  // that swept the tests too would have quietly turned every assertion here into
+  // `strength` and deleted the coverage. Never point these at a real movement.
   it("returns blank for a movement it does not recognise", () => {
-    expect(classifyMovement("Atlas Press")).toBe("");
-    expect(classifyMovement("Serpent Row Variation Two")).toBe("");
+    expect(classifyMovement("Nonesuch Press")).toBe("");
+    expect(classifyMovement("Nonesuch Row Variation Two")).toBe("");
     expect(classifyMovement("Zombie Walk")).toBe("");
   });
 
@@ -221,7 +228,7 @@ describe("categoryOf", () => {
   });
 
   it("returns blank when nothing is known", () => {
-    expect(categoryOf({ name: "Atlas Press" })).toBe("");
+    expect(categoryOf({ name: "Nonesuch Press" })).toBe("");
     expect(categoryOf(null)).toBe("");
   });
 });

@@ -98,7 +98,11 @@ const CATEGORY_RULES = [
   // Row" is strength; an unqualified "Row" in a circuit is the erg, and falls
   // through to the conditioning rule below.
   [/\b(?:chest[\s-]?supported|bent[\s-]?over|pendlay|inverted|renegade|seal|meadows|gorilla|upright|seated|barbell|bb|db|dumbbell|kb|kettlebell|cable|ring|single[\s-]?arm)\s+row\b/i, "strength"],
-  [/\b(?:pull[\s-]?up|chin[\s-]?up|dip|curl|extension|raise|fly|pulldown|pullover|shrug|lunge|step[\s-]?up|calf\s*raise|leg\s*press|nordic)\b/i, "strength"],
+  // `push-up` sits with its bodyweight siblings pull-up / chin-up / dip rather
+  // than with the burpees below: it is an upper-body push whoever programs it,
+  // and a coach who puts it in a circuit re-tags the block, not the movement.
+  // It must come AFTER the core rule so "Push-Up to Plank" stays core.
+  [/\b(?:pull[\s-]?up|chin[\s-]?up|push[\s-]?up|press[\s-]?up|dip|curl|extension|raise|fly|pulldown|pullover|shrug|lunge|step[\s-]?up|calf\s*raise|leg\s*press|nordic)\b/i, "strength"],
 
   // ── Conditioning: the residual for recognisably metabolic work ─────────────
   // NOT a catch-all — an unmatched name still returns "". Only names that are
@@ -109,7 +113,7 @@ const CATEGORY_RULES = [
   [/\b(?:erg|skierg|rower|rowing|assault\s*bike|echo\s*bike|air\s*bike|bike|treadmill|run(?:ning)?|jog|sprint|shuttle)\b/i, "conditioning"],
   // Bare "Row" is the erg — but ONLY when bare. It has to be anchored to the end
   // of the name (optionally trailed by "erg") or followed by a number, or it
-  // swallows every unrecognised strength row: "Serpent Row Variation Two" came
+  // swallows every unrecognised strength row: "Nonesuch Row Variation Two" came
   // back `conditioning` before this anchor existed. Same shape as inferEquip's
   // row rule at planParser.js:265.
   [/\bcal\s+row\b|\brow\b(?=\s*\d)|\brow(?:er|ing)?\b\s*(?:erg)?\s*$/i, "conditioning"],

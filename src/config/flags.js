@@ -1,25 +1,58 @@
 // ─── Feature flags ───────────────────────────────────────────────────────────
 // Mock/theatre surfaces default OFF so they can never be demoed as real (a
 // sales-integrity requirement — see roadmap Phase 0 "de-risk"). Flip a flag to
-// true ONLY for local UI work, never in a build a prospect might see. Each mock
-// surface gets replaced by a real-data implementation in the phase noted below.
+// true ONLY for local UI work, never in a build a prospect might see.
+//
+// A flag is a HOLDING PEN, not a filing cabinet. Five of them (mockMembers,
+// mockSchedule, attendeeShare, mockIntegrations, mockDiscover) were retired in
+// the session-5 cut: the code they gated is deleted, and git history is the
+// archive. Flagged-off theatre still costs — it is read during every refactor,
+// it hides latent crashes behind a `false` (the attendee route referenced a
+// component that was never written), and it invites a demo-day mistake.
+//
+// `music` is different in kind: the code behind it is intact and quarantined in
+// src/music/, not deleted, pending the post-pilot decision.
 
 export const FLAGS = {
-  mockAnalytics:    false, // AnalyticsScreen hardcoded KPIs + calendar suggestions/leaderboard → real analytics, Phase 2 (N2)
-  mockMembers:      false, // MemberScreen demo app + demo member song requests → superseded by the REAL RosterScreen (F4 slice 2); this flag now only gates the old member-facing demo
-  mockSchedule:     false, // BASE_SCHEDULE hardcoded classes → class_instances, Phase 1
-  attendeeShare:    false, // Legacy b64-in-URL read-only attendee view (+ the "Share with Class" buttons that mint those links) → replaced by magic-link member view, Phase 1
-  mockIntegrations: false, // IntegrationsScreen fake ClassPass/Stripe/Wearables "connected" cards → real integrations, later phase
-  mockDiscover:     false, // Exercise Library "Discover packs" feed — fabricated authors/import counts + no-op Import → real community pack marketplace, later phase
+  // AnalyticsScreen's hardcoded KPIs. Kept — the audit wants the screen retained
+  // as the layout target for real N2 analytics, so this one earns its flag.
+  mockAnalytics: false,
+
+  // The music / Auto-DJ subsystem (audit 2.1). Cut from the sellable product:
+  // no argued value for trainer, owner or member; Spotify's consumer ToS
+  // prohibits commercial-premises playback, and public performance in Singapore
+  // needs COMPASS/RIPS licences the GYM must hold. Renders half-dead without a
+  // Spotify login. Code lives in src/music/, untouched, so the decision stays
+  // reversible. TempoGuide is deliberately NOT behind this flag — it needs no
+  // licence and is the display's honest no-music state.
+  music: false,
 };
 
-// Views that exist only as mock/theatre today. Hidden from every nav and blocked
-// at the render choke-point unless their flag is explicitly on.
-// `member` is NOT listed here any more: that route now renders RosterScreen, which
-// is real data (the members / attendance tables from 0007) rather than theatre.
-const MOCK_VIEW_FLAG = { analytics: "mockAnalytics", integrations: "mockIntegrations" };
+// Which views may appear in a nav. This is the SINGLE choke-point — there are
+// four separate nav arrays in App.jsx (sidebar, dashboard rail, primaryNav, the
+// mobile sheet) and hand-editing each one is how a retired screen survives in
+// exactly one menu. Declare it here instead.
+//
+// `false` means retired: the screen is gone or folded into another surface, and
+// no flag brings it back. Spelling it as a literal keeps it from reading like a
+// typo'd flag name that silently returns undefined.
+//
+//   integrations → deleted; route renders the honest coming-soon panel
+//   templates    → folded into the Builder's class-type picker as Jungle presets
+//   glossary     → folded into the Exercise Library (cues on the movement row)
+//
+// A coach cannot hold three mental models of "what goes in a class" (audit 2.3):
+// class shapes, the movement library, and starter templates collapse to two.
+const MOCK_VIEW_FLAG = {
+  analytics: "mockAnalytics",
+  music: "music",
+  integrations: false,
+  templates: false,
+  glossary: false,
+};
 
 export function isViewEnabled(key) {
+  if (!(key in MOCK_VIEW_FLAG)) return true;
   const flag = MOCK_VIEW_FLAG[key];
-  return flag ? !!FLAGS[flag] : true;
+  return flag === false ? false : !!FLAGS[flag];
 }

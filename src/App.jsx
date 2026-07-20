@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Share2, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
 import { FLAGS, isViewEnabled } from "./config/flags.js";
@@ -17,7 +17,8 @@ import { analyzeAttendanceCsv, describeImport } from "./lib/csvImport.js";
 import { recordSession as recordCheckinSession, p6Summary, P6_TARGET_SEC } from "./lib/checkinMetrics.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "./lib/retention.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
-import { useQrDataUrl } from "./lib/qr.js";
+// src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
+// is the QR's first honest destination.
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
 
@@ -427,8 +428,6 @@ async function getToken() {
 function clearTokens() { ["sp_at","sp_ex","sp_rt","pkce_v","sp_scope"].forEach(k=>localStorage.removeItem(k)); }
 
 // Unicode-safe base64 (btoa throws on chars >0xFF: accents, emojis, en-dashes)
-function b64EncodeUnicode(str){ const bytes=new TextEncoder().encode(str); let bin=""; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); }
-function b64DecodeUnicode(b64){ const bin=atob(b64); const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0)); return new TextDecoder().decode(bytes); }
 function downloadJson(obj, filename){
   try {
     const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
@@ -462,16 +461,6 @@ async function fetchExerciseGif(name){
     return url;
   } catch(_) { return null; }
 }
-
-// ─── Attendee Mode (shareable read-only URL) ─────────────────────────────────
-function getAttendeePayload() {
-  try {
-    const p = new URLSearchParams(window.location.search);
-    if (p.get("mode") !== "attendee") return null;
-    return JSON.parse(b64DecodeUnicode(p.get("data") || ""));
-  } catch(_) { return null; }
-}
-const ATTENDEE_PAYLOAD = getAttendeePayload();
 
 // ─── Spotify REST API ─────────────────────────────────────────────────────────
 async function spFetch(path, opts={}) {
@@ -686,6 +675,14 @@ function useSpotify() {
   const [profile,        setProfile]        = useState(null);
 
   useEffect(() => {
+    // Music quarantine (audit 2.1). This is the ONE gate that matters: every
+    // effect below is already `if (!token) return`, so leaving the token null
+    // stops the SDK script load, the OAuth exchange and the player entirely —
+    // no Spotify network call is made and no listener is attached. Downstream,
+    // `nowPlaying`/`deviceId` stay null, which is what silences the dozens of
+    // `{nowPlaying && …}` fragments scattered through the runner and displays
+    // without touching each one.
+    if (!FLAGS.music) return;
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code"), err = params.get("error");
     if (err) { setAuthError("Spotify authorization was denied."); window.history.replaceState({},"",window.location.pathname); return; }
@@ -757,8 +754,24 @@ function useSpotify() {
   };
 
   const logout = () => { clearTokens(); player?.disconnect(); setToken(null); setPlayer(null); setDeviceId(null); setActiveDeviceId(null); setDevices([]); setNowPlaying(null); setSdkReady(false); setProfile(null); setSpError(null); };
+
+  // Returned AFTER every hook above has run, never before — the hook count must
+  // not depend on a flag, or flipping `music` back on would break hook order.
+  if (!FLAGS.music) return MUSIC_OFF;
+
   return { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, spPaused, authError, spError, profile, logout };
 }
+
+// The inert shape `useSpotify` returns while music is quarantined. Frozen so a
+// caller that tries to write to it fails loudly in dev rather than appearing to
+// work; every field matches the live shape so no call site needs a null check
+// it did not already have.
+const MUSIC_OFF = Object.freeze({
+  token: null, player: null, deviceId: null, activeDeviceId: null,
+  setActiveDeviceId: () => {}, devices: Object.freeze([]),
+  refreshDevices: async () => [], nowPlaying: null, spPaused: true,
+  authError: null, spError: null, profile: null, logout: () => {},
+});
 
 // ─── General helpers ──────────────────────────────────────────────────────────
 let _uid = 1;
@@ -824,33 +837,11 @@ const SCFG = {
 
 // Shared class schedule store (Calendar + Dashboard read the same data)
 const CLASS_COLORS = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
-const BASE_SCHEDULE = {
-  "Mon-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:96, type:"HIIT", dur:"45m"},
-  "Mon-09:00": {name:"Flow Yoga",    coach:"Priya",fill:64, type:"Yoga", dur:"50m"},
-  "Mon-18:00": {name:"Hyrox Sim",    coach:"Dev",  fill:92, type:"Hyrox",dur:"60m"},
-  "Tue-06:00": {name:"Strength Lab", coach:"Mara", fill:100,type:"Strength",dur:"45m"},
-  "Tue-09:00": {name:"Sunrise HIIT", coach:"Mara", fill:88, type:"HIIT", dur:"45m"},
-  "Tue-18:00": {name:"Spin Ride",    coach:"Dev",  fill:71, type:"Spin", dur:"45m"},
-  "Tue-19:30": {name:"Boxing",       coach:"Jo",   fill:55, type:"Boxing",dur:"45m"},
-  "Wed-06:00": {name:"Sunrise HIIT", coach:"Jo",   fill:90, type:"HIIT", dur:"45m"},
-  "Wed-09:00": {name:"Mobility",     coach:"Priya",fill:58, type:"Mobility",dur:"45m"},
-  "Wed-12:00": {name:"Hyrox Sim",    coach:"Dev",  fill:94, type:"Hyrox",dur:"60m"},
-  "Wed-18:00": {name:"Strength Lab", coach:"Mara", fill:98, type:"Strength",dur:"45m"},
-  "Thu-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:86, type:"HIIT", dur:"45m"},
-  "Thu-18:00": {name:"Hyrox Sim",    coach:"Dev",  fill:89, type:"Hyrox",dur:"60m"},
-  "Thu-19:30": {name:"Recovery",     coach:"Jo",   fill:52, type:"Yoga", dur:"45m"},
-  "Fri-06:00": {name:"Sunrise HIIT", coach:"Mara", fill:91, type:"HIIT", dur:"45m"},
-  "Fri-09:00": {name:"Flow Yoga",    coach:"Priya",fill:61, type:"Yoga", dur:"50m"},
-  "Fri-12:00": {name:"Hyrox Sim",    coach:"Dev",  fill:95, type:"Hyrox",dur:"60m"},
-  "Fri-18:00": {name:"Friday Burn",  coach:"Mara", fill:100,type:"Circuit",dur:"45m"},
-  "Sat-09:00": {name:"Strength Lab", coach:"Dev",  fill:82, type:"Strength",dur:"50m"},
-  "Sat-12:00": {name:"Spin Ride",    coach:"Priya",fill:68, type:"Spin", dur:"45m"},
-};
 function getUserClasses(){ return store.getUserClasses(); }
 function getDayClasses(dayAbbrev){
+  // BASE_SCHEDULE (20 invented classes with invented coaches and fill rates) is
+  // deleted — the schedule shows the gym's own classes or nothing (audit 2.2).
   const out = [];
-  const baseSchedule = FLAGS.mockSchedule ? BASE_SCHEDULE : {};
-  Object.entries(baseSchedule).forEach(([k,v])=>{ const parts=k.split("-"); if(parts[0]===dayAbbrev) out.push({time:parts[1],name:v.name,coach:v.coach,type:v.type,dur:v.dur,fill:v.fill,color:CLASS_COLORS[v.type]||"#8AA294"}); });
   getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
   return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
 }
@@ -885,7 +876,7 @@ function mkStages() {
   return [
     { id:uid(), type:"warmup",   name:"Warm-Up",         dur:300,  exercises:[{n:"Light Jog",s:"",r:"5 min",rest:""},{n:"Arm Swings",s:"2",r:"30 sec",rest:""}], tracks:[] },
     { id:uid(), type:"circuit",  name:"Circuit Blast",   dur:600,  exercises:[{n:"Burpee Complex",s:"3",r:"10",rest:"30s"},{n:"Box Jump",s:"3",r:"8",rest:"30s"}], tracks:[] },
-    { id:uid(), type:"strength", name:"Strength Block",  dur:900,  exercises:[{n:"Primal Squat",s:"4",r:"8",rest:"90s"},{n:"Atlas Press",s:"4",r:"10",rest:"90s"}], tracks:[] },
+    { id:uid(), type:"strength", name:"Strength Block",  dur:900,  exercises:[{n:"Back Squat",s:"4",r:"8",rest:"90s"},{n:"Overhead Press",s:"4",r:"10",rest:"90s"}], tracks:[] },
     { id:uid(), type:"recovery", name:"Active Recovery", dur:300,  exercises:[{n:"Easy Walk",s:"",r:"5 min",rest:""}], tracks:[] },
     { id:uid(), type:"cooldown", name:"Cool-Down",       dur:300,  exercises:[{n:"Pigeon Flow",s:"",r:"90 sec",rest:""},{n:"Hip 90/90 Flow",s:"",r:"60 sec each",rest:""}], tracks:[] },
   ];
@@ -1911,17 +1902,19 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
             </div>
 
             <div style={{display:"flex",flexDirection:"column",gap:isMobile?"14px":"20px"}}>
-              <div style={{...card,padding:"18px"}}>
-                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",marginBottom:"12px"}}>AUTO-DJ</div>
-                {npName ? (
-                  <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-                    <div style={{width:"46px",height:"46px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,var(--navy),var(--navy) 6px,var(--card) 6px,var(--card) 12px)",flexShrink:0}}/>
-                    <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npName}</div><div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npArtist}</div></div>
-                  </div>
-                ) : (
-                  <div style={{fontSize:"12px",color:"var(--muted)"}}>Auto-DJ idle — <button onClick={()=>onNavigate("music")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontWeight:"700",fontSize:"12px",padding:0}}>open Music</button></div>
-                )}
-              </div>
+              {FLAGS.music && (
+                <div style={{...card,padding:"18px"}}>
+                  <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",marginBottom:"12px"}}>AUTO-DJ</div>
+                  {npName ? (
+                    <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+                      <div style={{width:"46px",height:"46px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,var(--navy),var(--navy) 6px,var(--card) 6px,var(--card) 12px)",flexShrink:0}}/>
+                      <div style={{minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npName}</div><div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{npArtist}</div></div>
+                    </div>
+                  ) : (
+                    <div style={{fontSize:"12px",color:"var(--muted)"}}>Auto-DJ idle — <button onClick={()=>onNavigate("music")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontWeight:"700",fontSize:"12px",padding:0}}>open Music</button></div>
+                  )}
+                </div>
+              )}
               <div style={{...card,padding:"18px",flex:1}}>
                 <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px",marginBottom:"12px"}}>RECENT SESSIONS</div>
                 {recent.length===0 && <div style={{fontSize:"12px",color:"var(--muted)"}}>No sessions yet — your finished classes show here.</div>}
@@ -2134,145 +2127,6 @@ function TemplatesScreen({onSelectClassStyle, onBack, onExportTemplate, onImport
 }
 
 // ─── AnalyticsScreen ──────────────────────────────────────────────────────────
-// ─── IntegrationsScreen ───────────────────────────────────────────────────────
-function IntegrationsScreen({onBack}) {
-  const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  const isTablet = vw < 768;
-
-  const integrations = [
-    {
-      name: "Spotify",
-      connected: true,
-      iconBg: "#1DB954",
-      detail: "Studio · Premium",
-      desc: "Powers the Auto-DJ. Pulls BPM & audio analysis, plays from studio Premium account.",
-      icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
-          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4.6 14.4a.62.62 0 0 1-.86.2c-2.34-1.43-5.3-1.76-8.77-.96a.62.62 0 1 1-.28-1.21c3.8-.87 7.07-.5 9.7 1.11a.62.62 0 0 1 .2.86Zm1.23-2.74a.78.78 0 0 1-1.07.26c-2.68-1.65-6.77-2.13-9.94-1.16a.78.78 0 1 1-.45-1.49c3.63-1.1 8.13-.57 11.2 1.32a.78.78 0 0 1 .26 1.07Zm.1-2.85C14.83 8.96 9.4 8.78 6.3 9.72a.93.93 0 1 1-.54-1.79c3.56-1.08 9.56-.87 13.3 1.35a.94.94 0 0 1-.95 1.62Z"/>
-        </svg>
-      ),
-    },
-    {
-      name: "ClassPass",
-      connected: true,
-      iconBg: "#0B1F3A",
-      detail: "238 bookings / wk",
-      desc: "Two-way booking sync. Inventory, spot allocation & no-show fees flow automatically.",
-      iconText: "CP",
-    },
-    {
-      name: "Wearables",
-      connected: true,
-      iconBg: "#FF2D55",
-      detail: "HR zones live",
-      desc: "Apple Health, Whoop & Garmin. Live heart-rate to the TV, recovery into RPE data.",
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff">
-          <path d="M12 21s-7-4.35-9.5-8.5C.7 9.3 2 5.5 5.5 5.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.5 0 4.8 3.8 3 7C19 16.65 12 21 12 21Z"/>
-        </svg>
-      ),
-    },
-    {
-      name: "Calendar",
-      connected: true,
-      iconBg: "#fff",
-      detail: "Google · Outlook",
-      desc: "Trainer shifts & member bookings sync to Google / Outlook calendars both ways.",
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4285F4" strokeWidth="2">
-          <rect x="3" y="4" width="18" height="17" rx="2"/>
-          <path d="M3 9h18M8 2v4M16 2v4"/>
-        </svg>
-      ),
-    },
-    {
-      name: "Stripe",
-      connected: true,
-      iconBg: "#635BFF",
-      detail: "£48k / mo",
-      desc: "Memberships, drop-ins & retail. Revenue lands in the analytics dashboard live.",
-      iconText: "S",
-    },
-    {
-      name: null, // placeholder "Browse more"
-      connected: false,
-      isPlaceholder: true,
-    },
-  ];
-
-  const cols = isMobile ? 1 : isTablet ? 2 : 3;
-
-  return (
-    <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"32px",boxSizing:"border-box"}}>
-      {/* Back */}
-      <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"26px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        </button>
-        <h2 style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"22px",fontWeight:"700",color:"var(--text)",margin:0}}>Integrations</h2>
-      </div>
-
-      {/* Card */}
-      <div style={{background:"var(--bg)",border:`1px solid var(--border)`,borderRadius:"18px",overflow:"hidden",maxWidth:"1200px",margin:"0 auto"}}>
-        {/* Header row */}
-        <div style={{padding:"24px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
-          <div>
-            <div style={{fontFamily:"var(--display)",fontSize:"20px",fontWeight:"700",color:"var(--text)"}}>Connected apps</div>
-            <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"3px"}}>6 active · syncs in real time</div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--accent)",padding:"7px 13px",borderRadius:"999px",background:"rgba(123,227,164,.1)",border:`1px solid var(--accent)`}}>
-            <div style={{width:"7px",height:"7px",borderRadius:"50%",background:"var(--accent)"}}/>
-            All systems healthy
-          </div>
-        </div>
-
-        {/* Grid */}
-        <div style={{padding:"24px 28px",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:"16px"}}>
-          {integrations.map((item, idx) => {
-            if (item.isPlaceholder) {
-              return (
-                <div key={idx} style={{border:`1px dashed var(--border)`,borderRadius:"14px",padding:"18px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",minHeight:"170px",cursor:"pointer"}}>
-                  <div style={{width:"42px",height:"42px",borderRadius:"11px",border:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)"}}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
-                  </div>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--muted)"}}>Browse 40+ integrations</div>
-                  <div style={{fontSize:"11px",color:"var(--muted)",textAlign:"center"}}>Mailchimp · Mindbody · Slack · Zapier · Sonos</div>
-                </div>
-              );
-            }
-            const borderCol = item.connected ? "var(--accent)" : "var(--border)";
-            return (
-              <div key={idx} style={{background:"var(--card)",border:`1px solid ${borderCol}`,borderRadius:"14px",padding:"18px"}}>
-                {/* Header row */}
-                <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"13px"}}>
-                  <div style={{width:"42px",height:"42px",borderRadius:"11px",background:item.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"var(--display)",fontWeight:"800",color:"#fff",fontSize:item.iconText?.length===1?"18px":"15px"}}>
-                    {item.icon || item.iconText}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{item.name}</div>
-                    <div style={{fontSize:"11px",color:item.connected?"var(--accent)":"var(--muted)"}}>
-                      {item.connected ? "● Connected" : "○ Available"}
-                    </div>
-                  </div>
-                </div>
-                <div style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"14px"}}>{item.desc}</div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:"13px",borderTop:`1px solid var(--border)`}}>
-                  <span style={{fontSize:"11px",color:"var(--muted)"}}>{item.detail}</span>
-                  {/* Toggle */}
-                  <div style={{width:"38px",height:"22px",borderRadius:"11px",background:item.connected?"var(--accent)":"var(--border)",position:"relative",cursor:"pointer",flexShrink:0}}>
-                    <div style={{position:"absolute",top:"2px",width:"18px",height:"18px",borderRadius:"50%",background:"var(--bg)",transition:"left 0.2s",[item.connected?"right":"left"]:"2px"}}/>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AnalyticsScreen({onBack}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -2686,7 +2540,8 @@ function CalendarScreen({onBack}) {
 
   const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
 
-  const schedule = FLAGS.mockSchedule ? BASE_SCHEDULE : {};
+  // Only the gym's own classes appear — the mock base schedule is gone (audit 2.2).
+  const schedule = {};
 
   // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
   const effSchedule = { ...schedule };
@@ -2734,7 +2589,12 @@ function CalendarScreen({onBack}) {
           <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
             <h2 style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:"var(--text)",margin:0}}>Planning & schedule</h2>
-            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>Shoreditch · 3 studios · {Object.keys(schedule).length} classes</div>
+            {/* Was "Shoreditch · 3 studios" — a hardcoded London district on a
+                Singapore product (audit 1.3). The only honest facts here are the
+                gym's own name and how many classes are actually on the week. */}
+            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>
+              {[store.getGymBranding()?.gymName, `${Object.keys(schedule).length} classes`].filter(Boolean).join(" · ")}
+            </div>
           </div>
         </div>
         <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
@@ -2746,15 +2606,9 @@ function CalendarScreen({onBack}) {
             </span>
             <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
           </div>
-          <button style={{padding:"8px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600"}}>
-            Demand heat
-          </button>
-          <button style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
-            Publish week
-          </button>
-          <button style={{padding:"8px 14px",background:"var(--navy)",border:`1px solid color-mix(in srgb, var(--accent) 31%, transparent)`,borderRadius:"8px",cursor:"pointer",color:"var(--accent)",fontSize:"12px",fontWeight:"600"}}>
-            Auto-fill week
-          </button>
+          {/* "Demand heat", "Publish week" and "Auto-fill week" were dead buttons —
+              rendered, clickable, backed by nothing (audit 1.3). They return when
+              there is real demand data and a class_instances table to publish to. */}
           <button onClick={()=>setShowAddClass(true)} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             + Add class
           </button>
@@ -3173,280 +3027,6 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   );
 }
 
-
-// ─── MemberScreen ─────────────────────────────────────────────────────────────
-function MemberScreen({onBack}) {
-  const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  const [tab, setTab] = React.useState("discover"); // discover | detail | live | book | profile
-  const [selectedClass, setSelectedClass] = React.useState(null);
-
-  const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899"};
-  const upcomingClasses = [
-    {id:1, name:"Sunrise HIIT",  date:"Tue 06:00", coach:"Mara", bpm:130, match:92, type:"HIIT",     spots:6, booked:false, dur:"45m"},
-    {id:2, name:"Hyrox Sim",    date:"Wed 12:15", coach:"Dev",  bpm:140, match:84, type:"Hyrox",    spots:4, booked:false, dur:"60m"},
-    {id:3, name:"Strength Lab", date:"Thu 18:30", coach:"Priya",bpm:95,  match:78, type:"Strength", spots:0, booked:true,  dur:"45m"},
-    {id:4, name:"Spin Ride",    date:"Fri 19:30", coach:"Dev",  bpm:126, match:71, type:"Spin",     spots:0, booked:false, waitlist:3, dur:"45m"},
-  ];
-
-  const classDetail = selectedClass || upcomingClasses[0];
-  const stagesPreview = [
-    {name:"Warm-up flow",   bpm:88, color:"#5BD0C0"},
-    {name:"AMRAP block",    bpm:128,color:"#7BE3A4"},
-    {name:"Interval peak",  bpm:138,color:"#7BE3A4"},
-    {name:"Cool-down",      bpm:78, color:"#E0B85B"},
-  ];
-
-  const TabBtn = ({id, label, icon}) => (
-    <button onClick={()=>setTab(id)} style={{
-      flex:1,padding:"10px 4px",background:"none",border:"none",cursor:"pointer",
-      color:tab===id?"var(--accent)":"var(--muted)",
-      borderTop:`2px solid ${tab===id?"var(--accent)":"transparent"}`,
-      fontSize:"11px",fontWeight:"700",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",
-    }}>
-      <span style={{fontSize:"16px"}}>{icon}</span>
-      {label}
-    </button>
-  );
-
-  return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px 20px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
-        <div style={{fontFamily:"var(--display)",fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Member App</div>
-        <div style={{marginLeft:"auto",fontSize:"11px",color:"var(--muted)"}}>Sam Ellis</div>
-        <div style={{width:"30px",height:"30px",borderRadius:"50%",background:"color-mix(in srgb, var(--accent) 13%, transparent)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--accent)",fontSize:"12px",fontWeight:"700"}}>SE</div>
-      </div>
-
-      {/* Content */}
-      <div style={{flex:1,overflowY:"auto",padding:"0"}}>
-
-        {/* ── DISCOVER ── */}
-        {tab==="discover" && (
-          <div style={{padding:"20px"}}>
-            <div style={{marginBottom:"18px"}}>
-              <div style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600",marginBottom:"2px"}}>TONIGHT · 18:30</div>
-              <div style={{fontFamily:"var(--display)",fontSize:"20px",fontWeight:"700",color:"var(--text)"}}>Hey, Sam 👋</div>
-              <div style={{padding:"14px",background:"var(--card)",border:`1px solid color-mix(in srgb, var(--accent) 31%, transparent)`,borderRadius:"12px",marginTop:"12px",cursor:"pointer"}} onClick={()=>{setSelectedClass(upcomingClasses[2]);setTab("detail");}}>
-                <div style={{fontSize:"11px",color:"var(--accent)",fontWeight:"700",marginBottom:"4px"}}>TONIGHT · 18:30</div>
-                <div style={{fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Strength Lab</div>
-                <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>with Priya · 45 min · Studio 2</div>
-                <div style={{marginTop:"10px",padding:"6px 12px",background:"var(--accent)",borderRadius:"6px",display:"inline-block",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",cursor:"pointer"}}>View workout →</div>
-              </div>
-            </div>
-
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>Recommended for you</div>
-              <button style={{background:"none",border:"none",cursor:"pointer",color:"var(--accent)",fontSize:"12px",fontWeight:"700"}}>See all</button>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
-              {upcomingClasses.map((cls,i)=>(
-                <div key={cls.id} onClick={()=>{setSelectedClass(cls);setTab("detail");}}
-                  style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",cursor:"pointer"}}>
-                  <div style={{width:"44px",height:"44px",borderRadius:"10px",background:`${CAT_COLOR[cls.type]||"var(--accent)"}22`,border:`1px solid ${CAT_COLOR[cls.type]||"var(--accent)"}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <span style={{fontFamily:"var(--display)",fontSize:"16px",fontWeight:"800",color:CAT_COLOR[cls.type]||"var(--accent)"}}>{cls.date.split(" ")[0][0]+cls.date.split(" ")[0].slice(-2)}</span>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:"var(--muted)"}}>{cls.date} · {cls.coach} · {cls.bpm} BPM</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:"14px",fontWeight:"800",color:"var(--accent)"}}>{cls.match}%</div>
-                    <div style={{fontSize:"10px",color:"var(--muted)"}}>match</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── CLASS DETAIL ── */}
-        {tab==="detail" && (
-          <div style={{padding:"20px"}}>
-            <div style={{padding:"3px 8px",background:`${CAT_COLOR[classDetail.type]||"var(--accent)"}22`,border:`1px solid ${CAT_COLOR[classDetail.type]||"var(--accent)"}40`,borderRadius:"4px",display:"inline-block",fontSize:"11px",fontWeight:"700",color:CAT_COLOR[classDetail.type]||"var(--accent)",marginBottom:"8px"}}>{classDetail.type} · {classDetail.dur}</div>
-            <div style={{fontFamily:"var(--display)",fontSize:"24px",fontWeight:"800",color:"var(--text)",marginBottom:"4px"}}>{classDetail.name}</div>
-            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"16px"}}>
-              <div style={{width:"36px",height:"36px",borderRadius:"50%",background:"color-mix(in srgb, var(--accent) 13%, transparent)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--accent)",fontSize:"12px",fontWeight:"700"}}>{classDetail.coach[0]}</div>
-              <div>
-                <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{classDetail.coach}</div>
-                <div style={{fontSize:"11px",color:"var(--muted)"}}>Lead coach · 4.9 ★</div>
-              </div>
-              <div style={{marginLeft:"auto",display:"flex",gap:"12px",fontSize:"11px",color:"var(--muted)"}}>
-                <span>RPE 7–8</span>
-                <span>Studio 1</span>
-                <span style={{color:classDetail.spots>0?"var(--accent)":"#EF4444",fontWeight:"700"}}>{classDetail.spots>0?`${classDetail.spots} spots left`:"Full"}</span>
-              </div>
-            </div>
-
-            <div style={{fontFamily:"var(--display)",fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>The plan</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"16px"}}>
-              {stagesPreview.map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"10px",borderLeft:`3px solid ${s.color}`}}>
-                  <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{s.name}</div>
-                  <div style={{fontSize:"12px",color:s.color,fontWeight:"700"}}>{s.bpm} BPM</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{padding:"12px 14px",background:"color-mix(in srgb, var(--accent) 7%, transparent)",border:`1px solid color-mix(in srgb, var(--accent) 19%, transparent)`,borderRadius:"10px",marginBottom:"16px"}}>
-              <div style={{fontSize:"12px",fontWeight:"700",color:"var(--accent)",marginBottom:"2px"}}>Auto-DJ soundtrack ready</div>
-              <div style={{fontSize:"11px",color:"var(--muted)"}}>House · 52 tracks · beat-matched to every stage</div>
-            </div>
-
-            {classDetail.booked
-              ? <div style={{width:"100%",padding:"14px",background:"color-mix(in srgb, var(--accent) 13%, transparent)",border:`1px solid color-mix(in srgb, var(--accent) 38%, transparent)`,borderRadius:"10px",textAlign:"center",fontSize:"14px",fontWeight:"700",color:"var(--accent)"}}>✓ Booked</div>
-              : classDetail.waitlist
-                ? <button style={{width:"100%",padding:"14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--muted)"}}>Join waitlist ({classDetail.waitlist} ahead)</button>
-                : <button style={{width:"100%",padding:"14px",background:"var(--accent)",border:"none",borderRadius:"10px",cursor:"pointer",fontSize:"14px",fontWeight:"700",color:"var(--on-accent)"}}>Book with ClassPass</button>
-            }
-          </div>
-        )}
-
-        {/* ── LIVE IN CLASS ── */}
-        {tab==="live" && (
-          <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:"20px"}}>
-              <div style={{fontFamily:"var(--display)",fontSize:"16px",fontWeight:"700",color:"var(--text)"}}>Sunrise HIIT</div>
-              <div style={{padding:"4px 10px",background:"#EF444422",border:"1px solid #EF444460",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:"#EF4444"}}>● LIVE</div>
-            </div>
-
-            <div style={{padding:"3px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"999px",fontSize:"11px",color:"var(--muted)",marginBottom:"16px"}}>ROUND 3 / 8</div>
-            <div style={{fontFamily:"var(--display)",fontSize:"72px",fontWeight:"800",color:"var(--text)",lineHeight:"1",marginBottom:"8px"}}>00:42</div>
-            <div style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"700",color:"var(--accent)",marginBottom:"4px"}}>Kettlebell Swings</div>
-            <div style={{fontSize:"13px",color:"var(--muted)",marginBottom:"24px"}}>×20 · 24kg</div>
-
-            <div style={{padding:"12px 16px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",width:"100%",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px"}}>
-              <div style={{width:"36px",height:"36px",borderRadius:"8px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 3px,#0f1611 3px,#0f1611 6px)",flexShrink:0}}/>
-              <div style={{flex:1}}>
-                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>Pump It — Reso</div>
-                <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>now playing</div>
-              </div>
-              <div style={{fontFamily:"var(--display)",fontSize:"18px",fontWeight:"700",color:"var(--accent)"}}>132<span style={{fontSize:"10px",color:"var(--muted)"}}> BPM</span></div>
-            </div>
-
-            <button style={{width:"100%",padding:"12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"10px",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"12px"}}>
-              🎵 Request a track · 3 in queue
-            </button>
-
-            <div style={{padding:"14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",width:"100%"}}>
-              <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"10px"}}>How hard did that feel? Tap to log RPE after the round</div>
-              <div style={{display:"flex",gap:"6px"}}>
-                {[5,6,7,8,9,10].map(n=>(
-                  <button key={n} style={{flex:1,padding:"8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"13px",fontWeight:"700"}}>{n}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── BOOK / SCHEDULE ── */}
-        {tab==="book" && (
-          <div style={{padding:"20px"}}>
-            <div style={{fontFamily:"var(--display)",fontSize:"18px",fontWeight:"700",color:"var(--text)",marginBottom:"14px"}}>Book a class</div>
-
-            {/* Week strip */}
-            <div style={{display:"flex",gap:"8px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px"}}>
-              {["MON\n14","TUE\n15","WED\n16","THU\n17","FRI\n18","SAT\n19"].map((d,i)=>(
-                <div key={i} style={{
-                  minWidth:"48px",padding:"8px 4px",borderRadius:"10px",textAlign:"center",cursor:"pointer",flexShrink:0,
-                  background:i===1?"var(--accent)":"var(--card)",border:`1px solid ${i===1?"var(--accent)":"var(--border)"}`,
-                  color:i===1?"#0A0F0C":"var(--text)",
-                }}>
-                  <div style={{fontSize:"9px",fontWeight:"700",letterSpacing:"0.5px"}}>{d.split("\n")[0]}</div>
-                  <div style={{fontFamily:"var(--display)",fontSize:"18px",fontWeight:"700"}}>{d.split("\n")[1]}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* ClassPass badge */}
-            <div style={{padding:"8px 14px",background:"#3B82F622",border:"1px solid #3B82F650",borderRadius:"8px",fontSize:"12px",fontWeight:"600",color:"#3B82F6",marginBottom:"14px",display:"flex",alignItems:"center",gap:"8px"}}>
-              <span style={{fontWeight:"800"}}>CP</span> ClassPass · 7 credits left this month
-            </div>
-
-            {/* Class list */}
-            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-              {[
-                {time:"06:00",name:"Sunrise HIIT",coach:"Mara",dur:"45m",status:"Booked"},
-                {time:"12:15",name:"Hyrox Sim",coach:"Dev",dur:"50m",spots:4,status:"Book"},
-                {time:"18:30",name:"Strength Lab",coach:"Priya",dur:"45m",spots:8,status:"Book"},
-                {time:"19:30",name:"Spin Ride",dur:"45m",status:"Waitlist 3",full:true},
-              ].map((cls,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"10px"}}>
-                  <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--muted)",minWidth:"44px"}}>{cls.time}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.name}</div>
-                    <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>{cls.coach||""} {cls.coach?"·":""} {cls.dur}{cls.spots?` · ${cls.spots} left`:""}</div>
-                  </div>
-                  <button style={{
-                    padding:"6px 12px",
-                    background:cls.status==="Booked"?"color-mix(in srgb, var(--accent) 13%, transparent)":cls.full?"var(--navy)":"transparent",
-                    border:`1px solid ${cls.status==="Booked"?"var(--accent)":"var(--border)"}`,
-                    borderRadius:"7px",cursor:"pointer",
-                    color:cls.status==="Booked"?"var(--accent)":"var(--text)",
-                    fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap",
-                  }}>{cls.status}</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── PROFILE / DATA ── */}
-        {tab==="profile" && (
-          <div style={{padding:"20px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:"14px",marginBottom:"20px"}}>
-              <div style={{width:"56px",height:"56px",borderRadius:"50%",background:"color-mix(in srgb, var(--accent) 13%, transparent)",border:`2px solid var(--accent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",fontWeight:"800",color:"var(--accent)",flexShrink:0}}>SE</div>
-              <div>
-                <div style={{fontFamily:"var(--display)",fontSize:"18px",fontWeight:"700",color:"var(--text)"}}>Sam Ellis</div>
-                <div style={{fontSize:"12px",color:"var(--muted)"}}>Member since 2024 · Shoreditch</div>
-              </div>
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px",marginBottom:"20px"}}>
-              {[{val:"128",label:"classes"},{val:"7.6",label:"avg RPE"},{val:"12wk",label:"streak"}].map((s,i)=>(
-                <div key={i} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",textAlign:"center"}}>
-                  <div style={{fontFamily:"var(--display)",fontSize:"24px",fontWeight:"800",color:"var(--accent)"}}>{s.val}</div>
-                  <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{fontFamily:"var(--display)",fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Favourite classes</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"20px"}}>
-              {[{type:"HIIT",n:48,color:"#F59E0B"},{type:"Strength",n:36,color:"#8B5CF6"},{type:"Hyrox",n:24,color:"#22D3A6"}].map((c,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 12px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"8px"}}>
-                  <div style={{width:"8px",height:"8px",borderRadius:"50%",background:c.color}}/>
-                  <span style={{flex:1,fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{c.type}</span>
-                  <span style={{fontFamily:"var(--display)",fontSize:"16px",fontWeight:"700",color:c.color}}>{c.n}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{fontFamily:"var(--display)",fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"10px"}}>Music taste</div>
-            <div style={{padding:"14px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px"}}>
-              <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"10px"}}>
-                {["House","Drum & Bass","Hip-hop"].map(g=>(
-                  <div key={g} style={{padding:"5px 12px",background:"color-mix(in srgb, var(--accent) 13%, transparent)",border:`1px solid color-mix(in srgb, var(--accent) 25%, transparent)`,borderRadius:"999px",fontSize:"12px",fontWeight:"700",color:"var(--accent)"}}>{g}</div>
-                ))}
-              </div>
-              <div style={{fontSize:"12px",color:"var(--muted)"}}>128–140 BPM · peak zone</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{borderTop:`1px solid var(--border)`,background:"var(--card)",display:"flex",flexShrink:0}}>
-        <TabBtn id="discover" label="Discover" icon="🏠"/>
-        <TabBtn id="detail"   label="Classes"  icon="📋"/>
-        <TabBtn id="live"     label="Live"     icon="🎙"/>
-        <TabBtn id="book"     label="Book"     icon="📅"/>
-        <TabBtn id="profile"  label="Profile"  icon="👤"/>
-      </div>
-    </div>
-  );
-}
 
 
 // ─── BrandStudioScreen ────────────────────────────────────────────────────────
@@ -4335,198 +3915,11 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
   );
 }
 
-// ─── DiscoverTab — wger.de ExerciseDB integration ─────────────────────────────
-const WGER_CATEGORIES = [
-  {id:"",label:"All"},
-  {id:"8",label:"Arms"},
-  {id:"9",label:"Legs"},
-  {id:"10",label:"Abs"},
-  {id:"11",label:"Chest"},
-  {id:"12",label:"Back"},
-  {id:"13",label:"Shoulders"},
-  {id:"14",label:"Calves"},
-  {id:"15",label:"Cardio"},
-];
-function DiscoverTab({ onAddExercise }) {
-  const [query,     setQuery]     = useState("");
-  const [category,  setCategory]  = useState("");
-  const [results,   setResults]   = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [detail,    setDetail]    = useState(null);  // expanded exercise detail
-  const [loadingDt, setLoadingDt] = useState(false);
-  const [addedIds,  setAddedIds]  = useState(new Set());
-
-  const search = async () => {
-    if (!query.trim() && !category) return;
-    setLoading(true); setError(null); setResults([]); setDetail(null);
-    try {
-      let url;
-      if (query.trim()) {
-        url = `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(query.trim())}&language=english&format=json`;
-      } else {
-        url = `https://wger.de/api/v2/exercise/?format=json&language=2&category=${category}&limit=30`;
-      }
-      const r = await fetch(url);
-      if (!r.ok) throw new Error("Network error");
-      const d = await r.json();
-      if (d.suggestions) {
-        // Search endpoint returns suggestions
-        setResults(d.suggestions.map(s=>({ id:s.data.base_id, name:s.value, category:s.data.category, image:s.data.image_thumbnail })));
-      } else {
-        // List endpoint returns results array
-        const items = d.results || d;
-        setResults(items.map(ex=>{
-          const trans = (ex.translations||[]).find(t=>t.language===2) || (ex.translations||[])[0] || {};
-          return { id:ex.id, name:trans.name||ex.name||"Exercise", category:ex.category?.name||"", image:null, muscles:(ex.muscles||[]).map(m=>m.name_en||m.name).filter(Boolean) };
-        }));
-      }
-    } catch(e) {
-      setError("Could not load exercises. Check your connection.");
-    }
-    setLoading(false);
-  };
-
-  const loadDetail = async (id) => {
-    if (detail?.id === id) { setDetail(null); return; }
-    setLoadingDt(id); setDetail(null);
-    try {
-      const r = await fetch(`https://wger.de/api/v2/exerciseinfo/${id}/?format=json`);
-      const d = await r.json();
-      const trans = (d.translations||[]).find(t=>t.language===2) || (d.translations||[])[0] || {};
-      setDetail({
-        id,
-        name:       trans.name    || d.name    || "Exercise",
-        desc:       trans.description ? trans.description.replace(/<[^>]+>/g,"") : "",
-        muscles:    (d.muscles||[]).map(m=>m.name_en||m.name).filter(Boolean),
-        musclesAux: (d.muscles_secondary||[]).map(m=>m.name_en||m.name).filter(Boolean),
-        equipment:  (d.equipment||[]).map(e=>e.name).filter(Boolean),
-        category:   d.category?.name || "",
-      });
-    } catch(_) {}
-    setLoadingDt(null);
-  };
-
-  const handleAdd = (ex) => {
-    if (!onAddExercise) return;
-    const newEx = {
-      id:     "disc_" + ex.id + "_" + Date.now(),
-      n:      detail?.name || ex.name,
-      s:      "3",
-      r:      "10",
-      rest:   "30s",
-      muscles: (detail?.muscles||[]).join(", ") || ex.muscles?.join(", ") || ex.category || "",
-      notes:  detail?.desc ? detail.desc.slice(0, 120) : "",
-      timing: "none",
-      source: "discover",
-    };
-    onAddExercise(newEx);
-    setAddedIds(prev => new Set([...prev, ex.id]));
-  };
-
-  return (
-    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:0}}>
-      {/* Search bar */}
-      <div style={{padding:"12px 16px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
-        <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>Search the wger.de open exercise database · 11,000+ exercises</p>
-        <div style={{display:"flex",gap:"6px",marginBottom:"8px"}}>
-          <input
-            value={query}
-            onChange={e=>setQuery(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&search()}
-            placeholder="e.g. squat, deadlift, plank…"
-            style={{flex:1,padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"12px",outline:"none"}}
-          />
-          <button onClick={search} disabled={loading||(!query.trim()&&!category)}
-            style={{padding:"8px 16px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",opacity:(loading||(!query.trim()&&!category))?0.5:1}}>
-            {loading ? <Loader size={13}/> : <Search size={13}/>} Search
-          </button>
-        </div>
-        {/* Category quick-filter pills */}
-        <div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>
-          {WGER_CATEGORIES.map(c=>(
-            <button key={c.id} onClick={()=>{ setCategory(c.id); }}
-              style={{padding:"3px 10px",borderRadius:"12px",border:`1px solid ${category===c.id?"var(--accent)":"var(--border)"}`,background:category===c.id?"color-mix(in srgb, var(--accent) 13%, transparent)":"transparent",color:category===c.id?"var(--accent)":"var(--muted)",fontSize:"10px",fontWeight:"700",cursor:"pointer",transition:"all 0.12s"}}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Results */}
-      <div style={{flex:1,overflowY:"auto",padding:"10px 14px"}}>
-        {error && <p style={{fontSize:"12px",color:"var(--accent)",padding:"20px",textAlign:"center"}}>{error}</p>}
-        {!loading && !error && results.length === 0 && (
-          <div style={{textAlign:"center",padding:"40px 20px",color:"var(--muted)"}}>
-            <p style={{fontSize:"26px",marginBottom:"8px"}}>🏋️</p>
-            <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Search the exercise database</p>
-            <p style={{fontSize:"11px"}}>Type an exercise name or pick a category above, then hit Search</p>
-          </div>
-        )}
-        {results.map(ex => {
-          const isOpen   = detail?.id === ex.id;
-          const isLoading = loadingDt === ex.id;
-          const isAdded  = addedIds.has(ex.id);
-          return (
-            <div key={ex.id} style={{marginBottom:"7px",borderRadius:"10px",border:`1px solid ${isOpen?"color-mix(in srgb, var(--accent) 38%, transparent)":"var(--border)"}`,overflow:"hidden",transition:"border-color 0.15s"}}>
-              {/* Exercise row */}
-              <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 13px",background:"var(--navy)",cursor:"pointer"}}
-                onClick={()=>loadDetail(ex.id)}>
-                {ex.image
-                  ? <img src={ex.image} style={{width:"36px",height:"36px",borderRadius:"5px",objectFit:"cover",flexShrink:0}} alt=""/>
-                  : <div style={{width:"36px",height:"36px",borderRadius:"5px",background:"var(--border)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>🏋️</div>
-                }
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ex.name}</p>
-                  <p style={{fontSize:"10px",color:"var(--muted)"}}>{ex.category}{(ex.muscles||[]).length?` · ${ex.muscles.slice(0,2).join(", ")}`:""}</p>
-                </div>
-                <div style={{display:"flex",gap:"5px",alignItems:"center",flexShrink:0}}>
-                  {onAddExercise && (
-                    <button onClick={e=>{e.stopPropagation();handleAdd(ex);}}
-                      style={{padding:"5px 10px",background:isAdded?"color-mix(in srgb, var(--green) 13%, transparent)":"color-mix(in srgb, var(--accent) 13%, transparent)",color:isAdded?"var(--green)":"var(--accent)",border:`1px solid ${isAdded?"color-mix(in srgb, var(--green) 25%, transparent)":"color-mix(in srgb, var(--accent) 25%, transparent)"}`,borderRadius:"6px",cursor:"pointer",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"3px",whiteSpace:"nowrap"}}>
-                      {isAdded ? <><Check size={11}/> Added</> : <><Plus size={11}/> Add</>}
-                    </button>
-                  )}
-                  {isLoading ? <Loader size={13} color={"var(--muted)"}/> : <ChevronRight size={13} color={"var(--muted)"} style={{transform:isOpen?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.15s"}}/>}
-                </div>
-              </div>
-              {/* Expanded detail */}
-              {isOpen && detail && (
-                <div style={{padding:"12px 14px",background:"var(--card)",borderTop:`1px solid var(--border)`}}>
-                  {detail.muscles.length > 0 && (
-                    <p style={{fontSize:"10px",color:"var(--accent)",fontWeight:"700",marginBottom:"4px"}}>💪 Primary: {detail.muscles.join(", ")}</p>
-                  )}
-                  {detail.musclesAux.length > 0 && (
-                    <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"4px"}}>Secondary: {detail.musclesAux.join(", ")}</p>
-                  )}
-                  {detail.equipment.length > 0 && (
-                    <p style={{fontSize:"10px",color:"var(--muted)",marginBottom:"6px"}}>Equipment: {detail.equipment.join(", ")}</p>
-                  )}
-                  {detail.desc && (
-                    <p style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.5",marginBottom:"8px"}}>{detail.desc.slice(0,200)}{detail.desc.length>200?"…":""}</p>
-                  )}
-                  {onAddExercise && (
-                    <button onClick={()=>handleAdd(ex)}
-                      style={{padding:"7px 16px",background:isAdded?"var(--green)":"var(--accent)",color:isAdded?"var(--on-green)":"var(--on-accent)",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}>
-                      {isAdded ? <><Check size={13}/> Added to Stage</> : <><Plus size={13}/> Add to Stage</>}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── LibraryBrowserModal ──────────────────────────────────────────────────────
 function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
-  const [mainTab, setMainTab] = useState("library");
 
   const [libData, setLibData] = useState(() => getLibrary());
   const classKeys = Object.keys(libData);
@@ -4566,14 +3959,6 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   };
   const handleReset = () => { resetLibrary(); setLibData(WORKOUT_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
-
-  // Discover packs data
-  const DISCOVER_PACKS = [
-    {id:"hyrox12",icon:"🏋",title:"12 Days of Hyrox",author:"CrossFit Mile End",stats:"8 stations · 1.2k imports"},
-    {id:"tabata3",icon:"🔥",title:"Tabata Burner Vol. 3",author:"Jungle Editorial",stats:"16 exercises · 940 imports"},
-    {id:"5x5",    icon:"💪",title:"5×5 Strength Base",  author:"Mara K.",         stats:"5 lifts · 2.7k imports"},
-  ];
-  const [importedPacks, setImportedPacks] = useState([]);
 
   const stageLabels = {warmup:"Warm-up",main:"Main set",cooldown:"Cool-down"};
 
@@ -4653,21 +4038,11 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                 </select>
               )}
 
-              {/* My Library / Discover segmented toggle */}
-              <div style={{display:"flex",gap:"3px",background:"var(--navy)",borderRadius:"8px",padding:"3px",flexShrink:0}}>
-                {[["library","My Library"],["discover","Discover"]].map(([id,lbl])=>(
-                  <button key={id} onClick={()=>setMainTab(id)}
-                    style={{padding:"5px 14px",borderRadius:"6px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",
-                      background:mainTab===id?"var(--card)":"transparent",
-                      color:mainTab===id?"var(--text)":"var(--muted)",
-                      boxShadow:mainTab===id?"0 1px 4px rgba(0,0,0,.3)":"none",transition:"all 0.15s"}}>
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-
-              {mainTab==="library" && (
-                <>
+              {/* The "Discover" tab and its right-rail packs feed are gone: the tab
+                  browsed a third-party exercise API the gym never asked for, and
+                  the packs were fabricated authors and import counts (audit 2.2).
+                  The library is now the one movement home. */}
+              <>
                   {/* Search */}
                   <div style={{flex:1,display:"flex",alignItems:"center",gap:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px 12px",minWidth:"120px"}}>
                     <Search size={13} color={"var(--muted)"}/>
@@ -4680,14 +4055,10 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                     ✏️ {editMode?"Done":"Edit"}
                   </button>
                   {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid #EF444440",borderRadius:"8px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
-                </>
-              )}
+              </>
             </div>
 
-            {mainTab==="discover" ? (
-              <DiscoverTab onAddExercise={onAddExercise} onClose={onClose}/>
-            ) : (
-              <>
+            <>
                 {/* Sub-type filter chips */}
                 <div style={{flexShrink:0,padding:"8px 18px",borderBottom:`1px solid var(--border)`,display:"flex",gap:"6px",overflowX:"auto",WebkitOverflowScrolling:"touch",alignItems:"center"}}>
                   {subKeys.map(sk=>{
@@ -4803,45 +4174,14 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                     </button>
                   )}
                 </div>
-              </>
-            )}
+            </>
           </div>
 
-          {/* ── RIGHT RAIL: Discover packs ── */}
-          {!isMobile && !isTablet && (
-            <div style={{width:"300px",flexShrink:0,borderLeft:`1px solid var(--border)`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-              <div style={{flexShrink:0,padding:"16px 18px 10px"}}>
-                <p style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>Discover packs</p>
-                <p style={{fontSize:"11px",color:"var(--muted)"}}>{FLAGS.mockDiscover?"Community workouts — one tap to import":"Community pack marketplace — coming soon"}</p>
-              </div>
-              <div style={{flex:1,overflowY:"auto",padding:"6px 14px"}}>
-                {FLAGS.mockDiscover ? DISCOVER_PACKS.map(pack=>(
-                  <div key={pack.id} style={{background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"14px",marginBottom:"10px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}>
-                      <div style={{width:"36px",height:"36px",borderRadius:"9px",background:classColor+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"18px",flexShrink:0}}>{pack.icon}</div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>{pack.title}</p>
-                        <p style={{fontSize:"11px",color:"var(--muted)"}}>by {pack.author}</p>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <span style={{fontSize:"11px",color:"var(--muted)"}}>{pack.stats}</span>
-                      <button
-                        onClick={()=>setImportedPacks(p=>p.includes(pack.id)?p:[...p,pack.id])}
-                        style={{padding:"5px 12px",background:importedPacks.includes(pack.id)?"transparent":"var(--card)",border:`1px solid ${importedPacks.includes(pack.id)?"var(--muted)":classColor}`,borderRadius:"6px",cursor:"pointer",color:importedPacks.includes(pack.id)?"var(--muted)":classColor,fontSize:"11px",fontWeight:"700"}}>
-                        {importedPacks.includes(pack.id)?"✓ Imported":"Import"}
-                      </button>
-                    </div>
-                  </div>
-                )) : (
-                  <div style={{padding:"18px 6px",color:"var(--muted)",fontSize:"12px",lineHeight:"1.6"}}>A community marketplace of shareable workout packs is coming soon — browse packs from other studios and import them, BPM hints included, in one tap.</div>
-                )}
-              </div>
-              {FLAGS.mockDiscover&&<div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
-                <p style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.5"}}>Every imported exercise keeps its BPM hints, so the Auto-DJ scores it automatically.</p>
-              </div>}
-            </div>
-          )}
+          {/* The 300px "Discover packs" rail is gone. It advertised a community
+              marketplace that does not exist — fabricated authors and import
+              counts when flagged on, and a permanent coming-soon billboard when
+              flagged off. A column that only announces an absence earns none of
+              its width (audit 2.2). The Glossary cues claim this space instead. */}
         </div>
 
         {/* Reset overlay */}
@@ -5256,7 +4596,9 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
     fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
   };
-  const [subTab, setSubTab] = useState("music"); // avoid auto-opening the exercise library on entry
+  // Landing tab. With music quarantined the Soundtrack tab does not exist, so
+  // defaulting to it would open the Builder on a blank panel (audit 2.1).
+  const [subTab, setSubTab] = useState(FLAGS.music ? "music" : "settings");
   const [showSmart, setShowSmart] = useState(false);
   const [smartPrompt, setSmartPrompt] = useState("");
   const [smartBusy, setSmartBusy] = useState(false);
@@ -5459,10 +4801,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           style={{padding:"5px 10px",background:"color-mix(in srgb, var(--accent) 9%, transparent)",border:`1px solid color-mix(in srgb, var(--accent) 31%, transparent)`,borderRadius:"7px",cursor:"pointer",color:"var(--accent)",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           ⚡ {!isMobile && "Smart "}Distribute
         </button>
-        <button onClick={()=>{ if(isMobile||isTablet) setShowDjModal(true); else onDjClass(); }} disabled={djProgress?.active}
+        {FLAGS.music && <button onClick={()=>{ if(isMobile||isTablet) setShowDjModal(true); else onDjClass(); }} disabled={djProgress?.active}
           style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?"var(--border)":"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
           {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
-        </button>
+        </button>}
         <button onClick={()=>setShowSmart(true)} style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0,boxShadow:"var(--glow)"}}>⚡ {isMobile?"Build":"Build for me"}</button>
       </div>
 
@@ -5603,7 +4945,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           <div style={{flex:1,display:"flex",flexDirection:"column",borderRight:isTablet?"none":`1px solid var(--border)`,minWidth:0,overflow:"hidden"}}>
             {/* Tabs */}
             <div style={{height:"56px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"flex-end",padding:"0 22px",gap:"22px",flexShrink:0,background:"var(--card)"}}>
-              {["Soundtrack","Exercise Library","Settings"].map(tab=>(
+              {[...(FLAGS.music?["Soundtrack"]:[]),"Exercise Library","Settings"].map(tab=>(
                 <button key={tab} onClick={()=>setSubTab(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")}
                   style={{paddingBottom:"14px",fontWeight:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?"700":"600",color:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?"var(--accent)":"var(--muted)",background:"none",border:"none",borderBottom:subTab===(tab==="Soundtrack"?"music":tab==="Exercise Library"?"exercises":"settings")?`2px solid var(--accent)`:"2px solid transparent",cursor:"pointer",fontSize:"14px",whiteSpace:"nowrap"}}>
                   {tab}
@@ -5702,7 +5044,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {/* Exercise Library tab */}
             {subTab==="exercises" && (
               <div style={{flex:1,overflowY:"auto"}}>
-                <LibraryBrowserModal onClose={()=>setSubTab("music")} onAddExercise={handleAddLibraryExercise}/>
+                <LibraryBrowserModal onClose={()=>setSubTab(FLAGS.music?"music":"settings")} onAddExercise={handleAddLibraryExercise}/>
               </div>
             )}
 
@@ -5735,8 +5077,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           </div>
         )}
 
-        {/* RIGHT COLUMN: Auto-DJ panel (desktop only, non-tablet) */}
-        {!isMobile && !isTablet && (
+        {/* RIGHT COLUMN: Auto-DJ panel (desktop only, non-tablet).
+            Quarantined — with music off the Builder is two columns, which is
+            also what makes it stack cleanly on a phone (audit 2.1 + 1.1). */}
+        {FLAGS.music && !isMobile && !isTablet && (
           <AutoDjPanel stages={stages} onDjClass={onDjClass} djProgress={djProgress}/>
         )}
       </div>
@@ -5772,7 +5116,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         </div>
       )}
       {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
-      {showDjModal && (
+      {FLAGS.music && showDjModal && (
         <DjPlaylistModal
           stages={stages}
           onDjClass={onDjClass}
@@ -6183,14 +5527,14 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                 <Users size={14}/>{checkedInCount ? ` ${checkedInCount}` : " Check in"}
               </button>
               {/* Spotify device picker */}
-              <SpotifyDevicePicker
+              {FLAGS.music && <SpotifyDevicePicker
                 devices={devices}
                 activeDeviceId={activeDeviceId}
                 setActiveDeviceId={setActiveDeviceId}
                 browserDeviceId={deviceId}
                 refreshDevices={refreshDevices}
                 compact={isMobile}
-              />
+              />}
               {/* ELAPSED */}
               <div style={{textAlign:"center",flexShrink:0}}>
                 <div style={{fontSize:"10px",letterSpacing:"1.5px",color:"var(--muted)",fontWeight:"600"}}>ELAPSED</div>
@@ -6326,8 +5670,11 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                   )}
                 </div>
 
-                {/* MUSIC panel */}
-                <div style={{padding:"16px 20px",background:"var(--card)",flexShrink:0}}>
+                {/* MUSIC panel. Gated on the flag rather than on `nowPlaying`,
+                    because the null branch printed "No music playing" into the
+                    coach's runner for the whole class — a permanent status line
+                    about a feature the product no longer has (audit 2.1). */}
+                {FLAGS.music && <div style={{padding:"16px 20px",background:"var(--card)",flexShrink:0}}>
                   {nowPlaying ? (
                     <>
                       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
@@ -6358,7 +5705,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
                   ) : (
                     <div style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"8px 0"}}>No music playing</div>
                   )}
-                </div>
+                </div>}
               </div>
             )}
           </div>
@@ -6475,8 +5822,10 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                 <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
+                {/* "0 tracks" was printed here on the room's TV before a class,
+                    in front of members, every time (audit 2.1 / UI-UX §1). */}
                 <p style={{fontSize:"12px",color:"var(--muted)"}}>
-                  {stages.length} stages · {fmtDur(totalDur)} · {totalTracks} tracks · {totalExs} exercises
+                  {stages.length} stages · {fmtDur(totalDur)}{FLAGS.music ? ` · ${totalTracks} tracks` : ""} · {totalExs} exercises
                   {isLive && <span style={{color:"var(--accent)",fontWeight:"800"}}> · ● Stage {curIdx+1}/{stages.length}</span>}
                 </p>
               </div>
@@ -6543,9 +5892,12 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                       </div>
                       {/* Stage name */}
                       <p style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
-                      {/* Duration + BPM */}
+                      {/* Duration + BPM. The BPM range is a music-matching target;
+                          with no music to match it is noise on a member-facing
+                          card. TempoGuide is the survivor of the BPM UI — it needs
+                          no licence and earns its place on the live display. */}
                       <p style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600"}}>
-                        {fmtDur(s.dur)}{cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
+                        {fmtDur(s.dur)}{FLAGS.music && cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
                       </p>
                     </div>
 
@@ -6577,8 +5929,11 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                       ))}
                     </div>
 
-                    {/* Music footer */}
-                    <div style={{
+                    {/* Music footer. This is a MEMBER-FACING surface: with music
+                        off it used to print "No tracks" on every stage card,
+                        advertising an internal absence five times to the room
+                        (UI-UX §1). Nothing is better than an apology. */}
+                    {FLAGS.music && <div style={{
                       flexShrink:0,padding:"10px 18px",
                       borderTop:`1px solid ${cfg.color}25`,
                       display:"flex",alignItems:"center",gap:"8px"
@@ -6593,7 +5948,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                       ) : (
                         <p style={{fontSize:"11px",color:"var(--muted)",fontStyle:"italic"}}>No tracks</p>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
@@ -6606,11 +5961,14 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
 }
 
 // ─── DisplayScreen (TV mode) ──────────────────────────────────────────────────
+// "Music Focus" (big album art + timer) is filtered out while music is
+// quarantined — the preset renders an empty artwork panel with no player
+// attached, and it is the room's TV that shows it (audit 2.1).
 const DISPLAY_PRESETS = [
-  { id:"full",    label:"Full",        desc:"Timer + exercises + music" },
+  { id:"full",    label:"Full",        desc:FLAGS.music?"Timer + exercises + music":"Timer + exercises" },
   { id:"minimal", label:"Minimal",     desc:"Timer + stage name only"   },
   { id:"timer",   label:"Timer Only",  desc:"Giant full-screen clock"   },
-  { id:"music",   label:"Music Focus", desc:"Big album art + timer"      },
+  ...(FLAGS.music ? [{ id:"music", label:"Music Focus", desc:"Big album art + timer" }] : []),
 ];
 const FONT_SCALES = [
   { id:"s",  label:"S",  mult:0.75 },
@@ -6702,11 +6060,15 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
         <div style={{fontSize:"12px",color:"var(--muted)"}}>clockwise · {floor.length} stations</div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:"12px"}}>
-        <div style={panel}>
+      {/* This board faces the FLOOR — members read it mid-class. The NOW PLAYING
+          panel printed "No track playing." to the whole room for the entire
+          session (audit 2.1). Dropped with music; the grid closes up rather than
+          leaving a hole. */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":(FLAGS.music?"1fr 1fr 1fr":"1fr 1fr"),gap:"12px"}}>
+        {FLAGS.music && <div style={panel}>
           <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>NOW PLAYING</div>
           {npName ? <div><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>{npName}</div><div style={{fontSize:"12px",color:"var(--muted)"}}>{npArtist}</div></div> : <div style={{fontSize:"12px",color:"var(--muted)"}}>No track playing.</div>}
-        </div>
+        </div>}
         <div style={panel}>
           <div style={{fontSize:"11px",fontWeight:"800",color:"var(--muted)",letterSpacing:"1px",marginBottom:"10px"}}>BENCHMARK OF THE WEEK</div>
           <div style={{fontSize:"12px",color:"var(--muted)"}}>Set a weekly benchmark WOD to track PRs and attempts on the floor. Coming soon.</div>
@@ -6770,31 +6132,24 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   const nextMoves = nextStage ? (nextStage.exercises||[]).map(e=>e.n).filter(Boolean).slice(0,3) : [];
 
   // Display prefs persisted to localStorage
-  const [preset,    setPreset]    = useState(() => store.getDisplayPrefs().preset);
+  // A display that ran before the music quarantine has `preset:"music"` saved in
+  // localStorage, and that preset no longer exists — restoring it blindly would
+  // put an empty album-art panel on the gym's TV. Fall back to "full".
+  const [preset,    setPreset]    = useState(() => {
+    const saved = store.getDisplayPrefs().preset;
+    return DISPLAY_PRESETS.some(p => p.id === saved) ? saved : "full";
+  });
   const [fontScale, setFontScale] = useState(() => store.getDisplayPrefs().fontScale);
   const [showSettings, setShowSettings] = useState(false);
-  const [showQR,       setShowQR]       = useState(false);
   useEffect(() => {
     store.saveDisplayPrefs({ preset, fontScale });
   }, [preset, fontScale]);
 
-  // Feature 6: Generate attendee URL for QR code (try/catch guards against non-ASCII btoa errors)
-  const attendeeUrl = (() => {
-    try {
-      const payload = {
-        name: "Live Workout",
-        stages: stages.map(s => ({
-          name: s.name, type: s.type, dur: s.dur,
-          exercises: (s.exercises||[]).map(e => ({ n:e.n, s:e.s, r:e.r, rest:e.rest }))
-        }))
-      };
-      const encoded = b64EncodeUnicode(JSON.stringify(payload));
-      return `${window.location.origin}${window.location.pathname}?mode=attendee&data=${encoded}`;
-    } catch { return ""; }
-  })();
-  // Generated locally (src/lib/qr.js) — no third party in the path, nothing
-  // encoded leaves the device. See the Fable deprecation list.
-  const qrSrc = useQrDataUrl(attendeeUrl);
+  // The "Attendee QR" that used to live here promised a member "scan to see
+  // today's session on your phone" and encoded the whole class into a URL whose
+  // route rendered a component that was never written. A member-facing surface
+  // must not make a promise the product cannot keep, so it is gone until the N4
+  // magic-link page gives the QR something real to point at (audit 2.2).
 
   // F15: Esc exits display mode back to live
   useEffect(() => {
@@ -7021,13 +6376,8 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           <StageJourney compact={true}/>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
-          {/* Feature 6: QR code toggle */}
-          <button onClick={e=>{e.stopPropagation();setShowQR(s=>!s);setShowSettings(false);}} title="Show attendee QR code"
-            style={{padding:"8px",background:showQR?"#10B98120":"var(--navy)",border:`1px solid ${showQR?"#10B98140":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showQR?"#10B981":"var(--muted)",display:"flex"}}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="6" y="6" width="1" height="1"/><rect x="17" y="6" width="1" height="1"/><rect x="6" y="17" width="1" height="1"/><path d="M14 14h1v1h-1zM14 17h1v1h-1zM17 14h1v1h-1zM17 17h1v1h-1zM20 14v1M14 20h1M17 20v1M20 17h1"/></svg>
-          </button>
           {/* Settings gear */}
-          <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);setShowQR(false);}} style={{padding:"8px",background:showSettings?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--navy)",border:`1px solid ${showSettings?"color-mix(in srgb, var(--accent) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showSettings?"var(--accent)":"var(--muted)",display:"flex"}}>
+          <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);}} style={{padding:"8px",background:showSettings?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--navy)",border:`1px solid ${showSettings?"color-mix(in srgb, var(--accent) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showSettings?"var(--accent)":"var(--muted)",display:"flex"}}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </button>
           <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"13px",fontWeight:"700"}}><ArrowLeft size={14}/> Back</button>
@@ -7035,14 +6385,6 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       </div>
 
       {showSettings && <SettingsPanel/>}
-      {/* Feature 6: QR code floating panel */}
-      {showQR && qrSrc && (
-        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"70px",right:"20px",zIndex:200,background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"16px",padding:"20px",boxShadow:`0 8px 32px rgba(0,0,0,0.5)`,textAlign:"center",minWidth:"200px"}}>
-          <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>📱 Attendee QR</p>
-          <img src={qrSrc} width="200" height="200" style={{borderRadius:"8px",display:"block",margin:"0 auto"}} alt="Attendee QR code" onError={e=>{e.target.style.display="none";}}/>
-          <p style={{fontSize:"10px",color:"var(--muted)",marginTop:"10px",lineHeight:"1.5"}}>Scan to see today's<br/>session on your phone</p>
-        </div>
-      )}
 
       <div style={{flex:1,display:"flex"}}>
         {/* LEFT: Stage info */}
@@ -7123,9 +6465,11 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           )}
         </div>
 
-        {/* RIGHT: Spotify */}
+        {/* RIGHT: tempo (or the player, if music is ever turned back on).
+            The heading has to follow the content — "Now Playing" sitting above a
+            silent metronome reads as a player that has failed. */}
         <div style={{flex:"0 0 320px",background:"var(--card)",borderLeft:`1px solid var(--border)`,padding:"44px 28px",display:"flex",flexDirection:"column"}}>
-          <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"20px"}}>Now Playing</p>
+          <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"20px"}}>{nowPlaying ? "Now Playing" : "Tempo"}</p>
           {nowPlaying ? (
             <>
               {nowPlaying.album?.images?.[0]?.url && (
@@ -9012,7 +8356,10 @@ function ConnectSpotifyPrompt({ onConnect, onBack }) {
 }
 
 export default function App() {
-  if (FLAGS.attendeeShare && ATTENDEE_PAYLOAD) return <AttendeeView data={ATTENDEE_PAYLOAD}/>;
+  // The `?mode=attendee&data=<base64>` route is gone. It decoded a whole class
+  // out of the URL and rendered <AttendeeView/> — a component that was never
+  // written, so the route would have thrown had the flag ever been turned on.
+  // The N4 magic-link member page replaces it (audit 2.2).
 
   const vw = useWindowWidth();
   const isMobile = vw < 480;
@@ -9028,7 +8375,6 @@ export default function App() {
   store.connect({ gymId: auth?.gym?.id, userId: auth?.user?.id });
 
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
-  const [shareCopied, setShareCopied] = useState(false);
   const [showNav, setShowNav] = React.useState(false);
   const [crossfade, setCrossfade] = useState(() => store.getCrossfade());
   useEffect(() => { store.saveCrossfade(crossfade); }, [crossfade]);
@@ -9067,6 +8413,14 @@ export default function App() {
     if (!link) { link = document.createElement("link"); link.id = "jungle-gfont"; link.rel = "stylesheet"; document.head.appendChild(link); }
     link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;600;700;800;900&display=swap`;
   }, [gymBranding?.fontFamily]);
+
+  // White-label: the browser tab, the bookmark and the home-screen label are all
+  // this string. Once a gym has entered their name it is THEIR product, so the
+  // tab says so; "Jungle" is only the unbranded default (audit 1.2).
+  useEffect(() => {
+    const name = gymBranding?.gymName?.trim();
+    document.title = name || "Jungle";
+  }, [gymBranding?.gymName]);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [classChoice, setClassChoice] = useState(() => {
@@ -9259,11 +8613,6 @@ export default function App() {
     if(data.classType) setClassChoice({classType:data.classType, subType:data.subType||null});
     setView("builder");
   };
-  const shareWithClass = () => {
-    const payload = { name:sessionName, stages:stages.map(s=>({name:s.name,type:s.type,dur:s.dur,exercises:(s.exercises||[]).map(e=>({n:e.n,s:e.s,r:e.r,rest:e.rest}))})) };
-    const url = `${window.location.origin}${window.location.pathname}?mode=attendee&data=${b64EncodeUnicode(JSON.stringify(payload))}`;
-    navigator.clipboard.writeText(url).then(()=>{setShareCopied(true);setTimeout(()=>setShareCopied(false),2500);}).catch(()=>window.open(url,"_blank"));
-  };
 
   if (window.opener&&!window.opener.closed&&new URLSearchParams(window.location.search).get("code")) {
     return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)",color:"var(--text)",flexDirection:"column",gap:"16px"}}>
@@ -9286,11 +8635,8 @@ export default function App() {
         : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif");
 
 
-  const primaryNav = [
-    {key:"dashboard",  label:"Dashboard"},
-    {key:"builder",    label:"Builder"},
-    {key:"templates",  label:"Templates"},
-  ];
+  // (`primaryNav` lived here — declared, never rendered, and still listing
+  //  Templates. Removed rather than updated.)
   const can = auth?.can || (() => true); // no auth (supabase off) \u21d2 show everything
   // Account identity = the signed-in (Google) user, not Spotify. Falls back to the
   // Spotify profile only when there's no account session (e.g. Supabase disabled).
@@ -9363,11 +8709,6 @@ export default function App() {
                 ))}
               </div>
             ))}
-            {FLAGS.attendeeShare&&<div style={{marginTop:"auto",padding:"12px",borderTop:`1px solid var(--border)`}}>
-              <button onClick={()=>{shareWithClass();setShowNav(false);}} style={{width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 12px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"transparent",color:"var(--muted)",fontSize:"13px",fontWeight:"500"}}>
-                <Share2 size={14}/> Share with Class
-              </button>
-            </div>}
           </div>
         </div>
       )}
@@ -9386,12 +8727,8 @@ export default function App() {
           <div style={{display:"flex",gap:isMobile?"4px":"10px",alignItems:"center",flexShrink:0}}>
             {deviceId&&!isMobile&&<SpBadge><Wifi size={12}/> Spotify Ready</SpBadge>}
             {deviceId&&isMobile&&<Wifi size={13} color={"var(--green)"}/>}
-            {FLAGS.attendeeShare&&!isMobile&&<button onClick={shareWithClass} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",background:shareCopied?"color-mix(in srgb, var(--green) 13%, transparent)":"var(--navy)",color:shareCopied?"var(--green)":"var(--muted)",border:`1px solid ${shareCopied?"color-mix(in srgb, var(--green) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
-              {shareCopied?<Check size={13}/>:<Share2 size={13}/>}{shareCopied?"Copied!":"Share"}
-            </button>}
-            {FLAGS.attendeeShare&&isMobile&&<button onClick={shareWithClass} style={{background:"none",border:"none",cursor:"pointer",color:shareCopied?"var(--green)":"var(--muted)",padding:"4px",display:"flex"}}>
-              {shareCopied?<Check size={15}/>:<Share2 size={15}/>}
-            </button>}
+            {/* "Share with Class" minted a base64 URL into a route that no longer
+                exists. The N4 member link replaces it (audit 2.2). */}
             <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
               {displayProfile?.images?.[0]?.url?<img src={displayProfile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
             </button>
@@ -9423,29 +8760,36 @@ export default function App() {
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
             {/* Class Runner umbrella (B): one nav entry, sub-modes Run / Room TV / Auto-DJ. */}
             <div style={{flexShrink:0,display:"flex",gap:"6px",alignItems:"center",padding:"8px 16px",borderBottom:"1px solid var(--border)",background:"var(--card)"}}>
-              {[["run","Run"],["dj","Auto-DJ"]].map(([t,lbl]) => (
+              {[["run","Run"],...(FLAGS.music?[["dj","Auto-DJ"]]:[])].map(([t,lbl]) => (
                 <button key={t} onClick={()=>setRunnerTab(t)} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:runnerTab===t?"700":"600",border:`1px solid ${runnerTab===t?"var(--accent)":"var(--border)"}`,background:runnerTab===t?"color-mix(in srgb, var(--accent) 13%, transparent)":"transparent",color:runnerTab===t?"var(--accent)":"var(--text)"}}>{lbl}</button>
               ))}
               <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
             </div>
             {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")}/>}
-            {runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
+            {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
         {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
         {view==="glossary"&&<GlossaryScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
-        {view==="music"&&(token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
+        {view==="music"&&(!FLAGS.music
+          ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>
+          : token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
         {view==="member"&&<RosterScreen onBack={()=>setView("dashboard")}/>}
-        {view==="integrations"&&(FLAGS.mockIntegrations?<IntegrationsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Integrations" note="Real integrations (booking, payments, wearables) land in a later phase — the previous cards were demo theatre." onBack={()=>setView("dashboard")}/>)}
+        {view==="integrations"&&<MockDisabledScreen title="Integrations" note="Booking, payments and wearable integrations land in a later phase. The cards that used to sit here showed services as “connected” that never were." onBack={()=>setView("dashboard")}/>}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}
         </ErrorBoundary>
       </div>
 
       {!isFullscreen&&<footer style={{padding:"10px 24px",borderTop:`1px solid var(--border)`,background:"var(--card)",textAlign:"center"}}>
-        <p style={{fontSize:"11px",color:"var(--muted)"}}>© {new Date().getFullYear()} Dylan Rodrigues. All rights reserved.</p>
+        {/* White-label: a gym paying for this must never read someone else's
+            copyright line on their own screens (audit 1.2). Their name leads;
+            the Jungle credit is a quiet trailer, and only on staff surfaces. */}
+        <p style={{fontSize:"11px",color:"var(--muted)"}}>
+          {gymBranding?.gymName ? `${gymBranding.gymName} · ` : ""}Powered by Jungle
+        </p>
       </footer>}
 
       {showProfile&&<ProfileModal profile={displayProfile||{display_name:"Coach"}} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
