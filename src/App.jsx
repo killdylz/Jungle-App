@@ -31,15 +31,9 @@ const VIEW_LABELS = {
   integrations:"Integrations", "brand-studio":"Brand Studio", team:"Team",
 };
 
-// ─── Load Canopy fonts (Space Grotesk display + Hanken Grotesk body) ──────────
-(function injectFonts() {
-  if (document.getElementById("jungle-fonts")) return;
-  // Load Canopy base fonts; skin switcher loads its own pair via injectSkinFonts()
-  const l = document.createElement("link");
-  l.id = "jungle-fonts"; l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Anton:wght@400&family=Archivo:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap";
-  document.head.appendChild(l);
-})();
+// Skin fonts are bundled, not fetched — see src/fonts.js for why (P7: a Room TV
+// on gym Wi-Fi with no internet must still render in the gym's type).
+import "./fonts.js";
 
 const SPOTIFY_CLIENT_ID = "594e4864b902473c86c939c9cccce420";
 const REDIRECT_URI      = window.location.origin + window.location.pathname;
@@ -79,19 +73,11 @@ const DARK = PRESET_SKINS.canopy.tokens;   // fallback reference kept for safety
 const T = { ...PRESET_SKINS.canopy.tokens };
 // ThemeContext + useTheme moved to src/ui/primitives.jsx (imported above).
 
-// ─── Inject skin font pair ─────────────────────────────────────────────────────
-function injectSkinFonts(skin) {
-  const families = [skin.fonts.display, skin.fonts.body].filter(Boolean);
-  const query = families.map(f => "family=" + encodeURIComponent(f) + ":wght@400;500;600;700;800").join("&");
-  let link = document.getElementById("jungle-skin-fonts");
-  if (!link) {
-    link = document.createElement("link");
-    link.id = "jungle-skin-fonts";
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
-  }
-  link.href = "https://fonts.googleapis.com/css2?" + query + "&display=swap";
-}
+// Switching skins used to fetch that skin's font pair from the Google CDN, which
+// meant re-skinning a display mid-demo needed the internet. All three preset
+// pairs are bundled now (src/fonts.js), so this is a no-op kept as a named seam:
+// a gym that later supplies its own licensed font file gets it wired in here.
+function injectSkinFonts(_skin) { /* bundled at build time — nothing to fetch */ }
 
 // ─── Write CSS custom properties onto :root ─────────────────────────────────────
 function applySkinCSS(tokens, meta={}) {
@@ -8235,6 +8221,12 @@ export default function App() {
     store.saveGymBranding(gymBranding);
   }, [gymBranding]);
   // (legacy gymBranding accent/green override removed - superseded by the skin system)
+  // The ONE remaining runtime font fetch, and it cannot be bundled: this is a
+  // font the gym picks from the whole Google catalogue in Brand Studio, unknown
+  // at build time. It degrades honestly — if the request fails the fontFamily
+  // chain falls through to the skin's bundled face and then to system, so an
+  // offline display is still styled, just not in the gym's optional override.
+  // Every surface a member sees uses the bundled skin fonts.
   useEffect(() => {
     const font = gymBranding?.fontFamily;
     if (!font || font === "system") { const el = document.getElementById("jungle-gfont"); if (el) el.href = ""; return; }

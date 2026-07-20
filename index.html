@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0A0F0C" />
     <meta name="description" content="The class operating system for boutique fitness studios." />
+    <!-- PWA: installable on a phone, a tablet and the room's TV browser with no
+         app-store review in the path. `apple-touch-icon` must be a PNG — iOS
+         ignores the SVG the manifest is happy with. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Jungle" />
     <!-- Title is the gym's once they have branded the app (see App.jsx); "Jungle"
          is only the pre-branding default. An owner bookmarking this should never
          see a package name. -->
