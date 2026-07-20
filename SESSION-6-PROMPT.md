@@ -21,7 +21,8 @@ own screens, while quietly building the attendance record that shows who's about
 
 ## Start here
 
-1. **Confirm state:** `git status` (expect clean), `main` = `14be355` and pushed.
+0. **Repo:** `C:\Users\dylan\jungle-app` — request folder access first.
+1. **Confirm state:** `git status` (expect clean), `main` = `6d64aaa` and pushed.
 2. **Check CI.** Session 5 added Playwright to `.github/workflows/deploy.yml` and **that CI run has
    never been observed**. It passes locally on Windows; it has never run on a Linux runner. If the
    deploy went red, that is almost certainly why — start there, not with a feature.
