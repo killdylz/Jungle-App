@@ -1,5 +1,28 @@
 # SPEC-PATCHES — mechanical edits to `Jungle - Functional, Design & Technical Spec (As-Built).md`
 
+> ## ✅ APPLIED 2026-07-20. This file is now history — do not re-apply.
+>
+> All ten patches are in the spec. **They could not be applied literally**, and that is the thing
+> worth knowing if you are comparing the two files: the patches were written on 2026-07-19,
+> *before* the pilot-prep pass shipped, so several described a present tense that had since become
+> false. Applying them verbatim would have written stale claims into the spec on purpose. Where
+> that happened, the *intent* was applied against the code as it actually is:
+>
+> | # | Written 2026-07-19 | Applied as |
+> |---|---|---|
+> | 1 | Append the white-label leaks to F6 as an open Gap ("delete the quote once fixed") | The leaks **are** fixed — recorded as resolved, and the b64 attendee view it mentions was deleted, not flagged off |
+> | 2 | P7: "fonts load from CDN and no service worker exists" | Both untrue now — the **PWA shipped**. P7 rewritten to be blocked only on the physical soak |
+> | 5 | Replace the §11 examples table with a pointer | Done, plus: the U1 pass **shipped**, so the table of offending strings would itself have read as a lie |
+> | 6 | Re-rank the "Now" tables | Done, with ✅ marks for what shipped and 0008 recorded as **applied** |
+> | 10 | Line count → "~9,450 and shrinking" | The real count is **~8,780**. Used the measured number |
+>
+> Two things were found while applying, neither of them in the patch list:
+> - **The spec was mojibake-corrupted** across §9–§13 — 77 sequences (`â€"` for `—`, `âœ…` for
+>   `✅`, `Â§` for `§`, `Â·`, `Ã—`, `ðŸŸ¡`), from an earlier session writing UTF-8 through a
+>   CP1252 round-trip. Repaired in the same pass; a scan of every root `.md` is now clean.
+> - **The bundle is 606 KB / 170 KB gzip, measured** — it did *not* shrink to the 598 KB claimed
+>   in the handoff. Recorded as measured, with the discrepancy noted rather than smoothed over.
+
 _Fable audit, 2026-07-19. Apply as literal replace/insert operations. The Fable verdict doc
 stays unedited (dated artifact); where it has aged is recorded here and in TECH-PLAN §1._
 

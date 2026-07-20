@@ -49,9 +49,9 @@ functionality.
 | Fable phase | State | Evidence |
 |---|---|---|
 | **0 — De-risk** | ✅ Done | All six mock surfaces flagged off (`src/config/flags.js`, all default `false`). Deploy verification in place. Residual: `MusicProvider` shell never built — but N5's user value shipped without it, so it is now a refactor, not a blocker. |
-| **0.5 — Split slice** | 🟡 Steps 1–3 done | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` all extracted. Steps 4 (screens) and 5 (music quarantine) open. `App.jsx` is **~8,090 lines**. |
+| **0.5 — Split slice** | 🟡 Steps 1–3 done | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` all extracted; step 5 (music) is **quarantined behind `FLAGS.music`**. Step 4 (screens) open. `App.jsx` is **~8,780 lines and shrinking** via the decomposition stages (AUDIT-FINDINGS §3.1); stage 1 began with `src/ui/labels.js`. |
 | **1 — Data foundation ★** | 🟡 ~90% | Migrations `0001`–**`0007`** applied; RLS on every table (`0007`'s verified 11/11); Realtime room channels live; local-first sync across all 14 domains. **F4 schema is in — its capture UI is not.** Magic-link member view (N4) still missing. |
-| **2 — Make theatre real** | 🟡 **Unblocked, waiting on volume** | The blocker is gone: the coach roster sweep (slice 1) and the CSV backfill (slice 2, `e992d42`) both write real attendance rows, and a studio can now bring its whole history across on day one instead of accumulating it a class at a time. What N2/N3 wait on is no longer a feature — it is enough rows to compute a curve from. |
+| **2 — Make theatre real** | 🟡 **Unblocked, waiting on volume** | The blocker is gone: the coach roster sweep (slice 1) and the CSV backfill (slice 2, `e992d42`) both write real attendance rows, and a studio can now bring its whole history across on day one instead of accumulating it a class at a time. What N2/N3 wait on is no longer a feature — it is enough rows to compute a curve from. **At-risk (N3) is now live UI** with migration 0008 applied, so "waiting on volume" is the correct description for **N2 only**. |
 | **3 — Experience deepening** | 🟡 Partly done early | P1/P2 display work ✅, WCAG-AA in Brand Studio ✅, reduced-motion ✅, tempo guide ✅. BLE spike and Garmin application not started. |
 | **4–5** | ⛔ Not started | Correctly gated behind consent foundation and validation. |
 
@@ -186,10 +186,18 @@ trust the rule and a lawyer must be able to read it.
 branding and logos, `brand_profiles` sync with `active_skin_id`, and a **live WCAG-AA contrast
 audit** on token pairs — compliance turned into a feature, exactly as specified.
 
-**Gap:** the spec's purpose sentence is *"the member experiences the studio's brand"* — and there
-is **no member-visible surface at all** today. The magic-link view (N4) is unbuilt and the legacy
-b64-in-URL attendee view is flagged off. The auto-generated per-gym privacy/consent page is also
-unbuilt. So F6's *acceptance* is met on staff surfaces and untested where it actually matters.
+**Gap:** the spec's purpose sentence is *"the member experiences the studio's brand"* — and the
+member-visible surface is still only half-built. The magic-link view (N4) is unbuilt, blocked on an
+Edge Function to issue a signed class token (design in `LEGAL-AND-SECURITY.md` §4); the legacy
+b64-in-URL attendee view was **deleted** in the pilot-prep pass, along with the Room TV QR that
+pointed at it. The auto-generated per-gym privacy/consent page is also unbuilt. So F6's *acceptance*
+is met on staff surfaces and remains untested where it actually matters.
+
+**Shipped since (pilot-prep pass):** the **share card** — a gym-branded 1080×1920 PNG rendered
+client-side — is the first genuinely member-facing branded artefact, and it needed no backend. The
+in-app white-label leaks AUDIT-FINDINGS 1.2 caught are **fixed**: the `© Dylan Rodrigues` footer,
+the `jungle-app` browser title and Vite favicon, and runtime Google-Fonts loading (fonts are now
+self-hosted, which is also what makes the PWA work offline).
 
 ---
 
@@ -203,7 +211,7 @@ unbuilt. So F6's *acceptance* is met on staff surfaces and untested where it act
 | **P4** | Zero-touch room | ✅ | Auto-advance + phone-as-remote + Realtime Follow. |
 | **P5** | One primitive, two lenses | ⛔ | No 1:1 lens (see F1). |
 | **P6** | Capture costs <5s | 🚫 | Awaiting F4. **Must be instrumented, not assumed.** |
-| **P7** | Degrade gracefully | 🟡 | localStorage-first everywhere and QR now generates offline; but no display-side session cache with a verified reconnect path. |
+| **P7** | Degrade gracefully | 🟡 | localStorage-first everywhere, QR generates offline, and the **PWA now ships**: self-hosted fonts, manifest, and a hand-written service worker with build-time precache injection. Proven locally with the preview server stopped — the app boots, both skin fonts report loaded, and a check-in still records. Becomes ✅ only when the **physical gym soak test** (REGRESSION-PLAN §4, router off 5 min mid-class) passes on real hardware. |
 
 **Accessibility — built:** WCAG-AA contrast enforced at token-selection time in Brand Studio;
 reduced-motion honoured on every looping animation across all four display surfaces; timer state
@@ -243,7 +251,7 @@ that layer can be added later *without altering existing columns*.
 | `members` | `gym_id`, `name`, `email?`, `status`, `joined_at` | **Roster rows, not auth users.** This is what makes attendance capture require zero member adoption. |
 | `class_instances` | `gym_id`, `starts_at`, `coach_id`, `format` | A class *occurrence*. Explicitly **not booking** — no reservation, no payment. The no-CRM line in schema form. |
 | `attendance` | `class_instance_id`, `member_id`, `source: qr\|coach\|import`, `checked_in_at` | **Immutable** — insert-only RLS, same pattern as `session_history`. |
-| `consent_records` | `member_id`, `gym_id`, `scope`, `policy_version`, `method`, `granted_at`, `withdrawn_at` | Append-only. Ships in Phase 1 **even though biometrics don't** — cheap insurance, MHMDA-shaped. |
+| `consent_records` | `member_id`, `gym_id`, `scope`, `policy_version`, `method`, `granted_at`, `withdrawn_at` | Append-only. Ships in Phase 1 **even though biometrics don't** — cheap insurance. A **consent ledger, PDPA-first, with graduated scopes** (see `LEGAL-AND-SECURITY.md`). |
 
 *Design note carried from Fable:* graduated consent scopes. `roster/attendance` is notice-level
 now; `biometric_live`, `biometric_store`, `coach_view`, `export` are explicit opt-in later.
@@ -395,7 +403,7 @@ parsed at **1.0** once the movement was in their corpus.
 | 1 | Data constants → `src/data/` | ✅ `library.js`, `templates.js`, `glossary.js`, `personas.seed.js` |
 | 2 | Repository seam → `src/lib/store.js` | ✅ The migration seam; ~30 call sites route through it |
 | 3 | Shared UI → `src/ui/primitives.jsx` | ✅ Incl. `ThemeContext`/`useTheme`/`useWindowWidth` |
-| 4 | Screens → `src/screens/` | ⛔ **Open.** `App.jsx` ~8,090 lines. Leaf-first: Glossary → Templates → Calendar → BrandStudio → Displays |
+| 4 | Screens → `src/screens/` | 🟡 **Stage 1 begun.** `App.jsx` ~8,780 lines and shrinking. Leaf-first, per AUDIT-FINDINGS §3.1 — shared helpers (`src/ui/labels.js` ✅) → leaf screens → Calendar → BrandStudio → Displays. Glossary and Templates are **retired**, not pending. Stages 4–5 stay deferred |
 | 5 | Music quarantine → `src/music/` | ⛔ **Open.** ~2,000 lines of Spotify/DJ still inline; `MusicProvider` never built |
 
 Step 4 is mechanical and zero-risk, and it directly reduces the recurring stale-build and
@@ -526,10 +534,10 @@ risk, not by size.
 
 | # | Item | Why it matters |
 |---|---|---|
-| I6 | **Screens split (§4.5 step 4)** | `App.jsx` is **8,279 lines**. Mechanical, zero-risk, and it attacks the recurring stale-build/merge pain directly. |
-| I7 | **Music quarantine + `MusicProvider` (§4.5 step 5)** | ~2,000 lines, and the natural home for fixing I8 in one pass. Closes the last Phase-0 item. |
-| I8 | **Three client-side third-party accesses** | Spotify tokens in localStorage (`App.jsx:372–403`), user-supplied RapidAPI key (`:433`, UI `:5537`), client-side Deezer BPM (`:525–533`). A stated architectural constraint currently violated. |
-| I9 | **Code splitting** | Single **606 KB** bundle (166 KB gzip), no `React.lazy` anywhere. Route-level splitting would cut first paint materially — the room display is loaded on a TV over gym Wi-Fi. |
+| I6 | **Screens split (§4.5 step 4)** | `App.jsx` is **~8,780 lines and shrinking** via the decomposition stages (AUDIT-FINDINGS §3.1). Mechanical, zero-risk, and it attacks the recurring stale-build/merge pain directly. |
+| I7 | **Music: cut from the sellable product** | Licensing exposure plus zero argued value to any of the three lives (trainer, owner, member). Quarantined behind `FLAGS.music` in `src/music/`; **`MusicProvider` will not be built.** TempoGuide survives as the only rhythm feature. Deleting the quarantine outright is a post-pilot decision. |
+| I8 | **Three client-side third-party accesses** | Spotify tokens in localStorage (`App.jsx:372–403`), user-supplied RapidAPI key (`:433`, UI `:5537`), client-side Deezer BPM (`:525–533`). A stated architectural constraint currently violated. **The Spotify-token item is resolved by feature removal for v1** (see I7); the RapidAPI key and Deezer BPM calls remain real. |
+| I9 | **Code splitting** | Single **606 KB** bundle (**170 KB gzip**, measured 2026-07-20), no `React.lazy` anywhere. Route-level splitting would cut first paint materially — the room display is loaded on a TV over gym Wi-Fi. Note the bundle has **not** shrunk: it is worth measuring rather than assuming, since the music quarantine removed features without removing their code from the graph. |
 | I10 | **Delta writes instead of whole-list upserts** | `save*` pushes the ENTIRE domain list on every change. Fine at today's volume; quadratic-feeling as a corpus grows, and it is why one bad row poisoned every plan. |
 
 ### Tier 3 — correctness gaps to close before real users
@@ -623,25 +631,25 @@ offline cache), that distinction is deliberate.*
 
 ---
 
-## 9. Persona depth â€” the main build ahead
+## 9. Persona depth — the main build ahead
 
 _Added 2026-07-19. This section is the design brief for the next phase of Workstream D._
 
 The persona system can currently **read** a coach's history and **imitate** it. What it cannot
 do is let a coach *hold their format in their hands and change it*. That is the difference
-between a clever import tool and the thing a trainer actually wants â€” and it is the gap this
+between a clever import tool and the thing a trainer actually wants — and it is the gap this
 section exists to close.
 
-### 9.1 Class Blueprints â€” structure recommended, then editable
+### 9.1 Class Blueprints — structure recommended, then editable
 
 **The problem.** A plan today is a flat list of blocks whose structure is whatever extraction
 happened to produce. Generation mimics "typical structure" statistically. Nowhere can a coach
-say *"my circuit class is a warm-up and two circuits, in that order"* â€” even though that
+say *"my circuit class is a warm-up and two circuits, in that order"* — even though that
 sentence is the most stable, most valuable thing they know about their own programming.
 
-**The object.** A `Blueprint` belongs to a coach Ã— class type and is an ordered list of slots:
+**The object.** A `Blueprint` belongs to a coach × class type and is an ordered list of slots:
 
-> **Garage Circuit** â€” `C1 = Warm-up` Â· `C2 = Circuit 1` Â· `C3 = Circuit 2`
+> **Garage Circuit** — `C1 = Warm-up` · `C2 = Circuit 1` · `C3 = Circuit 2`
 
 ```
 Blueprint {
@@ -662,22 +670,22 @@ Blueprint {
 
 | Requirement | Why it matters |
 |---|---|
-| **Recommended, then editable** â€” derived from the coach's own corpus (labels, order, roles, durations) and offered as a starting point they can rename, reorder, add to, delete from | A fixed pipeline is a worse product than no pipeline. The coach's judgement is the asset; the derivation is a convenience, not an authority. `source:"edited"` must never be silently regenerated over. |
-| **Presets for cold start** â€” ship house blueprints (Strength, Circuit, Endurance/Hyrox) | A coach with no corpus currently faces an empty screen, which is exactly when they decide whether this product is for them. |
-| **Drives generation** â€” pick blueprint, fill each slot from the coach's catalog by category, coach approves | Structure is fixed by a human; the model only chooses movements within it. Vastly more controllable, and more trustworthy, than "the AI wrote you a class". |
-| **Drives parsing** â€” a blueprint tells the parser that for *this* coach `C1` is a warm-up | This is precisely the ambiguity Â§4.3.2 had to disambiguate heuristically (S360's `A1/A2` pair vs GC's `C1/C2/C3` sequence). A blueprint answers it outright, and is the natural successor to the per-coach hints already shipped. |
+| **Recommended, then editable** — derived from the coach's own corpus (labels, order, roles, durations) and offered as a starting point they can rename, reorder, add to, delete from | A fixed pipeline is a worse product than no pipeline. The coach's judgement is the asset; the derivation is a convenience, not an authority. `source:"edited"` must never be silently regenerated over. |
+| **Presets for cold start** — ship house blueprints (Strength, Circuit, Endurance/Hyrox) | A coach with no corpus currently faces an empty screen, which is exactly when they decide whether this product is for them. |
+| **Drives generation** — pick blueprint, fill each slot from the coach's catalog by category, coach approves | Structure is fixed by a human; the model only chooses movements within it. Vastly more controllable, and more trustworthy, than "the AI wrote you a class". |
+| **Drives parsing** — a blueprint tells the parser that for *this* coach `C1` is a warm-up | This is precisely the ambiguity §4.3.2 had to disambiguate heuristically (S360's `A1/A2` pair vs GC's `C1/C2/C3` sequence). A blueprint answers it outright, and is the natural successor to the per-coach hints already shipped. |
 
-#### Status â€” âœ… derive + edit + deterministic drafting built (`src/lib/blueprints.js`)
+#### Status — ✅ derive + edit + deterministic drafting built (`src/lib/blueprints.js`)
 
-Stored at `coach_personas.style_profile.blueprints[classType]` â€” that jsonb column already
+Stored at `coach_personas.style_profile.blueprints[classType]` — that jsonb column already
 existed and already synced, so this needed no migration. Called **"class shape"** on screen,
-never "blueprint" (Â§11).
+never "blueprint" (§11).
 
 - **Derivation takes the MODAL SEQUENCE**, not a positional alignment. Plans differ in length
   and in whether an optional block ran; aligning them invents correspondences that are not in
   the data. The card states the honest number: *"Suggested from 6 of your 8 S360 classes."*
-- **A slot is named after what RECURS** â€” the key (`M1`), not the modal full label
-  (`M1 â€” Deadlift`). Naming it from the full label bakes one week's focus into the shape and
+- **A slot is named after what RECURS** — the key (`M1`), not the modal full label
+  (`M1 — Deadlift`). Naming it from the full label bakes one week's focus into the shape and
   reads as a lie the week it is a squat. Found by driving the real corpus.
 - **A slot's categories are ordered by prevalence within that slot, and that order is
   load-bearing.** A real warm-up contains the odd strength-ish movement, so the category set is
@@ -689,24 +697,24 @@ never "blueprint" (Â§11).
   house `ROLE_DUR_SEC` map and is the coach's to set.
 - **Deterministic drafting** (`draftFromBlueprint`) fills each slot from the coach's own
   catalog by category. No model: the structure is theirs, the movements are theirs, the
-  selection is arithmetic. This is Â§9.3 taken to its conclusion, and unlike the persona-ai path
-  it works with Supabase off â€” which is the only reason it could be verified at all.
+  selection is arithmetic. This is §9.3 taken to its conclusion, and unlike the persona-ai path
+  it works with Supabase off — which is the only reason it could be verified at all.
 - **A slot the catalog cannot fill emits an EMPTY block**, and an uncategorised movement is
   never drafted. Same rule as the taxonomy's blank: an honest gap the coach can see beats a
   wrong movement they might not.
 
 **Not done, and worth being plain about:** the blueprint is passed to persona-ai's `generate`
-payload but **that path is unverified** â€” it needs the function redeployed and cannot be
-exercised locally. And Â§9.1's fourth requirement, **blueprint-driven PARSING** (telling the
+payload but **that path is unverified** — it needs the function redeployed and cannot be
+exercised locally. And §9.1's fourth requirement, **blueprint-driven PARSING** (telling the
 parser that for this coach `C1` is a warm-up), is not built.
 
-**Cold-start presets are narrower than Â§9.1 implies.** They appear when a class type exists but
-no shape can be derived from it â€” e.g. a pasted plan whose blocks carry no labels. A coach with
-*no plans at all* has no class type, so no card and no presets: Â§9.1's "empty screen" case is
+**Cold-start presets are narrower than §9.1 implies.** They appear when a class type exists but
+no shape can be derived from it — e.g. a pasted plan whose blocks carry no labels. A coach with
+*no plans at all* has no class type, so no card and no presets: §9.1's "empty screen" case is
 still open. Serving it properly means letting a coach name a class and choose its shape
 *before* importing anything, which is a persona-level surface that does not exist yet.
 
-### 9.2 Movement taxonomy â€” the parser must know what KIND of thing it is reading
+### 9.2 Movement taxonomy — the parser must know what KIND of thing it is reading
 
 The parser recognises **structure** but not **meaning**. It cannot currently tell a warm-up
 movement from a strength lift from a Hyrox station, which is why blueprint slot filters,
@@ -718,13 +726,13 @@ accurate `classCategory`, and structural category discipline are all impossible 
 |---|---|
 | `warmup` / `mobility` | band pull apart, scap push-up, world's greatest stretch |
 | `strength` | back squat, bench press, deadlift, overhead press |
-| `conditioning` | burpee, wall ball, box jump, KB swing, thruster â€” **and** the loaded carries: sled push, sled pull, farmers carry, sandbag lunge, ski erg |
-| ~~`hyrox`~~ | **Removed â€” see Â§13 Q8.** Hyrox is a format, not a movement property; a circuit class can contain Hyrox movements. The stations are `conditioning`; the format lives in the blueprint preset. |
+| `conditioning` | burpee, wall ball, box jump, KB swing, thruster — **and** the loaded carries: sled push, sled pull, farmers carry, sandbag lunge, ski erg |
+| ~~`hyrox`~~ | **Removed — see §13 Q8.** Hyrox is a format, not a movement property; a circuit class can contain Hyrox movements. The stations are `conditioning`; the format lives in the blueprint preset. |
 | `core` | plank, hollow hold, pallof press |
 | `cooldown` | stretching, breathing |
 
 **And, distinctly, what is NOT a movement.** The parser must keep separating movement text from
-modifiers â€” rest wording (`rest 90s`, `walk-back recovery`), intensity markers (`RIR 2`,
+modifiers — rest wording (`rest 90s`, `walk-back recovery`), intensity markers (`RIR 2`,
 `RPE 7-8`, `%1RM`, tempo `31X1`) and structural cues (`3 rounds`, `go to B after`,
 `1st set as primer`). It already does this well (see `foldScheme` / `stripSchemeTokens` /
 `isBareRoleWord`); **the gap is movement to category, not modifier stripping.**
@@ -735,7 +743,7 @@ LLM fallback for genuinely unknown names, **batched into one call**. As with equ
 honest blank must beat a confident wrong guess: the catalog already surfaces "needs equipment"
 and should surface "needs category" the same way.
 
-#### Status â€” âœ… layers 1 and 2 built (`src/lib/movementTaxonomy.js`)
+#### Status — ✅ layers 1 and 2 built (`src/lib/movementTaxonomy.js`)
 
 Deterministic classifier + coach override shipped. The **LLM fallback is deliberately not
 built**: it is only worth batching once a real corpus of blanks exists to batch, and the
@@ -746,16 +754,16 @@ Four things worth carrying forward, all of them corrections to the prose above:
 
 - **`categoryOf()` re-derives at read time; it does not trust the stored `category`.** A
   catalog is only re-aggregated when a persona's *plans* change, so a persisted category is a
-  snapshot that goes stale the moment the rules improve â€” an existing coach would never see the
+  snapshot that goes stale the moment the rules improve — an existing coach would never see the
   improvement. Found by driving the UI, not by unit tests: `Hanging Knee Raise` stayed
   `strength` across reloads after the rules were corrected to `core`.
 - **The coach's override lives in `persona_movements.meta.category`, not a column.** `meta` is
   unconstrained jsonb and already syncs, so this needed no migration and carries no
   CHECK-constraint risk. Derivation refreshes freely underneath it and can never overwrite it.
 - **There is no `hyrox` category.** The examples table above lists one; it was built that way
-  and then removed the same day on Dylan's call â€” *a circuit class can contain Hyrox
+  and then removed the same day on Dylan's call — *a circuit class can contain Hyrox
   movements*, so the format must not be stamped onto the movement. The stations classify as
-  `conditioning`, and `HYROX_STATIONS` belongs to the blueprint preset. See Â§13 Q8 for the
+  `conditioning`, and `HYROX_STATIONS` belongs to the blueprint preset. See §13 Q8 for the
   full reasoning and the design smell that flagged it. **The live category set is the six in
   `CATEGORIES`: `warmup`, `mobility`, `strength`, `conditioning`, `core`, `cooldown`.**
 - **Loaded carries need their own rule anyway**, one row above the strength rules: `Sandbag
@@ -765,8 +773,8 @@ Four things worth carrying forward, all of them corrections to the prose above:
   than defensive: a catalog written by the earlier build can carry `meta.category = "hyrox"`,
   and the guard makes those rows fall back to the derivation instead of poisoning slot filters.
 - **The eight stations, corrected.** The prose above lists `run` as a station and omits Wall
-  Balls. The race is 8 Ã— 1km run *between* eight stations â€” the run is connective tissue, not a
-  station â€” and the eighth station is Wall Balls.
+  Balls. The race is 8 × 1km run *between* eight stations — the run is connective tissue, not a
+  station — and the eighth station is Wall Balls.
 
 **What it unlocks:** blueprint slot filters; a much sharper `classCategory`; and "no ergs in a
 strength block" enforced **structurally** rather than by asking a model nicely in a prompt.
@@ -778,7 +786,7 @@ The division of labour this whole workstream has been converging on:
 | The model SHOULD | The model SHOULD NOT |
 |---|---|
 | Classify movements it has never seen (batched, cheap) | Decide the structure of a class |
-| Suggest a blueprint for a coach with no corpus | Decide who is at risk (already correct â€” N3 is arithmetic) |
+| Suggest a blueprint for a coach with no corpus | Decide who is at risk (already correct — N3 is arithmetic) |
 | Draft a class **within a blueprint the coach fixed** | Invent structure the coach did not ask for |
 | Explain a flag, draft a win-back message, narrate | Be the steady-state engine for anything deterministic |
 
@@ -788,129 +796,153 @@ asking a trainer to do it is the same category of error as showing them a confid
 
 ---
 
-## 10. Platform strategy â€” web, desktop, mobile
+## 10. Platform strategy — web, desktop, mobile
 
 _Added 2026-07-19._ The recommendation is deliberately boring, because the boring option is
 nearly free and solves an outstanding spec requirement as a side effect.
 
 | Step | What | Why this order |
 |---|---|---|
-| **1. PWA** | Manifest + service worker on the existing build | Installable on iOS, Android **and** desktop with no store review; and the service worker delivers the **offline display cache the spec already demands** (P7 / I11 â€” *"survives Wi-Fi loss for a full class"* is currently an untested assumption, and a room TV on gym Wi-Fi is the exact case). Highest value per unit of work by a wide margin. |
-| **2. Capacitor** | Wrap the *same* build for the App Store / Play Store | Reuses essentially all the code. Worth doing once there is a **member-facing** surface worth installing â€” i.e. after **N4** (magic-link member view). Shipping a store app whose only users are staff is effort with no audience. |
-| **3. Tauri (not Electron)** | Desktop app for reception / studio TV | Far smaller than Electron. Honestly, the PWA probably covers this â€” do not build it speculatively. |
-| **4. React Native** | Full native | **This is a rewrite.** Only justified if BLE heart-rate (N7) genuinely demands native access. That is the one real forcing function and should be settled *before* anyone commits to a mobile direction. |
+| **1. PWA** | Manifest + service worker on the existing build | Installable on iOS, Android **and** desktop with no store review; and the service worker delivers the **offline display cache the spec already demands** (P7 / I11 — *"survives Wi-Fi loss for a full class"* is currently an untested assumption, and a room TV on gym Wi-Fi is the exact case). Highest value per unit of work by a wide margin. |
+| **2. Capacitor** | Wrap the *same* build for the App Store / Play Store | Reuses essentially all the code. Worth doing once there is a **member-facing** surface worth installing — i.e. after **N4** (magic-link member view). Shipping a store app whose only users are staff is effort with no audience. |
 
-**Surface-by-surface, what each device is actually for** â€” worth stating, because "mobile app"
+**BLE (N7), if ever needed, forces a wrapper** because iOS has no Web Bluetooth — but that wrapper
+is **Capacitor with a BLE plugin around the same build, never a rewrite**. React Native is removed
+from the roadmap, and the Tauri desktop row with it: the PWA covers reception and the studio TV,
+and building a desktop shell speculatively was never justified.
+
+**Surface-by-surface, what each device is actually for** — worth stating, because "mobile app"
 means three different things here:
 
-- **Coach's phone** â€” the runner and check-in. Needs offline (P7) and speed (P6). PWA covers it.
-- **Room TV / desktop** â€” the display. Needs offline, large type, and to never show browser
-  chrome. PWA in fullscreen covers it; a Tauri shell is a nicety.
-- **Member's phone** â€” QR self-check-in and the magic-link summary (N4). This is the one that
-  eventually wants a store presence, and the one **still blocked on the QR Edge Function**.
+- **Coach's phone** — the runner and check-in. Needs offline (P7) and speed (P6). PWA covers it.
+- **Room TV / desktop** — the display. Needs offline, large type, and to never show browser
+  chrome. PWA in fullscreen covers it, and no desktop shell is planned.
+- **Member's phone** — the magic-link summary (N4). This is the one that could eventually want a
+  store presence, and the one **still blocked on an Edge Function** to issue a signed class token.
+  QR self-check-in is **deferred**, not next — design in `LEGAL-AND-SECURITY.md` §4.
 
 ---
 
-## 11. UI language â€” take the implementation out of the coach's way
+## 11. UI language — take the implementation out of the coach's way
 
-_Added 2026-07-19._ Jungle is an experience layer. Every leaked implementation term is a small
-failure of that promise, and they have accumulated. **Currently in the code:**
+_Added 2026-07-19. Status updated in the pilot-prep pass._ Jungle is an experience layer. Every
+leaked implementation term is a small failure of that promise.
 
-| Shown to a coach today | The problem |
-|---|---|
-| `"Add to corpus"`, `"Paste JSON"`, `"Extract & add"`, `"Extracted:"` | Names the mechanism, not the outcome |
-| `"Each deck is read via the Google Slides API (read-only) and extracted by persona-ai into blocks, schemes and movements."` | Three implementation nouns and a service name in one sentence |
-| `"the built-in parser only understood 53% of that text and the persona-ai fallback isn't available"` | A confidence percentage and two internal components |
-| `"Not valid JSON â€” paste an extraction object like { blocks: [ ... ] }"` | Asks a trainer to write JSON |
-| `"Edge Function returned a non-2xx status code"`, `"no blocks came back"` | Says what failed internally, not what to do |
-| `"New persona"` / `"Coach Personas"` | Even the feature name is jargon |
+**The rule: name the outcome, not the mechanism.** "Add to corpus" becomes *"Save this class"*;
+"Extract & add" becomes *"Read this class"*. Confidence scores, parsers, functions, blocks, schemes
+and JSON must never reach a coach's eyes. Errors say what to **do**.
 
-**The rule: name the outcome, not the mechanism.** "Add to corpus" becomes *"Save this class"*.
-"Extract & add" becomes *"Read this class"*. Confidence scores, parsers, functions, blocks,
-schemes and JSON should never reach a coach's eyes. Errors should say what to **do**.
+**✅ The U1 pass has since shipped.** The table of offending strings that stood here is gone
+because the strings are gone — it described the code as of 2026-07-19 and would now read as a lie.
+The complete replacement copy is maintained in **`UI-UX-DIRECTION.md` §4**, which is the
+authoritative U1 worklist.
 
-`ROLE_LABEL` in `App.jsx` is the pattern to copy â€” it already maps `primary_lift` to
-"Primary lift" so the raw enum never surfaces. Extend that discipline to every string.
+The label maps are extracted to **`src/ui/labels.js`** — `ROLE_LABEL`, `SCHEME_LABEL` and friends,
+so a raw enum never surfaces — **with a unit test that enforces the no-jargon rule** rather than
+leaving it to discipline. That test is the durable part: it is what stops the next feature
+reintroducing "corpus".
 
 ---
 
-## 12. Feature backlog â€” the full remaining picture
+## 12. Feature backlog — the full remaining picture
 
-_Added 2026-07-19, consolidating Â§7b and Â§7c with the new work above._
+_Added 2026-07-19, consolidating §7b and §7c with the new work above._
 
-### Now â€” persona depth (Â§9)
+### Now — persona depth (§9)
 | # | Item |
 |---|---|
-| D1 | **Movement taxonomy** â€” âœ… deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch) |
-| D2 | **Class Blueprints** â€” âœ… derive, present, edit **and drive deterministic drafting**. Still open: blueprint-driven **parsing**, and the persona-ai `generate` path is wired but **unverified** |
-| D3 | **Blueprint presets** â€” ðŸŸ¡ built and reachable when a class type yields no derivable shape; the true no-corpus cold start still needs a persona-level surface (Â§9.1 Status) |
-| D4 | **Generation presets** â€” pick a blueprint and a preset, never type a prompt |
+| D1 | **Movement taxonomy** — ✅ deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch) |
+| D2 | **Class Blueprints** — ✅ derive, present, edit **and drive deterministic drafting**. Still open: blueprint-driven **parsing**, and the persona-ai `generate` path is wired but **unverified** |
+| D3 | **Blueprint presets** — 🟡 built and reachable when a class type yields no derivable shape; the true no-corpus cold start still needs a persona-level surface (§9.1 Status) |
+| D4 | **Generation presets** — pick a blueprint and a preset, never type a prompt |
 
-### Now â€” finishing what is half-built
+### Now — finishing what is half-built
+
+_Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now core**, see
+`PRODUCT-DIRECTION.md` §5._
+
 | # | Item |
 |---|---|
-| N3-UI | âœ… **Built.** At-risk list on the Members screen, per-flag "why" with its numbers, and an append-only action ledger (`retention_actions`, migration **0008 â€” NOT YET APPLIED by Dylan**). A3 becomes measurable once it is applied |
-| U1 | **UI language pass** (Â§11) |
-| M1 | **Members CRUD** â€” `RosterScreen` reads but cannot edit; no status, no joined date |
-| I5 | **RLS tests for `0001`-`0006`** (only `0007` is covered) |
+| **Mobile layout** | ✅ **Shipped.** Bottom tab bar below 900px (Run · Build · Members · Brand · More), bottom sheet, safe-area insets. The real gap was the **480–900px band**, not 375px — see the AUDIT 1.1 correction in `SESSION-HANDOFF.md` |
+| P1 | **PWA** — ✅ **shipped**: self-hosted fonts, manifest, hand-written service worker + build-time precache injection. Closes I11 in code; P7 flips to ✅ only after the physical soak |
+| U1 | **UI language pass** (§11) — ✅ **shipped**, enforced by a test (`src/ui/labels.js`) |
+| D3 | **Cold start** — ✅ **shipped**: a coach with zero classes can name a class type, pick a preset shape, and land in the Builder |
+| N4 | **Member magic-link summary** — the only member-facing surface, and the only place F6's white-label premium (A2) can be tested on a member. **Share-card half ✅ shipped** (needs no backend); the link half is **blocked on an Edge Function** to issue a signed class token |
+| I5 | **RLS tests for `0001`-`0006`** — ✅ **shipped** and run by Dylan |
+| N3-UI | ✅ **Built**, and migration **0008 is now APPLIED** — the append-only action ledger (`retention_actions`) persists, so A3 is measurable |
+| M1 | **Members CRUD** — `RosterScreen` reads but cannot edit; no status, no joined date |
 
-### Next â€” platform + reach (Â§10)
+### Next — platform + reach (§10)
 | # | Item |
 |---|---|
-| P1 | **PWA** â€” manifest + service worker; closes I11/P7 |
-| N4 | **Member magic-link summary** â€” the only member-facing surface, and the only place F6's white-label premium (A2) can be tested on a member |
-| F4-QR | **QR self-check-in Edge Function** â€” service-role write path. **Blocked on a hand-deploy.** Do not loosen RLS to `anon` |
 | P2 | **Capacitor** wrap, once N4 exists |
 
-### Then â€” the outcome tier
+### Then — the outcome tier
 | # | Item |
 |---|---|
 | N2 | 90-day cohort curve + benchmark overlay + revenue-at-risk |
 | N3-LLM | Win-back message drafting (model drafts; rules decide) |
-| F1 | Session primitive (`sessions`, `session_assignments`, XOR) â€” **no 1:1/PT path exists at all**, so P5 is unreachable |
+| F1 | Session primitive (`sessions`, `session_assignments`, XOR) — **no 1:1/PT path exists at all**, so P5 is unreachable |
 | PAR-Q | Must land in the same change that introduces individualised load |
 
-### Structural debt (unchanged, still real)
-`I6` screens split (`App.jsx` ~8,600 lines) Â· `I7` music quarantine Â· `I8` three client-side
-third-party accesses Â· `I9` code splitting (~630 KB, no `React.lazy`) Â· `I10` delta writes Â·
-`I13` background retry Â· `I14` hydrate pagination Â· `I15` persona LLM quality ceiling
+### Structural debt (still real)
+`I6` screens split (`App.jsx` **~8,780 lines and shrinking** via the decomposition stages,
+AUDIT-FINDINGS §3.1 — stage 1 began with `src/ui/labels.js`) · `I7` music **cut**, quarantined
+behind `FLAGS.music` · `I8` three client-side third-party accesses (Spotify token resolved by
+removal) · `I9` code splitting (**606 KB / 170 KB gzip**, measured — not the 598 KB previously claimed; no
+`React.lazy`) · `I10` delta writes ·
+`I13` background retry · `I14` hydrate pagination · `I15` persona LLM quality ceiling
 
 ### Deferred
-N6 soundtrack routing Â· tempo-guide extensions Â· N7-N11 (BLE HR, aggregator, Strava, Garmin,
-iOS) â€” correctly gated behind the consent foundation Â· N12 coach self-serve tier
+**F4-QR — QR self-check-in Edge Function.** Moved here from "Next": a service-role write path,
+blocked on a hand-deploy, and **not** required for the pilot. Design in `LEGAL-AND-SECURITY.md` §4.
+**Do not loosen RLS to `anon`.**
+**Templates screen + Glossary retired** (AUDIT 2.3) — folded into the Builder picker ("Jungle
+presets") and Library rows rather than deleted. Note the trap this sprang: retiring the Templates
+nav orphaned class export/import, because that screen was the only route to either. A fold is not
+the same as a deletion.
+N6 soundtrack routing · tempo-guide extensions · N7-N11 (BLE HR, aggregator, Strava, Garmin,
+iOS) — correctly gated behind the consent foundation · N12 coach self-serve tier
 
 ---
 
 ## 13. Open questions for the Fable review (2026-07-19)
 
-In addition to Â§8, which stands:
+In addition to §8, which stands:
 
 7. ~~**Blueprint vs. corpus authority.**~~ **Settled 2026-07-19 (Dylan): the edit always wins,
-   and the contradiction is surfaced.** Built in `reconcileBlueprint` â€” an `edited` blueprint is
+   and the contradiction is surfaced.** Built in `reconcileBlueprint` — an `edited` blueprint is
    returned untouched and the freshly derived shape rides along as `contradiction` only when it
    actually differs, so the card can say *"Your recent classes have been running a different
    shape"* with a **Use this instead** action. Never auto-applied, never silently reconciled.
 8. ~~**Is `hyrox` a movement category or a class type?**~~ **Settled 2026-07-19 (Dylan):
-   NEITHER â€” Hyrox is a format, and there is no `hyrox` movement category.** The reasoning is
+   NEITHER — Hyrox is a format, and there is no `hyrox` movement category.** The reasoning is
    Dylan's and it is decisive: *a circuit class can contain Hyrox movements.* A sled push is a
    loaded carry whoever is pushing it, so tagging the movement with the format would mislabel
    every ordinary circuit class that happens to own a sled. The stations classify as
    `conditioning` like anything else. `HYROX_STATIONS` survives as an exported list belonging
-   to the Hyrox **blueprint preset** (Â§9.1), which is where the format legitimately lives.
+   to the Hyrox **blueprint preset** (§9.1), which is where the format legitimately lives.
 
    _(An earlier pass the same day shipped `hyrox` as a category and had already begun
-   contorting itself â€” only five of the eight stations were tagged, because Row, Run and Wall
+   contorting itself — only five of the eight stations were tagged, because Row, Run and Wall
    Balls are obviously everyday conditioning. That carve-out was the design telling us the
    category was wrong. Recorded because the smell is reusable: when a category needs
    exceptions to avoid mislabelling ordinary cases, the category is the problem.)_
-9. **Does the member app need to exist before a store presence is worth anything?** Â§10 assumes
-   yes (Capacitor waits for N4). If the coach-facing PWA is enough to sell, the order changes.
-10. **BLE heart-rate is the one thing that could force a native rewrite (N7).** Should that be
-    spiked cheaply *now* to de-risk the mobile direction, even though the feature itself is
-    correctly gated behind consent and sits in a much later phase?
-11. **How much structure should a preset impose on a brand-new coach?** A strong preset gets them
-    to value in one click but teaches them Jungle's opinion rather than capturing theirs â€” which
-    cuts against the entire persona thesis.
+9. ~~**Does the member app need to exist before a store presence is worth anything?**~~
+   **Settled: the member surface is a magic link, and there is no store presence.** Nothing about
+   the member experience needs an installed app — a link a member opens once after class is the
+   whole surface, and it is also the only version that respects PDPA-first data minimisation.
+   Capacitor stays on the roadmap for one reason only: **if BLE ever ships.**
+10. ~~**Should BLE be spiked cheaply now to de-risk the mobile direction?**~~ **Folds into Q9 —
+    no spike needed.** The question only mattered while the answer could force a *rewrite*. It
+    cannot: iOS has no Web Bluetooth, so BLE needs a wrapper, but that wrapper is **Capacitor
+    around the same build**. Since the cost of being wrong is now a wrapper rather than a
+    rewrite, there is nothing to de-risk in advance.
+11. ~~**How much structure should a preset impose on a brand-new coach?**~~ **Answered: presets
+    are scaffolding, not opinion.** They are shown *only* at a zero-corpus cold start, and are
+    always editable. Jungle's opinion never overwrites a derived or edited shape — the same
+    authority rule as Q7. The preset exists to get a coach to a first class; the moment they have
+    a corpus, their own shape replaces it.
 
 
 ---
@@ -937,22 +969,29 @@ This is the first time the product has had a named customer, and it promotes sev
 | Technical jargon in the UI (§11) | **Blocking.** A paying customer's staff will read these strings. |
 | No backups, no staging, no observability | **Blocking before member data is real.** |
 
-### 14.2 ⚠️ The compliance framing in this document is wrong for Singapore
+### 14.2 The compliance framing — corrected for Singapore
 
-**§4.1 describes `consent_records` as "MHMDA-shaped", and the migrations reference GDPR erasure.**
-Those are US and EU instruments. Singapore's governing law is the **Personal Data Protection Act
-(PDPA)**, and the differences are material — notably the **mandatory data breach notification**
-regime, the **Data Protection Officer** requirement, and the **Do Not Call** provisions, which bear
-directly on the win-back messaging feature (N3/N5) because that feature contacts members who have
-stopped attending.
+**§4.1 used to describe `consent_records` as "MHMDA-shaped", and the migrations still reference
+GDPR erasure.** Those are US and EU instruments. Singapore's governing law is the **Personal Data
+Protection Act (PDPA)**, and the differences are material — notably the **mandatory data breach
+notification** regime, the **Data Protection Officer** requirement, and the **Do Not Call**
+provisions, which bear directly on the win-back messaging feature (N3/N5) because that feature
+contacts members who have stopped attending.
 
-Also unresolved: in PDPA terms the **gym** is almost certainly the organisation with obligations to
-its members and **Jungle is a data intermediary**. That framing determines the contract, the
-retention policy and parts of the architecture, and it has never been written down.
+§4.1's wording is now corrected to "consent ledger, PDPA-first, scopes graduated". **The migration
+comments still say GDPR and have not been rewritten** — they are inert prose, but they are the
+remaining instance of the wrong framing in the repo.
+
+**Resolved framing: the gym is the organisation; Jungle is a data intermediary.** The gym holds the
+obligations to its members; Jungle processes on the gym's instructions. That determines the
+contract, the retention policy and parts of the architecture, and it is now written down — with the
+DPO, breach-notification and Do Not Call specifics — in **`LEGAL-AND-SECURITY.md`**, which is
+authoritative for all of it. Two consequences that reach into the code: a **sub-processor must be
+named in the gym's DPA** (which is why adding Sentry is a legal decision, not a library choice —
+crash payloads can carry member names), and DNC bears directly on win-back messaging (N3/N5).
 
 **Nothing here should be read as legal advice, and none of it has been reviewed by a Singapore
-lawyer.** It is flagged as a gap, not answered. `FABLE-AUDIT-PROMPT.md` §2.3 asks for the analysis;
-the outcome should be folded back into this section and into §4.1.
+lawyer** — that review is still outstanding and is on Dylan's queue.
 
 ### 14.3 The IP question, which is not a technical one
 
@@ -960,10 +999,12 @@ Software built by a freelancer while engaged at a gym can have a **contested own
 be agreed in writing with the first gym *before* launch, not after it succeeds. Recorded here
 because it is the kind of thing that is cheap to settle early and expensive to settle late.
 
-### 14.4 What this section does not yet contain
+### 14.4 Where the commercial numbers live
 
-Pricing, unit economics, the addressable Singapore market, the first-gym commercial arrangement,
-integration priorities, and the scaling cost curve. All are requested in `FABLE-AUDIT-PROMPT.md`
-and should be folded in here when they come back — **with sources or an explicit note that a number
-is a guess.** The rule that governs this document applies to commercial figures too: an honest
-blank beats a confident wrong guess.
+Pricing, unit economics, the addressable Singapore market, and the first-gym commercial arrangement
+are maintained in **`GTM-SINGAPORE.md`**, which is authoritative for all of them. **Each number
+carries its confidence tag there** — sourced, estimated, or guess — rather than being restated here
+where the tag would drift loose from the figure.
+
+The rule that governs this document applies to commercial figures too, and is the reason for the
+tagging discipline: **an honest blank beats a confident wrong guess.**
