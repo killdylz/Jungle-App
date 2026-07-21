@@ -41,7 +41,7 @@ import { SCFG } from "./data/stageConfig.js";
 // These are the ONLY music identifiers App.jsx still speaks; the rest of the
 // subsystem talks to itself. See src/music/index.js for why it is quarantined
 // rather than deleted.
-import { useSpotify, IS_CONFIGURED, redirectToSpotify, apiPlay, rampVolume,
+import { useSpotify, redirectToSpotify, apiPlay, rampVolume,
          enrichTracksWithBpm, runDjOrchestrator, TrackSearch, MusicHubScreen,
          SpotifyDevicePicker, DjPlaylistModal, AutoDjPanel,
          ConnectSpotifyPrompt } from "./music/index.js";
@@ -332,31 +332,13 @@ const CLASS_TYPES = ["HIIT","Strength","Mobility","Circuit","Cardio","Recovery",
 
 // BrandLogo + StatCard moved to src/ui/primitives.jsx (imported above).
 
-// ─── LoginScreen ──────────────────────────────────────────────────────────────
-function LoginScreen({onLogin, authError}) {
-  const vw = useWindowWidth();
-  const isMobile = vw < 480;
-  return (
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:`radial-gradient(ellipse at 50% 20%, var(--navy) 0%, var(--bg) 65%)`,color:"var(--text)",padding:isMobile?"20px":"30px",textAlign:"center"}}>
-      <JungleLogo size={isMobile?60:80}/>
-      <h1 style={{marginTop:"20px",fontSize:isMobile?"36px":"56px",fontWeight:"800",letterSpacing:isMobile?"4px":"8px"}}>JUNGLE</h1>
-      <p style={{marginTop:"12px",color:"var(--muted)",fontSize:isMobile?"14px":"16px",maxWidth:"360px",lineHeight:"1.7",width:"100%",boxSizing:"border-box"}}>Elite gym workout management<br/>with synchronized Spotify integration</p>
-      {authError && <div style={{marginTop:"20px",padding:"12px 20px",background:"color-mix(in srgb, var(--accent) 13%, transparent)",border:`1px solid var(--accent)`,borderRadius:"8px",color:"var(--accent)",fontSize:"13px"}}>⚠️ {authError}</div>}
-      {IS_CONFIGURED ? (
-        <button onClick={onLogin} style={{marginTop:"32px",padding:isMobile?"14px 36px":"16px 52px",background:"var(--green)",color:"var(--on-green)",border:"none",borderRadius:"32px",fontSize:isMobile?"14px":"15px",fontWeight:"700",cursor:"pointer",width:isMobile?"92vw":"auto",maxWidth:"320px",minHeight:"44px"}}>
-          🎵 Continue with Spotify
-        </button>
-      ) : (
-        <div style={{marginTop:"28px",padding:isMobile?"16px":"20px",background:"var(--card)",borderRadius:"12px",border:`1px solid var(--border)`,width:isMobile?"92vw":"420px",maxWidth:"100%",textAlign:"left",boxSizing:"border-box"}}>
-          <p style={{fontWeight:"700",marginBottom:"10px"}}>⚙️ Setup Required</p>
-          <p style={{fontSize:"13px",color:"var(--muted)",marginBottom:"10px"}}>Open jungle.jsx and set your Spotify Client ID:</p>
-          <code style={{fontSize:"12px",color:"var(--accent)",background:"var(--navy)",padding:"10px 12px",borderRadius:"6px",display:"block",wordBreak:"break-all"}}>const SPOTIFY_CLIENT_ID = "your_id_here";</code>
-        </div>
-      )}
-      <p style={{marginTop:"24px",fontSize:"12px",color:"var(--muted)",padding:"0 8px"}}>Spotify Premium required · Redirect URI must match your Spotify Dashboard</p>
-    </div>
-  );
-}
+// LoginScreen (Spotify-gated entry) deleted in stage 3. It was never rendered —
+// AuthGate.jsx (Google) has been the gate since session 5, when Spotify stopped
+// gating the app. It was also the last surface still calling Jungle "elite gym
+// workout management with synchronized Spotify integration" and demanding
+// "Spotify Premium", a white-label + sales-integrity leak (audit 2.1). Its
+// deletion removes the only consumer of the music barrel's IS_CONFIGURED, which
+// is why that import is now gone too. git history keeps the screen.
 
 // ─── ProfileModal ─────────────────────────────────────────────────────────────
 // F13: Expanded with real class-history stats and recent sessions

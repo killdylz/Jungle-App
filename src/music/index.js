@@ -14,7 +14,9 @@
 // TempoGuide is deliberately NOT here: it needs no licence and is the display's
 // honest no-music state, so it stays with the display code in App.jsx.
 export { useSpotify, MUSIC_OFF } from "./useSpotify.js";
-export { IS_CONFIGURED, redirectToSpotify } from "./spotifyAuth.js";
+// IS_CONFIGURED lives in spotifyAuth.js but is not re-exported: its only consumer
+// was the deleted Spotify-gated LoginScreen. Import it directly if it earns a use.
+export { redirectToSpotify } from "./spotifyAuth.js";
 export { apiPlay, rampVolume, enrichTracksWithBpm } from "./spotifyApi.js";
 export { TrackItem, TrackSearch } from "./TrackSearch.jsx";
 export { MusicHubScreen } from "./MusicHubScreen.jsx";
