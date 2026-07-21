@@ -5592,6 +5592,10 @@ export default function App() {
   // their own mount; classes hydrate separately in CalendarScreen.
   useEffect(() => {
     let alive = true;
+    // I13: start the background-retry triggers once. Idempotent, so mounting after
+    // an auth change doesn't stack listeners. A failed write now re-pushes on
+    // reconnect (and on a slow timer) instead of waiting for the next login hydrate.
+    store.startSyncRetry();
     store.hydrateAll().then(r => {
       if (!alive || !r) return;
       if (r.brand) {

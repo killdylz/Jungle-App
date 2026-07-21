@@ -17,7 +17,7 @@ import {
   ensureClassInstance, getClassInstances, _ciToRow,
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
-  updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog,
+  updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -244,6 +244,61 @@ describe("syncErrors", () => {
     }));
     expect(syncErrors().map(e => e.table).sort()).toEqual(["persona_plans", "user_prefs"]);
     expect(syncErrors().find(e => e.table === "persona_plans").msg).toBe("check violation");
+  });
+});
+
+// ── I13: which failed writes are due for a retry ─────────────────────────────
+// The pure decision behind background retry. The I/O around it (navigator.onLine,
+// calling the re-push thunks, the interval) needs a live Supabase and a browser,
+// so — like _mergeAppendLog for I14 — the decision is pinned here and the wiring
+// is left to the integration surface. Base backoff is 5s, cap 5min.
+describe("_dueRetries", () => {
+  const BASE = 5_000, CAP = 300_000;
+
+  it("returns nothing while offline — a retry that can't reach the network only burns an attempt", () => {
+    const errors = { members: { at: 0, attempts: 0 } };   // long overdue
+    expect(_dueRetries(errors, { online: false, now: 10 * CAP })).toEqual([]);
+  });
+
+  it("returns nothing for an empty or missing ledger", () => {
+    expect(_dueRetries({}, { online: true, now: Date.now() })).toEqual([]);
+    expect(_dueRetries(undefined, { online: true, now: Date.now() })).toEqual([]);
+  });
+
+  it("waits out the base backoff before the first retry", () => {
+    const at = 1_000_000;
+    const errors = { members: { at, attempts: 0 } };
+    // just before base has elapsed → not yet due
+    expect(_dueRetries(errors, { online: true, now: at + BASE - 1 })).toEqual([]);
+    // at/after base → due
+    expect(_dueRetries(errors, { online: true, now: at + BASE })).toEqual(["members"]);
+  });
+
+  it("backs off exponentially with the attempt count", () => {
+    const at = 1_000_000;
+    // attempts=3 → wait = base * 2^3 = 40s
+    const errors = { attendance: { at, attempts: 3 } };
+    expect(_dueRetries(errors, { online: true, now: at + 8 * BASE - 1 })).toEqual([]);
+    expect(_dueRetries(errors, { online: true, now: at + 8 * BASE })).toEqual(["attendance"]);
+  });
+
+  it("never waits longer than the cap, no matter how many attempts have failed", () => {
+    const at = 1_000_000;
+    // 2^40 * base would be astronomical; the cap must clamp it to 5 min.
+    const errors = { persona_plans: { at, attempts: 40 } };
+    expect(_dueRetries(errors, { online: true, now: at + CAP - 1 })).toEqual([]);
+    expect(_dueRetries(errors, { online: true, now: at + CAP })).toEqual(["persona_plans"]);
+  });
+
+  it("returns only the DUE tables, sorted for a deterministic retry order", () => {
+    const now = 2_000_000;
+    const errors = {
+      members:      { at: now - BASE - 1, attempts: 0 },   // due
+      user_prefs:   { at: now - 1,        attempts: 0 },   // too recent
+      attendance:   { at: now - CAP,      attempts: 20 },  // capped → due
+      brand_profiles:{ at: now - 100,     attempts: 5 },   // backing off → not due
+    };
+    expect(_dueRetries(errors, { online: true, now })).toEqual(["attendance", "members"]);
   });
 });
 

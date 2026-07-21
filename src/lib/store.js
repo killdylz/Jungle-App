@@ -96,7 +96,15 @@ const SYNC_ERR_KEY = "jungle_sync_errors";
 function _noteSyncError(table, msg) {
   try {
     const all = readJSON(SYNC_ERR_KEY, {});
-    all[table] = { msg: String(msg || "unknown"), at: Date.now() };
+    const prev = all[table];
+    // `attempts` counts CONSECUTIVE failures for this table and drives I13's
+    // exponential backoff (see _dueRetries). It starts at 0 on the first failure
+    // and increments each time a write to this table fails again before any
+    // success clears it — so a genuinely broken write (a CHECK violation that will
+    // fail identically forever) backs off toward the cap instead of hammering the
+    // server every tick, while a transient blip retries quickly and then clears.
+    all[table] = { msg: String(msg || "unknown"), at: Date.now(),
+                   attempts: prev ? (prev.attempts || 0) + 1 : 0 };
     writeJSON(SYNC_ERR_KEY, all);
   } catch (_) { /* never let bookkeeping break a write */ }
 }
@@ -115,6 +123,34 @@ export function syncErrorFor(table) { return readJSON(SYNC_ERR_KEY, {})[table] |
 export function syncErrors() {
   const all = readJSON(SYNC_ERR_KEY, {});
   return Object.keys(all).map(table => ({ table, ...all[table] }));
+}
+
+// ── I13: background retry of failed writes ───────────────────────────────────
+// Until now a failed background write sat in the ledger above until the NEXT
+// hydrate re-pushed it (via _guardList / _blobStale / _mergeAppendLog). Hydrate
+// runs on login and little else, so a check-in that failed on a two-second Wi-Fi
+// blip could wait hours to reach Postgres — invisible on every other device, and
+// only "saved on this device" the whole time. I13 closes that: reconnecting fires
+// an immediate retry, and a slow timer re-pushes anything that failed while online
+// (a transient 500, which has no `online` event to ride back on).
+//
+// The decision — WHICH tables are due to retry right now — is pulled out here as a
+// pure function and unit-tested, the same discipline I14 used for _mergeAppendLog.
+// The I/O around it (reading navigator.onLine, calling the re-push thunks, the
+// interval) is the untestable-locally part and stays thin.
+const RETRY_BASE_MS = 5_000;      // first retry ~5s after a failure
+const RETRY_CAP_MS  = 5 * 60_000; // never slower than every 5 min, never faster than base
+
+// Given the ledger, whether we're online, and the clock, return the tables whose
+// backoff has elapsed — sorted, so the result is deterministic for tests and the
+// retry order is stable. Offline returns nothing: a retry that cannot reach the
+// network only burns an attempt and inflates the backoff for when it matters.
+export function _dueRetries(errors, { online, now, baseMs = RETRY_BASE_MS, capMs = RETRY_CAP_MS } = {}) {
+  if (!online) return [];
+  return Object.entries(errors || {})
+    .filter(([, e]) => e && (now - (e.at || 0)) >= Math.min(baseMs * 2 ** (e.attempts || 0), capMs))
+    .map(([table]) => table)
+    .sort();
 }
 
 // ── The two hydrate guards (infra backlog I3) ────────────────────────────────
@@ -1162,6 +1198,87 @@ export async function hydrateAttendance() {
     console.warn("[store] hydrateAttendance error:", e?.message || e);
     return null;
   }
+}
+
+// ── I13: the re-push registry and the retry driver ───────────────────────────
+// One thunk per syncable table that re-pushes the CURRENT local state for that
+// domain. We do NOT retain the exact failed payload — the ledger records only
+// that a table's last write failed — so the honest retry is "push what local
+// holds now", which is also self-correcting: a value that has since been edited
+// (or healed by a normalizer like planSource on read) pushes the corrected row.
+//
+// Every push here is idempotent by construction: list/blob domains upsert on a
+// stable key, and the append logs insert with ignoreDuplicates. Re-pushing a whole
+// list or log is therefore safe if heavier than necessary; scoping to just the
+// failed rows is what I10 (delta writes, deferred) would buy. brand_profiles and
+// user_prefs have no single "save current state" setter — their columns are
+// written by many partial upserts — so their thunks re-assemble the full row the
+// way _hydrate*'s seed path does.
+//
+// consent_records is deliberately absent: recordConsent keeps no local copy, so
+// there is nothing to re-push. A failed consent write is a separate gap (it needs
+// a local consent ledger) and is not something a blind retry can honestly close.
+const _RETRY_PUSHERS = {
+  class_schedule_rules: () => saveUserClasses(getUserClasses()),
+  library_overrides:    () => saveLibraryCustom(getLibraryCustom()),
+  brand_profiles:       () => _bgUpsert("brand_profiles", { gym_id: _ctx.gymId,
+                          branding: getGymBranding(), active_skin_id: getSkinId(),
+                          custom_skin_tokens: getCustomSkinTokens() }, "gym_id"),
+  user_prefs:           () => { const dp = getDisplayPrefs(); _bgUpsert("user_prefs", {
+                          user_id: _ctx.userId, display_preset: dp.preset, display_font_scale: dp.fontScale,
+                          crossfade: getCrossfade(), exercise_db_key: getExerciseDbKey() || null,
+                          template_tracks: getTemplateTracks(), dj_energy: getDjEnergy(),
+                          dj_bpm_min: getDjBpmMin(), dj_bpm_max: getDjBpmMax(), dj_transition: getDjTransition(),
+                          dj_follow_structure: getDjFollowStructure(), dj_take_requests: getDjTakeRequests(),
+                          dj_clean_edits: getDjCleanEdits() }, "user_id"); },
+  coach_personas:       () => savePersonas(getPersonas()),
+  persona_plans:        () => savePersonaPlans(getPersonaPlans()),
+  persona_movements:    () => savePersonaMovements(getPersonaMovements()),
+  persona_generations:  () => savePersonaGenerations(getPersonaGenerations()),
+  members:              () => saveMembers(getMembers()),
+  class_instances:      () => saveClassInstances(getClassInstances()),
+  attendance:           () => _pushAttendance(getAttendance()),
+  retention_actions:    () => { const rows = getRetentionActions(); if (rows.length)
+                          supabase.from("retention_actions").upsert(rows.map(_raToRow),
+                            { onConflict: "id", ignoreDuplicates: true }).then(
+                            ({ error }) => { if (error) _noteSyncError("retention_actions", error.message);
+                                             else _clearSyncError("retention_actions"); },
+                            (e) => _noteSyncError("retention_actions", e?.message || e)); },
+};
+
+// Run the retries that are due. `force` (used by the online-event trigger) retries
+// every ledgered table regardless of backoff, because regaining connectivity is a
+// strong, real signal — not a guess a timer is making. Returns the tables it
+// re-pushed, for tests and callers. Never throws: a retry must not be able to
+// break the caller any more than the original fire-and-forget write could.
+export function _retryNow({ force = false } = {}) {
+  if (!_synced()) return [];
+  let tables = [];
+  try {
+    const errors = readJSON(SYNC_ERR_KEY, {});
+    const online = (typeof navigator === "undefined") ? true : navigator.onLine !== false;
+    tables = force ? Object.keys(errors).sort()
+                   : _dueRetries(errors, { online, now: Date.now() });
+    tables.forEach(t => { const push = _RETRY_PUSHERS[t]; if (push) push(); });
+  } catch (_) { /* a retry can never be the thing that breaks a session */ }
+  return tables;
+}
+
+// Install the two triggers, once. Idempotent: calling it again (connect() runs on
+// every auth change) does not stack listeners or intervals. The interval only does
+// work while the ledger is non-empty and we are online, so a healthy app pays
+// nothing but a cheap localStorage read per tick.
+let _retryInstalled = false;
+const RETRY_TICK_MS = 30_000;
+export function startSyncRetry() {
+  if (_retryInstalled || typeof window === "undefined") return;
+  _retryInstalled = true;
+  window.addEventListener("online", () => _retryNow({ force: true }));
+  setInterval(() => {
+    if (!_synced()) return;
+    const errors = readJSON(SYNC_ERR_KEY, {});
+    if (Object.keys(errors).length) _retryNow({ force: false });
+  }, RETRY_TICK_MS);
 }
 
 // ── One-shot hydrate for the App root ────────────────────────────────────────
