@@ -62,15 +62,21 @@ async function primaryFraction(page) {
   });
 }
 
-async function gotoCoachDisplay(page) {
+// Both member-facing live surfaces reach their display the same way — enter Room
+// TV, wake the transient mode overlay with a real mouse move (it hides after 4.5s;
+// Fable P1/P2 gives the running surface the whole screen), pick the mode. `ready`
+// is a marker unique to that surface so the measurement runs after it paints.
+const MODES = {
+  Coach: { ready: () => /remaining/ }, // coach display: timer + "remaining"
+  Floor: { ready: () => /clockwise · \d+ stations/ }, // floor board members read
+};
+
+async function gotoDisplay(page, mode) {
   await nav(page, "Class Runner");
   await page.getByRole("button", { name: /Room TV/ }).click();
-  // The mode switch is a transient overlay that hides after 4.5s (Fable P1/P2).
-  // Wake it with a real mouse move the way a coach does, then pick Coach.
   await page.mouse.move(640, 400);
-  await page.getByRole("button", { name: "Coach", exact: true }).click();
-  // The coach display's timer reads "remaining" beneath it — wait for the surface.
-  await expect(page.getByText("remaining").first()).toBeVisible();
+  await page.getByRole("button", { name: mode, exact: true }).click();
+  await expect(page.getByText(MODES[mode].ready()).first()).toBeVisible();
 }
 
 const VIEWPORTS = [
@@ -79,12 +85,13 @@ const VIEWPORTS = [
 ];
 
 test.describe("P2 · the 10-foot rule — the primary element holds its share of the wall", () => {
+  for (const mode of Object.keys(MODES)) {
   for (const vp of VIEWPORTS) {
-    test(`coach-display timer is 8–12% of height at ${vp.name}`, async ({ page }) => {
+    test(`${mode}-display timer is 8–12% of height at ${vp.name}`, async ({ page }) => {
       const errors = watchConsole(page);
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await freshApp(page);
-      await gotoCoachDisplay(page);
+      await gotoDisplay(page, mode);
 
       // The white-screen guard: a display that threw would render the error
       // boundary, not a timer. Assert its absence explicitly.
@@ -119,6 +126,7 @@ test.describe("P2 · the 10-foot rule — the primary element holds its share of
       expectNoConsoleErrors(errors);
     });
   }
+  }
 
   test("the primary fraction is invariant across 1080p and 4K", async ({ page }) => {
     // This is the property fixed px lacked and the whole point of tvFont: the same
@@ -128,7 +136,7 @@ test.describe("P2 · the 10-foot rule — the primary element holds its share of
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await freshApp(page);
-      await gotoCoachDisplay(page);
+      await gotoDisplay(page, "Coach");
       const m = await primaryFraction(page);
       fracs[vp.name] = m.fontFrac;
     }
