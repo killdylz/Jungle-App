@@ -439,7 +439,7 @@ first write is not yet evidence of anything.**
 
 | Required | State |
 |---|---|
-| Vitest units on pure logic | 🟡 **Runner installed; 29 tests.** Covers slide import + persona aggregation. Timer/stage math and `can()` still uncovered |
+| Vitest units on pure logic | 🟡 **423 tests.** Broad coverage: slide import, persona aggregation, parser, taxonomy, blueprints, retention, colours, csv, share card, win-back, db-constraints, and now the **interval sub-timer math** (`intervalTimer.test.js`, extracted from App.jsx so it is testable). The Runner's per-stage advance/remaining math and `can()` are still component-embedded and uncovered by units (the e2e smoke exercises the advance path end-to-end). |
 | **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ✅ **`supabase/tests/0007_rls_selftest.sql`, 11/11 PASS.** Dashboard-run (no Docker needed); impersonates `role authenticated` because the SQL editor bypasses RLS as superuser. Covers the `0007` tables only — `0001`–`0006` policies are still untested |
 | **Attendance-immutability tests** | ✅ Covered by the same suite: `UPDATE`/`DELETE` on `attendance` and `consent_records` both affect zero rows |
 | Playwright: plan→publish→run→display, QR check-in | ⛔ |

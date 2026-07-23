@@ -17,6 +17,7 @@ import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./l
 // was their only consumer and it now owns them. checkinMetrics keeps only
 // recordSession — p6Summary and P6_TARGET_SEC went with the roster too.
 import { recordSession as recordCheckinSession } from "./lib/checkinMetrics.js";
+import { calcIntervalState } from "./lib/intervalTimer.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
@@ -175,31 +176,8 @@ const uid = () => `s${_uid++}`;
 const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
 const fmtSec = s => `${s}s`;
 
-// ── Feature 4: interval state calculator ─────────────────────────────────────
-// Given the exercises for a stage and the elapsed seconds, returns the current
-// interval sub-timer state (Tabata / EMOM), or null if no timed exercises are active.
-function calcIntervalState(exercises, elapsed) {
-  if (!exercises?.length || elapsed == null || elapsed < 0) return null;
-  let offset = 0;
-  for (const ex of exercises) {
-    if (!ex.timing || ex.timing === "none") continue;
-    const workSec  = Math.max(1, parseInt(ex.workSec)  || 20);
-    const restSec  = Math.max(0, parseInt(ex.restSec)  || (ex.timing === "emom" ? 0 : 10));
-    const rounds   = Math.max(1, parseInt(ex.rounds)   || (ex.timing === "emom" ? 10 : 8));
-    const cycleDur = workSec + restSec;           // always >= 1
-    const totalDur = rounds * cycleDur;
-    if (elapsed < offset + totalDur) {
-      const elapsedInEx    = elapsed - offset;
-      const roundIdx       = Math.floor(elapsedInEx / cycleDur);
-      const elapsedInCycle = elapsedInEx % cycleDur;
-      const isWork         = elapsedInCycle < workSec;
-      const phaseRemaining = Math.max(0, isWork ? workSec - elapsedInCycle : cycleDur - elapsedInCycle);
-      return { exName: ex.n, phase: isWork ? "WORK" : "REST", phaseRemaining, round: roundIdx + 1, totalRounds: rounds, timing: ex.timing, workSec, restSec };
-    }
-    offset += totalDur;
-  }
-  return null;
-}
+// calcIntervalState (the Tabata/EMOM interval sub-timer) moved to
+// src/lib/intervalTimer.js so it can be unit-tested — imported above.
 
 function fireSiren() {
   try {
