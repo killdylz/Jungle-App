@@ -17,7 +17,7 @@ import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./l
 // was their only consumer and it now owns them. checkinMetrics keeps only
 // recordSession — p6Summary and P6_TARGET_SEC went with the roster too.
 import { recordSession as recordCheckinSession } from "./lib/checkinMetrics.js";
-import { calcIntervalState } from "./lib/intervalTimer.js";
+import { calcIntervalState, floorPacer } from "./lib/intervalTimer.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
@@ -3472,14 +3472,8 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
   const elapsed = liveState.elapsed||0;
-  const rotateEverySec = 180;
-  const rotateRemaining = rotateEverySec - (elapsed % rotateEverySec);
-  const spotlight = floor.length ? Math.floor(elapsed/6) % floor.length : 0;
-  const roundLen=45, restLen=15, cycle=roundLen+restLen;
-  const inCycle = elapsed % cycle;
-  const phase = inCycle < roundLen ? "WORK" : "REST";
-  const phaseRemaining = phase==="WORK" ? roundLen-inCycle : cycle-inCycle;
-  const rounds = 8; const currentRound = Math.min(rounds, Math.floor(elapsed/cycle)+1);
+  // Ambient floor pacer (fixed cadences today — see floorPacer / the honesty note).
+  const { phase, phaseRemaining, currentRound, rounds, rotateRemaining, spotlight } = floorPacer(elapsed, floor.length);
   const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(Math.max(0,s)%60)).padStart(2,"0")}`;
   const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
   const panel = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"16px"};

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcIntervalState } from "./intervalTimer.js";
+import { calcIntervalState, floorPacer, FLOOR_PACE } from "./intervalTimer.js";
 
 // The Runner's live interval sub-timer. Every number below is what a coach and a
 // room would see counting down, so each is stated as an exact expectation rather
@@ -109,5 +109,54 @@ describe("calcIntervalState — degenerate inputs are clamped, not crashed", () 
     // is surprising, so it is pinned rather than left to be discovered live.
     const s = calcIntervalState([tabata({ restSec: 0 })], 20);
     expect(s).toMatchObject({ phase: "REST", restSec: 10 });
+  });
+});
+
+// The Floor board's ambient pacer. These pin the CURRENT (fixed-cadence) behaviour
+// verbatim — 45s work / 15s rest / 8 rounds, 180s rotation, spotlight every 6s. If
+// the "fabricated pacer" decision (SESSION-HANDOFF.md) makes it plan-derived, these
+// are the tests that will change with it; until then they stop it drifting silently.
+describe("floorPacer — fixed work/rest/rotation cadence", () => {
+  const { roundLen, restLen, rounds, rotateEverySec } = FLOOR_PACE; // 45/15/8/180
+
+  it("opens in WORK with the full round on the clock, round 1", () => {
+    expect(floorPacer(0, 5)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 1, rounds });
+  });
+
+  it("counts work down and flips to REST exactly at the work boundary", () => {
+    expect(floorPacer(44, 5)).toMatchObject({ phase: "WORK", phaseRemaining: 1 });
+    expect(floorPacer(45, 5)).toMatchObject({ phase: "REST", phaseRemaining: restLen });
+    expect(floorPacer(59, 5)).toMatchObject({ phase: "REST", phaseRemaining: 1 });
+  });
+
+  it("rolls into the next round at the 60s cycle boundary", () => {
+    expect(floorPacer(60, 5)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 2 });
+  });
+
+  it("caps the round counter at the configured total", () => {
+    // 8 rounds * 60s = 480s; anything at or past that stays at round 8.
+    expect(floorPacer(480, 5).currentRound).toBe(rounds);
+    expect(floorPacer(6000, 5).currentRound).toBe(rounds);
+  });
+
+  it("counts the 180s station rotation down and wraps", () => {
+    expect(floorPacer(0, 5).rotateRemaining).toBe(rotateEverySec);
+    expect(floorPacer(179, 5).rotateRemaining).toBe(1);
+    expect(floorPacer(180, 5).rotateRemaining).toBe(rotateEverySec); // wrapped
+  });
+
+  it("moves the spotlight one station every 6s, wrapping on the station count", () => {
+    expect(floorPacer(0, 5).spotlight).toBe(0);
+    expect(floorPacer(6, 5).spotlight).toBe(1);
+    expect(floorPacer(30, 5).spotlight).toBe(0); // 5 stations → back to the first
+  });
+
+  it("does not divide by a zero station count", () => {
+    expect(floorPacer(42, 0).spotlight).toBe(0);
+  });
+
+  it("treats a negative or missing clock as zero", () => {
+    expect(floorPacer(-5, 3)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 1 });
+    expect(floorPacer(undefined, 3).phase).toBe("WORK");
   });
 });
