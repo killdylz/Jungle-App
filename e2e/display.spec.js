@@ -128,6 +128,37 @@ test.describe("P2 · the 10-foot rule — the primary element holds its share of
   }
   }
 
+  test("the interval sub-timer overlay renders a live Tabata block", async ({ page }) => {
+    // calcIntervalState was extracted to src/lib/intervalTimer.js; this is the
+    // wiring guard for the OTHER half — that the coach display actually renders
+    // its result. The default class carries no timed exercise, so this overlay is
+    // never reached by any other test. Seed a class whose first stage is a Tabata.
+    const errors = watchConsole(page);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await freshApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_draft_class", JSON.stringify({
+        name: "Interval Test",
+        stages: [{
+          id: "s1", type: "circuit", name: "Tabata Block", dur: 600,
+          exercises: [{ n: "Burpees", timing: "tabata", workSec: 20, restSec: 10, rounds: 8 }],
+          tracks: [],
+        }],
+      }));
+    });
+    await page.reload();
+    await gotoDisplay(page, "Coach");
+
+    await expect(page.getByText(/Something broke|stopped responding/i)).toHaveCount(0);
+    // At elapsed 0 the block opens in WORK, round 1 of 8, 20-on/10-off.
+    await expect(page.getByText("WORK").first()).toBeVisible();
+    await expect(page.getByText(/Round 1 of 8/)).toBeVisible();
+    await expect(page.getByText(/20s on \/ 10s off/)).toBeVisible();
+    await expect(page.getByText("Burpees").first()).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
   test("the primary fraction is invariant across 1080p and 4K", async ({ page }) => {
     // This is the property fixed px lacked and the whole point of tvFont: the same
     // fraction of the screen on both walls. On the pre-fix code the 4K fraction was
