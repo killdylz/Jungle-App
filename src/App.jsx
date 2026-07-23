@@ -3228,6 +3228,30 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   );
 }
 
+// ── P2 · the 10-foot rule ─────────────────────────────────────────────────────
+// The member-facing Room TV surfaces (Overview / Floor / Coach display) were
+// authored with fixed-px type — `Math.round(N*scaleMult)px`. Fixed px does not
+// grow with the viewport, so a "160px" timer is a SMALLER fraction of a 4K wall
+// than of 1080p: on 4K it is ~half the share of the screen. That means the Fable
+// §3 legibility floor — the primary element (current move + timer) holding
+// ~8–12% of screen HEIGHT so it reads at 8m — is not enforced anywhere; the
+// presets only gesture at it.
+//
+// `tvFont` fixes that by keying the size to viewport HEIGHT. The reference height
+// is 1080, chosen deliberately: at 1080p the vh term equals `basePx` exactly, so
+// the tuned look Dylan checks on does not regress, and it grows from there —
+// ~2× on 4K — holding the same fraction of the wall. The `clamp` floor keeps it
+// legible on a phone-sized display; the cap guards a freak aspect ratio. `mult`
+// carries the coach's S/M/L/XL font-scale preference straight through.
+const DISPLAY_REF_H = 1080;
+function tvFont(basePx, mult = 1) {
+  const scaled = basePx * mult;
+  const vh = (scaled / DISPLAY_REF_H) * 100;   // vh that equals `scaled`px at 1080p
+  const floor = Math.round(scaled * 0.7);       // legible floor on small displays
+  const cap = Math.round(scaled * 2.4);         // ~4K reaches ~2×; cap guards freak ratios
+  return `clamp(${floor}px, ${vh.toFixed(2)}vh, ${cap}px)`;
+}
+
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
 function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
   const vw = useWindowWidth();
@@ -3292,7 +3316,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                 cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",flexShrink:0
               }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
               <div>
-                <p style={{fontSize:isMobile?"18px":"26px",fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
+                <p style={{fontSize:tvFont(26),fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 {/* "0 tracks" was printed here on the room's TV before a class,
@@ -3364,7 +3388,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                         {isCur && <span style={{marginLeft:"auto",fontSize:"11px",fontWeight:"900",letterSpacing:"1px",color:"var(--on-accent)",background:"var(--accent)",padding:"2px 9px",borderRadius:"999px"}}>NOW</span>}
                       </div>
                       {/* Stage name */}
-                      <p style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
+                      <p style={{fontSize:tvFont(16),fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
                       {/* Duration + BPM. The BPM range is a music-matching target;
                           with no music to match it is noise on a member-facing
                           card. TempoGuide is the survivor of the BPM UI — it needs
@@ -3386,7 +3410,7 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                           paddingLeft:"10px",borderLeft:`3px solid ${cfg.color}`,
                           marginBottom:"4px"
                         }}>
-                          <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
+                          <p style={{fontSize:tvFont(13),fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
                           <p style={{fontSize:"11px",color:"var(--muted)"}}>
                             {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
                           </p>
@@ -3494,8 +3518,11 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
 
       <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"20px",flexWrap:"wrap",background:"linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), var(--card))"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:"14px"}}>
-          <div style={{fontSize:isMobile?"18px":"24px",fontWeight:"800",letterSpacing:"2px",color:phase==="WORK"?"var(--accent)":"var(--muted)"}}>{phase}</div>
-          <div style={{fontFamily:"var(--display)",fontSize:isMobile?"54px":"84px",fontWeight:"900",lineHeight:"0.9",color:phase==="WORK"?"var(--text)":"var(--muted)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(phaseRemaining)}</div>
+          <div style={{fontSize:tvFont(24),fontWeight:"800",letterSpacing:"2px",color:phase==="WORK"?"var(--accent)":"var(--muted)"}}>{phase}</div>
+          {/* PRIMARY member-facing element on the floor board. At the old fixed
+              84px it was 7.8% of a 1080p wall — already under the Fable §3 8% floor
+              — and half that on 4K. tvFont(96) holds ~8.9% of height on both. */}
+          <div style={{fontFamily:"var(--display)",fontSize:tvFont(96),fontWeight:"900",lineHeight:"0.9",color:phase==="WORK"?"var(--text)":"var(--muted)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(phaseRemaining)}</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"8px",alignItems:"flex-end"}}>
           <div style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)"}}>ROUND <span style={{color:"var(--text)"}}>{currentRound}</span>/{rounds}</div>
@@ -3519,7 +3546,7 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
               {st.isStart&&<span style={{fontSize:"9px",fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
               {st.isFinish&&<span style={{fontSize:"9px",fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
             </div>
-            <div style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"26px",fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
+            <div style={{fontFamily:"var(--display)",fontSize:tvFont(26),fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
             {st.scheme && <div style={{fontSize:"13px",color:"var(--muted)"}}>{st.scheme}</div>}
             {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:"9px",fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
           </div>
@@ -3745,8 +3772,8 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:"56px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(160*scaleMult)}px`,fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
-          <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:"var(--muted)",marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
+          <p style={{fontSize:tvFont(160,scaleMult),fontWeight:"900",color:timerColor,lineHeight:"0.9",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",letterSpacing:"-4px"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:tvFont(20,scaleMult),color:"var(--muted)",marginTop:"16px",textTransform:"uppercase",letterSpacing:"6px"}}>{stage?.name}</p>
           <p style={{fontSize:"13px",color:"var(--muted)",marginTop:"8px",opacity:0.6}}>Stage {liveState.idx+1} of {stages.length}</p>
         </div>
         <div style={{height:"6px",display:"flex",overflow:"hidden"}}>
@@ -3776,16 +3803,16 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
         {showSettings && <SettingsPanel/>}
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px"}}>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <h1 style={{fontSize:`${Math.round(52*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
+          <h1 style={{fontSize:tvFont(52,scaleMult),fontWeight:"800",color:"var(--text)",marginBottom:"6px",textAlign:"center"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"56px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"28px"}}/>
-          <p style={{fontSize:`${Math.round(110*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:tvFont(110,scaleMult),fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"15px",color:"var(--muted)",marginBottom:"28px"}}>remaining · Stage {liveState.idx+1} of {stages.length}</p>
           <div style={{width:"min(480px,80%)",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
           {nextStage
-            ? <p style={{fontSize:`${Math.round(20*scaleMult)}px`,color:"var(--muted)",marginTop:"26px"}}>Next: <span style={{color:nextCfg.color,fontWeight:"800"}}>{nextStage.name}</span></p>
-            : <p style={{fontSize:`${Math.round(18*scaleMult)}px`,color:cfg.color,fontWeight:"700",marginTop:"26px"}}>Final stage</p>}
+            ? <p style={{fontSize:tvFont(20,scaleMult),color:"var(--muted)",marginTop:"26px"}}>Next: <span style={{color:nextCfg.color,fontWeight:"800"}}>{nextStage.name}</span></p>
+            : <p style={{fontSize:tvFont(18,scaleMult),color:cfg.color,fontWeight:"700",marginTop:"26px"}}>Final stage</p>}
         </div>
         <div style={{height:"5px",display:"flex",overflow:"hidden"}}>
           {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||"var(--border)"; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:"var(--navy)"}}/>; })}
@@ -3831,7 +3858,7 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
           </div>
           {/* Timer right */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"36px"}}>
-            <p style={{fontSize:`${Math.round(96*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
+            <p style={{fontSize:tvFont(96,scaleMult),fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none",transition:"color 0.5s",textAlign:"center"}}>{fmt(remaining)}</p>
             <p style={{fontSize:"16px",color:"var(--muted)",marginTop:"10px",marginBottom:"28px"}}>remaining</p>
             <div style={{width:"100%",maxWidth:"360px",height:"8px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
               <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -3869,10 +3896,10 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       <div style={{flex:1,display:"flex"}}>
         {/* LEFT: Stage info */}
         <div style={{flex:1,padding:"44px 52px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-          <h1 style={{fontSize:`${Math.round(54*scaleMult)}px`,fontWeight:"800",color:"var(--text)",marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
+          <h1 style={{fontSize:tvFont(54,scaleMult),fontWeight:"800",color:"var(--text)",marginBottom:"8px",lineHeight:"1"}}>{stage?.name||"Complete"}</h1>
           <div style={{width:"64px",height:"4px",background:timerColor,borderRadius:"2px",marginBottom:"36px",transition:"background 0.5s"}}/>
           <style>{`@keyframes jg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.04)}}`}</style>
-          <p style={{fontSize:`${Math.round(92*scaleMult)}px`,fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
+          <p style={{fontSize:tvFont(92,scaleMult),fontWeight:"800",color:timerColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)",marginBottom:"6px",transition:"color 0.5s",animation:(isPulsing&&!reduce)?"jg-pulse 0.8s ease-in-out infinite":"none"}}>{fmt(remaining)}</p>
           <p style={{fontSize:"16px",color:"var(--muted)",marginBottom:"36px"}}>remaining</p>
           <div style={{width:"100%",height:"8px",background:"var(--navy)",borderRadius:"4px",marginBottom:"24px",overflow:"hidden"}}>
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
@@ -3888,10 +3915,10 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
               <div style={{marginBottom:"28px",background:ivColor+"12",border:`2px solid ${ivColor}`,borderRadius:"16px",padding:"18px 24px",display:"flex",alignItems:"center",gap:"24px"}}>
                 <div>
                   <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"2px",display:"block",marginBottom:"4px"}}>{ivState.phase}</span>
-                  <p style={{fontSize:`${Math.round(64*scaleMult)}px`,fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
+                  <p style={{fontSize:tvFont(64,scaleMult),fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
                 </div>
                 <div>
-                  <p style={{fontSize:`${Math.round(18*scaleMult)}px`,fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{ivState.exName}</p>
+                  <p style={{fontSize:tvFont(18,scaleMult),fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{ivState.exName}</p>
                   <p style={{fontSize:"13px",color:"var(--muted)"}}>Round {ivState.round} of {ivState.totalRounds} · {ivState.timing === "tabata" ? `${ivState.workSec}s on / ${ivState.restSec}s off` : "EMOM"}</p>
                 </div>
               </div>
@@ -3910,10 +3937,10 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                     <div key={grp.id} style={{padding:"18px 20px",background:"var(--card)",border:`2px solid ${gc}`,borderRadius:"12px",boxShadow:`0 0 20px ${gc}30`}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
                         <div style={{width:"12px",height:"12px",borderRadius:"50%",background:gc,flexShrink:0}}/>
-                        <p style={{fontSize:`${Math.round(14*scaleMult)}px`,fontWeight:"800",color:"var(--text)"}}>{grp.name}</p>
+                        <p style={{fontSize:tvFont(14,scaleMult),fontWeight:"800",color:"var(--text)"}}>{grp.name}</p>
                       </div>
                       {exerciseLabel
-                        ? <p style={{fontSize:`${Math.round(20*scaleMult)}px`,fontWeight:"700",color:gc,lineHeight:"1.2"}}>{exerciseLabel}</p>
+                        ? <p style={{fontSize:tvFont(20,scaleMult),fontWeight:"700",color:gc,lineHeight:"1.2"}}>{exerciseLabel}</p>
                         : <p style={{fontSize:"12px",color:"var(--muted)",fontStyle:"italic"}}>—</p>
                       }
                     </div>
@@ -3934,10 +3961,10 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
                   return (
                   <div key={i} style={{padding:"18px 22px",background:"var(--card)",border:`1px solid var(--border)`,borderLeft:`5px solid ${cfg.color}`,borderRadius:"10px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}>
-                      <p style={{fontSize:`${Math.round((solo?34:24)*scaleMult)}px`,fontWeight:"800",color:"var(--text)",lineHeight:"1.1"}}>{ex.n}</p>
+                      <p style={{fontSize:tvFont(solo?34:24,scaleMult),fontWeight:"800",color:"var(--text)",lineHeight:"1.1"}}>{ex.n}</p>
                       {ex.timing && ex.timing!=="none" && <span style={{fontSize:"11px",padding:"2px 7px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"4px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
-                    <p style={{fontSize:`${Math.round((solo?20:16)*scaleMult)}px`,color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&(/^\d+(\s*[-–/x×]\s*\d+)*$/.test(String(ex.r).trim())?`${ex.r} reps`:String(ex.r)),ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
+                    <p style={{fontSize:tvFont(solo?20:16,scaleMult),color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&(/^\d+(\s*[-–/x×]\s*\d+)*$/.test(String(ex.r).trim())?`${ex.r} reps`:String(ex.r)),ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
                   </div>
                 );})}
               </div>
@@ -3983,16 +4010,16 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
       {/* UP NEXT — the "next" half of now-over-next; big enough to read across the floor,
           but clearly secondary to the live stage above it. */}
       <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:"18px",padding:isMobile?"12px 16px":"16px 32px",background:"var(--card)",borderTop:`1px solid var(--border)`,minHeight:0}}>
-        <span style={{fontSize:`${Math.round(14*scaleMult)}px`,fontWeight:"800",color:"var(--muted)",letterSpacing:"3px",flexShrink:0}}>UP NEXT</span>
+        <span style={{fontSize:tvFont(14,scaleMult),fontWeight:"800",color:"var(--muted)",letterSpacing:"3px",flexShrink:0}}>UP NEXT</span>
         {nextStage ? (
           <>
             <span style={{width:"14px",height:"14px",borderRadius:"50%",background:nextCfg.color,flexShrink:0,boxShadow:`0 0 12px ${nextCfg.color}80`}}/>
-            <span style={{fontSize:`${Math.round(30*scaleMult)}px`,fontWeight:"800",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:1,minWidth:0}}>{nextStage.name}</span>
-            <span style={{fontSize:`${Math.round(17*scaleMult)}px`,fontWeight:"700",color:nextCfg.color,flexShrink:0}}>{Math.round((nextStage.dur||0)/60)} min</span>
-            {nextMoves.length>0 && <span style={{fontSize:`${Math.round(18*scaleMult)}px`,color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>· {nextMoves.join("  ·  ")}</span>}
+            <span style={{fontSize:tvFont(30,scaleMult),fontWeight:"800",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:1,minWidth:0}}>{nextStage.name}</span>
+            <span style={{fontSize:tvFont(17,scaleMult),fontWeight:"700",color:nextCfg.color,flexShrink:0}}>{Math.round((nextStage.dur||0)/60)} min</span>
+            {nextMoves.length>0 && <span style={{fontSize:tvFont(18,scaleMult),color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>· {nextMoves.join("  ·  ")}</span>}
           </>
         ) : (
-          <span style={{fontSize:`${Math.round(24*scaleMult)}px`,fontWeight:"800",color:cfg.color}}>Final stage — class wraps after this 🎉</span>
+          <span style={{fontSize:tvFont(24,scaleMult),fontWeight:"800",color:cfg.color}}>Final stage — class wraps after this 🎉</span>
         )}
       </div>
     </div>

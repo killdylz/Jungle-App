@@ -206,7 +206,7 @@ self-hosted, which is also what makes the PWA work offline).
 | # | Principle | State | Notes |
 |---|---|---|---|
 | **P1** | Now over next | ✅ | Current move ≥60% weight on the coach display; UP NEXT peripheral. |
-| **P2** | The 10-foot rule | 🟡 | `DISPLAY_PRESETS`/`FONT_SCALES` exist and sizes were raised, but there are **no enforced minimums** and no 1080p/4K snapshot regression. Still "gestures at" the rule, as Fable put it. |
+| **P2** | The 10-foot rule | ✅ | Every member-facing display size (Overview / Floor / Coach) is now keyed to viewport **height** via `tvFont` — a `clamp(floor, Nvh, cap)` that reproduces the tuned 1080p px exactly and then grows, so the primary element (move + timer) holds ~8.5% of height on **1080p and 4K** alike, not a shrinking fraction. The floor board's phase timer, previously 7.8% at 1080p (already under the floor) and half that on 4K, now holds ~8.9%. Regression: `e2e/display.spec.js` drives the real Room TV at 1920×1080 **and** 3840×2160 and asserts the primary is 8–12% of height at both plus viewport-invariant; mutation-verified (fixing the timer back to px fails the 4K band and the invariance check). |
 | **P3** | Brand-forward, coach-neutral | 🟡 | Staff surfaces neutral ✅; member surfaces don't exist yet, so the half that matters is untested. |
 | **P4** | Zero-touch room | ✅ | Auto-advance + phone-as-remote + Realtime Follow. |
 | **P5** | One primitive, two lenses | ⛔ | No 1:1 lens (see F1). |
@@ -443,7 +443,7 @@ first write is not yet evidence of anything.**
 | **RLS policy tests** (cross-org reads must fail; member-scope isolation) | ✅ **`supabase/tests/0007_rls_selftest.sql`, 11/11 PASS.** Dashboard-run (no Docker needed); impersonates `role authenticated` because the SQL editor bypasses RLS as superuser. Covers the `0007` tables only — `0001`–`0006` policies are still untested |
 | **Attendance-immutability tests** | ✅ Covered by the same suite: `UPDATE`/`DELETE` on `attendance` and `consent_records` both affect zero rows |
 | Playwright: plan→publish→run→display, QR check-in | ⛔ |
-| Visual snapshots at 1920×1080 / 4K (P2 regression) | ⛔ |
+| Visual snapshots at 1920×1080 / 4K (P2 regression) | ✅ `e2e/display.spec.js` — measures the primary element's height as a fraction of the viewport at both resolutions (not pixel snapshots, which are brittle; measures the actual §3 property) and asserts 8–12% + viewport-invariance. Mutation-verified. |
 | Realtime soak: 30 subscribers per room channel | ⛔ |
 
 **Honest read:** CI now runs three gates — crash lint, unit tests, build. That is a real floor,
