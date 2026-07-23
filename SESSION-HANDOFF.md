@@ -1,12 +1,53 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-20 (end of session 6)_
+_Last updated: 2026-07-23 (session 8, in progress)_
 
-> **▶ STARTING A NEW SESSION? Paste `SESSION-8-PROMPT.md` as your opening message.**
-> It supersedes `SESSION-7-PROMPT.md`, now history. Session 7 shipped stage-3 music quarantine
-> (`e291c35`), the dead-LoginScreen deletion (`ded748c`) and I13 background retry (`3eb70f4`);
-> `main = 3eb70f4`, pushed, gates green (`lint:crash` 0 · 405 unit · 35 e2e · build). P2 (the
-> 10-foot rule) is next and was started but has no code committed yet.
+> **▶ STARTING A NEW SESSION?** `SESSION-8-PROMPT.md` set the direction; this block records what
+> shipped against it. Gates as of the latest push: **`lint:crash` 0 · 423 unit · 41 e2e · build
+> 631 KB**, all pushed to `main`.
+
+## 🟢 Shipped SESSION 8 — `4cfaa16` → (latest), pushed, all gates green
+
+**P2 (the 10-foot rule) is DONE and is the headline.** Plus a closed constrained-column audit and
+the first unit coverage of the Runner's interval math.
+
+| Commit | What |
+|---|---|
+| `689abf7` | **P2 — the 10-foot rule.** Every member-facing display size (Overview / Floor / Coach) now keyed to viewport **height** via `tvFont(basePx, mult)` — a `clamp(floor, Nvh, cap)` whose vh term reproduces `basePx` **exactly at 1080p** (no regression to the tuned look) and grows ~2× on 4K, holding the same fraction of the wall. Fixes the real gap: fixed px made a "92px" timer 8.5% of a 1080p wall but ~4.3% of 4K. The Floor board's phase timer was a fixed 84px — 7.8% at 1080p, already under the §3 floor — now `tvFont(96)` → ~8.9%. Regression `e2e/display.spec.js` drives the real Room TV (Coach + Floor) at 1920×1080 **and** 3840×2160, measures the primary element's height fraction, asserts 8–12% + viewport-invariance. **Mutation-verified** (px timer fails 4K + invariance, passes 1080p). |
+| `60a3f3c` | **Constrained-column audit closed (the handoff's open "is there a fifth?" question).** Three columns the client writes and syncs — `persona_plans.source`, `coach_personas.kind`, `class_schedule_rules.repeat` — were wrongly in the test's "not yet written" list. **No illegal value reaches the DB today** (dropdowns only offer legal values; `planSource` normalises), so no live loss — but unguarded synced columns are the 2026-07-18 incident's shape. All three now pinned in `store.js` constants the producing UI shares, checked against the migrations. Mutation-verified. |
+| `a40cef1` | **P2 regression extended to the Floor board** (the surface members read mid-class) at both resolutions. |
+| `6f278fb` | **Interval sub-timer math covered.** `calcIntervalState` (Tabata/EMOM) extracted from App.jsx to `src/lib/intervalTimer.js` and pinned with **18 exact-value tests** — the spec's named "timer/stage math" gap. Mutation-verified. |
+| `5dab0ae` | **e2e wiring guard** — the coach display renders a live Tabata overlay (WORK · Round 1 of 8 · 20s on / 10s off), a path no other test reaches. |
+
+App.jsx unchanged in size to speak of (P2 was in-place edits; `calcIntervalState` extraction is ~−20 lines).
+
+### Verified in the running app (not just tests)
+- P2 stress-checked at **375px, 1080p, 3840×2160** on all three display surfaces: **no horizontal
+  overflow, no error boundary**, primary always ~8–9% of height (72px mobile → 96px 1080p → 192px 4K).
+- The constant-driven controls render: coach-kind dropdown (Coach/House style/Class format) and the
+  Calendar repeat control (This week/Weekly/Every day).
+- The interval overlay renders correct WORK/round/cadence for a real Tabata stage.
+
+### Findings NOT acted on (judgement calls / for a decision)
+- **FloorLiveScreen's phase pacer is a hardcoded 45s-work/15s-rest, 8-round loop** unrelated to the
+  coach's actual plan. For a non-interval class (e.g. a strength block) the room sees a WORK/REST
+  countdown and round counter that are **fabricated** — arguably the same member-facing-honesty
+  problem as the "No tracks"/"coming soon" leaks that were cut. Left alone: making it honest is a
+  floor-board redesign, not a bug fix, and is Dylan's call.
+- **FloorLiveScreen empty state** ("Build a class in the Class Builder") is a coach-directed
+  instruction facing the room, but only in the zero-stage edge a live class never hits. Low value.
+- The Runner's per-stage **auto-advance tick** (App.jsx ~5640) is still component-embedded and
+  unit-uncovered. Deliberately left: it is 6 lines of demonstrably-correct logic inside the class's
+  single most critical loop, and the e2e smoke exercises it end-to-end — a poor risk/reward to rewire.
+- **Dylan's queue is unchanged.** The dead symbols (`nudgeForContrast`, `resolveSubBrand`,
+  `SLOT_LABELS`, `fetchBpmData`) still await his yes/no — not deleted unilaterally. N4 still blocked
+  on the Edge Function. `eslint-plugin-react` still his call.
+
+---
+
+### (prior) Session-7 pointer
+> Session 7 shipped stage-3 music quarantine (`e291c35`), the dead-LoginScreen deletion (`ded748c`)
+> and I13 background retry (`3eb70f4`). `SESSION-8-PROMPT.md` supersedes `SESSION-7-PROMPT.md`.
 >
 > **CI is answered: it is GREEN on Linux, Playwright and all.** Session 5's unobserved deploy
 > run passed at `14be355`, `6d64aaa` and `f2990b6` — the workflow ran `lint:crash → test →
