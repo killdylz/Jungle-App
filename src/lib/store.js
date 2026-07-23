@@ -550,7 +550,11 @@ function _rowToPersona(r) {
 // path wrote "extract", neither of which the constraint allows. Both call sites are
 // fixed, and this normalizer repairs rows ALREADY sitting in localStorage from
 // before the fix, so they sync on the next save instead of staying poisoned.
-const PLAN_SOURCES  = new Set(["google_slides", "manual", "jungle"]);
+// The three values 0005's CHECK allows on persona_plans.source — the very column
+// whose rejection cost live data on 2026-07-18. `planSource()` normalises to this
+// set; the array is the single authority both it and dbConstraints.test.js read.
+export const PERSONA_PLAN_SOURCES = ["google_slides", "manual", "jungle"];
+const PLAN_SOURCES  = new Set(PERSONA_PLAN_SOURCES);
 const LEGACY_SOURCE = { slides: "google_slides", extract: "manual" };
 export function planSource(s) {
   // Type-guard rather than `(s || "")`: a non-string source (corrupted localStorage,
@@ -785,6 +789,16 @@ export function retentionAction(a) {
 export function retentionRule(r) {
   return RETENTION_RULES.includes(r) ? r : null;
 }
+
+// ── Two more constrained columns the client actually writes ──────────────────
+// Both `coach_personas.kind` (0005) and `class_schedule_rules.repeat` (0003) sync
+// to Postgres CHECK-constrained columns, so their legal values are pinned here —
+// in ONE place, read by the UI that produces them — and checked against the
+// migrations by dbConstraints.test.js. Order is the UI display order; the guard
+// compares sets, so it is free. Anything the dropdowns can emit is, by
+// construction, a member of these arrays.
+export const PERSONA_KINDS   = ["coach", "house", "format"];
+export const SCHEDULE_REPEATS = ["once", "weekly", "daily"];
 function _raToRow(a) {
   return { id: a.id, gym_id: _ctx.gymId, member_id: a.memberId, rule: a.rule,
            action: retentionAction(a.action), note: a.note || null,

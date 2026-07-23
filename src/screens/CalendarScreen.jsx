@@ -158,7 +158,7 @@ export function CalendarScreen({onBack}) {
             </div>
             <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Repeat</div>
             <div style={{display:"flex",gap:"6px",marginBottom:"18px"}}>
-              {[["once","This week"],["weekly","Weekly"],["daily","Every day"]].map(([val,lbl])=>(
+              {store.SCHEDULE_REPEATS.map(val=>[val,{once:"This week",weekly:"Weekly",daily:"Every day"}[val]]).map(([val,lbl])=>(
                 <button key={val} onClick={()=>setAddForm(f=>({...f,repeat:val}))} style={{flex:1,padding:"9px 0",background:addForm.repeat===val?"var(--accent)":"transparent",color:addForm.repeat===val?"var(--on-accent)":"var(--muted)",border:`1px solid ${addForm.repeat===val?"var(--accent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>{lbl}</button>
               ))}
             </div>

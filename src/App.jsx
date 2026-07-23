@@ -4772,9 +4772,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
               <Input placeholder="Name — e.g. Coach Mike" value={form.name}
                      onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{marginBottom:"8px"}}/>
               <Select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
-                <option value="coach">A coach</option>
-                <option value="house">The house style</option>
-                <option value="format">A class format</option>
+                {store.PERSONA_KINDS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
               </Select>
               <Input placeholder="Description (optional)" value={form.description}
                      onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{marginBottom:"10px"}}/>
