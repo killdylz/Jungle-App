@@ -3,7 +3,7 @@
 _Last updated: 2026-07-23 (session 8, in progress)_
 
 > **▶ STARTING A NEW SESSION?** `SESSION-8-PROMPT.md` set the direction; this block records what
-> shipped against it. Gates as of the latest push: **`lint:crash` 0 · 423 unit · 41 e2e · build
+> shipped against it. Gates as of the latest push: **`lint:crash` 0 · 431 unit · 41 e2e · build
 > 631 KB**, all pushed to `main`.
 
 ## 🟢 Shipped SESSION 8 — `4cfaa16` → (latest), pushed, all gates green
@@ -18,6 +18,7 @@ the first unit coverage of the Runner's interval math.
 | `a40cef1` | **P2 regression extended to the Floor board** (the surface members read mid-class) at both resolutions. |
 | `6f278fb` | **Interval sub-timer math covered.** `calcIntervalState` (Tabata/EMOM) extracted from App.jsx to `src/lib/intervalTimer.js` and pinned with **18 exact-value tests** — the spec's named "timer/stage math" gap. Mutation-verified. |
 | `5dab0ae` | **e2e wiring guard** — the coach display renders a live Tabata overlay (WORK · Round 1 of 8 · 20s on / 10s off), a path no other test reaches. |
+| `503c534` | **Floor-board ambient pacer extracted** to `floorPacer()` (verbatim) + 8 tests. Behaviour unchanged; gives the flagged "fabricated pacer" decision a clean, covered seam. 431 unit. |
 
 App.jsx unchanged in size to speak of (P2 was in-place edits; `calcIntervalState` extraction is ~−20 lines).
 
@@ -32,8 +33,11 @@ App.jsx unchanged in size to speak of (P2 was in-place edits; `calcIntervalState
 - **FloorLiveScreen's phase pacer is a hardcoded 45s-work/15s-rest, 8-round loop** unrelated to the
   coach's actual plan. For a non-interval class (e.g. a strength block) the room sees a WORK/REST
   countdown and round counter that are **fabricated** — arguably the same member-facing-honesty
-  problem as the "No tracks"/"coming soon" leaks that were cut. Left alone: making it honest is a
-  floor-board redesign, not a bug fix, and is Dylan's call.
+  problem as the "No tracks"/"coming soon" leaks that were cut. Making it honest is a floor-board
+  redesign, not a bug fix, so it's **Dylan's call — spawned as a task chip**. The maths is now
+  extracted to `floorPacer()` (tested, verbatim), so whichever way the decision lands it has a
+  clean seam: for interval stages, feed it `calcIntervalState`'s phase; otherwise show a neutral
+  honest state instead of the fake round counter.
 - **FloorLiveScreen empty state** ("Build a class in the Class Builder") is a coach-directed
   instruction facing the room, but only in the zero-stage edge a live class never hits. Low value.
 - The Runner's per-stage **auto-advance tick** (App.jsx ~5640) is still component-embedded and
