@@ -10,6 +10,7 @@
 
 import { supabase, supabaseEnabled } from "../supabase.js";
 import { RETENTION_RULES } from "./retention.js";
+import { diffOccurrences } from "./scheduleInstances.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -953,6 +954,37 @@ export function ensureClassInstance({ name, classType, coachName, durationMin })
   const next = [...list, c];
   saveClassInstances(next);
   return { instance: c, instances: next };
+}
+
+// ── B4: publish a week of the schedule as dated occurrences ─────────────────
+// The other half of `ensureClassInstance`. That one mints the occurrence for the
+// class happening RIGHT NOW; this one turns the recurring rules the Schedule
+// grid holds into the dated occurrences attendance and analytics hang off, so a
+// class exists before a coach presses play. 0003 named this as the generator
+// class_schedule_rules was always the input to.
+//
+// The dedupe belongs in scheduleInstances.js (pure, tested); this only decides
+// what gets written. Pressing publish twice must be a no-op — a duplicated
+// occurrence splits one class's check-ins across two rows and nothing surfaces
+// the split.
+export function publishOccurrences(occurrences) {
+  const list = getClassInstances();
+  const { create, already } = diffOccurrences(occurrences, list);
+  if (!create.length) return { created: 0, already: already.length, instances: list };
+
+  const rows = create.map(o => ({
+    id: newId(),
+    startsAt: o.startsAt,
+    name: o.name || "",
+    classType: o.classType || "",
+    coachName: o.coachName || "",
+    // `|| null`, not `|| 0`: a rule whose duration could not be read must stay
+    // unknown. duration_min is nullable and a zero-minute class is a lie.
+    durationMin: o.durationMin || null,
+  }));
+  const next = [...list, ...rows];
+  saveClassInstances(next);
+  return { created: rows.length, already: already.length, instances: next };
 }
 
 // ── attendance: the spine. Append-only. ─────────────────────────────────────

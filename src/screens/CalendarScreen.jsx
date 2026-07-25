@@ -18,6 +18,7 @@ import React from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
+import { occurrencesForWeek, diffOccurrences, describePublish } from "../lib/scheduleInstances.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 
 export function CalendarScreen({onBack}) {
@@ -85,6 +86,27 @@ export function CalendarScreen({onBack}) {
     setShowAddClass(false);
     setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
   };
+  // ── B4: publish this week ─────────────────────────────────────────────────
+  // The grid holds RULES ("Tuesday 6pm, weekly"). Attendance hangs off dated
+  // OCCURRENCES, and until now nothing turned one into the other — the Runner
+  // minted an occurrence ad hoc when a coach pressed play, which works for the
+  // class in front of you and leaves the schedule as a drawing.
+  //
+  // "Publish week" was deleted in the 2.2 audit as a dead button; `class_instances`
+  // (0007) is what it was waiting for. It is idempotent, so the honest thing to
+  // show is what it actually did, including "nothing, this week is already done".
+  const [instances, setInstances] = React.useState(() => store.getClassInstances());
+  const [published, setPublished] = React.useState("");
+  React.useEffect(() => { setPublished(""); }, [weekOffset]);
+
+  const weekOccurrences = occurrencesForWeek(userClasses, startOfWeek, { days: DAYS });
+  const pending = diffOccurrences(weekOccurrences, instances);
+  const publishWeek = () => {
+    const r = store.publishOccurrences(weekOccurrences);
+    setInstances(r.instances);
+    setPublished(describePublish(r));
+  };
+
   const suggested = FLAGS.mockAnalytics ? [
     {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
@@ -118,8 +140,14 @@ export function CalendarScreen({onBack}) {
             {/* Was "Shoreditch · 3 studios" — a hardcoded London district on a
                 Singapore product (audit 1.3). The only honest facts here are the
                 gym's own name and how many classes are actually on the week. */}
+            {/* Counted from the week actually being viewed, not from `schedule`
+                — which is the deleted mock base and is permanently `{}`, so this
+                line has always read "0 classes" no matter what the gym runs. */}
             <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"1px"}}>
-              {[store.getGymBranding()?.gymName, `${Object.keys(schedule).length} classes`].filter(Boolean).join(" · ")}
+              {[store.getGymBranding()?.gymName,
+                `${weekOccurrences.length} class${weekOccurrences.length===1?"":"es"} this week`,
+                pending.already.length ? `${pending.already.length} on the books` : "",
+               ].filter(Boolean).join(" · ")}
             </div>
           </div>
         </div>
@@ -132,14 +160,36 @@ export function CalendarScreen({onBack}) {
             </span>
             <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
           </div>
-          {/* "Demand heat", "Publish week" and "Auto-fill week" were dead buttons —
-              rendered, clickable, backed by nothing (audit 1.3). They return when
-              there is real demand data and a class_instances table to publish to. */}
+          {/* "Demand heat" and "Auto-fill week" are still absent — they were dead
+              buttons backed by nothing (audit 1.3) and there is still no real
+              demand data. "Publish week" is back, because the thing it was
+              waiting for now exists: class_instances (0007). Disabled with a
+              reason rather than hidden, so the schedule explains itself. */}
+          <button onClick={publishWeek} disabled={!pending.create.length} data-testid="publish-week"
+            title={weekOccurrences.length === 0
+              ? "Add a class to this week first"
+              : pending.create.length === 0
+                ? "Every class on this week is already on the books"
+                : `Put ${pending.create.length} class${pending.create.length===1?"":"es"} on the books, ready to check people into`}
+            style={{padding:"8px 14px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
+                    cursor:pending.create.length?"pointer":"not-allowed",color:pending.create.length?"var(--text)":"var(--muted)",
+                    fontSize:"12px",fontWeight:"700",opacity:pending.create.length?1:0.55}}>
+            Publish week{pending.create.length ? ` · ${pending.create.length}` : ""}
+          </button>
           <button onClick={()=>setShowAddClass(true)} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             + Add class
           </button>
         </div>
       </div>
+
+      {/* What publishing actually did. Says "nothing left to do" as readily as
+          it says "added 6" — pressing the button again is the common case. */}
+      {published && (
+        <div data-testid="publish-result" style={{marginBottom:"14px",padding:"10px 13px",borderRadius:"9px",
+             border:"1px solid var(--border)",background:"var(--card)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+          {published}
+        </div>
+      )}
 
       {/* F5: Add class modal */}
       {showAddClass && (

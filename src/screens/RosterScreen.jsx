@@ -183,7 +183,13 @@ export function RosterScreen({ onBack }) {
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:"12px"}}>
             <StatCard label="MEMBERS" value={String(members.length)}/>
             <StatCard label="CHECK-INS" value={String(attendance.length)}/>
-            <StatCard label="CLASSES RUN" value={String(classes.length)}/>
+            {/* Only classes that have actually HAPPENED. Publishing a week from
+                the Schedule (B4) creates dated occurrences ahead of time, and
+                counting those here would make "classes run" climb every time an
+                owner published next week — a number that goes up for work not
+                yet done is the kind of flattering lie this screen exists to
+                avoid. Same reasoning as counting ACTIVE members below. */}
+            <StatCard label="CLASSES RUN" value={String(classes.filter(c => !c.startsAt || new Date(c.startsAt) <= new Date()).length)}/>
           </div>
 
           {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
