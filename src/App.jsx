@@ -2727,10 +2727,17 @@ function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlayi
 // is worse than an empty ledger. store.recordConsent() exists and is wired for
 // when a real notice surface ships (QR self-check-in's first screen); it is not
 // called from here on purpose.
-function CheckInPanel({ sessionName, classType, onClose }) {
+function CheckInPanel({ sessionName, classType, durationMin, coachName, onClose }) {
   // Idempotent by design, so React 19 StrictMode's double-invoke of this
   // initializer resolves to the SAME occurrence rather than minting two.
-  const [ci] = useState(() => store.ensureClassInstance({ name: sessionName, classType }).instance);
+  //
+  // Duration and coach ride along because this row is PERMANENT and nothing
+  // later can recover them: the occurrence the runner mints was landing with
+  // `duration_min: null` and `coach_name: ''` while the one B4 publishes from
+  // the Schedule carried both, so the same class recorded different amounts of
+  // itself depending on which door it came through. `coach_name` is denormalised
+  // in 0007 precisely so per-coach analysis is possible over it.
+  const [ci] = useState(() => store.ensureClassInstance({ name: sessionName, classType, durationMin, coachName }).instance);
   const [members, setMembers]       = useState(() => store.getMembers());
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [q, setQ] = useState("");
@@ -2835,7 +2842,7 @@ function CheckInPanel({ sessionName, classType, onClose }) {
   );
 }
 
-function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack, sessionName, classType}) {
+function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack, sessionName, classType, coachName}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
@@ -3034,8 +3041,13 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
           display:"flex", flexDirection:"column",
           flex:1,
         }}>
+          {/* `durationMin` is the planned length from the stages actually
+              loaded — the same number the header shows as "total". Rounded to
+              whole minutes because `class_instances.duration_min` is an int. */}
           {showCheckIn && (
-            <CheckInPanel sessionName={sessionName || "Class"} classType={classType || ""} onClose={closeCheckIn}/>
+            <CheckInPanel sessionName={sessionName || "Class"} classType={classType || ""}
+              durationMin={Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60) || null}
+              coachName={coachName || ""} onClose={closeCheckIn}/>
           )}
           {/* HEADER */}
           <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
@@ -6096,7 +6108,7 @@ export default function App() {
               ))}
               <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
             </div>
-            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")}/>}
+            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""}/>}
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}

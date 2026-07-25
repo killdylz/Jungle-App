@@ -118,6 +118,40 @@ test.describe("a drawn schedule becomes classes on the books", () => {
   });
 });
 
+// There are TWO doors into `class_instances`: publishing a week (above) and the
+// Runner minting one when a coach presses Check in. Found by driving the whole
+// new-gym journey: the runner's door was recording `durationMin: null` on a class
+// whose own header said "48:00 total", so the same class recorded a different
+// amount of itself depending on which door it came through. These rows are
+// permanent and nothing later can recover the length.
+test.describe("both doors into class_instances record the same class", () => {
+  test("the runner's occurrence carries the class's real length", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Runner");
+
+    // The length the coach can see on the header, read from the screen rather
+    // than assumed, so this test tracks the seeded class rather than a constant.
+    const header = await page.locator("body").innerText();
+    const [, mm, ss] = header.match(/(\d+):(\d{2}) total/) || [];
+    const expected = Number(mm);
+    expect(expected).toBeGreaterThan(0);
+    expect(ss).toBe("00");
+
+    await page.getByRole("button", { name: /Check in/ }).first().click();
+    await page.getByPlaceholder(/Search or type/i).fill("Sarah Chen");
+    await page.getByRole("button", { name: /Add .*Sarah Chen/ }).click();
+
+    const ci = await stored(page, "jungle_class_instances");
+    expect(ci).toHaveLength(1);
+    expect(ci[0].durationMin).toBe(expected);
+    expect(ci[0].name).toBeTruthy();
+    expect(Number.isNaN(Date.parse(ci[0].startsAt))).toBe(false);
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
 test.describe("publishing ahead does not inflate what the gym has done", () => {
   // A number that goes up for work not yet done is the flattering lie the
   // Members screen exists to avoid — it is why the roster counts ACTIVE members
