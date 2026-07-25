@@ -396,6 +396,48 @@ A2 Chest Supported Row 12-10-10-8
     expect(r.plan.blocks[0].exercises[0].name).toBe("Back Squat");
   });
 
+  // Found by driving a whole deck through the Slides pipeline (see
+  // slidesImport.test.js). A trailing bare count is the GC/CrossFit convention
+  // written the other way round from the leading count the parser already knew,
+  // and it stayed welded to the NAME — so the catalog held "Wall Ball 15" and
+  // "Wall Ball 20" as two movements while `reps` sat empty. Same defect class as
+  // "Assault Bike 3x30s", in the form its fix did not cover.
+  const exOf = text => parsePlanText(text).plan.blocks[0].exercises;
+
+  it("reads a trailing count in an AMRAP as reps, not as part of the name", () => {
+    expect(exOf("GC\nC2 AMRAP 12min\nWall Ball 15\nBox Jump 12"))
+      .toMatchObject([{ name: "Wall Ball", reps: "15" }, { name: "Box Jump", reps: "12" }]);
+  });
+
+  // "3 rounds" sets the block's `sets`; the per-movement count is a DIFFERENT
+  // fact and is still reps. An earlier cut of the guard broke exactly this.
+  it("reads a trailing count under a rounds header too", () => {
+    expect(exOf("GC\nC1\n3 rounds\nKB Swing 20\nPush Up 15"))
+      .toMatchObject([{ name: "KB Swing", reps: "20" }, { name: "Push Up", reps: "15" }]);
+  });
+
+  // The block already states its reps, so a number beside the movement is
+  // something else — load, most often. Leave it exactly where the coach put it
+  // rather than trading one wrong answer for another.
+  it("leaves a trailing number alone when the block states sets x reps", () => {
+    expect(exOf("S360\nM1 Back Squat 5x5\nFarmer Carry 40"))
+      .toMatchObject([{ name: "Back Squat" }, { name: "Farmer Carry 40" }]);
+  });
+
+  it("does not invent 500 reps out of a distance written without its unit", () => {
+    // Past 100 a bare number is far more often metres than reps.
+    expect(exOf("GC\nC2 AMRAP 12min\nRow 500\nRun 400").map(e => e.name)).toEqual(["Row 500", "Run 400"]);
+  });
+
+  it("still prefers a real unit over the rep reading", () => {
+    expect(exOf("GC\nC2 AMRAP 12min\nRow 500m")).toMatchObject([{ name: "Row", target: "500m", reps: "" }]);
+  });
+
+  it("leaves the leading-count convention working", () => {
+    expect(exOf("GC\nC2 AMRAP 12min\n15 Wall Ball\n10 Burpees"))
+      .toMatchObject([{ name: "Wall Ball", reps: "15" }, { name: "Burpees", reps: "10" }]);
+  });
+
   // A block header written "M1 — Deadlift" names the slot AND this week's focus,
   // which is exactly how `slotKey()` in blueprints.js already reads it. Parsing
   // that suffix as a movement invented an exercise the coach never wrote on a

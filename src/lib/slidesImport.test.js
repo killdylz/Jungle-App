@@ -4,6 +4,7 @@
 // No amount of clicking through the UI surfaces that, which is why they're tested.
 import { describe, it, expect } from "vitest";
 import { parseDriveId, splitDeckSlides, slideDate, looksLikeClassSlide } from "./slidesImport.js";
+import { parsePlanText, PARSE_THRESHOLD } from "./planParser.js";
 
 describe("parseDriveId", () => {
   it("accepts the link shapes coaches actually paste", () => {
@@ -95,5 +96,65 @@ describe("looksLikeClassSlide", () => {
     expect(looksLikeClassSlide("Coach Mara")).toBe(false);
     expect(looksLikeClassSlide("")).toBe(false);
     expect(looksLikeClassSlide(null)).toBe(false);
+  });
+});
+
+// ── The whole import journey, in one pass ────────────────────────────────────
+// Every test above pins ONE function. Three of session 9's five defects were
+// disagreements BETWEEN parts, which per-function tests cannot see by
+// construction. This drives a realistic mixed deck the whole way —
+// splitDeckSlides -> looksLikeClassSlide -> slideDate -> parsePlanText -> the
+// plan that gets STORED — because that composition is what a coach's import
+// actually is, and its failures are silent: a class quietly missing from the
+// corpus, or a plan filed under the wrong date.
+describe("a real deck, end to end", () => {
+  const slide = (n, text) => `--- Slide ${n} ---\n${text}`;
+  const DECK = [
+    slide(1, "THE GARAGE\nS360 PROGRAMMING\nWeek 4"),
+    slide(2, '"Discipline is choosing between what you want now\nand what you want most."'),
+    slide(3, "S360\n11 July 2026\nWarm Up\nWorld's Greatest Stretch 2x5\nM1 — Deadlift\n" +
+             "Conventional Deadlift 4x5 @RPE8\nA1 Bench Press 3x8\nA2 Barbell Row 3x8\nFinisher\nAssault Bike 3x30s"),
+    slide(4, "COACH DYLAN\nStrength & conditioning"),
+    slide(5, "GC\n18 July 2026\nC1 Warm Up\nBand Pull Apart 2x15\nC2 AMRAP 12min\n" +
+             "Wall Ball 15\nBox Jump 12\nC3 Finisher\nRow 500m"),
+  ].join("\n");
+
+  const imported = () => splitDeckSlides(DECK)
+    .filter(s => looksLikeClassSlide(s.text))
+    .map(s => ({ n: s.n, date: slideDate(s.text), ...parsePlanText(s.text) }));
+
+  it("keeps both real classes and drops the title card and the bio", () => {
+    expect(imported().map(p => p.n)).toEqual([3, 5]);
+  });
+
+  it("files each class under the date on its OWN slide, not the deck's", () => {
+    expect(imported().map(p => p.date)).toEqual(["2026-07-11", "2026-07-18"]);
+  });
+
+  it("parses both without falling through to the LLM", () => {
+    imported().forEach(p => expect(p.confidence).toBeGreaterThanOrEqual(PARSE_THRESHOLD));
+  });
+
+  // The catalog every persona claim is aggregated from. A movement here that the
+  // coach never wrote on a movement line poisons that aggregation at the source —
+  // which is exactly what the "M1 — Deadlift" block label used to do.
+  it("stores only movements the coach actually wrote", () => {
+    const names = imported().flatMap(p => p.plan.blocks.flatMap(b => b.exercises.map(e => e.name)));
+    expect(names).toEqual([
+      "World's Greatest Stretch", "Conventional Deadlift", "Bench Press", "Barbell Row", "Assault Bike",
+      "Band Pull Apart", "Wall Ball", "Box Jump", "Row",
+    ]);
+    expect(names).not.toContain("Deadlift");   // the block label's focus suffix
+    expect(names).not.toContain("Warm Up");    // the role word in "C1 Warm Up"
+    expect(names).not.toContain("Finisher");
+  });
+
+  // GC writes "C1 / C2 / C3" as a SEQUENCE of stages; S360 writes "A1 / A2" as a
+  // superset. Same shape to a naive letter rule, opposite meaning — folding GC's
+  // three stages into one block destroys the class.
+  it("keeps GC's C1/C2/C3 as separate stages while folding S360's A1+A2", () => {
+    const [s360, gc] = imported();
+    expect(s360.plan.blocks.map(b => b.label)).toEqual(["Warm Up", "M1", "A1+A2", "Finisher"]);
+    expect(gc.plan.blocks.map(b => b.label)).toEqual(["C1", "C2", "C3"]);
   });
 });

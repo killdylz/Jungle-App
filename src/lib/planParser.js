@@ -283,7 +283,7 @@ const TARGET_RE = /\b(\d+(?:\.\d+)?\s*(?:m|km|mi|miles?|metres?|meters?|cal(?:s|
 // its own field; whatever remains is the name AS THE COACH WROTE IT (the prompt's
 // rule too — we expand nothing beyond obvious abbreviations, which aggregation
 // handles via the movement catalog's aliases).
-export function parseExercise(rawLine) {
+export function parseExercise(rawLine, opts = {}) {
   let line = stripBullet(rawLine);
   const ex = { name: "", equip: "", reps: "", per_side: false, regression: "", target: "" };
   if (!line) return null;
@@ -315,6 +315,23 @@ export function parseExercise(rawLine) {
     if (!/^\s*(?:m|km|cal|s|sec|min)\b/i.test(line.slice(m[0].length))) {
       ex.reps = m[1]; line = clean(line.slice(m[0].length));
     }
+  } else if (opts.countsAreReps && (m = line.match(/\s(\d{1,3})$/))) {
+    // TRAILING count — the same GC/CrossFit convention written the other way
+    // round. "Wall Ball 15" under an AMRAP is 15 reps of Wall Ball, and found by
+    // driving a real deck end to end: the count stayed welded to the NAME, so the
+    // catalog held "Wall Ball 15" and "Wall Ball 20" as two different movements
+    // while `reps` sat empty. That is the aggregation key for every persona claim,
+    // and it is the same defect class as "Assault Bike 3x30s" in an uncovered form.
+    //
+    // Two guards, both about not trading one wrong answer for another:
+    //  - Only where the block does NOT already state sets×reps. In a strength
+    //    block the scheme carries the reps, so a trailing number is something else
+    //    (load, most often) and is left exactly where the coach put it.
+    //  - Only up to 100. Past that a bare number is far more often a distance
+    //    ("Row 500") than a rep count, and inventing 500 reps is precisely the
+    //    confident wrong guess an honest blank beats.
+    const n = Number(m[1]);
+    if (n > 0 && n <= 100) { ex.reps = m[1]; line = clean(line.slice(0, m.index)); }
   }
 
   // An inline sets x reps ("M1 Back Squat 5x5") belongs to the BLOCK scheme, which
@@ -553,7 +570,7 @@ export function parsePlanText(text, opts = {}) {
       // heuristic doesn't have, so it overrides — that is the whole point of hints.
       const known = !schemeOnly && hintedMovement(line, hints);
       if (known || (!schemeOnly && looksLikeMovement(line))) {
-        const ex = parseExercise(line);
+        const ex = parseExercise(line, { countsAreReps: countsAreReps(scheme) });
         if (ex) { exercises.push(ex); consumed[idx] = true; if (known) hintedLines++; return; }
       }
       if (contributed) { consumed[idx] = true; return; }
@@ -568,7 +585,7 @@ export function parsePlanText(text, opts = {}) {
     if (focusEntry && !exercises.length && !isBareRoleWord(focusEntry.line)) {
       const known = hintedMovement(focusEntry.line, hints);
       if (known || looksLikeMovement(focusEntry.line)) {
-        const ex = parseExercise(focusEntry.line);
+        const ex = parseExercise(focusEntry.line, { countsAreReps: countsAreReps(scheme) });
         if (ex) { exercises.push(ex); consumed[focusEntry.idx] = true; if (known) hintedLines++; }
       }
     }
@@ -725,6 +742,23 @@ function soloRegression(line) {
 function isBareRoleWord(line) {
   const t = stripBullet(line);
   return /^(?:warm[\s-]?up|cool[\s-]?down|finisher|burnout|circuit|conditioning|metcon|recovery|stretch|mobility)$/i.test(t);
+}
+// Does a bare trailing number on a movement line mean REPS in this block?
+//
+// Only when the block does not already state sets×reps. An AMRAP / EMOM / "3
+// rounds" block lists a per-movement count ("Wall Ball 15"); a strength block
+// states its reps in the scheme, so a number beside the movement is something
+// else — usually load — and must be left alone rather than reinterpreted.
+//
+// An empty type is still undecided at the point exercises are parsed, and falls
+// through to "rounds" once the block is finished, so it counts as rep-context.
+//
+// Deliberately keyed on the TYPE alone. An earlier cut also required `sets` to be
+// unset, which broke the most ordinary circuit there is — "3 rounds" sets `sets`
+// to 3, and "KB Swing 20" underneath it is still 20 reps. The rounds count and
+// the per-movement rep count are different facts about the same block.
+function countsAreReps(scheme) {
+  return scheme.type !== "sets_reps";
 }
 function isBlockStart(line) {
   const t = stripBullet(line);
