@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { freshApp, nav, stored, watchConsole, expectNoConsoleErrors } from "./helpers.js";
 
 // ── Dashboard cold start (B1) ────────────────────────────────────────────────
 //
@@ -128,6 +128,65 @@ test.describe("a running gym gets its numbers back", () => {
     await expect(page.locator(NUDGE).getByText(/Bring your members across/)).toBeVisible();
     await page.locator(NUDGE).getByRole("button", { name: "Import members", exact: true }).click();
     await expect(page.getByText(/Your roster and the attendance history behind it/).first()).toBeVisible();
+  });
+});
+
+// ── The other cold start: a coach with nothing (D3 / B6) ─────────────────────
+//
+// Spec §9.1 Status says a coach with no plans at all "has no class type, so no
+// card and no presets — §9.1's empty screen case is still open". Driving it says
+// otherwise: the path exists and works. This suite is what makes that claim
+// checkable rather than a matter of whose memory is more recent, and it is why
+// the spec entry is now corrected rather than carried forward again.
+test.describe("a coach with nothing can still get to a class", () => {
+  test("goes from no coaches at all to a named class shape", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Coaches");
+
+    // 1. No coaches. Says so, and says what to do about it.
+    await expect(page.getByText(/No coaches yet/i)).toBeVisible();
+
+    // 2. Add one.
+    await page.getByPlaceholder(/Name — e.g./).fill("Dylan");
+    await page.getByRole("button", { name: "Add coach", exact: true }).click();
+
+    // 3. A coach with zero plans is offered the class-type cold start, not a
+    //    dead end telling them to go and import something first.
+    await expect(page.getByText(/Start with a class this coach teaches/i)).toBeVisible();
+    await page.getByPlaceholder(/Class type — e.g./).fill("S360");
+
+    // 4. Pick a shape.
+    await page.getByRole("button", { name: /^Circuit/ }).click();
+
+    // 5. They land on a real class-type surface with a real shape behind it.
+    await expect(page.getByText("S360 — CLASS SHAPE")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Start a class from this shape/ })).toBeVisible();
+
+    // And it is STORED as a preset, not as an edit — so the coach's own shape
+    // replaces it silently once their real classes arrive.
+    const personas = await stored(page, "jungle_personas");
+    const bp = personas[0].styleProfile.blueprints.S360;
+    expect(bp.source).toBe("preset");
+    expect(bp.slots.map(s => s.label)).toEqual(["Warm-up", "Circuit 1", "Circuit 2", "Cool-down"]);
+
+    await expect(page.getByText(/Something broke|stopped responding/i)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  // Found by driving the above: this line greets every coach on the cold-start
+  // path and read "Add classs for S360" — three s, on a first-impression screen.
+  test("spells the invitation to add classes correctly", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Coaches");
+    await page.getByPlaceholder(/Name — e.g./).fill("Dylan");
+    await page.getByRole("button", { name: "Add coach", exact: true }).click();
+    await page.getByPlaceholder(/Class type — e.g./).fill("S360");
+    await page.getByRole("button", { name: /^Circuit/ }).click();
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/classs/i);
+    expect(body).toMatch(/Add S360 classes and Jungle works out the structure/);
   });
 });
 

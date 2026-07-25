@@ -5224,8 +5224,11 @@ function PersonaProfilePanel({ prof, extracted }) {
           </div>
         </div>
       ) : null}
+      {/* This line greets a coach whose class type exists but has no plans
+          behind it yet — the cold-start path — so it is a first-impression
+          surface. It read "Add classs" (three s) until session 9. */}
       {!prof.structure?.length && !prof.schemes?.length && !extracted.conventions?.length && (
-        <p style={{fontSize:"13px",color:"var(--muted)"}}>Add classs for {prof.classType} and the structure, schemes and defaults are learned automatically.</p>
+        <p style={{fontSize:"13px",color:"var(--muted)"}}>Add {prof.classType} classes and Jungle works out the structure, schemes and defaults from them.</p>
       )}
     </div>
   );
