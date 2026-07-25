@@ -1631,13 +1631,25 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
           {/* 4. LIVE PREVIEW */}
           <div style={sectionStyle}>
-            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · updates instantly on reskin</div>
+            {/* "on sample content" is the load-bearing half. The RESKIN is live —
+                that part was always true — but the numbers below it are made up,
+                and the header said nothing about it. NPS was the worst of them:
+                there is no survey anywhere in this product and no path to one, so
+                a metric no gym will ever see here was sitting on the screen an
+                owner is shown during a sales conversation. Replaced with the
+                class length, which Jungle does know. The preview still needs
+                content to be a preview — it just has to say that it is sample. */}
+            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · your colours and fonts, on sample content</div>
             <div style={{background:"var(--bg)",borderRadius:"12px",padding:"16px",border:`1px solid var(--border)`}}>
               {/* Mini nav */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-                <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:"var(--accent)",letterSpacing:"2px"}}>JUNGLE</div>
+                {/* The gym's own name, because this is the white-label preview —
+                    showing "JUNGLE" here was the one wordmark it should never be. */}
+                <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"15px",fontWeight:"800",color:"var(--accent)",letterSpacing:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"48%"}}>
+                  {(gymBranding?.gymName || "JUNGLE").toUpperCase()}
+                </div>
                 <div style={{display:"flex",gap:"10px"}}>
-                  {[["FILL","92%"],["RPE","7.4"],["NPS","71"]].map(([l,v])=>(
+                  {[["MEMBERS","24"],["RPE","7.4"],["MIN","45"]].map(([l,v])=>(
                     <div key={l} style={{textAlign:"center"}}>
                       <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"14px",fontWeight:"800",color:"var(--accent)"}}>{v}</div>
                       <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700"}}>{l}</div>
