@@ -2,11 +2,11 @@
 
 _Last updated: 2026-07-25 (session 9, complete)_
 
-> **▶ STARTING A NEW SESSION?** Read this block first, then spec **§0's trust ranking** (new this
-> session) and **§12**. `SESSION-9-PROMPT.md` is now history except for its §3C/§4 — the
-> **blocked-on-Dylan list and the open decisions**, which are still live and are the only place
-> they are written down.
-> `main = 9511695`, pushed, tree clean.
+> **▶ STARTING A NEW SESSION? Paste `SESSION-10-PROMPT.md` as your opening message.**
+> It supersedes `SESSION-9-PROMPT.md` (now history) and carries the full pending list, the
+> blocked-on-Dylan items, and the one defect session 9 found and deliberately deferred.
+> Then read spec **§0's trust ranking** (new in session 9) and **§12**.
+> `main = 9cafaf0`, pushed, tree clean.
 > Gates: **`lint:crash` 0 · 573 unit + 1 todo · 78 e2e · build 648 KB**.
 
 ---
