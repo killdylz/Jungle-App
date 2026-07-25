@@ -1,12 +1,122 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-23 (session 8, in progress)_
+_Last updated: 2026-07-25 (session 9, complete)_
 
-> **▶ STARTING A NEW SESSION? Paste `SESSION-9-PROMPT.md` as your opening message.**
-> It supersedes `SESSION-8-PROMPT.md` (now history) and carries the **full pending-work audit**
-> — every doc in the repo checked against the actual code, including a list of **stale claims in
-> the as-built spec** that has cost time every session. `main = e4ab933`, pushed, tree clean.
-> Gates: **`lint:crash` 0 · 440 unit · 41 e2e · build 631 KB**.
+> **▶ STARTING A NEW SESSION?** Read this block first, then spec **§0's trust ranking** (new this
+> session) and **§12**. `SESSION-9-PROMPT.md` is now history except for its §3C/§4 — the
+> **blocked-on-Dylan list and the open decisions**, which are still live and are the only place
+> they are written down.
+> `main = 9511695`, pushed, tree clean.
+> Gates: **`lint:crash` 0 · 573 unit + 1 todo · 78 e2e · build 648 KB**.
+
+---
+
+## 🟢 Shipped SESSION 9 — `8037b43` → `9511695`, 9 commits, all pushed
+
+**Every unblocked item on session 9's pending list is done.** What is left in §3A is B3 alone
+(D2 on a real deck), which needs decks only Dylan has.
+
+| Commit | What |
+|---|---|
+| `4852a36` | **B1 — Dashboard cold start.** The four KPIs all derive from the SAME empty array, so a new gym's first screen read "0 · 0.0 · 0 · 0". Replaced pre-data by a three-step checklist. Gates on **sessions**, not on checklist completion — a gym running classes daily but never importing its roster gets its numbers plus one quiet line, never a setup card where its numbers belong. `src/lib/setupProgress.js`, 15 unit + 9 e2e. |
+| `f4efa03` | **B5 — member data export.** PDPA access (one member's own record) and portability (the whole roster). RFC 4180 quoting pinned by a **round-trip through the importer's own `parseCsv`**; leading `= + - @` guarded against spreadsheet formula execution; UTF-8 BOM. 39 unit + 6 e2e. |
+| `0fee0c1` | **D4 — generation presets.** Five named intents, each a deterministic transformation of the coach's own shape, each stating what it will change **in numbers** before they commit. The rule that keeps it honest: a preset may REORDER a slot's categories, **never ADD one**. 38 unit + 7 e2e. |
+| `7adadd1` | **B4 — publish a week.** The Schedule's recurring rules become dated `class_instances`, idempotently on `(name, startsAt)`. "Publish week" returns from the 2.2 audit's dead-button cut, because the table it waited for now exists. 33 unit + 6 e2e. |
+| `4720da2` | **B6 — the no-corpus cold start was already built**; now proven by two e2e, and a typo on it fixed ("Add class**s** for S360", three s, on a first-impression screen). |
+| `a6e8643` | **Docs — every stale status claim reconciled.** See below; this is the §0 action the prompt asked for. |
+| `99c2c67` | **Regression: the runner's `class_instances` row.** Found by driving the whole journey. |
+| `701ec59` | **B8 — the colour-only audit** + the number nothing ever set. |
+| `aab934f` · `9511695` | **Parser name-pollution fixes** + the Brand Studio preview's honesty. |
+
+### The four defects found by DRIVING, not by reading — the method still works
+
+Every one of these renders perfectly and says the wrong thing. None was visible to a unit test.
+
+1. **"Short class" promised "38 → 25 min" and delivered a class the same length.**
+   `draftFromBlueprint` dropped each slot's `minutes` and `planToStages` fell through to a per-role
+   default — so **the Minutes field the class shape card has always offered was WRITE-ONLY.** A
+   coach setting an 8-minute warm-up silently got the house 5. Fixed at both ends.
+2. **The runner's occurrence recorded less of the class than the schedule's.** There are two doors
+   into `class_instances`; the runner's wrote `duration_min: null` and `coach_name: ''` on a class
+   whose own header said "48:00 total". These rows are permanent.
+3. **`fill` is never SET anywhere in the product.** No capacity field, no booking integration — so
+   every class on every gym's Dashboard read "0%", and every Schedule cell drew an empty bar reading
+   "0%". That says "nobody came", not "we don't know". Removed from both.
+4. **The parser welded schemes onto movement NAMES.** "Assault Bike 3x30s" kept every character
+   while "Burpee 3x10" beside it cleaned up perfectly (`\b` cannot sit between `0` and `s`), and
+   "Conventional Deadlift 4x5 @RPE8" recorded RPE twice — once in the scheme, once in the name. The
+   name is the **aggregation key for the entire persona thesis**, so each of these split one
+   movement into two and neither half had the coach's full history.
+
+Plus two U1/accessibility leaks: the Builder rendered raw enums (**"warmup · 5:00"**) on the app's
+most-used screen, and the **Room TV** — a member-facing surface — left a coloured dot to say which
+stage each chip was. `SCFG`'s palette does not even carry that uniquely: **warmup/power,
+core/stretch and engine/recovery are each one colour shared by two types.** Documented at the
+definition, with the reason widening the palette is not the fix.
+
+### ⛔ ONE DEFECT FOUND AND DELIBERATELY NOT FIXED — take this first if you touch the parser
+
+A block header written **`M1 — Deadlift`** yields the block label `M1` **and a phantom exercise
+named "Deadlift"** — so a block the coach wrote with one movement comes back with two, and the
+catalog gains a movement that was never on a movement line. Reported at `confidence: 1`.
+`slotKey()` in `blueprints.js` already reads that form as *slot M1 plus this week's focus*, so the
+two halves of the codebase disagree.
+
+Not fixed here because the fix changes **block segmentation** — the parser's most delicate path,
+shared with D2's blueprint-driven resolution — and it cannot be checked against The Garage's real
+decks from this machine. **It belongs with B3, where it can be.** Recorded as an `it.todo` in
+`planParser.test.js` so it cannot be forgotten. Repro:
+`parsePlanText("S360\nM1 — Deadlift\nConventional Deadlift 4x5")`.
+
+Smaller, same area, also unfixed: the plan title comes out **"S360 — S360 — Week 4"** when the deck
+header already contains the class type.
+
+### Docs — what was actually wrong, and the durable fix
+
+The audit found the docs stale **in both directions**. Corrected inline with dates: spec §1 (claimed
+F4 unbuilt, App.jsx ~8,780 lines), §2/F4 ("Blocked on: approval of migration 0007" — applied
+2026-07-18), §2/F1, §2/F5 ("⛔ Blocked on F4"), §7c (**wrong in four places**, now headed SUPERSEDED
+BY §12), §9.1, §12; LEGAL §3 / AUDIT 2.4 / REGRESSION §3 #9 (all three listed I5 RLS tests as open —
+`supabase/tests/0001_0006_rls_selftest.sql` exists and has been run); UI-UX §2.
+
+**Spec §0 now carries a trust ranking**, headed by the thing that actually fixes this:
+**a passing test is the only claim in this repo that cannot go stale silently.** Where this session
+could turn a disputed status into an assertion it did.
+
+⚠️ `Jungle - Delta & Backlog Breakdown.md` is **gitignored** — its HISTORICAL marker is local-only.
+The spec's §0 table carries the same warning in a tracked file.
+
+### Verified in the running app, not just in tests
+All nine screens at 1280 and 375 (no error boundary, **zero horizontal overflow anywhere**); the
+More sheet and every destination behind it; publish-week and the roster export on a phone; the
+check-in chain's member → attendance → occurrence links; the paste-deck path **working offline**
+(the deterministic parser handles it with Supabase off — worth knowing).
+
+### Still true, still worth knowing
+- **`lint:crash` cannot see undefined JSX components.** Unchanged. It *does* catch a JSX parse
+  error — I made the same one twice this session (a `{/* comment */}` as the first child inside
+  `&& ( … )`) and the gate caught it both times.
+- **B7 (ENERGY CURVE truncation) is MOOT** — verified: it lives inside `subTab === "music"`,
+  reachable only when `FLAGS.music` is true. Also: that curve is a **hardcoded decorative SVG,
+  identical for every class**, under a label reading "peak intensity". Theatre, if music ever
+  un-quarantines.
+- **The Floor board's fabricated pacer is still Dylan's call** (SESSION-9-PROMPT §4 item 3).
+
+### Suggested order for session 10
+
+1. **Anything Dylan has unblocked** — `SESSION-9-PROMPT.md` §3C is still the live list.
+   **N4** (member magic-link) is the highest-value item in the product and needs an Edge Function;
+   **OPS: Supabase Pro + a restore drill** is Day 1 and the free tier has no backups.
+2. **B3 — D2 on a real deck**, *with* the `M1 — Deadlift` segmentation fix above. They are the same
+   piece of work and neither should ship without the other.
+3. **I10 delta writes** — AUDIT 3.2 wants this before gym #2; it is why one bad row once poisoned
+   every plan. Unblocked, and the only §3B item that is about data loss rather than tidiness.
+4. **I9 code splitting** — the bundle is **648 KB and still growing**, loaded by a TV on gym Wi-Fi,
+   with no `React.lazy` anywhere.
+5. Otherwise keep driving flows and reading back stored objects. It found four defects today and
+   has now found every defect in sessions 3–9.
+
+---
 
 ## 🟢 Shipped SESSION 8 — `4cfaa16` → (latest), pushed, all gates green
 
