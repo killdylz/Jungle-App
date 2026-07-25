@@ -2,9 +2,11 @@
 
 _Last updated: 2026-07-23 (session 8, in progress)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-8-PROMPT.md` set the direction; this block records what
-> shipped against it. Gates as of the latest push: **`lint:crash` 0 · 431 unit · 41 e2e · build
-> 631 KB**, all pushed to `main`.
+> **▶ STARTING A NEW SESSION? Paste `SESSION-9-PROMPT.md` as your opening message.**
+> It supersedes `SESSION-8-PROMPT.md` (now history) and carries the **full pending-work audit**
+> — every doc in the repo checked against the actual code, including a list of **stale claims in
+> the as-built spec** that has cost time every session. `main = e4ab933`, pushed, tree clean.
+> Gates: **`lint:crash` 0 · 440 unit · 41 e2e · build 631 KB**.
 
 ## 🟢 Shipped SESSION 8 — `4cfaa16` → (latest), pushed, all gates green
 
@@ -19,6 +21,7 @@ the first unit coverage of the Runner's interval math.
 | `6f278fb` | **Interval sub-timer math covered.** `calcIntervalState` (Tabata/EMOM) extracted from App.jsx to `src/lib/intervalTimer.js` and pinned with **18 exact-value tests** — the spec's named "timer/stage math" gap. Mutation-verified. |
 | `5dab0ae` | **e2e wiring guard** — the coach display renders a live Tabata overlay (WORK · Round 1 of 8 · 20s on / 10s off), a path no other test reaches. |
 | `503c534` | **Floor-board ambient pacer extracted** to `floorPacer()` (verbatim) + 8 tests. Behaviour unchanged; gives the flagged "fabricated pacer" decision a clean, covered seam. 431 unit. |
+| `e4ab933` | **D2 — blueprint-driven parsing** (spec §9/§12's "main build ahead"; the open half of §4.3.2). The coach's own class shape now resolves block roles the parser previously guessed, and vetoes the same-letter superset fold when the blueprint declares a sequence — the `C1/C2/C3` case that collapsed a whole class into one block. Applied AFTER the slide's explicit words and BEFORE the structural fallbacks; resolves only, never invents. Wired at both call sites; `stats.blueprint` makes its contribution measurable. 9 tests, both mechanisms mutation-verified. **440 unit.** ⚠️ Verified on fixtures, NOT yet on a real deck — and note AUDIT 2.4 ranked this "defer until after pilot" while §9/§12 called it the main build (see SESSION-9-PROMPT §4). |
 
 App.jsx unchanged in size to speak of (P2 was in-place edits; `calcIntervalState` extraction is ~−20 lines).
 
