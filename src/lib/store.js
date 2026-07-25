@@ -192,16 +192,110 @@ export function _blobStale(table) {
   return true;
 }
 
+// ── I10: delta writes ────────────────────────────────────────────────────────
+// Every id-keyed `save*` below used to push the WHOLE domain list on every
+// change: renaming one plan re-sent the entire corpus. Two costs, one of which
+// is the reason AUDIT 3.2 wants this before gym #2:
+//
+// 1. DATA LOSS BLAST RADIUS. An upsert is one statement. If a single row
+//    violates a CHECK, the whole batch fails — so one bad row stops every OTHER
+//    row in that domain from syncing, and the ledger just says "the table
+//    failed". That is how one bad row poisoned every plan on 2026-07-18.
+// 2. Payload. A coach's whole corpus over gym Wi-Fi on every keystroke-ish save.
+//
+// The subtle part, and the reason this was deferred rather than obvious: today's
+// full-list push is ACCIDENTALLY SELF-HEALING. A row that failed to sync is
+// re-sent by the next unrelated save, and `_RETRY_PUSHERS` leans on exactly that
+// — every thunk just calls the same `save*` again. A naive delta destroys that
+// property and turns a transient failure into permanent divergence.
+//
+// So the rule here is: a row is only marked synced when the SERVER CONFIRMED it.
+// A failed push marks nothing, so the row stays in the delta and the very next
+// save — or I13's retry thunk, unchanged — picks it up again. The self-healing
+// survives; only the payload shrinks.
+const SYNCED_KEY = "jungle_synced_rows";
+
+// 64 bits over the row as it will be SENT (not the local shape), so a change to
+// gym_id or any mapped field counts as a change. Two independent 32-bit hashes
+// rather than one: a collision here means an edited row is never pushed — silent
+// data loss, which is the one failure this whole module exists to prevent — and
+// 2^-32 is not a margin worth taking for a few bytes.
+function _fingerprint(row) {
+  const s = JSON.stringify(row);
+  let h1 = 0x811c9dc5, h2 = 5381;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = (Math.imul(h2, 33) ^ c) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+
+// The rows whose mapped form differs from what the server last confirmed.
+// Exported for tests: this decides what does and does not reach Postgres, so it
+// is pinned directly rather than through a write that needs a live Supabase —
+// the same reasoning as _guardList and _dueRetries.
+export function _deltaRows(table, rows) {
+  const marks = readJSON(SYNCED_KEY, {})[table] || {};
+  return (rows || []).filter(r => r && marks[r.id] !== _fingerprint(r));
+}
+
+// Confirm the rows the server accepted, and drop marks for rows that no longer
+// exist locally so the map cannot grow forever. `allRows` is the full current
+// list; anything outside it is gone (deleted via _bgDelete) and its mark is dead.
+// Exported alongside _deltaRows so the self-healing property — a push that was
+// never confirmed stays in the next delta — can be pinned without a live Supabase.
+export function _markSynced(table, pushed, allRows) {
+  try {
+    const all = readJSON(SYNCED_KEY, {});
+    const prev = all[table] || {};
+    const live = new Set((allRows || []).map(r => r && r.id));
+    const next = {};
+    Object.keys(prev).forEach(id => { if (live.has(id)) next[id] = prev[id]; });
+    (pushed || []).forEach(r => { if (r) next[r.id] = _fingerprint(r); });
+    all[table] = next;
+    writeJSON(SYNCED_KEY, all);
+  } catch (_) { /* never let bookkeeping break a write */ }
+}
+
+// Drop one row's mark, so a later row with that id is pushed on its own merits.
+// Exported for tests for the same reason as the two above.
+export function _unmark(table, id) {
+  try {
+    const all = readJSON(SYNCED_KEY, {});
+    if (all[table] && all[table][id] !== undefined) { delete all[table][id]; writeJSON(SYNCED_KEY, all); }
+  } catch (_) { /* never let bookkeeping break a write */ }
+}
+
+// Note there is deliberately no "forget everything for this table" escape hatch:
+// the fingerprint covers the row AS SENT, gym_id included, so a different gym (or
+// any remapping) already mismatches every mark and re-pushes in full on its own.
+// A second mechanism for that would only be a second thing to get wrong.
+
+// Push only what changed. `allRows` is the full mapped list, used to prune marks.
+// No delta => no request at all, which is the common case on a re-save.
+function _bgUpsertDelta(table, allRows, onConflict = "id") {
+  const delta = _deltaRows(table, allRows);
+  if (!delta.length) return;
+  _bgUpsert(table, delta, onConflict, () => _markSynced(table, delta, allRows));
+}
+
 // Fire-and-forget writes — never block or throw into the caller.
-function _bgUpsert(table, row, onConflict) {
+function _bgUpsert(table, row, onConflict, onOk) {
   supabase.from(table).upsert(row, { onConflict }).then(
     ({ error }) => {
       if (error) { console.warn(`[store] ${table} upsert failed:`, error.message); _noteSyncError(table, error.message); }
-      else _clearSyncError(table);
+      else { _clearSyncError(table); if (onOk) { try { onOk(); } catch (_) {} } }
     },
     (e) => _noteSyncError(table, e?.message || e));
 }
 function _bgDelete(table, col, val) {
+  // Drop the delta mark for a deleted id. Without this, deleting a row and later
+  // re-adding the SAME id with identical content would match the dead row's
+  // fingerprint, look already-synced, and never be pushed — the server would stay
+  // permanently missing a row that exists locally. Unmarking here (rather than at
+  // each call site) keeps every present and future delete honest by construction.
+  if (col === "id") _unmark(table, val);
   supabase.from(table).delete().eq(col, val).then(
     ({ error }) => { if (error) console.warn(`[store] ${table} delete failed:`, error.message); },
     () => {});
@@ -583,13 +677,13 @@ export function savePersonas(personas) {
   writeJSON(KEYS.personas, personas);
   if (!_synced()) return;
   const rows = (personas || []).map(_personaToRow);
-  if (rows.length) _bgUpsert("coach_personas", rows, "id");
+  _bgUpsertDelta("coach_personas", rows);
 }
 export function savePersonaPlans(plans) {
   writeJSON(KEYS.personaPlans, plans);
   if (!_synced()) return;
   const rows = (plans || []).map(_planToRow);
-  if (rows.length) _bgUpsert("persona_plans", rows, "id");
+  _bgUpsertDelta("persona_plans", rows);
 }
 // Delete a persona + its plans locally; server plans cascade via the FK.
 export function deletePersona(id) {
@@ -629,7 +723,7 @@ export function savePersonaMovements(moves) {
   writeJSON(KEYS.personaMoves, withIds);
   if (_synced()) {
     const rows = withIds.map(m => ({ ...m, common_scheme: m.commonScheme || {} })).map(_moveToRow);
-    if (rows.length) _bgUpsert("persona_movements", rows, "id");
+    _bgUpsertDelta("persona_movements", rows);
   }
   return withIds;
 }
@@ -671,7 +765,7 @@ export function savePersonaGenerations(list) {
   writeJSON(KEYS.personaGens, list || []);
   if (_synced()) {
     const rows = (list || []).map(_genToRow);
-    if (rows.length) _bgUpsert("persona_generations", rows, "id");
+    _bgUpsertDelta("persona_generations", rows);
   }
 }
 
@@ -852,7 +946,7 @@ export function saveMembers(list) {
   writeJSON(KEYS.members, list || []);
   if (!_synced()) return;
   const rows = (list || []).map(_memberToRow);
-  if (rows.length) _bgUpsert("members", rows, "id");
+  _bgUpsertDelta("members", rows);
 }
 // Quick-add during check-in: a name is all that's required, because anything
 // more is a form a coach won't fill in mid-class and P6 gives us <5 seconds.
@@ -937,7 +1031,7 @@ export function saveClassInstances(list) {
   writeJSON(KEYS.classInstances, list || []);
   if (!_synced()) return;
   const rows = (list || []).map(_ciToRow);
-  if (rows.length) _bgUpsert("class_instances", rows, "id");
+  _bgUpsertDelta("class_instances", rows);
 }
 // Find-or-create the occurrence for a class being run right now. Idempotent
 // within the window so pausing and resuming, or reopening the roster, does not

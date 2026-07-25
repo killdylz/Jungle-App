@@ -18,6 +18,7 @@ import {
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
+  _deltaRows, _markSynced, _unmark,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -299,6 +300,109 @@ describe("_dueRetries", () => {
       brand_profiles:{ at: now - 100,     attempts: 5 },   // backing off → not due
     };
     expect(_dueRetries(errors, { online: true, now })).toEqual(["attendance", "members"]);
+  });
+});
+
+// ── I10: delta writes ────────────────────────────────────────────────────────
+// What actually reaches Postgres on a save. The whole-list upsert this replaces
+// meant one bad row failed EVERY row in the domain — the 2026-07-18 data loss at
+// the top of this file. The danger in fixing it is that the full-list push was
+// accidentally self-healing (every save re-sent everything, so a failed row got
+// another chance), so these tests care as much about what STAYS in the delta as
+// about what leaves it.
+describe("_deltaRows / _markSynced", () => {
+  const T = "persona_plans";
+  const row = (id, v) => ({ id, gym_id: "g1", title: v });
+  beforeEach(() => localStorage.removeItem("jungle_synced_rows"));
+
+  it("sends everything when the server has confirmed nothing", () => {
+    const rows = [row("a", 1), row("b", 2)];
+    expect(_deltaRows(T, rows)).toEqual(rows);
+  });
+
+  it("sends nothing when every row is unchanged — the common re-save", () => {
+    const rows = [row("a", 1), row("b", 2)];
+    _markSynced(T, rows, rows);
+    expect(_deltaRows(T, rows)).toEqual([]);
+  });
+
+  it("sends ONLY the row that changed", () => {
+    const rows = [row("a", 1), row("b", 2), row("c", 3)];
+    _markSynced(T, rows, rows);
+    const edited = [rows[0], { ...rows[1], title: 99 }, rows[2]];
+    expect(_deltaRows(T, edited)).toEqual([{ id: "b", gym_id: "g1", title: 99 }]);
+  });
+
+  it("sends a newly added row and nothing else", () => {
+    const rows = [row("a", 1)];
+    _markSynced(T, rows, rows);
+    expect(_deltaRows(T, [rows[0], row("b", 2)])).toEqual([row("b", 2)]);
+  });
+
+  it("notices a change to any mapped field, not just the visible one", () => {
+    const rows = [row("a", 1)];
+    _markSynced(T, rows, rows);
+    // Same id, same title, different gym — must not be mistaken for synced.
+    expect(_deltaRows(T, [{ id: "a", gym_id: "g2", title: 1 }])).toHaveLength(1);
+  });
+
+  // THE self-healing property. A push that failed is never marked, so it must
+  // still be in the next delta — otherwise a transient Wi-Fi blip becomes
+  // permanent divergence, which is strictly worse than the whole-list push.
+  it("keeps an unconfirmed row in the delta forever until it is confirmed", () => {
+    const ok = row("a", 1), failed = row("b", 2);
+    _markSynced(T, [ok], [ok, failed]);          // only `a` came back clean
+    expect(_deltaRows(T, [ok, failed])).toEqual([failed]);
+    // ...and it is still there on the save after that, and the one after.
+    expect(_deltaRows(T, [ok, failed])).toEqual([failed]);
+    _markSynced(T, [failed], [ok, failed]);      // the retry finally lands
+    expect(_deltaRows(T, [ok, failed])).toEqual([]);
+  });
+
+  it("keeps each table's marks separate", () => {
+    const rows = [row("a", 1)];
+    _markSynced(T, rows, rows);
+    expect(_deltaRows("members", rows)).toEqual(rows);
+  });
+
+  it("drops marks for rows deleted locally, so the map cannot grow forever", () => {
+    const rows = [row("a", 1), row("b", 2)];
+    _markSynced(T, rows, rows);
+    _markSynced(T, [], [rows[0]]);               // `b` deleted
+    const marks = JSON.parse(localStorage.getItem("jungle_synced_rows"))[T];
+    expect(Object.keys(marks)).toEqual(["a"]);
+  });
+
+  // A re-added id must not inherit the dead row's mark and skip its push.
+  it("re-sends an id that was deleted and later came back with new content", () => {
+    const a = row("a", 1);
+    _markSynced(T, [a], [a]);
+    _markSynced(T, [], []);                      // deleted
+    expect(_deltaRows(T, [row("a", 7)])).toHaveLength(1);
+  });
+
+  // The nastier version of the same case: deleted, then re-added with IDENTICAL
+  // content. The fingerprint matches the dead row's mark, so without _unmark the
+  // row looks synced and the server stays permanently missing it. _bgDelete calls
+  // this for every id-keyed delete.
+  it("re-sends an id that was deleted and came back byte-identical", () => {
+    const a = row("a", 1);
+    _markSynced(T, [a], [a]);
+    expect(_deltaRows(T, [a])).toEqual([]);       // synced, as far as we know
+    _unmark(T, "a");                             // what _bgDelete does
+    expect(_deltaRows(T, [a])).toEqual([a]);      // ...and now it must go again
+  });
+
+  it("unmarking an absent table or id is a no-op, not a throw", () => {
+    expect(() => _unmark("nope", "x")).not.toThrow();
+    _markSynced(T, [row("a", 1)], [row("a", 1)]);
+    expect(() => _unmark(T, "missing")).not.toThrow();
+    expect(_deltaRows(T, [row("a", 1)])).toEqual([]);
+  });
+
+  it("survives a missing or malformed list", () => {
+    expect(_deltaRows(T, null)).toEqual([]);
+    expect(_deltaRows(T, [null, undefined])).toEqual([]);
   });
 });
 
