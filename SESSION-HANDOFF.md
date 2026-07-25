@@ -1,13 +1,61 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-25 (session 9, complete)_
+_Last updated: 2026-07-25 (session 10, complete)_
 
-> **▶ STARTING A NEW SESSION? Paste `SESSION-10-PROMPT.md` as your opening message.**
-> It supersedes `SESSION-9-PROMPT.md` (now history) and carries the full pending list, the
-> blocked-on-Dylan items, and the one defect session 9 found and deliberately deferred.
-> Then read spec **§0's trust ranking** (new in session 9) and **§12**.
-> `main = 9cafaf0`, pushed, tree clean.
-> Gates: **`lint:crash` 0 · 573 unit + 1 todo · 78 e2e · build 648 KB**.
+> **▶ STARTING A NEW SESSION?** `SESSION-10-PROMPT.md` still carries the pending list and the
+> blocked-on-Dylan items; **§3A is now DONE** and two of its three open decisions are settled
+> (see Session 10 below). Then read spec **§0's trust ranking** and **§12**.
+> `main = 224b074`, pushed, tree clean.
+> Gates: **`lint:crash` 0 · 596 unit (no todos) · 78 e2e · build 648 KB**.
+>
+> ⚠️ **That 648 KB is the LOCAL number and it under-reports production by ~37%.** With no
+> `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the real deployed bundle is
+> **~890 KB**. See the I9 measurement below before planning any bundle work.
+
+---
+
+## 🟢 Shipped SESSION 10 — `f4449c1` → `224b074`, 3 commits, all pushed
+
+| Commit | What |
+|---|---|
+| `5e45726` | **§3A — the block label that invented a movement.** `M1 — Deadlift` yielded the label `M1` **and** a phantom exercise "Deadlift", at `confidence: 1`. Over a four-week S360 corpus the derived catalog went **10 movements → 7**; the three removed (Deadlift, Press, Squat) were never on a movement line, and each shadowed the specific movement it came from (Conventional Deadlift, Overhead Press, Back Squat). Also fixed the doubled title ("S360 — S360 — Week 4"). 8 tests; the `it.todo` is gone. |
+| `8de5ed1` | **The Floor board's fabricated pacer (open decision #1, decided).** The board members read mid-class ran on invented constants — 45s/15s, 8 rounds, 180s rotation. Interval stages now take their real phase from `calcIntervalState`; every other stage gets an honest steady state with **no round counter at all**. `FLOOR_PACE` is deleted. 8 pinning tests replaced by 11 honest ones. |
+| `224b074` | **I10 — delta writes.** Six id-keyed domains now push only changed rows instead of the whole list, so one bad row can no longer fail every other row in its domain. 18 tests. |
+
+### What the method turned up this time
+
+- **The phantom fix had a trap worth keeping**: the separator alone is not the signal. If the
+  suffix is the block's **only** movement-shaped content, it IS the movement — dropping it loses
+  the only one the coach wrote, which is worse than the phantom. The decision is deferred until
+  the rest of the block is read.
+- **I10's real risk was invisible until stated**: the full-list push was *accidentally
+  self-healing* — a failed row got another chance on every later save, and every
+  `_RETRY_PUSHERS` thunk leans on that. A row is therefore marked synced **only on server
+  confirmation**, and a test pins exactly that.
+- **Writing those tests found a live hole**: `_bgDelete` removed a row server-side but kept its
+  fingerprint, so deleting a row and re-adding the same id with identical content would look
+  synced and never push. `_bgDelete` now unmarks any id-keyed delete.
+- **The Floor spotlight was not merely fabricated, it contradicted data already in hand.** It
+  cycled stations every 6s while `liveState.idx` held the stage the class was actually on — the
+  FOLLOW badge pointed the room at a station the coach had left.
+
+### 📏 I9 — measured, and the premise was wrong
+
+Production bundle attributed via sourcemap (build with dummy `VITE_SUPABASE_*`, then delete
+`dist/`). **Do not plan I9 off the 648 KB local number.**
+
+| Share | What |
+|---|---|
+| **235 KB (27%)** | `src/App.jsx` — one eager file, the single biggest item |
+| 177 KB (20%) | `react-dom` — unavoidable |
+| **198 KB (23%)** | `@supabase/*` — auth-js 96, realtime-js+phoenix 55, storage-js 22, postgrest 16 |
+| 58 KB (7%) | `src/data/library.js` — pure data |
+| ~22 KB | `src/music/*` — shipped to every device, never runs (`FLAGS.music` false) |
+
+**The headline finding: App.jsx at 235 KB cannot be `React.lazy`'d while it is one file, so I9's
+biggest win is gated behind I6 (decomposition), not on any lazy-loading trick.** The next
+cleanest targets are independent of that: `realtime-js` + `phoenix` (55 KB) is used only by
+`room.js` for Room TV Follow, and `storage-js` (22 KB) appears to be used by nothing at all.
 
 ---
 
