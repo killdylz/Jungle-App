@@ -18,6 +18,7 @@ import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./l
 // recordSession — p6Summary and P6_TARGET_SEC went with the roster too.
 import { recordSession as recordCheckinSession } from "./lib/checkinMetrics.js";
 import { calcIntervalState, floorPacer } from "./lib/intervalTimer.js";
+import { setupProgress, describeSetup } from "./lib/setupProgress.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
@@ -703,6 +704,33 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
   const totalMin = Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60);
   const hasDraft = totalStages>0;
 
+  // ── Cold start (B1) ───────────────────────────────────────────────────────
+  // All four stats above read the SAME empty array on day one, so a brand-new
+  // gym's first impression was "0 · 0.0 · 0 · 0" — four confident numbers saying
+  // nothing (UI-UX §2: "reads as a dead product"). Counts are read from the
+  // store on mount rather than threaded down: the Dashboard is the only consumer
+  // and `hydrateAll` has already landed them in localStorage.
+  //
+  // `stages` is deliberately NOT counted. It seeds from `mkStages()` — a sample
+  // class Jungle invented — so it is non-empty on a fresh install and would tick
+  // "bring in your classes" for a coach who has brought in nothing.
+  const [ownCounts, setOwnCounts] = useState(() => ({
+    classes: store.getPersonaPlans().length + store.getUserClasses().length,
+    members: store.getMembers().length,
+  }));
+  useEffect(() => {
+    let alive = true;
+    store.hydrateAttendance().then(r => {
+      if (alive && r) setOwnCounts(c => ({ ...c, members: (r.members || []).length }));
+    });
+    return () => { alive = false; };
+  }, []);
+  const setup = setupProgress({
+    classes: ownCounts.classes,
+    sessions: sessionHistory.length,
+    members: ownCounts.members,
+  });
+
   const todayAbbrev = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][now.getDay()];
   const todayClasses = getDayClasses(todayAbbrev).slice(0,5);
   const recent = sessionHistory.slice(0,3);
@@ -743,15 +771,67 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
             </div>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:isMobile?"10px":"14px"}}>
-            {stats.map((s,i)=>(
-              <div key={i} style={{...card,padding:isMobile?"14px":"18px"}}>
-                <s.Icon size={18} color="var(--accent)"/>
-                <div style={{fontSize:isMobile?"22px":"28px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)",fontVariantNumeric:"var(--num)",margin:"8px 0 2px"}}>{s.value}</div>
-                <div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px"}}>{s.label}</div>
+          {/* Setup checklist stands where the KPI row goes, and ONLY until there
+              is a class to count. Once the gym is running, the numbers come back
+              and anything still outstanding drops to the single line below them —
+              a cold-start surface, never a nag. */}
+          {setup.showChecklist ? (
+            <div data-testid="setup-checklist" style={{...card,padding:isMobile?"18px":"24px"}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
+                <div style={{fontSize:isMobile?"16px":"18px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Get your studio running</div>
+                <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",fontVariantNumeric:"var(--num)"}}>{setup.done} / {setup.total}</div>
               </div>
-            ))}
-          </div>
+              <p style={{fontSize:"13px",color:"var(--muted)",lineHeight:1.6,marginBottom:"16px"}}>{describeSetup(setup)}</p>
+
+              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                {setup.steps.map((s,i)=>(
+                  <div key={s.key} style={{display:"flex",alignItems:"flex-start",gap:"12px",padding:"12px 0",borderTop:i?"1px solid var(--border)":"none",opacity:s.done?0.62:1}}>
+                    {/* Done is a filled tick; not-done is a numbered ring rather
+                        than an empty box, so the order reads as a sequence. */}
+                    <div style={{flexShrink:0,width:"24px",height:"24px",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                                 background:s.done?"var(--green)":"transparent",border:s.done?"none":"1px solid var(--border)",
+                                 color:s.done?"var(--on-green)":"var(--muted)",fontSize:"11px",fontWeight:"800",marginTop:"1px"}}>
+                      {s.done ? <Check size={13}/> : i+1}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",textDecoration:s.done?"line-through":"none"}}>{s.title}</div>
+                      {!s.done && <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.55,marginTop:"3px"}}>{s.body}</p>}
+                    </div>
+                    {!s.done && (
+                      <button onClick={()=>onNavigate(s.view)} style={{flexShrink:0,padding:"7px 13px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
+                                     border:"1px solid var(--border)",background:s.key===setup.nextStep?.key?"var(--accent)":"transparent",
+                                     color:s.key===setup.nextStep?.key?"var(--on-accent)":"var(--text)"}}>
+                        {s.cta}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:isMobile?"10px":"14px"}}>
+                {stats.map((s,i)=>(
+                  <div key={i} style={{...card,padding:isMobile?"14px":"18px"}}>
+                    <s.Icon size={18} color="var(--accent)"/>
+                    <div style={{fontSize:isMobile?"22px":"28px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)",fontVariantNumeric:"var(--num)",margin:"8px 0 2px"}}>{s.value}</div>
+                    <div style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px"}}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              {setup.nextStep && (
+                <div data-testid="setup-nudge" style={{...card,padding:isMobile?"12px 14px":"14px 18px",display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:"180px"}}>
+                    <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>Still to do</div>
+                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginTop:"2px"}}>{setup.nextStep.title}</div>
+                  </div>
+                  <button onClick={()=>onNavigate(setup.nextStep.view)} style={{flexShrink:0,padding:"7px 13px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",border:"1px solid var(--border)",background:"transparent",color:"var(--accent)"}}>
+                    {setup.nextStep.cta}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
 
           <div style={{display:"grid",gridTemplateColumns:isNarrow?"1fr":"1.4fr 1fr",gap:isMobile?"14px":"20px"}}>
             <div style={{...card,padding:"18px"}}>
