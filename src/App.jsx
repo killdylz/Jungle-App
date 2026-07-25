@@ -11,6 +11,8 @@ import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./dat
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "./lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "./lib/movementTaxonomy.js";
 import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "./lib/blueprints.js";
+import { GENERATION_PRESETS, applyPreset, presetDraftOpts, describePresetEffect,
+         presetDraftTitle } from "./lib/generationPresets.js";
 import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPresentations, fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "./lib/slidesImport.js";
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "./lib/planParser.js";
 // csvImport, retention and winback are no longer imported here at all: RosterScreen
@@ -4115,8 +4117,15 @@ function planToStages(plan) {
       return { n: ex.name || "Movement", s: sc.sets != null ? String(sc.sets) : "",
                r: reps, rest: restLabel, notes };
     });
+    // A block that states its own length wins; the per-role default is the
+    // fallback for parsed plans, which carry no duration at all (blocks have
+    // none — only occasional prose in scheme.note hints at one, and parsing that
+    // would be a guess dressed as data). A blueprint-drafted block DOES state
+    // one, and it is the coach's own number from the class shape.
+    const dur = Number(b.minutes) > 0 ? Math.round(Number(b.minutes) * 60)
+                                      : (ROLE_DUR_SEC[b.role] || 600);
     return { id: uid(), type: ROLE_TO_STAGE[b.role] || "circuit",
-             name: b.label || "Block", dur: ROLE_DUR_SEC[b.role] || 600,
+             name: b.label || "Block", dur,
              exercises, tracks: [] };
   });
 }
@@ -4520,11 +4529,24 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   // Deterministic drafting from the coach's shape — no model involved. The
   // structure is theirs, the movements are theirs, the selection is arithmetic
   // (§9.3). Unlike generateForCT this works with Supabase off.
-  const draftFromShape = () => {
+  //
+  // D4: a preset is an optional NAMED INTENT layered on top ("heavier day",
+  // "short class"). It transforms a COPY of the shape and never the shape
+  // itself — pressing "try heavier this week" must not rewrite the format the
+  // coach has used for years. See generationPresets.js.
+  const draftFromShape = (arg = null) => {
     if (!blueprint) return;
-    const { blocks } = draftFromBlueprint(blueprint, ctMoves, { classType: curCT, recent: recentGens });
+    // A preset, or nothing. Anything else — most plausibly a MouseEvent from a
+    // handler passed bare — is treated as "no preset" rather than read for
+    // fields it does not have. Cheap, and this component hands `draftFromShape`
+    // straight to a Btn.
+    const preset = arg && typeof arg.key === "string" && typeof arg.name === "string" ? arg : null;
+    const shaped = preset ? applyPreset(blueprint, preset) : blueprint;
+    const opts = preset ? presetDraftOpts(preset, { classType: curCT, recent: recentGens })
+                        : { classType: curCT, recent: recentGens };
+    const { blocks } = draftFromBlueprint(shaped, ctMoves, opts);
     if (!blocks.length) return;
-    const label = `${curCT} — from your class shape`;
+    const label = presetDraftTitle(curCT, preset);
     setGenerations(store.appendPersonaGeneration({ personaId: selectedId, classType: curCT, category,
       title: label, focus: "", brief: {}, movements: blockMovementNames(blocks), plan: { blocks } }));
     onDraftToBuilder(planToStages({ blocks }), label, builderClass);
@@ -5037,22 +5059,63 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>
                     {showGen && (
-                      <div style={{marginBottom:"14px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
-                        <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>New {curCT} class — brief</p>
-                        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:"8px",marginBottom:"8px"}}>
-                          <Input placeholder="Focus — e.g. Deadlift · Engine · Upper hypertrophy" value={brief.focus} onChange={e=>setBrief(b=>({...b,focus:e.target.value}))}/>
-                          <Input placeholder="Duration (min)" type="number" value={brief.durationMin} onChange={e=>setBrief(b=>({...b,durationMin:e.target.value}))}/>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
-                          <Input placeholder="Week X (periodized, optional)" type="number" value={brief.weekX} onChange={e=>setBrief(b=>({...b,weekX:e.target.value}))}/>
-                          <Input placeholder="of N weeks (optional)" type="number" value={brief.weekN} onChange={e=>setBrief(b=>({...b,weekN:e.target.value}))}/>
-                        </div>
+                      <div data-testid="gen-panel" style={{marginBottom:"14px",padding:"14px",background:"var(--navy)",borderRadius:"10px",border:"1px solid var(--border)"}}>
+                        {/* D4 — pick, never prompt (§9.3). Each card drafts on
+                            the spot from the coach's own shape and movements:
+                            no model, no network, and the same click twice gives
+                            the same class. The effect line under each name is
+                            what this asks the coach to trust — a preset that
+                            cannot say what it changes is a prompt with a nicer
+                            name. Only shown when there IS a shape to transform;
+                            without one there is nothing honest to promise. */}
+                        {blueprint && (
+                          <>
+                            <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>New {curCT} class — pick one</p>
+                            <div data-testid="gen-presets" style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(190px,1fr))",gap:"8px",marginBottom:"12px"}}>
+                              {GENERATION_PRESETS.map(p => {
+                                const effect = describePresetEffect(p, blueprint);
+                                return (
+                                  <button key={p.key} onClick={()=>draftFromShape(p)}
+                                    style={{textAlign:"left",padding:"11px 13px",borderRadius:"9px",border:"1px solid var(--border)",
+                                            background:"var(--card)",cursor:"pointer"}}>
+                                    <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"3px"}}>{p.name}</div>
+                                    <div style={{fontSize:"11px",color:"var(--muted)",lineHeight:"1.45"}}>{p.body}</div>
+                                    {effect && <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",marginTop:"5px",letterSpacing:"0.3px"}}>{effect}</div>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {ctMoves.length === 0 && (
+                              <p style={{fontSize:"11px",color:"#E0B85B",marginBottom:"10px",lineHeight:"1.5"}}>
+                                No movements saved for {curCT} yet, so these open the class named and timed with the sections empty — ready to fill from the Library.
+                              </p>
+                            )}
+                          </>
+                        )}
+
+                        {/* The written brief survives, demoted. It is the only
+                            way to ask for something the presets do not cover,
+                            and it is the path that needs the model — so it is no
+                            longer what a coach meets first. */}
+                        <details>
+                          <summary style={{cursor:"pointer",fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:"8px"}}>
+                            {blueprint ? "…or write a brief" : `New ${curCT} class — brief`}
+                          </summary>
+                          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:"8px",margin:"8px 0"}}>
+                            <Input placeholder="Focus — e.g. Deadlift · Engine · Upper hypertrophy" value={brief.focus} onChange={e=>setBrief(b=>({...b,focus:e.target.value}))}/>
+                            <Input placeholder="Duration (min)" type="number" value={brief.durationMin} onChange={e=>setBrief(b=>({...b,durationMin:e.target.value}))}/>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                            <Input placeholder="Week X (periodized, optional)" type="number" value={brief.weekX} onChange={e=>setBrief(b=>({...b,weekX:e.target.value}))}/>
+                            <Input placeholder="of N weeks (optional)" type="number" value={brief.weekN} onChange={e=>setBrief(b=>({...b,weekN:e.target.value}))}/>
+                          </div>
+                          <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center",flexWrap:"wrap"}}>
+                            <Btn onClick={generateForCT} disabled={genBusy}>{genBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {genBusy ? "Generating…" : "Generate in style"}</Btn>
+                            <Btn variant="ghost" onClick={draftFromRecent}><Layers size={13}/> Draft from recent</Btn>
+                          </div>
+                          <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Grounded on this coach's {curCT} structure, schemes and movement vocabulary. Opens as an editable draft in the Builder.</p>
+                        </details>
                         {genErr && <p style={{fontSize:"12px",color:"var(--accent)",margin:"8px 0 0"}}>{genErr}</p>}
-                        <div style={{display:"flex",gap:"8px",marginTop:"10px",alignItems:"center"}}>
-                          <Btn onClick={generateForCT} disabled={genBusy}>{genBusy ? <Loader size={14} style={{animation:"spin 1s linear infinite"}}/> : <Zap size={14}/>} {genBusy ? "Generating…" : "Generate in style"}</Btn>
-                          <Btn variant="ghost" onClick={draftFromRecent}><Layers size={13}/> Draft from recent</Btn>
-                        </div>
-                        <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"8px",lineHeight:"1.5"}}>Grounded on this coach's {curCT} structure, schemes and movement vocabulary. Opens as an editable draft in the Builder.</p>
                       </div>
                     )}
                     <PersonaProfilePanel prof={prof} extracted={extracted}/>
@@ -5218,7 +5281,9 @@ function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable, empt
         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{classType} — class shape</p>
         {!editing && (
           <div style={{display:"flex",gap:"8px"}}>
-            {draftable && <Btn variant="ghost" onClick={onDraft} style={{padding:"6px 12px"}}
+            {/* Wrapped, NOT passed bare: `onDraft` now takes an optional preset,
+                and a bare handler hands it a MouseEvent instead. */}
+            {draftable && <Btn variant="ghost" onClick={()=>onDraft()} style={{padding:"6px 12px"}}
               title={emptyCatalog ? "Opens this shape in the Builder with the sections named and timed, ready to fill" : "Fill this shape with this coach's own movements"}>
               <Layers size={13}/> {emptyCatalog ? "Start a class from this shape" : "Draft from this shape"}</Btn>}
             <Btn variant="ghost" onClick={start} style={{padding:"6px 12px"}}>Change</Btn>

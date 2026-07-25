@@ -283,6 +283,34 @@ describe("draftFromBlueprint", () => {
     expect(blocks[1].exercises.map(e => e.name)).toEqual(["Back Squat", "Deadlift"]);
   });
 
+  // Found by driving a "short class" preset through the real Builder: the class
+  // came back the SAME length as the full one, because the slot's minutes were
+  // dropped here and planToStages fell through to a per-role default. The coach
+  // has always been able to set a slot's minutes in the class shape card — the
+  // number simply reached nothing.
+  it("carries each slot's own length onto the block", () => {
+    const timed = { classType: "S360", slots: [
+      { key: "W",  label: "Warm-up", role: "warmup",       minutes: 8,  movementCount: 1, categories: ["warmup"] },
+      { key: "M1", label: "Main",    role: "primary_lift", minutes: 18, movementCount: 1, categories: ["strength"] },
+    ] };
+    const { blocks } = draftFromBlueprint(timed, catalog);
+    expect(blocks.map(b => b.minutes)).toEqual([8, 18]);
+  });
+
+  it("omits minutes entirely when the slot has none, so parsed plans are unaffected", () => {
+    const { blocks } = draftFromBlueprint(bp, catalog);
+    for (const b of blocks) expect("minutes" in b).toBe(false);
+  });
+
+  it("ignores a zero or nonsense length rather than emitting a zero-second block", () => {
+    const bad = { classType: "S360", slots: [
+      { key: "W", label: "Warm-up", role: "warmup", minutes: 0,    movementCount: 1, categories: ["warmup"] },
+      { key: "X", label: "Odd",     role: "circuit", minutes: "abc", movementCount: 1, categories: ["conditioning"] },
+    ] };
+    const { blocks } = draftFromBlueprint(bad, catalog);
+    for (const b of blocks) expect("minutes" in b).toBe(false);
+  });
+
   it("respects the slot's movement count and keeps the coach's structure", () => {
     const { blocks } = draftFromBlueprint(bp, catalog);
     expect(blocks).toHaveLength(2);

@@ -222,6 +222,12 @@ export function draftFromBlueprint(blueprint, catalog = [], opts = {}) {
     return {
       label: s.label || s.key,
       role: s.role || "circuit",
+      // The slot's own length rides along. Without it the coach's minutes were
+      // write-only: ClassShapeCard has always let them set a warm-up to 8
+      // minutes, and the drafted class came back with the house 5 because
+      // planToStages fell through to a per-role default. A block that carries no
+      // minutes still does, so parsed plans are unaffected.
+      ...(Number(s.minutes) > 0 ? { minutes: Number(s.minutes) } : {}),
       scheme: s.schemeDefault ? { type: s.schemeDefault } : {},
       exercises: picked.map(m => ({ name: m.name, equip: m.equip || "", reps: "" })),
     };
