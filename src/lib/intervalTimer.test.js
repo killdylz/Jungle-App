@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcIntervalState, floorPacer, FLOOR_PACE } from "./intervalTimer.js";
+import { calcIntervalState, floorPacer } from "./intervalTimer.js";
 
 // The Runner's live interval sub-timer. Every number below is what a coach and a
 // room would see counting down, so each is stated as an exact expectation rather
@@ -112,51 +112,79 @@ describe("calcIntervalState — degenerate inputs are clamped, not crashed", () 
   });
 });
 
-// The Floor board's ambient pacer. These pin the CURRENT (fixed-cadence) behaviour
-// verbatim — 45s work / 15s rest / 8 rounds, 180s rotation, spotlight every 6s. If
-// the "fabricated pacer" decision (SESSION-HANDOFF.md) makes it plan-derived, these
-// are the tests that will change with it; until then they stop it drifting silently.
-describe("floorPacer — fixed work/rest/rotation cadence", () => {
-  const { roundLen, restLen, rounds, rotateEverySec } = FLOOR_PACE; // 45/15/8/180
+// The Floor board faces the room. Everything it shows is read by members mid-class,
+// so the rule here is the one the "No tracks" and "coming soon" panels were cut
+// under: an honest blank beats a confident wrong number. It used to run on fixed
+// cadences (45s/15s, 8 rounds, 180s rotation) that came from nothing in the plan.
+describe("floorPacer — an interval stage gets its REAL phase", () => {
+  const stage = { name: "Tabata Block", dur: 600, exercises: [{ n: "Burpees", timing: "tabata", workSec: 20, restSec: 10, rounds: 8 }] };
 
-  it("opens in WORK with the full round on the clock, round 1", () => {
-    expect(floorPacer(0, 5)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 1, rounds });
+  it("takes work/rest from the coach's plan, not a fixed 45/15", () => {
+    expect(floorPacer(stage, 0)).toMatchObject({ mode: "interval", phase: "WORK", phaseRemaining: 20, currentRound: 1, rounds: 8 });
+    // At 20s the old fixed pacer was still in WORK with 25s left. The plan says REST.
+    expect(floorPacer(stage, 20)).toMatchObject({ phase: "REST", phaseRemaining: 10, currentRound: 1 });
+    expect(floorPacer(stage, 30)).toMatchObject({ phase: "WORK", currentRound: 2 });
   });
 
-  it("counts work down and flips to REST exactly at the work boundary", () => {
-    expect(floorPacer(44, 5)).toMatchObject({ phase: "WORK", phaseRemaining: 1 });
-    expect(floorPacer(45, 5)).toMatchObject({ phase: "REST", phaseRemaining: restLen });
-    expect(floorPacer(59, 5)).toMatchObject({ phase: "REST", phaseRemaining: 1 });
+  it("reports the round count the plan states", () => {
+    const short = { dur: 300, exercises: [{ n: "Row", timing: "tabata", workSec: 30, restSec: 15, rounds: 3 }] };
+    expect(floorPacer(short, 0)).toMatchObject({ rounds: 3, currentRound: 1 });
   });
 
-  it("rolls into the next round at the 60s cycle boundary", () => {
-    expect(floorPacer(60, 5)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 2 });
+  it("still counts the stage itself down alongside the phase", () => {
+    expect(floorPacer(stage, 60).stageRemaining).toBe(540);
+  });
+});
+
+describe("floorPacer — a non-interval stage says nothing it cannot know", () => {
+  const stage = { name: "Strength", dur: 480, exercises: [{ n: "Back Squat" }] };
+
+  it("reports no phase and no rounds at all", () => {
+    const s = floorPacer(stage, 100);
+    expect(s.mode).toBe("steady");
+    // The whole point: a room on a strength block sees no fabricated WORK/REST.
+    expect(s.phase).toBeNull();
+    expect(s.phaseRemaining).toBeNull();
+    expect(s.currentRound).toBeNull();
+    expect(s.rounds).toBeNull();
   });
 
-  it("caps the round counter at the configured total", () => {
-    // 8 rounds * 60s = 480s; anything at or past that stays at round 8.
-    expect(floorPacer(480, 5).currentRound).toBe(rounds);
-    expect(floorPacer(6000, 5).currentRound).toBe(rounds);
+  it("counts down the one thing it does know — this stage", () => {
+    expect(floorPacer(stage, 0).stageRemaining).toBe(480);
+    expect(floorPacer(stage, 479).stageRemaining).toBe(1);
   });
 
-  it("counts the 180s station rotation down and wraps", () => {
-    expect(floorPacer(0, 5).rotateRemaining).toBe(rotateEverySec);
-    expect(floorPacer(179, 5).rotateRemaining).toBe(1);
-    expect(floorPacer(180, 5).rotateRemaining).toBe(rotateEverySec); // wrapped
+  it("never runs the stage countdown past zero", () => {
+    expect(floorPacer(stage, 999).stageRemaining).toBe(0);
   });
 
-  it("moves the spotlight one station every 6s, wrapping on the station count", () => {
-    expect(floorPacer(0, 5).spotlight).toBe(0);
-    expect(floorPacer(6, 5).spotlight).toBe(1);
-    expect(floorPacer(30, 5).spotlight).toBe(0); // 5 stations → back to the first
+  it("treats an exercise with timing 'none' as untimed", () => {
+    expect(floorPacer({ dur: 60, exercises: [{ n: "Row", timing: "none" }] }, 0).mode).toBe("steady");
   });
 
-  it("does not divide by a zero station count", () => {
-    expect(floorPacer(42, 0).spotlight).toBe(0);
+  it("goes steady once a finished interval block is spent", () => {
+    // A default Tabata owns 0-239. Past that there is no phase left to show, and
+    // inventing one is exactly the bug this replaced.
+    const s = floorPacer({ dur: 600, exercises: [{ n: "Burpees", timing: "tabata" }] }, 240);
+    expect(s).toMatchObject({ mode: "steady", phase: null });
+  });
+});
+
+describe("floorPacer — guards", () => {
+  it("survives a missing stage", () => {
+    expect(floorPacer(null, 10)).toMatchObject({ mode: "steady", phase: null, stageRemaining: null });
+    expect(floorPacer(undefined, 0).mode).toBe("steady");
+  });
+
+  it("reports an unknown stage length as null rather than zero", () => {
+    // null means "we don't know", and the board hides the countdown. Zero would
+    // read as "this stage is over", which is a different and wrong claim.
+    expect(floorPacer({ exercises: [] }, 10).stageRemaining).toBeNull();
   });
 
   it("treats a negative or missing clock as zero", () => {
-    expect(floorPacer(-5, 3)).toMatchObject({ phase: "WORK", phaseRemaining: roundLen, currentRound: 1 });
-    expect(floorPacer(undefined, 3).phase).toBe("WORK");
+    expect(floorPacer({ dur: 100 }, -5).stageRemaining).toBe(100);
+    expect(floorPacer({ dur: 100 }, undefined).stageRemaining).toBe(100);
   });
 });
+

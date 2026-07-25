@@ -3603,8 +3603,21 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
   const elapsed = liveState.elapsed||0;
-  // Ambient floor pacer (fixed cadences today — see floorPacer / the honesty note).
-  const { phase, phaseRemaining, currentRound, rounds, rotateRemaining, spotlight } = floorPacer(elapsed, floor.length);
+  // The real pace of the stage the room is actually on — see floorPacer. `elapsed`
+  // is elapsed WITHIN this stage, which is what the interval maths expects.
+  const stage = stages[liveState.idx] || null;
+  const { mode, phase, phaseRemaining, currentRound, rounds, stageRemaining } = floorPacer(stage, elapsed);
+  const isInterval = mode === "interval";
+  const isWork = isInterval && phase === "WORK";
+  // Highlight the stage that is LIVE. This used to cycle every 6s regardless of
+  // where the class actually was, so the FOLLOW badge told the room to follow a
+  // station the coach had already left — using data this component already had.
+  // A live stage past the 5 the board shows highlights nothing, rather than lying.
+  const spotlight = (liveState.idx||0) < floor.length ? (liveState.idx||0) : -1;
+  // What the big number means. Interval stages count the work/rest phase down;
+  // everything else counts THIS STAGE down, and says so.
+  const bigLabel = isInterval ? phase : (stageRemaining!=null ? "TIME LEFT" : "ELAPSED");
+  const bigSec   = isInterval ? phaseRemaining : (stageRemaining!=null ? stageRemaining : elapsed);
   const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(Math.max(0,s)%60)).padStart(2,"0")}`;
   const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
   const panel = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"16px"};
@@ -3620,16 +3633,23 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
       </div>
 
       <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"20px",flexWrap:"wrap",background:"linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), var(--card))"}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:"14px"}}>
-          <div style={{fontSize:tvFont(24),fontWeight:"800",letterSpacing:"2px",color:phase==="WORK"?"var(--accent)":"var(--muted)"}}>{phase}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:"14px",flexWrap:"wrap"}}>
+          <div style={{fontSize:tvFont(24),fontWeight:"800",letterSpacing:"2px",color:isWork?"var(--accent)":"var(--muted)"}}>{bigLabel}</div>
           {/* PRIMARY member-facing element on the floor board. At the old fixed
               84px it was 7.8% of a 1080p wall — already under the Fable §3 8% floor
               — and half that on 4K. tvFont(96) holds ~8.9% of height on both. */}
-          <div style={{fontFamily:"var(--display)",fontSize:tvFont(96),fontWeight:"900",lineHeight:"0.9",color:phase==="WORK"?"var(--text)":"var(--muted)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(phaseRemaining)}</div>
+          <div style={{fontFamily:"var(--display)",fontSize:tvFont(96),fontWeight:"900",lineHeight:"0.9",color:(isInterval&&!isWork)?"var(--muted)":"var(--text)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(bigSec)}</div>
+          {stage?.name && <div style={{fontSize:"14px",fontWeight:"700",color:"var(--muted)"}}>{stage.name}</div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"8px",alignItems:"flex-end"}}>
-          <div style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)"}}>ROUND <span style={{color:"var(--text)"}}>{currentRound}</span>/{rounds}</div>
-          <div style={{display:"flex",gap:"4px"}}>{Array.from({length:rounds}).map((_,i)=><div key={i} style={{width:"14px",height:"6px",borderRadius:"3px",background:i<currentRound?"var(--accent)":"var(--navy)"}}/>)}</div>
+          {/* Rounds are shown ONLY when the coach's own plan states them. A fixed
+              "ROUND 3/8" on a class with no rounds is a number the room believes. */}
+          {isInterval && (
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--muted)"}}>ROUND <span style={{color:"var(--text)"}}>{currentRound}</span>/{rounds}</div>
+          )}
+          {isInterval && (
+            <div style={{display:"flex",gap:"4px"}}>{Array.from({length:rounds}).map((_,i)=><div key={i} style={{width:"14px",height:"6px",borderRadius:"3px",background:i<currentRound?"var(--accent)":"var(--navy)"}}/>)}</div>
+          )}
           <div style={{fontSize:"12px",color:"var(--muted)"}}>Elapsed {fmt(elapsed)}</div>
         </div>
       </div>
@@ -3659,7 +3679,12 @@ function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0},
 
       <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"center",gap:"18px",flexWrap:"wrap"}}>
         <div style={{fontSize:"12px",fontWeight:"800",color:"var(--muted)",letterSpacing:"2px"}}>THE LOOP</div>
-        <div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"var(--text)"}}>Rotate in <span style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"800",color:"var(--accent)",fontVariantNumeric:"var(--num)"}}>{fmt(rotateRemaining)}</span></div>
+        {/* The stations ARE the stages, so the room moves on when the stage does —
+            that is the only rotation moment the plan actually expresses. The old
+            fixed 180s countdown told the floor to rotate on a cadence nothing set. */}
+        {stageRemaining!=null && (
+          <div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"var(--text)"}}>Next station in <span style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"800",color:"var(--accent)",fontVariantNumeric:"var(--num)"}}>{fmt(stageRemaining)}</span></div>
+        )}
         <div style={{fontSize:"12px",color:"var(--muted)"}}>clockwise · {floor.length} stations</div>
       </div>
 

@@ -12,27 +12,42 @@
 // of whichever timed exercise is live — or null when none is (no timed exercises,
 // or the elapsed time is past the last one, or elapsed is missing/negative).
 
-// ── Floor board ambient pacer (CURRENT behaviour, pinned) ────────────────────
-// The live Floor board ("STUDIO FLOOR · LIVE") shows a WORK/REST countdown, a
-// round counter, a station-rotation timer and a moving station spotlight. Today
-// these come from FIXED cadences — 45s work / 15s rest, 8 rounds, 180s rotation,
-// spotlight every 6s — NOT from the coach's actual plan. That is a live
-// member-facing-honesty question flagged for Dylan (see "fabricated pacer" in
-// SESSION-HANDOFF.md). This function pins the current maths verbatim so it is
-// testable now, and so whichever way that decision lands there is a clean, covered
-// seam to change (e.g. feed it calcIntervalState's phase for interval stages).
-export const FLOOR_PACE = { roundLen: 45, restLen: 15, rounds: 8, rotateEverySec: 180, spotlightEverySec: 6 };
-
-export function floorPacer(elapsed, stationCount, cfg = FLOOR_PACE) {
+// ── Floor board pacer ────────────────────────────────────────────────────────
+// The live Floor board ("STUDIO FLOOR · LIVE") faces the room — members read it
+// mid-class. It used to show a WORK/REST countdown, a round counter and a station
+// rotation timer driven by FIXED cadences (45s work / 15s rest, 8 rounds, 180s
+// rotation, spotlight every 6s) that had nothing to do with the coach's plan. On a
+// non-interval class the room was reading a fabricated clock — the same
+// member-facing-honesty problem that got the "No tracks" and "coming soon" panels
+// cut. Dylan's call was to feed it the real phase and be honest otherwise.
+//
+// So: a stage whose exercises carry a real Tabata/EMOM timing gets its real phase,
+// from the same calcIntervalState the Runner already uses. Every other stage gets
+// an honest steady state — the stage's own countdown and no invented rounds.
+//
+// `elapsed` is elapsed WITHIN the current stage (the Runner resets it on every
+// stage change), which is exactly what calcIntervalState expects.
+export function floorPacer(stage, elapsed) {
   const e = Math.max(0, elapsed || 0);
-  const cycle = cfg.roundLen + cfg.restLen;
-  const inCycle = e % cycle;
-  const phase = inCycle < cfg.roundLen ? "WORK" : "REST";
-  const phaseRemaining = phase === "WORK" ? cfg.roundLen - inCycle : cycle - inCycle;
-  const currentRound = Math.min(cfg.rounds, Math.floor(e / cycle) + 1);
-  const rotateRemaining = cfg.rotateEverySec - (e % cfg.rotateEverySec);
-  const spotlight = stationCount ? Math.floor(e / cfg.spotlightEverySec) % stationCount : 0;
-  return { phase, phaseRemaining, currentRound, rounds: cfg.rounds, rotateRemaining, spotlight };
+  const dur = Math.max(0, Number(stage?.dur) || 0);
+  // Real: how long this stage has left. This is also the only honest answer to
+  // "when do we rotate?" — the room moves on when the stage does, and nothing in
+  // the plan expresses a rotation cadence independent of that.
+  const stageRemaining = dur ? Math.max(0, dur - e) : null;
+  const iv = calcIntervalState(stage?.exercises, e);
+  if (iv) {
+    return {
+      mode: "interval",
+      phase: iv.phase, phaseRemaining: iv.phaseRemaining,
+      currentRound: iv.round, rounds: iv.totalRounds,
+      exName: iv.exName, stageRemaining,
+    };
+  }
+  return {
+    mode: "steady",
+    phase: null, phaseRemaining: null, currentRound: null, rounds: null,
+    exName: "", stageRemaining,
+  };
 }
 
 export function calcIntervalState(exercises, elapsed) {
