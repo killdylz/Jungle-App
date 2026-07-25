@@ -5,8 +5,8 @@ _Last updated: 2026-07-25 (session 10, complete)_
 > **▶ STARTING A NEW SESSION?** `SESSION-10-PROMPT.md` still carries the pending list and the
 > blocked-on-Dylan items; **§3A is now DONE** and two of its three open decisions are settled
 > (see Session 10 below). Then read spec **§0's trust ranking** and **§12**.
-> `main = 224b074`, pushed, tree clean.
-> Gates: **`lint:crash` 0 · 596 unit (no todos) · 78 e2e · build 648 KB**.
+> `main = e8f450d`, pushed, tree clean.
+> Gates: **`lint:crash` 0 · 607 unit (no todos) · 78 e2e · build 648 KB**.
 >
 > ⚠️ **That 648 KB is the LOCAL number and it under-reports production by ~37%.** With no
 > `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the real deployed bundle is
@@ -14,13 +14,14 @@ _Last updated: 2026-07-25 (session 10, complete)_
 
 ---
 
-## 🟢 Shipped SESSION 10 — `f4449c1` → `224b074`, 3 commits, all pushed
+## 🟢 Shipped SESSION 10 — `f4449c1` → `e8f450d`, 4 commits + handoff, all pushed
 
 | Commit | What |
 |---|---|
 | `5e45726` | **§3A — the block label that invented a movement.** `M1 — Deadlift` yielded the label `M1` **and** a phantom exercise "Deadlift", at `confidence: 1`. Over a four-week S360 corpus the derived catalog went **10 movements → 7**; the three removed (Deadlift, Press, Squat) were never on a movement line, and each shadowed the specific movement it came from (Conventional Deadlift, Overhead Press, Back Squat). Also fixed the doubled title ("S360 — S360 — Week 4"). 8 tests; the `it.todo` is gone. |
 | `8de5ed1` | **The Floor board's fabricated pacer (open decision #1, decided).** The board members read mid-class ran on invented constants — 45s/15s, 8 rounds, 180s rotation. Interval stages now take their real phase from `calcIntervalState`; every other stage gets an honest steady state with **no round counter at all**. `FLOOR_PACE` is deleted. 8 pinning tests replaced by 11 honest ones. |
 | `224b074` | **I10 — delta writes.** Six id-keyed domains now push only changed rows instead of the whole list, so one bad row can no longer fail every other row in its domain. 18 tests. |
+| `e8f450d` | **The rep count that made a new movement every week.** `Wall Ball 15` under an AMRAP kept the count welded to the NAME and dropped it as data. Coaches vary rep counts weekly, so **this one scales with the corpus**: four weeks of GC notation with three real movements produced a catalog of **14** (Wall Ball 12/15/18/20, and the same fan-out for Box Jump and Burpees). Now 5. 11 tests. |
 
 ### What the method turned up this time
 
@@ -38,6 +39,19 @@ _Last updated: 2026-07-25 (session 10, complete)_
 - **The Floor spotlight was not merely fabricated, it contradicted data already in hand.** It
   cycled stations every 6s while `liveState.idx` held the stage the class was actually on — the
   FOLLOW badge pointed the room at a station the coach had left.
+
+### 🧹 The three unswept surfaces from §9.5 — two swept, one still unreachable
+
+| Surface | Result |
+|---|---|
+| **Google Slides import** | **Swept, and it found `e8f450d`.** Every per-function test passed; the COMPOSITION did not. The sweep is now a permanent test in `slidesImport.test.js` that drives a realistic mixed deck (title card, hype quote, two real classes, coach bio) through split → gate → date → parse and asserts on the **stored plans**: both classes kept and the furniture dropped, each filed under its own slide's date, GC's C1/C2/C3 kept as separate stages while S360's A1+A2 folds, and the catalog containing only movements the coach actually wrote. That last assertion is the one that failed. |
+| **Share card** | **Swept, clean — no defect.** Driven in the real UI by recording what the canvas actually draws rather than trusting the model. Gym name resolves from branding; 38 min / 4 sections computed correctly; a movement appearing in two stages is listed **once**; 15 movements render as 12 + "+3 more"; "1 section" is correctly singular; an empty class refuses to draw and says why (nothing drawn, no download, no error boundary). |
+| **Room TV Follow** | **Not reachable from this machine, and it is not a matter of effort.** `room.js` gates every path on `supabaseEnabled` (`room.js:16`), which is false in the local no-credentials build, so the broadcast no-ops. It needs Supabase **and** two devices — it stays in §3D as Dylan's to verify. |
+
+**Note for whoever sweeps next:** the browser console buffer persists across reloads *and across
+dev-server restarts*, so a syntax probe run earlier in a session leaves "Failed to reload" errors
+for every importer of the probed file that look current for the rest of the session. Confirm
+health against the live DOM (all nine screens, error boundary absent), never the console buffer.
 
 ### 📏 I9 — measured, and the premise was wrong
 
