@@ -317,7 +317,24 @@ export function parseExercise(rawLine) {
   // into the movement name — this shipped a catalog entry called "Back Squat 5x5",
   // which aggregates as a different movement from "Back Squat" and silently splits
   // the coach's own history in two.
-  line = clean(line.replace(/\b\d{1,2}\s*[x×]\s*\d{1,3}(?:\s*[-–]\s*\d{1,3})?\b/i, " "));
+  //
+  // The trailing unit clause is the same bug in its TIME form, found by driving a
+  // real deck: "Assault Bike 3x30s" kept every character, because `\b` cannot sit
+  // between `0` and `s`, while "Burpee 3x10" beside it cleaned up perfectly. So
+  // the catalog held "Assault Bike" and "Assault Bike 3x30s" as two movements —
+  // and `draftFromBlueprint` would offer the second one as a movement name in a
+  // class. Only unambiguous time units are accepted: a bare `m` is metres at
+  // least as often as minutes, and TARGET_RE owns distance.
+  line = clean(line.replace(/\b\d{1,2}\s*[x×]\s*\d{1,3}(?:\s*[-–]\s*\d{1,3})?(?:\s*(?:secs?|mins?|s)\b|\b)/i, " "));
+
+  // Intensity qualifiers. `foldScheme` has ALREADY read these into the block's
+  // scheme from this same line, so leaving them here duplicates the fact and
+  // pollutes the name: "Conventional Deadlift 4x5 @RPE8" aggregated as a
+  // different movement from "Conventional Deadlift" while `scheme.rpe` was
+  // already 8. Mirrors the patterns in stripSchemeTokens rather than inventing
+  // new ones, so the two cannot drift.
+  line = clean(line.replace(/@?\bRPE\s*:?\s*\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?/gi, " ")
+                   .replace(/@?\bRIR\s*:?\s*\d+(?:\.\d+)?/gi, " "));
 
   // Target (distance / calories / time cap) — after reps, so "10 Wall Balls" has
   // already taken its count and cannot re-read it here.

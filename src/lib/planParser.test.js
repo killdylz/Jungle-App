@@ -351,6 +351,63 @@ A2 Chest Supported Row 12-10-10-8
       });
     });
   });
+
+  // ── Session 9: found by pasting a real-shaped deck through the UI ──────────
+  // The movement NAME is the aggregation key for the whole persona thesis: the
+  // catalog, the derived blueprint's categories, and what draftFromBlueprint
+  // picks from. Anything left clinging to a name splits one movement into two
+  // and neither half has the coach's full history.
+  it("strips a TIME-suffixed rep count out of the movement name", () => {
+    const r = parsePlanText("S360\nC1\nAssault Bike 3x30s\nBurpee 3x10");
+    const c1 = r.plan.blocks.find(b => b.label === "C1");
+    // "Burpee 3x10" always cleaned up; "Assault Bike 3x30s" kept every
+    // character, because `\b` cannot sit between `0` and `s`. The catalog then
+    // held "Assault Bike" and "Assault Bike 3x30s" as two different movements.
+    expect(c1.exercises.map(e => e.name)).toEqual(["Assault Bike", "Burpee"]);
+  });
+
+  it("accepts the spelled-out time units too", () => {
+    const names = t => parsePlanText(`S360\nC1\n${t}`).plan.blocks[0].exercises.map(e => e.name);
+    expect(names("Row 3x30 sec")).toEqual(["Row"]);
+    expect(names("Plank 3x45secs")).toEqual(["Plank"]);
+    expect(names("Ski Erg 4x2min")).toEqual(["Ski Erg"]);
+  });
+
+  // A bare `m` is metres at least as often as minutes, and TARGET_RE owns
+  // distance — so an unrecognised unit must leave the line ALONE rather than
+  // strip half of it and hand back a name like "Farmer Carry kg".
+  it("leaves an unrecognised unit alone rather than half-stripping the name", () => {
+    const r = parsePlanText("S360\nC1\nFarmer Carry 3x30kg");
+    expect(r.plan.blocks[0].exercises[0].name).toBe("Farmer Carry 3x30kg");
+  });
+
+  it("strips an intensity qualifier the block scheme has already recorded", () => {
+    const r = parsePlanText("S360\nM1 — Deadlift\nConventional Deadlift 4x5 @RPE8");
+    const m1 = r.plan.blocks.find(b => b.label === "M1");
+    // Recorded once, in the scheme...
+    expect(m1.scheme.rpe).toBe(8);
+    // ...and not a second time, welded to the movement name.
+    expect(m1.exercises.map(e => e.name)).toContain("Conventional Deadlift");
+    expect(m1.exercises.every(e => !/RPE/i.test(e.name))).toBe(true);
+  });
+
+  it("strips RIR the same way", () => {
+    const r = parsePlanText("S360\nM1\nBack Squat 4x6 RIR 2");
+    expect(r.plan.blocks[0].exercises[0].name).toBe("Back Squat");
+  });
+
+  // ⛔ KNOWN DEFECT, deliberately not fixed here — see SESSION-HANDOFF.
+  // A block header written "M1 — Deadlift" yields the block label `M1` AND a
+  // phantom exercise named "Deadlift", so a block the coach wrote with one
+  // movement comes back with two and the catalog gains a movement that was
+  // never on a movement line. `slotKey()` in blueprints.js already treats
+  // "M1 — Deadlift" as slot M1 plus THIS WEEK'S FOCUS, so the two disagree.
+  //
+  // Not fixed in session 9 because the fix changes block segmentation — the
+  // parser's most delicate path, shared with D2's blueprint-driven resolution —
+  // and it cannot be checked against The Garage's real decks from here. It
+  // belongs with B3 (real-corpus verification), where it can be.
+  it.todo("does not turn a block label's focus suffix into a phantom movement (M1 — Deadlift)");
 });
 
 describe("output shape compatibility with the LLM extractor", () => {
