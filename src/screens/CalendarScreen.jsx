@@ -125,7 +125,8 @@ export function CalendarScreen({onBack}) {
     {id:2, text:"Mara is near weekly cap (14/16). Shift Fri Burn to Jo to balance load.", action:"Reassign"},
   ] : [];
 
-  const fillColor = f => f >= 90 ? "var(--accent)" : f >= 70 ? "#E0B85B" : "#8AA294";
+  // `fillColor` went with the fill bar it coloured — see the grid cell below.
+  // It thresholded a number nothing ever set, so it only ever returned grey.
 
   const visibleDays = isMobile ? DAYS.slice(0,4) : DAYS;
 
@@ -253,13 +254,17 @@ export function CalendarScreen({onBack}) {
                       boxSizing:"border-box",
                     }}>
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{cls.coach} · {cls.dur}</div>
-                      <div style={{marginTop:"4px",display:"flex",alignItems:"center",gap:"4px"}}>
-                        <div style={{flex:1,height:"3px",background:"var(--navy)",borderRadius:"2px"}}>
-                          <div style={{width:`${cls.fill}%`,height:"100%",background:fillColor(cls.fill),borderRadius:"2px"}}/>
-                        </div>
-                        <span style={{fontSize:"9px",color:fillColor(cls.fill),fontWeight:"700"}}>{cls.fill}%</span>
-                      </div>
+                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {/* The fill bar and its "%" are gone. Nothing in the
+                          product ever SETS `fill` — no capacity field, no
+                          booking integration — so every cell on every gym's
+                          week rendered an empty bar reading "0%", which says
+                          "nobody came" rather than "we don't know". Same
+                          judgement that removed BASE_SCHEDULE (audit 2.2): a
+                          confident wrong number is worse than no number. The
+                          class TYPE takes the space, which also gives the cell
+                          a non-colour cue for what the border hue means. */}
+                      {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.type}</div>}
                     </div>
                   )}
                   {!cls && sug && (

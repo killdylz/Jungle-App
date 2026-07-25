@@ -843,8 +843,16 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
                 <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
                   <div style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
                   <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",width:"48px",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.time}</div>
-                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{c.coach}{c.dur?" · "+c.dur:""}</div></div>
-                  <div style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.fill||0}%</div>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{[c.coach, c.dur].filter(Boolean).join(" · ")}</div></div>
+                  {/* Was `{c.fill||0}%`. Nothing in the product ever SETS `fill`
+                      — there is no capacity field and no booking integration —
+                      so every class on every gym's dashboard read "0%", which
+                      says "nobody came" rather than "we don't know". It returns
+                      when a booking source does. In its place: the class TYPE,
+                      which until now existed only as the colour of the 3px bar
+                      on the left and so was invisible to anyone who does not
+                      separate those hues (§3 accessibility). */}
+                  {c.type && <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",flexShrink:0,textTransform:"uppercase",letterSpacing:"0.5px"}}>{c.type}</div>}
                 </div>
               ))}
             </div>
@@ -2361,7 +2369,14 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   <div style={{width:"3px",height:"26px",borderRadius:"2px",background:cfg.color,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
-                    <div style={{fontSize:"11px",color:"var(--muted)"}}>{s.type} · {fmt(s.dur)}</div>
+                    {/* Through SCFG's label, not the raw key. This rendered
+                        "warmup · 5:00" and "primary_lift · 15:00" on the app's
+                        most-used screen — a §11 violation hiding in plain sight,
+                        because the label map existed and this call site simply
+                        did not use it. The colour bar to the left carries the
+                        same fact, so this text is also the non-colour cue for
+                        it (§3 accessibility). */}
+                    <div style={{fontSize:"11px",color:"var(--muted)"}}>{cfg.label || s.type} · {fmt(s.dur)}</div>
                   </div>
                   <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0}}>{(s.exercises||[]).length} ex</span>
                   <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
@@ -3400,7 +3415,14 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
               </div>
             </div>
 
-            {/* Per-stage duration chips */}
+            {/* Per-stage chips. The dot's colour carried WHICH stage each chip
+                was and only the duration was written, so on a member-facing
+                surface the run of the class was unreadable to anyone who does
+                not separate those hues — and SCFG's palette does not even
+                separate them for everyone else: warmup/power, core/stretch and
+                engine/recovery are each a single colour shared by two types.
+                The stage's own name is now the carrier and the colour is the
+                reinforcement, which is the §3 rule. */}
             <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
               {stages.map((s,si)=>{
                 const cfg = SCFG[s.type]||SCFG.circuit;
@@ -3411,10 +3433,13 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                     padding:"5px 10px",
                     background:chipCur?"var(--accent)":`${cfg.color}18`,
                     borderRadius:"999px",
-                    border:`1px solid ${chipCur?"var(--accent)":cfg.color+"40"}`
+                    border:`1px solid ${chipCur?"var(--accent)":cfg.color+"40"}`,
+                    minWidth:0,
                   }}>
-                    <div style={{width:"6px",height:"6px",borderRadius:"50%",background:chipCur?"var(--on-accent)":cfg.color}}/>
-                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":cfg.color}}>{fmtDur(s.dur)}</span>
+                    <div style={{width:"6px",height:"6px",borderRadius:"50%",background:chipCur?"var(--on-accent)":cfg.color,flexShrink:0}}/>
+                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":cfg.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                      {s.name || cfg.label} · {fmtDur(s.dur)}
+                    </span>
                   </div>
                 );
               })}
