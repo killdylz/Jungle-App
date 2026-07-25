@@ -4326,6 +4326,12 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
         // the coach's known vocabulary just as much as an imported one.
         hints: deriveHints(plans.filter(pl => pl.personaId === selectedId),
                            movements.filter(m => m.personaId === selectedId)),
+        // D2 — and the coach's own class SHAPES, keyed by class type. Where hints
+        // teach the parser this coach's vocabulary, the blueprint teaches it their
+        // structure, so a bare "C1 / C2 / C3" deck is read as the warm-up, circuit
+        // and finisher the coach actually programs instead of being guessed at
+        // (§4.3.2). Resolves only; never invents a block.
+        blueprints: selected?.styleProfile?.blueprints || null,
       });
       if (parsed.confidence >= PARSE_THRESHOLD) {
         data = parsed; conf = parsed.confidence;
@@ -4595,7 +4601,8 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
                                 movements.filter(m => m.personaId === selectedId));
       const todo = [];
       for (const u of classy) {
-        const p = parsePlanText(u.text, { classTypeHint: "", title: u.deck.name, hints });
+        const p = parsePlanText(u.text, { classTypeHint: "", title: u.deck.name, hints,
+                                          blueprints: selected?.styleProfile?.blueprints || null });
         if (p.confidence >= PARSE_THRESHOLD && p.plan.blocks.length) {
           added.push(rowFor(u, p, "parser", p.confidence));
           parsedCount++;

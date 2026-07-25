@@ -464,3 +464,104 @@ Whoever is on the far rack needs the safety pins reset to hole seven please`, { 
     expect(withHints.plan).toEqual(without.plan);
   });
 });
+
+// ── D2 · blueprint-driven parsing (§4.3.2, §9.1) ─────────────────────────────
+//
+// Hints taught the parser a coach's VOCABULARY. A blueprint teaches it their
+// STRUCTURE — which is the half §4.3.2 said the parser has to guess at.
+//
+// The case that matters is a deck whose slots carry no role words at all. To a
+// naive letter rule "C1 / C2 / C3" is one superset (same letter, three members,
+// all plain); to the coach it is a warm-up, a circuit and a finisher in sequence.
+// Folding them destroys the class structure. The coach's own blueprint is the
+// evidence that settles it — and it settles it WITHOUT the parser inventing
+// anything, because every block it names already exists on the slide.
+describe("D2 — the coach's blueprint resolves what the parser would guess", () => {
+  // Bare lettered slots: no "Warm Up", no "AMRAP", no "Finisher" anywhere.
+  const BARE = `GC
+Fundamental
+
+C1
+Row 500m
+Air Squat x10
+
+C2
+10 Wall Balls
+15 Cal Row
+
+C3
+Burpee x20`;
+
+  const BLUEPRINT = {
+    classType: "GC",
+    slots: [
+      { key: "C1", role: "warmup" },
+      { key: "C2", role: "circuit" },
+      { key: "C3", role: "finisher" },
+    ],
+  };
+
+  it("without a blueprint the bare slots fold into ONE superset — the defect", () => {
+    // Pinned deliberately: this is the behaviour the blueprint exists to correct,
+    // and if it ever changes on its own the test below stops proving anything.
+    const r = parsePlanText(BARE);
+    expect(r.plan.blocks).toHaveLength(1);
+    expect(r.plan.blocks[0].role).toBe("superset");
+  });
+
+  it("with the coach's blueprint they stay three blocks, in the coach's roles", () => {
+    const r = parsePlanText(BARE, { blueprint: BLUEPRINT });
+    expect(r.plan.blocks.map(b => b.label)).toEqual(["C1", "C2", "C3"]);
+    expect(r.plan.blocks.map(b => b.role)).toEqual(["warmup", "circuit", "finisher"]);
+  });
+
+  it("reports how many blocks the blueprint resolved, so its value is visible", () => {
+    expect(parsePlanText(BARE, { blueprint: BLUEPRINT }).stats.blueprint).toBe(3);
+    expect(parsePlanText(BARE).stats.blueprint).toBe(0);
+  });
+
+  it("resolves the blueprint from a per-class-type map on the detected class type", () => {
+    const r = parsePlanText(BARE, { blueprints: { GC: BLUEPRINT, S360: { slots: [] } } });
+    expect(r.plan.blocks.map(b => b.role)).toEqual(["warmup", "circuit", "finisher"]);
+  });
+
+  it("does NOT override what the coach wrote on the slide itself", () => {
+    // The blueprint calls C1 a warm-up; this week's slide says C1 is the finisher.
+    // The slide is this class; the blueprint is the usual shape. The slide wins.
+    const bp = { slots: [{ key: "C1", role: "warmup" }] };
+    const r = parsePlanText("GC\nC1 Finisher\nFarmers Carry 40m", { blueprint: bp });
+    expect(r.plan.blocks[0].role).toBe("finisher");
+    expect(r.stats.blueprint).toBe(0);   // not counted — the slide resolved it
+  });
+
+  it("never injects a role that is not a real role", () => {
+    const bp = { slots: [{ key: "C1", role: "nonsense" }, { key: "C2", role: "circuit" }] };
+    const r = parsePlanText(BARE, { blueprint: bp });
+    r.plan.blocks.forEach(b => expect(_internal.ROLES).toContain(b.role));
+  });
+
+  it("still folds a GENUINE superset the blueprint declares as one", () => {
+    const bp = { slots: [{ key: "A1", role: "superset" }, { key: "A2", role: "superset" }] };
+    const r = parsePlanText(S360, { blueprint: bp });
+    expect(r.plan.blocks.some(b => b.label === "A1+A2" && b.role === "superset")).toBe(true);
+  });
+
+  it("changes NOTHING about the plan on a deck that states its own structure", () => {
+    // The output is what matters, and it is byte-identical.
+    //
+    // Note the counter still reads 1 here, and that is correct rather than a leak:
+    // GC's "C2 AMRAP 12min" names a SCHEME, not a role, so the slide never says
+    // what that block IS — without a blueprint its role comes from the amrap→circuit
+    // fallback. The blueprint supplies it directly and happens to agree. Counting it
+    // is the honest reading of "roles the blueprint resolved rather than guessed".
+    const withBp = parsePlanText(GC, { blueprint: BLUEPRINT });
+    expect(withBp.plan).toEqual(parsePlanText(GC).plan);
+    expect(withBp.stats.blueprint).toBe(1);
+  });
+
+  it("a blueprint only ever RESOLVES a block — it cannot create one", () => {
+    const bp = { slots: [{ key: "C1", role: "warmup" }, { key: "Z9", role: "finisher" }] };
+    const r = parsePlanText(BARE, { blueprint: bp });
+    expect(r.plan.blocks.map(b => b.label)).not.toContain("Z9");
+  });
+});

@@ -348,16 +348,59 @@ function looksLikeMovement(line) {
 // ── Block role assignment ────────────────────────────────────────────────────
 // Keyword first, then scheme, then the lettered-slot convention. Ordering matters:
 // GC decks label their warmup "C1", so the word "warm up" must beat the letter rule.
-function roleFor({ label, text, scheme, slotLetter, slotPeers, isLast }) {
+
+// The strong, EXPLICIT signals: a role word in the label or text, or S360's M-slot.
+// These come from the slide itself and are authoritative — nothing (not even the
+// coach's blueprint) overrides what they literally wrote on this slide.
+function explicitRole(label, text) {
   for (const [re, role] of NAMED_BLOCK) if (re.test(label) || re.test(text)) return role;
   if (/\bfinisher|burnout\b/i.test(text)) return "finisher";
   if (/^M\d/i.test(label)) return "primary_lift";          // S360's main-lift slot
+  return null;
+}
+
+function roleFor({ label, text, scheme, slotLetter, slotPeers, isLast, blueprintRole }) {
+  const explicit = explicitRole(label, text);
+  if (explicit) return explicit;
+  // D2 (§4.3.2) — the coach's blueprint answers what the generic heuristics below
+  // can only GUESS. It is evidence from their own corpus, applied exactly where the
+  // parser would otherwise guess: AFTER the slide's explicit words, BEFORE the
+  // structural fallbacks. Like the movement/class-type hints, it only ever
+  // resolves an existing block — it never invents structure.
+  if (blueprintRole && ROLES.includes(blueprintRole)) return blueprintRole;
   if (slotPeers > 1) return "superset";                    // A1 + A2 share a letter
   if (scheme.type === "amrap" || scheme.type === "interval") return "circuit";
   if (scheme.type === "rounds") return "circuit";
   if (slotLetter === "A" && scheme.type === "sets_reps") return "primary_lift";
   if (isLast && scheme.type === "sets_reps") return "finisher";
   return "circuit";
+}
+
+// ── D2 blueprint role resolution ─────────────────────────────────────────────
+// A slot key normalised so the parser's block label ("A1+A2", "Warm Up") and the
+// blueprint's stored key ("A1+A2", "Warm-up") match despite spacing/dash noise.
+const slotKeyNorm = k => String(k || "").trim().toLowerCase().replace(/[\s\-–—+]+/g, "");
+
+// Choose the blueprint to apply: an explicit single `opts.blueprint`, or an
+// `opts.blueprints` map keyed by class type, resolved against the type the header
+// pass detected (case-insensitively).
+function pickBlueprint(opts, classType) {
+  if (opts.blueprint) return opts.blueprint;
+  const map = opts.blueprints;
+  if (!map || typeof map !== "object") return null;
+  if (classType && map[classType]) return map[classType];
+  const key = Object.keys(map).find(k => norm(k) === norm(classType));
+  return key ? map[key] : null;
+}
+
+// slotKeyNorm(key) → role, for the roles a blueprint actually declares. Only the
+// valid ROLES are indexed, so a malformed blueprint can never inject a bad role.
+function blueprintRoleMap(blueprint) {
+  const m = new Map();
+  (blueprint?.slots || []).forEach(s => {
+    if (s && s.key && ROLES.includes(s.role)) m.set(slotKeyNorm(s.key), s.role);
+  });
+  return m;
 }
 
 // ── The parser ───────────────────────────────────────────────────────────────
@@ -401,6 +444,13 @@ export function parsePlanText(text, opts = {}) {
     if (!focus && h.length <= 60) { focus = h; consumed[idx] = true; return; }
     consumed[idx] = true;                              // extra header prose: harmless
   });
+
+  // D2 — resolve the coach's blueprint for the class type the header identified,
+  // so a lettered slot with no role word gets the coach's own role rather than a
+  // guess (§4.3.2). Empty when no blueprint is supplied — then nothing below
+  // changes and the parser behaves exactly as before.
+  const blueprintRoles = blueprintRoleMap(pickBlueprint(opts, classType));
+  let blueprintLines = 0;
 
   // ── Pass 2: segment into blocks.
   // Each entry in `rest` carries its own source index. Tracking the index ON the
@@ -503,7 +553,16 @@ export function parsePlanText(text, opts = {}) {
       const run = [];
       let j = k;
       while (j < parsed.length && parsed[j].slot?.[1] === letter) { run.push(parsed[j]); j++; }
-      const foldable = run.length >= 2 && run.length <= 3
+      // D2 — if the coach's blueprint names each member as its OWN (non-superset)
+      // slot, they are a SEQUENCE the coach declared, not a superset — GC's bare
+      // "C1 / C2 / C3" that a naive letter rule folds into one block, destroying the
+      // exact structure §4.3.2 is about. The blueprint vetoes the fold. Empty
+      // blueprint → `bpDistinct` is false → folding is unchanged.
+      const bpDistinct = run.length >= 2 && run.every(g => {
+        const r = blueprintRoles.get(slotKeyNorm(g.seg.label));
+        return r && r !== "superset";
+      });
+      const foldable = !bpDistinct && run.length >= 2 && run.length <= 3
                        && run.every(g => g.plain && g.exercises.length);
       if (foldable) {
         k = j;
@@ -512,12 +571,18 @@ export function parsePlanText(text, opts = {}) {
       }
     }
     const isLast = k === parsed.length - 1;
+    const text = p.seg.rest.map(r => r.text).join(" ");
+    // The coach's blueprint governs this slot only when the slide itself gave no
+    // explicit role word — otherwise the slide wins. Counted for stats so the
+    // blueprint's contribution is visible, the same way `hinted` is.
+    const bpRole = blueprintRoles.get(slotKeyNorm(p.seg.label));
+    if (bpRole && ROLES.includes(bpRole) && !explicitRole(p.seg.label, text)) blueprintLines++;
     blocks.push({
       label: p.seg.label,
       // slotPeers is 1 here BY DEFINITION: anything that was a genuine superset
       // was folded above, so a block reaching this branch is a standalone stage
       // even when other slots share its letter (GC's C1/C2/C3).
-      role: roleFor({ label: p.seg.label, text: p.seg.rest.map(r => r.text).join(" "), scheme: p.scheme, slotLetter: letter, slotPeers: 1, isLast }),
+      role: roleFor({ label: p.seg.label, text, scheme: p.scheme, slotLetter: letter, slotPeers: 1, isLast, blueprintRole: bpRole }),
       rotation: "",
       scheme: p.scheme,
       exercises: p.exercises,
@@ -564,7 +629,10 @@ export function parsePlanText(text, opts = {}) {
              exercises: blocks.reduce((n, b) => n + b.exercises.length, 0),
              // How many lines only parsed BECAUSE of this coach's own corpus.
              // Makes the hints' contribution measurable instead of assumed.
-             hinted: hintedLines },
+             hinted: hintedLines,
+             // How many blocks took their role from the coach's blueprint rather
+             // than a guess (§4.3.2) — the D2 contribution, made visible too.
+             blueprint: blueprintLines },
   };
 }
 
