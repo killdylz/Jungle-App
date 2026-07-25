@@ -14,6 +14,7 @@ import { MEMBER_STATUSES, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
+import { memberCsv, rosterCsv, memberCsvFilename, rosterCsvFilename } from "../lib/csvExport.js";
 import { p6Summary, P6_TARGET_SEC } from "../lib/checkinMetrics.js";
 import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
 // NOTE: `lint:crash` CANNOT see these. `no-undef` resolves plain identifiers but
@@ -21,7 +22,7 @@ import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
 // throws `ReferenceError` the moment a coach opens the screen. That is exactly
 // what happened here — the extraction shipped a dead Members panel past a green
 // gate. The e2e added alongside this commit is what actually catches it.
-import { ArrowLeft, Check, Upload } from "lucide-react";
+import { ArrowLeft, Check, Upload, Download } from "lucide-react";
 
 const EMPTY_FORM = { name: "", email: "", joinedAt: "", status: "active" };
 
@@ -107,6 +108,28 @@ export function RosterScreen({ onBack }) {
     const reader = new FileReader();
     reader.onload = () => { setCsv(String(reader.result || "")); setAnalysis(null); setResult(null); };
     reader.readAsText(f);
+  };
+
+  // ── B5: getting the data back out ─────────────────────────────────────────
+  // PDPA gives a member the right to ask what is held about them, and the DPA
+  // commits to data return on exit (LEGAL §1). Both are answered with a file the
+  // person receiving it can actually read — see csvExport.js for why the
+  // per-member shape differs from the roster one.
+  const download = (text, filename) => {
+    try {
+      // text/csv;charset=utf-8 alongside the BOM: between them, Excel, Numbers
+      // and Sheets all open a name with an accent in it correctly.
+      const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (_) { /* a blocked download is not worth breaking the screen over */ }
+  };
+  const exportRoster = () => download(rosterCsv(members, attendance), rosterCsvFilename(gymName));
+  const exportMember = (m) => {
+    const csv = memberCsv(m, attendance, classes, { gymName });
+    if (csv) download(csv, memberCsvFilename(m));
   };
 
   const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
@@ -340,6 +363,14 @@ export function RosterScreen({ onBack }) {
               <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
                 <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
                   style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+                {/* The gym's own copy of its roster. Disabled rather than hidden
+                    on an empty roster: an owner evaluating Jungle should be able
+                    to see that their data can leave, before they put any in. */}
+                <button onClick={exportRoster} disabled={!members.length} data-testid="export-roster"
+                  title="Download every member and their visit history as a CSV"
+                  style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"6px",...(members.length?{}:{opacity:.45,cursor:"not-allowed"})}}>
+                  <Download size={12}/> Export CSV
+                </button>
                 <button onClick={()=>{ setAdding(a=>!a); setEditId(null); setFormErr(""); }}
                   style={{padding:"7px 12px",borderRadius:"7px",border:`1px solid var(--border)`,background:adding?"var(--accent)":"transparent",color:adding?"var(--on-accent)":"var(--text)",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
                   {adding ? "Cancel" : "Add member"}
@@ -419,6 +450,16 @@ export function RosterScreen({ onBack }) {
                         buttons announced itself as just "Edit" — indistinguishable
                         in a 200-row roster to a screen reader, and ambiguous to
                         any test. The label names who is being edited. */}
+                    {/* One member's own record, for when they ask what is held
+                        about them (PDPA access). aria-label for the same reason
+                        as Edit below: `title` does NOT override text content for
+                        an accessible name, so 200 rows would all announce
+                        themselves as "Data". */}
+                    <button onClick={()=>exportMember(m)} aria-label={`Download ${m.name||"member"}'s data`}
+                      title={`Download everything held about ${m.name||"this member"}`}
+                      style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"5px"}}>
+                      <Download size={11}/> Data
+                    </button>
                     <button onClick={()=>startEdit(m)} aria-label={`Edit ${m.name||"member"}`} style={ghostBtn}>Edit</button>
                   </div>
                 ))}
