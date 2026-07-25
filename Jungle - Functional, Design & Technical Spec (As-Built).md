@@ -42,24 +42,53 @@ working. Six of this codebase's surfaces rendered convincingly while presenting 
 and were flagged off in `cb6e77f` for that reason. Status marks here refer to *honest, real-data*
 functionality.
 
+### ⚠️ Which part of THIS document to trust
+
+_Added 2026-07-25 (session 9), after a full audit found stale claims in **both directions** — things
+marked "not started" that had shipped, and things marked done that were not. Every session since 5
+has paid a tax re-deriving this from the code. Rank the sources:_
+
+| Rank | Source | Why |
+|---|---|---|
+| 1 | **A passing test** | `e2e/` drives the real UI; `src/lib/*.test.js` pins the arithmetic. A test is the only claim in this repo that cannot go stale silently. |
+| 2 | **`SESSION-HANDOFF.md` (top block)** and the current session prompt | Written against the code, at the end of the session that changed it. |
+| 3 | **§3 (design) and §12 (backlog)** of this document | Maintained as work ships. **§12 supersedes §7c.** |
+| 4 | **§1, §2, §4, §7b, §7c, §9** | Corrected in session 9, but these are the sections that drift. Each correction is marked inline with its date. |
+| 5 | `Jungle - Delta & Backlog Breakdown.md` | **HISTORICAL.** Analyses App.jsx at 8,059 lines (July 5). Do not plan from it. |
+
+**The durable fix is not a tidier document — it is a test.** Where session 9 could turn a disputed
+status into an assertion it did (D3's cold start, D4's presets, B4's idempotency, B5's export), so
+the next session reads a test result instead of arbitrating between two paragraphs.
+
 ---
 
 ## 1. Where we actually are
 
+> **Corrected 2026-07-25 (session 9).** This section had drifted badly and was
+> being planned from. It claimed F4's capture UI was unbuilt, App.jsx was ~8,780 lines, and that
+> "F4 attendance is unbuilt" governed the roadmap — all three false since session 7. The audit in
+> `SESSION-9-PROMPT.md` §0 flagged it; this is that correction. **If you are reading a status claim
+> anywhere in this document, prefer §12, then a test, then this section.**
+
 | Fable phase | State | Evidence |
 |---|---|---|
 | **0 — De-risk** | ✅ Done | All six mock surfaces flagged off (`src/config/flags.js`, all default `false`). Deploy verification in place. Residual: `MusicProvider` shell never built — but N5's user value shipped without it, so it is now a refactor, not a blocker. |
-| **0.5 — Split slice** | 🟡 Steps 1–3 done | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` all extracted; step 5 (music) is **quarantined behind `FLAGS.music`**. Step 4 (screens) open. `App.jsx` is **~8,780 lines and shrinking** via the decomposition stages (AUDIT-FINDINGS §3.1); stage 1 began with `src/ui/labels.js`. |
-| **1 — Data foundation ★** | 🟡 ~90% | Migrations `0001`–**`0007`** applied; RLS on every table (`0007`'s verified 11/11); Realtime room channels live; local-first sync across all 14 domains. **F4 schema is in — its capture UI is not.** Magic-link member view (N4) still missing. |
-| **2 — Make theatre real** | 🟡 **Unblocked, waiting on volume** | The blocker is gone: the coach roster sweep (slice 1) and the CSV backfill (slice 2, `e992d42`) both write real attendance rows, and a studio can now bring its whole history across on day one instead of accumulating it a class at a time. What N2/N3 wait on is no longer a feature — it is enough rows to compute a curve from. **At-risk (N3) is now live UI** with migration 0008 applied, so "waiting on volume" is the correct description for **N2 only**. |
-| **3 — Experience deepening** | 🟡 Partly done early | P1/P2 display work ✅, WCAG-AA in Brand Studio ✅, reduced-motion ✅, tempo guide ✅. BLE spike and Garmin application not started. |
+| **0.5 — Split slice** | 🟡 Steps 1–3 done, **step 4 partly** | `src/data/`, `src/lib/store.js`, `src/ui/primitives.jsx` extracted; step 5 (music) **quarantined behind `FLAGS.music`**. Step 4 (screens): `AdminTeamScreen`, `CalendarScreen`, `RosterScreen` are out; personas (stage 4) and Builder/Live/RoomTV behind a `useClassRunner()` hook (stage 5) are open. `App.jsx` is **~5,650 lines**, down from 8,780. |
+| **1 — Data foundation ★** | ✅ **Done** | Migrations `0001`–**`0008`** applied; RLS on every table, self-tests for `0001`–`0006` **and** `0007` (11/11) written and run; Realtime room channels live; local-first sync across all 14 domains. F4 capture UI **shipped** (coach sweep + CSV backfill). The one remaining Phase-1 gap is N4, and it is blocked on an Edge Function, not on schema. |
+| **2 — Make theatre real** | 🟡 **Unblocked, waiting on volume — for N2 only** | The coach roster sweep and the CSV backfill (`e992d42`) both write real attendance rows, so a studio can bring its whole history across on day one. **N3 at-risk is live UI** with 0008 applied and an append-only action ledger. What is left is not a feature — it is enough rows to compute a cohort curve from. |
+| **3 — Experience deepening** | 🟡 Partly done early | P1 PWA ✅, P2 10-foot rule ✅ (viewport-keyed, regression-tested at 1080p and 4K), WCAG-AA in Brand Studio ✅, reduced-motion ✅, tempo guide ✅, mobile layout ✅. BLE spike and Garmin application not started. P7 flips to ✅ only after the physical offline soak. |
 | **4–5** | ⛔ Not started | Correctly gated behind consent foundation and validation. |
 
-**The single structural fact that governs the roadmap:** F4 attendance is unbuilt, and it is the
-spine. Fable states it three ways — *"capture is F4 and sits on the critical path; dashboards are
-downstream consumers"*, MODIFY pillar **M2**, and assumption **A7** whose failure is kill
-criterion #3. Everything in Phase 2, the entire $349–499 outcome tier, an honest active-members
-number, the floor-board roster, and the member summary all wait on it.
+**The single structural fact that governs the roadmap — RESTATED, because the old one is spent.**
+F4 attendance *was* the spine and it is now built: capture, backfill, the at-risk loop, and (session
+9) the schedule→`class_instances` generator that gives attendance a dated occurrence to hang off.
+Everything downstream of it is now gated on **volume and on Dylan**, not on code:
+
+- **N2 cohort analytics** waits on rows accumulating, which waits on the pilot running.
+- **N4 member magic-link** — the only member-facing surface, and the last Phase-1 gap — waits on an
+  Edge Function Dylan must deploy. ⛔ Do not build the page first; that is the `<AttendeeView/>` mistake.
+- **F1's 1:1 path** waits on a migration decision (and PAR-Q must land in the same change).
+- **Backups** — the free tier has none. `LEGAL-AND-SECURITY.md` §3 hole #1, and it is Day 1.
 
 ---
 
@@ -73,15 +102,20 @@ Completed sessions append to `session_history` (insert-only RLS — history genu
 rewritten).
 
 **Not built — and this is the spec's actual acceptance criterion:** there is no
-`session_assignments` table, no `class_instances`, and **no 1:1 path at all**. The spec's test —
-*"`session_assignment` targets a `class_instance` XOR a `member` — no parallel tables"* — cannot
-currently be run because neither side of the XOR exists. Templates also do not snapshot on
+`session_assignments` table and **no 1:1 path at all**. Templates also do not snapshot on
 publish; editing a template today does not mutate delivered history only because history is a
 separate append-only log, not because a snapshot boundary was designed.
 
+> **Corrected 2026-07-25 (session 9).** This paragraph said "no `class_instances`". That half is
+> now false: `class_instances` shipped in `0007`, and since session 9 the Schedule can publish a
+> week of recurring rules into dated occurrences (`src/lib/scheduleInstances.js`,
+> `store.publishOccurrences`, idempotent on `(name, startsAt)`). So **one side of the XOR now
+> exists.** The spec's test — *"`session_assignment` targets a `class_instance` XOR a `member`"* —
+> is still unrunnable, but for one reason rather than two.
+
 **Consequence:** the PT/1:1 market and the "one primitive, two lenses" design principle (P5) are
-both unreachable until this lands. It arrives naturally with the F4 migration, since
-`class_instances` is on both critical paths.
+both unreachable until the member side lands. That is a **new migration and therefore Dylan's
+call**, and PAR-Q must land in the same change that introduces individualised load.
 
 ### F2 — Programming & builder (AI-drafted, coach-approved) · ✅ Built, with two gaps
 
@@ -129,7 +163,13 @@ Still open.
 localStorage holds the class, but there is **no explicit display-side session cache with a
 reconnect path**, and no soak test. Treat P7 as unproven for displays.
 
-### F4 — Attendance capture · 🟡 Schema APPLIED + RLS verified; capture UI not built
+### F4 — Attendance capture · ✅ Built (coach sweep + CSV backfill); 🚫 QR deferred by decision
+
+> **Corrected 2026-07-25 (session 9).** This heading read *"capture UI not built"* and the section
+> ended *"Blocked on: approval of migration 0007"*. Both were false from session 7 onward — 0007 is
+> applied, the sweep and the backfill shipped, and Members CRUD with it. The original text is kept
+> below where it still describes the schema and the RLS work accurately; the status claims are
+> corrected inline.
 
 **Applied 2026-07-18 — migration `0007`.** `members`, `class_instances`, `attendance`
 (insert-only) and `consent_records` (append-only) are live, gym-scoped and RLS-protected.
@@ -145,8 +185,13 @@ affect zero rows; a cross-gym insert is rejected; the `source` CHECK bites.
 *Not covered by that suite, so it isn't mistaken for total coverage:* the `members_delete`
 admin-only policy, multi-gym membership, and the QR/anon write path (see the gap below).
 
-**Still to build — the whole client side:** `store.js` domains for the four tables, QR
-self-check-in, the coach roster sweep in the Live runner, and CSV backfill.
+**✅ Built since — the client side, except QR.** `store.js` domains for all four tables; the coach
+roster sweep in the Live runner; CSV backfill (`src/lib/csvImport.js`, preview-then-apply against an
+append-only table); Members CRUD (add + inline edit, no delete — see §12); P6 instrumentation
+(`src/lib/checkinMetrics.js`); and, session 9, the schedule→occurrence generator
+(`src/lib/scheduleInstances.js`) plus member/roster CSV **export** (`src/lib/csvExport.js`, the PDPA
+access obligation). **QR self-check-in is deferred by decision, not blocked** — AUDIT 2.4 says
+*"defer, do not promise"*; the coach sweep is the pilot path.
 
 **⚠️ Known gap, documented in the migration:** QR self-check-in **cannot write through these
 policies**. Every policy requires an authenticated staff user, and a member scanning the room
@@ -163,17 +208,26 @@ because a third party must not sit in the check-in path and no member-identifyin
 transit someone else's URL. Verified in-browser: 240×240 PNG data URL, correct brand palette,
 works offline.
 
-**Blocked on:** approval of migration `0007`. Proposed shape in §4.1 below.
+~~**Blocked on:** approval of migration `0007`.~~ **Cleared 2026-07-18** — 0007 is applied and its
+shape is recorded in §4.1 below.
 
 **Design law that must govern the build: P6 — check-in ≤5 seconds per member.** Above that,
 coaches skip it, attendance starves, and the thesis is decapitated (A7 / kill criterion #3). This
 is a *measured* requirement, not an aspiration: instrument check-in duration from day one and
 treat the pilot's check-in rate as the #1 metric.
 
-### F5 — Retention analytics + at-risk loop · ⛔ Blocked on F4
+### F5 — Retention analytics + at-risk loop · 🟡 At-risk ✅ live; cohort analytics waiting on volume
+
+> **Corrected 2026-07-25 (session 9).** This read *"⛔ Blocked on F4"*. F4 is built, and so is the
+> at-risk half of F5: `src/lib/retention.js` + `src/lib/winback.js` drive a live panel on the
+> Members screen, with migration `0008`'s append-only `retention_actions` ledger behind the
+> acted/dismissed/reopened states, so A3 is measurable. What remains is **N2 cohort analytics**, and
+> it waits on attendance VOLUME rather than on code.
 
 `AnalyticsScreen` exists but is 🎭 flagged off (`mockAnalytics`) because its KPIs were fabricated.
-Keep the layout as the Phase-2 target; rebuild on real data.
+Keep the layout as the Phase-2 target; rebuild on real data. **It is still entirely hardcoded** —
+"Barry's · Shoreditch", 1,284 members, £412/class — which is correct while the flag is false and is
+the reason the flag must stay false.
 
 Worth restating because it is easy to get wrong under delivery pressure: **at-risk v1 is SQL, not
 LLM.** Two transparent rules (<4 visits in month one; 14-day absence). The LLM drafts the win-back
@@ -534,10 +588,10 @@ risk, not by size.
 
 | # | Item | Why it matters |
 |---|---|---|
-| I6 | **Screens split (§4.5 step 4)** | `App.jsx` is **~8,780 lines and shrinking** via the decomposition stages (AUDIT-FINDINGS §3.1). Mechanical, zero-risk, and it attacks the recurring stale-build/merge pain directly. |
+| I6 | **Screens split (§4.5 step 4)** | `App.jsx` is **~5,650 lines** (was 8,780) via the decomposition stages (AUDIT-FINDINGS §3.1). Stages 1–3 done; **stage 4** = personas cluster → `src/screens/personas/`, **stage 5** = Builder/Live/RoomTV behind a `useClassRunner()` hook. Mechanical, zero-risk, and it attacks the recurring stale-build/merge pain directly. AUDIT 3.1 says 4–5 land after the pilot. |
 | I7 | **Music: cut from the sellable product** | Licensing exposure plus zero argued value to any of the three lives (trainer, owner, member). Quarantined behind `FLAGS.music` in `src/music/`; **`MusicProvider` will not be built.** TempoGuide survives as the only rhythm feature. Deleting the quarantine outright is a post-pilot decision. |
 | I8 | **Three client-side third-party accesses** | Spotify tokens in localStorage (`App.jsx:372–403`), user-supplied RapidAPI key (`:433`, UI `:5537`), client-side Deezer BPM (`:525–533`). A stated architectural constraint currently violated. **The Spotify-token item is resolved by feature removal for v1** (see I7); the RapidAPI key and Deezer BPM calls remain real. |
-| I9 | **Code splitting** | Single **606 KB** bundle (**170 KB gzip**, measured 2026-07-20), no `React.lazy` anywhere. Route-level splitting would cut first paint materially — the room display is loaded on a TV over gym Wi-Fi. Note the bundle has **not** shrunk: it is worth measuring rather than assuming, since the music quarantine removed features without removing their code from the graph. |
+| I9 | **Code splitting** | Single **647 KB** bundle (**181 KB gzip**, measured 2026-07-25), no `React.lazy` anywhere. Route-level splitting would cut first paint materially — the room display is loaded on a TV over gym Wi-Fi. Note the bundle keeps **growing**, not shrinking: it is worth measuring rather than assuming, since the music quarantine removed features without removing their code from the graph. |
 | I10 | **Delta writes instead of whole-list upserts** | `save*` pushes the ENTIRE domain list on every change. Fine at today's volume; quadratic-feeling as a corpus grows, and it is why one bad row poisoned every plan. |
 
 ### Tier 3 — correctness gaps to close before real users
@@ -554,6 +608,15 @@ risk, not by size.
 
 ## 7c. Feature backlog — what has NOT been built
 
+> ## ⚠️ SUPERSEDED BY §12 — corrected 2026-07-25 (session 9)
+>
+> **This is the OLDEST backlog section in the document and it was wrong in four places.** It listed
+> N3 at-risk, "alert dismiss/acted state", Members CRUD and the `class_instances` generator as *not
+> started*; all four have shipped. Every session since has re-derived that by reading the code.
+>
+> **Plan from §12.** The table below is corrected rather than deleted, because the *reasoning* in
+> each row is still good and is not repeated in §12.
+
 Grouped by the spec's own numbering so it maps onto the Fable roadmap.
 
 ### Phase 1 remainder (the current phase)
@@ -561,25 +624,26 @@ Grouped by the spec's own numbering so it maps onto the Fable roadmap.
 | Item | State |
 |---|---|
 | **F4 slice 2 — CSV backfill** | ✅ **DONE (`e992d42`).** `src/lib/csvImport.js` (parse → validate → preview) + `store.applyAttendanceImport` (materialise in FK order, idempotent, `source='import'`). Two-step by design: analysis writes nothing, because `attendance` is append-only and a half-applied import cannot be rolled back. Ambiguous slash dates are a **coach decision** (`dayFirst` checkbox), never a guess; unparseable dates and unmatched names are reported per line rather than guessed at. |
-| **F4 slice 3 — QR self-check-in** | Not started. **Blocked on an Edge Function** (service-role write path; see F4's known gap). Needs a hand-deploy. |
-| **Members management screen** | 🟡 **Partly built (`e992d42`) — `RosterScreen`** at the `member` route (which is no longer flagged theatre). Shows the real roster with per-member visit counts and last-seen, plus the CSV backfill. **Still missing:** edit/delete, status, joined date — i.e. CRUD. Quick-add still covers walk-ins. |
-| **`class_instances` generator** | Not started. Nothing turns `class_schedule_rules` (recurring rules) into dated occurrences yet — the runner creates one ad hoc. |
-| **N4 — member magic-link summary** | Not started. **The only member-facing surface**, and the only place F6's white-label premium (A2) can actually be tested on a member. |
-| **Consent notice surface** | Not started. Deliberately: no consent record is written until a real notice exists, because fabricating one is worse than an empty ledger. |
+| **Member data EXPORT** | ✅ **DONE (session 9).** `src/lib/csvExport.js` — one member's own record (the PDPA access obligation) and the whole roster (portability / data return on exit). RFC 4180 quoting pinned by a round-trip through `parseCsv`; leading `= + - @` guarded against spreadsheet formula execution; UTF-8 BOM so Excel does not mangle names. |
+| **F4 slice 3 — QR self-check-in** | 🚫 **Deferred by decision, not blocked.** AUDIT 2.4: *"defer, do not promise"* — the coach sweep is the pilot path. Ship the Edge Function only when a gym asks. Never loosen RLS to `anon`. |
+| **Members management screen** | ✅ **DONE.** `RosterScreen` at the `member` route: real roster, per-member visit counts and last-seen, CSV backfill **and export**, at-risk panel, P6 instrument, and M1 CRUD (add + inline edit of name/email/joined/status). **No delete, deliberately** — `attendance.member_id` cascades, so deleting a member destroys the history the retention analytics run on. Leaving is `status: 'cancelled'`; erasure deserves its own PDPA flow. |
+| **`class_instances` generator** | ✅ **DONE (session 9).** `src/lib/scheduleInstances.js` + `store.publishOccurrences`, surfaced as "Publish week" on the Schedule. Idempotent on `(name, startsAt)` — a duplicated occurrence would split one class's check-ins across two rows. |
+| **N4 — member magic-link summary** | ⛔ **Not started, and blocked on Dylan.** **The only member-facing surface**, and the only place F6's white-label premium (A2) can be tested on a member. The share-card half ✅ shipped (needs no backend); the link half needs an Edge Function issuing a signed class token. **Do not build the page first** — that is the `<AttendeeView/>` mistake. |
+| **Consent notice surface** | ⛔ Not started. Deliberately: no consent record is written until a real notice exists, because fabricating one is worse than an empty ledger. `recordConsent` exists with **zero callers**, and that is correct. |
 
 ### Phase 2 — the outcome tier (unblocked once attendance rows accumulate)
 
 | Item | State |
 |---|---|
-| **N2 — 90-day cohort curve + benchmark overlay + revenue-at-risk** | Not started. `AnalyticsScreen` exists but is flagged off (its KPIs were fabricated); keep the layout as the target. |
-| **N3 — at-risk detection + outreach drafts** | Not started. Two SQL rules (<4 visits in month one; 14-day absence). **Arithmetic, not AI** — the LLM only drafts the message and explains the flag. |
-| **Alert dismiss/acted state** | Not started. Without it, A3 (do operators *act*?) is unmeasurable. |
+| **N2 — 90-day cohort curve + benchmark overlay + revenue-at-risk** | ⛔ Not started, and waiting on **volume, not code**. `AnalyticsScreen` exists but is flagged off (its KPIs are fabricated); keep the layout as the target. |
+| **N3 — at-risk detection + outreach drafts** | ✅ **DONE.** `src/lib/retention.js` + `src/lib/winback.js`, live on the Members screen. Two transparent rules (<4 visits in month one; 14-day absence), each flag carrying the numbers that produced it so an operator can argue with it. **Arithmetic, not AI** — Jungle drafts the WhatsApp; the human sends it, from their own number, to a contact they pick. |
+| **Alert dismiss/acted state** | ✅ **DONE.** Migration `0008`'s append-only `retention_actions` ledger: acted / dismissed / reopened, with handled work staying visible so "we acted on 9 of 11" is computable. A3 is measurable. |
 
 ### Phase 3+ / deferred
 
 | Item | State |
 |---|---|
-| **F1 — session primitive** (`sessions`, `session_assignments`, XOR) | Not started. Deliberately excluded from `0007`. **No 1:1/PT path exists at all**, so P5 ("one primitive, two lenses") is unreachable. |
+| **F1 — session primitive** (`sessions`, `session_assignments`, XOR) | 🟡 Half-blocked. `class_instances` exists and is now generated from the schedule, so one side of the XOR is real; `session_assignments` and the member side are not. **No 1:1/PT path exists**, so P5 ("one primitive, two lenses") is unreachable. Needs a migration — Dylan's call. |
 | **PAR-Q screen** | Not started. Must land in the same change that introduces individualized load. |
 | **Server-side exercise media proxy** | Not started (see I8). |
 | **N6 — Soundtrack / personal-Spotify routing** | Not started; needs `MusicProvider`. |
@@ -708,11 +772,14 @@ payload but **that path is unverified** — it needs the function redeployed and
 exercised locally. And §9.1's fourth requirement, **blueprint-driven PARSING** (telling the
 parser that for this coach `C1` is a warm-up), is not built.
 
-**Cold-start presets are narrower than §9.1 implies.** They appear when a class type exists but
-no shape can be derived from it — e.g. a pasted plan whose blocks carry no labels. A coach with
-*no plans at all* has no class type, so no card and no presets: §9.1's "empty screen" case is
-still open. Serving it properly means letting a coach name a class and choose its shape
-*before* importing anything, which is a persona-level surface that does not exist yet.
+~~**Cold-start presets are narrower than §9.1 implies.**~~ **✅ Closed — corrected 2026-07-25
+(session 9).** The persona-level surface this asked for exists and was verified end to end by
+driving it: a gym with no coaches is told so; adding one lands on *"Start with a class this coach
+teaches"*; naming a class type and picking a preset shape stores it as `source: "preset"` (so the
+coach's own shape replaces it silently once real classes arrive) and drops them on a working
+class-type surface. Two e2e in `e2e/coldstart.spec.js` pin the whole path, so this claim is now
+checkable rather than a matter of whose memory is more recent. Driving it also surfaced a typo —
+*"Add classs for S360"*, three s, on that exact first-impression screen — now fixed and tested.
 
 ### 9.2 Movement taxonomy — the parser must know what KIND of thing it is reading
 
@@ -851,10 +918,10 @@ _Added 2026-07-19, consolidating §7b and §7c with the new work above._
 ### Now — persona depth (§9)
 | # | Item |
 |---|---|
-| D1 | **Movement taxonomy** — ✅ deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch) |
-| D2 | **Class Blueprints** — ✅ derive, present, edit **and drive deterministic drafting**. Still open: blueprint-driven **parsing**, and the persona-ai `generate` path is wired but **unverified** |
-| D3 | **Blueprint presets** — 🟡 built and reachable when a class type yields no derivable shape; the true no-corpus cold start still needs a persona-level surface (§9.1 Status) |
-| D4 | **Generation presets** — pick a blueprint and a preset, never type a prompt |
+| D1 | **Movement taxonomy** — ✅ deterministic classifier + catalog override **shipped**; batched LLM fallback still open (deferred until there is a real corpus of blanks to batch). Session 9 pinned the visible cost: common warm-up names ("Arm Swings", "Cat Cow") return no category, and the drafter correctly leaves them out of a class rather than guessing — so the gap shows up as thinner warm-ups, not as wrong ones |
+| D2 | **Class Blueprints** — ✅ derive, present, edit, drive deterministic drafting **and drive parsing** (`e4ab933`). ⛔ **Still open: parsing is verified against FIXTURES, not against The Garage's real decks.** Drive a real deck through the Slides import with a blueprint saved and confirm `stats.blueprint > 0`. The persona-ai `generate` path is wired but **unverified** — needs a redeploy |
+| D3 | **Blueprint presets** — ✅ **DONE (verified session 9).** Reachable both when a class type yields no derivable shape AND at the true no-corpus cold start; the persona-level surface §9.1 asked for exists and is covered by `e2e/coldstart.spec.js` |
+| D4 | **Generation presets** — ✅ **DONE (session 9).** Five named intents (the usual · something different · heavier day · engine day · short class), each a deterministic transformation of the coach's own shape, each stating what it will change in numbers before the coach commits. `src/lib/generationPresets.js`. The written brief survives, demoted behind a summary, for what presets do not cover. **The rule that keeps it honest: a preset may REORDER a slot's categories, never ADD one** — otherwise "heavier day" puts a deadlift in the warm-up |
 
 ### Now — finishing what is half-built
 
@@ -866,7 +933,10 @@ _Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now 
 | **Mobile layout** | ✅ **Shipped.** Bottom tab bar below 900px (Run · Build · Members · Brand · More), bottom sheet, safe-area insets. The real gap was the **480–900px band**, not 375px — see the AUDIT 1.1 correction in `SESSION-HANDOFF.md` |
 | P1 | **PWA** — ✅ **shipped**: self-hosted fonts, manifest, hand-written service worker + build-time precache injection. Closes I11 in code; P7 flips to ✅ only after the physical soak |
 | U1 | **UI language pass** (§11) — ✅ **shipped**, enforced by a test (`src/ui/labels.js`) |
-| D3 | **Cold start** — ✅ **shipped**: a coach with zero classes can name a class type, pick a preset shape, and land in the Builder |
+| D3 | **Cold start** — ✅ **shipped**: a coach with zero classes can name a class type, pick a preset shape, and land in the Builder. Verified end to end in session 9 and covered by `e2e/coldstart.spec.js` |
+| B1 | **Dashboard cold start** — ✅ **shipped (session 9).** The four KPIs all derive from the same empty array, so a new gym's first screen was "0 · 0.0 · 0 · 0". The KPI row is replaced by a three-step checklist until there is a class to count; after that the numbers return and anything outstanding drops to one quiet line. `src/lib/setupProgress.js` |
+| B4 | **`class_instances` generator** — ✅ **shipped (session 9).** "Publish week" turns the Schedule's recurring rules into dated occurrences, idempotently. `src/lib/scheduleInstances.js`. Consequence handled in the same change: "CLASSES RUN" now counts only classes that have actually happened, so publishing next week cannot inflate it |
+| B5 | **Member data export** — ✅ **shipped (session 9).** Per-member (PDPA access) and whole-roster (portability / data return on exit). `src/lib/csvExport.js` |
 | N4 | **Member magic-link summary** — the only member-facing surface, and the only place F6's white-label premium (A2) can be tested on a member. **Share-card half ✅ shipped** (needs no backend); the link half is **blocked on an Edge Function** to issue a signed class token |
 | I5 | **RLS tests for `0001`-`0006`** — ✅ **shipped** and run by Dylan |
 | N3-UI | ✅ **Built**, and migration **0008 is now APPLIED** — the append-only action ledger (`retention_actions`) persists, so A3 is measurable |
@@ -886,12 +956,17 @@ _Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now 
 | PAR-Q | Must land in the same change that introduces individualised load |
 
 ### Structural debt (still real)
-`I6` screens split (`App.jsx` **~8,780 lines and shrinking** via the decomposition stages,
-AUDIT-FINDINGS §3.1 — stage 1 began with `src/ui/labels.js`) · `I7` music **cut**, quarantined
-behind `FLAGS.music` · `I8` three client-side third-party accesses (Spotify token resolved by
-removal) · `I9` code splitting (**606 KB / 170 KB gzip**, measured — not the 598 KB previously claimed; no
-`React.lazy`) · `I10` delta writes ·
-`I13` background retry · `I14` hydrate pagination · `I15` persona LLM quality ceiling
+`I6` screens split (`App.jsx` **~5,650 lines**, down from 8,780; stages 4–5 open — personas cluster,
+then Builder/Live/RoomTV behind `useClassRunner()`) · `I7` music **cut**, quarantined behind
+`FLAGS.music` · `I8` three client-side third-party accesses (Spotify token resolved by removal;
+RapidAPI key and Deezer BPM still need a server-side media proxy) · `I9` code splitting
+(**647 KB / 181 KB gzip**, measured 2026-07-25 — still growing; no `React.lazy` anywhere) ·
+`I10` delta writes (AUDIT 3.2 wants this before gym #2, for `persona_plans` + `attendance` — it is
+why one bad row once poisoned every plan) ·
+~~`I13` background retry~~ ✅ **shipped** (retry on reconnect + slow timer; the physical soak still
+owes the proof) · `I14` hydrate pagination · `I15` persona LLM quality ceiling (two secrets switch
+persona reasoning to Opus 4.8 — do it **before** ingesting a large corpus, or re-extraction costs
+quota twice)
 
 ### Deferred
 **F4-QR — QR self-check-in Edge Function.** Moved here from "Next": a service-role write path,

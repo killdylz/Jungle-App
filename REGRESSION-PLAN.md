@@ -57,7 +57,7 @@ Run in CI after `npm test`, before `build`. Keep it under ~2 min.
 | 6 | Offline soak (§4) | 1 session |
 | 7 | QR self-check-in | **Cut from promises** (design ready in LEGAL §4 when wanted) |
 | 8 | ~~Mobile layout (AUDIT 1.1)~~ | **Done** `262c83f` — bottom tab bar below 900px. See the correction in AUDIT 1.1: the 375px/63% measurement did not reproduce; the real gap was 480–900px |
-| 9 | I5 RLS tests 0001–0006 | build, half day |
+| 9 | ~~I5 RLS tests 0001–0006~~ | ✅ **Done** — `supabase/tests/0001_0006_rls_selftest.sql`, written and run. _Status corrected 2026-07-25._ |
 
 ## 4. Testing the offline claim honestly
 

@@ -59,8 +59,10 @@ correct Supabase model; no member PII in URLs (QR is local now); GitHub Pages se
 **Holes, prioritised before real member data:**
 1. **Supabase Pro + backups** — free tier has none. US$25/mo. Day 1. Restore drill: actually
    download a backup and restore it to the staging project once (an untested backup is a hope).
-2. **RLS tests for 0001–0006 (I5)** — the self-test pattern exists for 0007 only; cross-tenant
-   leak elsewhere is invisible from the app. Half a day.
+2. ~~**RLS tests for 0001–0006 (I5)**~~ — ✅ **DONE.** `supabase/tests/0001_0006_rls_selftest.sql`
+   exists and Dylan has run it, alongside `0007_rls_selftest.sql` (11/11). _Corrected 2026-07-25:
+   this hole was listed as open here, in `AUDIT-FINDINGS.md` 2.4 and in `REGRESSION-PLAN.md` §3 #9
+   long after it closed; spec §12 was the only doc that had it right._
 3. **Google OAuth allowlist hygiene** — the allowlist gate (0001) is the tenant boundary; add a
    staff-offboarding note to the gym runbook (remove email → access ends).
 4. **Spotify tokens in localStorage** (`App.jsx:416-427`) — resolved for v1 by the music

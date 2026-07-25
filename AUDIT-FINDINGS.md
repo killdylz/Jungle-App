@@ -110,10 +110,10 @@ inside the Builder's class-type picker (the picker already exists at `BuilderScr
 | M1 Members CRUD | **Finish minimally** (edit name/status/joined; no more) |
 | F4-QR self-check-in | **Defer, do not promise.** Coach sweep is the pilot path (P6 evidence: sweep is faster than member-phone-scan in a cold room). Ship the Edge Function only when a gym asks |
 | N4 magic-link member view | **Build in week 1** — it is the only member-visible surface and the social artefact carrier (see PRODUCT-DIRECTION) |
-| Blueprint-driven parsing | Defer — hints already cover most of it; do after pilot |
+| Blueprint-driven parsing | ~~Defer — hints already cover most of it; do after pilot~~ · **Overtaken by events: shipped in `e4ab933` (session 8)** as an additive, zero-risk change. _Noted 2026-07-25: this row and spec §9/§12 disagreed about the ranking, and the disagreement was never resolved — the work simply happened. Verified against FIXTURES only; the real-deck check is still owed._ |
 | Taxonomy LLM fallback | Defer until a real corpus of blanks exists (as designed) |
 | F1 session primitive / PT path | Defer — no pilot customer needs 1:1 yet |
-| I5 RLS tests 0001–0006 | **Finish before member data** (see LEGAL-AND-SECURITY) |
+| I5 RLS tests 0001–0006 | ✅ **DONE** — `supabase/tests/0001_0006_rls_selftest.sql`, written and run. _Status corrected 2026-07-25._ |
 
 ## Severity 3 — structural debt (unchanged verdicts, sharpened order)
 
