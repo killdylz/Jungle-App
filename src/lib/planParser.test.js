@@ -396,18 +396,62 @@ A2 Chest Supported Row 12-10-10-8
     expect(r.plan.blocks[0].exercises[0].name).toBe("Back Squat");
   });
 
-  // ⛔ KNOWN DEFECT, deliberately not fixed here — see SESSION-HANDOFF.
-  // A block header written "M1 — Deadlift" yields the block label `M1` AND a
-  // phantom exercise named "Deadlift", so a block the coach wrote with one
-  // movement comes back with two and the catalog gains a movement that was
-  // never on a movement line. `slotKey()` in blueprints.js already treats
-  // "M1 — Deadlift" as slot M1 plus THIS WEEK'S FOCUS, so the two disagree.
-  //
-  // Not fixed in session 9 because the fix changes block segmentation — the
-  // parser's most delicate path, shared with D2's blueprint-driven resolution —
-  // and it cannot be checked against The Garage's real decks from here. It
-  // belongs with B3 (real-corpus verification), where it can be.
-  it.todo("does not turn a block label's focus suffix into a phantom movement (M1 — Deadlift)");
+  // A block header written "M1 — Deadlift" names the slot AND this week's focus,
+  // which is exactly how `slotKey()` in blueprints.js already reads it. Parsing
+  // that suffix as a movement invented an exercise the coach never wrote on a
+  // movement line, and fed it into the catalog personaAggregate builds — at
+  // confidence 1, which §4.3.2 says must never happen.
+  it("does not turn a block label's focus suffix into a phantom movement (M1 — Deadlift)", () => {
+    const r = parsePlanText("S360\nM1 — Deadlift\nConventional Deadlift 4x5");
+    const m1 = r.plan.blocks.find(b => b.label === "M1");
+    expect(m1.exercises.map(e => e.name)).toEqual(["Conventional Deadlift"]);
+  });
+
+  it("reads the colon form as a focus suffix too", () => {
+    const r = parsePlanText("S360\nM1: Deadlift\nConventional Deadlift 4x5");
+    expect(r.plan.blocks[0].exercises.map(e => e.name)).toEqual(["Conventional Deadlift"]);
+  });
+
+  // The separator alone is NOT the signal. When the suffix is the block's only
+  // movement-shaped content it IS the movement — dropping it would lose the only
+  // one the coach wrote, which is worse than the phantom it replaces.
+  it("keeps the suffix when it is the block's only movement", () => {
+    const r = parsePlanText("S360\nM1 — Deadlift\nB1 Bench Press 3x5");
+    expect(r.plan.blocks.find(b => b.label === "M1").exercises.map(e => e.name)).toEqual(["Deadlift"]);
+  });
+
+  // Unseparated inline content is load-bearing and must be untouched by all this.
+  it("still treats unseparated inline content as the movement", () => {
+    const r = parsePlanText("S360\nM1 Back Squat 5x5");
+    expect(r.plan.blocks[0].exercises.map(e => e.name)).toEqual(["Back Squat"]);
+  });
+
+  // A scheme written on the header line must survive the label being dropped.
+  it("keeps a scheme stated on the header line", () => {
+    const r = parsePlanText("S360\nM1 — Deadlift 5x5\nRomanian Deadlift 3x8");
+    const m1 = r.plan.blocks[0];
+    expect(m1.exercises.map(e => e.name)).toEqual(["Romanian Deadlift"]);
+    expect(m1.scheme.sets).toBe(3);
+  });
+
+  // A role word as the suffix is block furniture, not a movement — the same rule
+  // that stops a bare "Finisher" line entering the catalog.
+  it("does not promote a role-word suffix to a movement", () => {
+    const r = parsePlanText("S360\nC1 — Warm Up\nArm Swings");
+    expect(r.plan.blocks[0].exercises.map(e => e.name)).toEqual(["Arm Swings"]);
+  });
+});
+
+describe("plan title", () => {
+  // The deck names the class type twice — once alone, once leading the focus line
+  // — and the join produced "S360 — S360 — Week 4".
+  it("does not repeat a class type the focus line already leads with", () => {
+    expect(parsePlanText("S360\nS360 — Week 4\nM1 Back Squat 5x5").title).toBe("S360 — Week 4");
+  });
+
+  it("still joins a focus that does not lead with the class type", () => {
+    expect(parsePlanText("GC\nGCX — Week 4\nM1 Back Squat 5x5").title).toBe("GC — GCX — Week 4");
+  });
 });
 
 describe("output shape compatibility with the LLM extractor", () => {

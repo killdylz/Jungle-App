@@ -111,6 +111,11 @@ const NAMED_BLOCK = [
 ];
 const SLOT_RE = /^([A-Z])(\d{1,2})\b[.:)]?\s*/;      // A1 / B2 / C3 / M1
 const SCHEME_BLOCK_RE = /^(amrap|emom|e\d+mom|tabata|for time|intervals?)\b/i;
+// A slot header carrying a SEPARATED suffix — "M1 — Deadlift", "M1: Deadlift".
+// Deliberately mirrors slotKey() in blueprints.js, which already reads this exact
+// form as "slot M1, plus this week's focus". The separator is what distinguishes it
+// from "M1 Back Squat 5x5", where the suffix is the movement itself.
+const FOCUS_SUFFIX_RE = /^([A-Z])(\d{1,2})\b(?:\s+[—–-]\s+|:\s*)(.+)$/;
 
 // ── Scheme parsing ───────────────────────────────────────────────────────────
 // Every rule below is a pattern the decks use verbatim. Each returns the fields it
@@ -479,7 +484,8 @@ export function parsePlanText(text, opts = {}) {
   for (; i < lines.length; i++) {
     if (isBlockStart(lines[i])) {
       const inline = afterLabel(lines[i]);
-      cur = { label: blockLabelOf(lines[i]), headIdx: i, rest: inline ? [{ text: inline, idx: i }] : [] };
+      const focusSuffix = FOCUS_SUFFIX_RE.test(stripBullet(lines[i]));
+      cur = { label: blockLabelOf(lines[i]), headIdx: i, rest: inline ? [{ text: inline, idx: i, focusSuffix }] : [] };
       segments.push(cur);
     } else if (cur) {
       cur.rest.push({ text: lines[i], idx: i });
@@ -500,7 +506,26 @@ export function parsePlanText(text, opts = {}) {
     const exercises = [];
     const slot = seg.label.match(SLOT_RE);
 
-    seg.rest.forEach(({ text: line, idx }) => {
+    // A block header written "M1 — Deadlift" names the slot AND this week's focus —
+    // exactly how slotKey() reads it. That suffix is a THEME, not a movement, and
+    // parsing it as one invented an exercise the coach never wrote on a movement
+    // line, then fed it into the catalog the whole persona thesis aggregates.
+    //
+    // The separator alone is NOT the signal. If the suffix is the block's only
+    // movement-shaped content it IS the movement, and dropping it would lose the
+    // only one. So defer the decision until the rest of the block has been read.
+    let focusEntry = null;
+
+    seg.rest.forEach(({ text: line, idx, focusSuffix }) => {
+      if (focusSuffix) {
+        // Fold the scheme now regardless: "M1 — Deadlift 5x5" states the block's
+        // scheme on the header line, and it must not be lost along with the label.
+        // Folding HERE rather than after the loop also keeps the header's scheme
+        // first, so a later line still wins exactly as it does today.
+        if (foldScheme(scheme, line, notes)) consumed[idx] = true;
+        focusEntry = { line, idx };
+        return;
+      }
       // A regression written on its OWN line — "(DB Press regression)" under the
       // movement it scales — belongs to the exercise above it, not to a new one.
       // Without this it parsed as a separate movement and quietly entered the
@@ -535,6 +560,18 @@ export function parsePlanText(text, opts = {}) {
       if (NOISE_RE.test(line) || DATE_RE.test(line)) { consumed[idx] = true; return; }
       reasons.push(`unparsed line in "${seg.label}": "${line.slice(0, 48)}"`);
     });
+
+    // Nothing else in the block was movement-shaped, so the suffix was never a
+    // focus label — it is the block's one movement. Run it through the SAME guards
+    // the normal path uses, so "C1 — Warm Up" stays block furniture rather than
+    // becoming an exercise called "Warm Up".
+    if (focusEntry && !exercises.length && !isBareRoleWord(focusEntry.line)) {
+      const known = hintedMovement(focusEntry.line, hints);
+      if (known || looksLikeMovement(focusEntry.line)) {
+        const ex = parseExercise(focusEntry.line);
+        if (ex) { exercises.push(ex); consumed[focusEntry.idx] = true; if (known) hintedLines++; }
+      }
+    }
 
     scheme.note = notes.join("; ");
     if (!scheme.type) scheme.type = scheme.reps.length || scheme.sets != null ? "sets_reps" : "rounds";
@@ -630,7 +667,16 @@ export function parsePlanText(text, opts = {}) {
   }
   confidence = Math.max(0, Math.round(confidence * 100) / 100);
 
-  if (!title) title = [classType, focus].filter(Boolean).join(" — ") || "Imported class";
+  // Decks routinely name the class type twice — once alone, once leading the focus
+  // line ("S360", then "S360 — Week 4") — which joined into "S360 — S360 — Week 4".
+  // Prefix the class type only when the focus does not already lead with it. The
+  // boundary check matters: class type "S3" must NOT be treated as a prefix of
+  // "S360 — Week 4".
+  if (!title) {
+    const f = focus.trim(), c = classType.trim();
+    const dup = c && f.toLowerCase().startsWith(c.toLowerCase()) && !/[a-z0-9]/i.test(f.charAt(c.length));
+    title = (dup ? f : [c, f].filter(Boolean).join(" — ")) || "Imported class";
+  }
 
   // `_setsInferred` is bookkeeping for the merge above, not part of the schema.
   // It must not reach persona_plans.plan — the block shape is asserted by tests
