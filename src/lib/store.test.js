@@ -18,7 +18,7 @@ import {
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
-  _deltaRows, _markSynced, _unmark,
+  _deltaRows, _markSynced, _unmark, publishOccurrences,
 } from "./store.js";
 import { analyzeAttendanceCsv } from "./csvImport.js";
 
@@ -130,6 +130,46 @@ describe("ensureClassInstance", () => {
     expect(second.id).toBe(first.id);
     expect(getClassInstances()).toHaveLength(1);
   });
+
+  // B4 publishes dated occurrences from the Schedule; the Runner mints one when a
+  // coach presses play. They are two doors into the SAME table, and whether they
+  // meet decides if a class's check-ins land on the row the Schedule published or
+  // on a second row nobody looks at. The join works — on name, inside the 4h
+  // window — so it is pinned here before anything relies on it.
+  it("joins the occurrence the Schedule already published, rather than minting a second", () => {
+    const startsAt = new Date().toISOString();          // the class runs at its slot
+    const published = publishOccurrences([{ startsAt, name: "S360", classType: "HIIT",
+                                            coachName: "Dylan", durationMin: 45 }]).instances[0];
+    const { instance } = ensureClassInstance({ name: "S360", classType: "HIIT" });
+    expect(instance.id).toBe(published.id);
+    expect(getClassInstances()).toHaveLength(1);
+    // The published row's real data survives — the Runner joins it, never overwrites it.
+    expect(instance).toMatchObject({ coachName: "Dylan", durationMin: 45 });
+  });
+
+  it("still joins a class started a few minutes off its slot", () => {
+    const startsAt = new Date(Date.now() - 10 * 60_000).toISOString();
+    const published = publishOccurrences([{ startsAt, name: "S360" }]).instances[0];
+    expect(ensureClassInstance({ name: "S360" }).instance.id).toBe(published.id);
+  });
+
+  // ⛔ THE GAP, verified but deliberately not fixed here — see SESSION-11-PROMPT §3A.
+  // The join above is keyed on NAME, and nothing ever makes the Builder's
+  // `sessionName` equal the schedule rule's name: it comes from the draft, a
+  // template or a persona and defaults to "My Workout" (App.jsx:2767, and every
+  // setSessionName call site). So in real use the names differ, the Runner mints a
+  // second occurrence, and the published row keeps zero attendance forever.
+  // Measured: identical names at slot time -> 1 occurrence; "S360" published vs
+  // "S360 — Week 4" or "My Workout" run -> 2.
+  //
+  // NOT fixed by loosening the match. Guessing WHICH scheduled occurrence a coach
+  // is running would attach attendance to the wrong class permanently and
+  // invisibly. The honest fix is to let the coach start a class FROM the Schedule
+  // so the occurrence is chosen rather than inferred — a product decision.
+  // `retention.js` reads only `attendance`, never `class_instances`, so the
+  // at-risk instrument is NOT affected; per-class analytics and the
+  // schedule-vs-actual picture are.
+  it.todo("carries the Schedule's occurrence into the Runner so the names cannot diverge");
 
   it("never stores a non-string in the class_type text column", () => {
     // Caught by driving the real UI: the app's classChoice is an OBJECT

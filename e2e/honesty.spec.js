@@ -16,15 +16,27 @@ import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js
 // Found by driving the app, not by reading it: all three defects below render
 // perfectly and say the wrong thing.
 
-async function seedWeek(page) {
-  await page.evaluate(() => {
-    const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
+// The Schedule grid is a SIX-day week — `DAYS = Mon..Sat` in CalendarScreen, and
+// the "Add class" day picker is built from the same list, so Sunday is not a
+// schedulable day anywhere in the product. A fixture that takes its day from
+// `new Date()` is therefore unschedulable ONE DAY IN SEVEN: this suite passed all
+// week and failed on a Sunday, on a commit that had not touched the app at all.
+//
+// So the day is explicit. Tests that mean "a class today" keep today; tests that
+// need the class to appear in the GRID pin a weekday that always has a column.
+// `repeat: "weekly"` means the rule renders in whichever week is displayed.
+async function seedWeek(page, day) {
+  await page.evaluate((forced) => {
+    const today = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
     localStorage.setItem("jungle_user_classes", JSON.stringify([
-      { id: "ucT", name: "Saturday Grind", type: "Hyrox", coach: "Dylan", day, slot: "09:00", dur: "45m", repeat: "weekly" },
+      { id: "ucT", name: "Saturday Grind", type: "Hyrox", coach: "Dylan",
+        day: forced || today, slot: "09:00", dur: "45m", repeat: "weekly" },
     ]));
-  });
+  }, day);
   await page.reload();
 }
+// A weekday the six-day grid always renders, for the tests that read the grid.
+const GRID_DAY = "Wed";
 
 test.describe("nothing important is carried by colour alone", () => {
   // The Builder's stage rows read "warmup · 5:00" and "primary_lift · 15:00" —
@@ -90,7 +102,7 @@ test.describe("no number the product cannot know", () => {
   test("the Schedule grid shows no fill bar or percentage", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    await seedWeek(page);
+    await seedWeek(page, GRID_DAY);
     await nav(page, "Schedule");
 
     await expect(page.getByText("Saturday Grind")).toBeVisible();
@@ -104,7 +116,7 @@ test.describe("no number the product cannot know", () => {
   // saying something false.
   test("the Schedule cell still names the class, coach and type", async ({ page }) => {
     await freshApp(page);
-    await seedWeek(page);
+    await seedWeek(page, GRID_DAY);
     await nav(page, "Schedule");
 
     await expect(page.getByText("Saturday Grind")).toBeVisible();
