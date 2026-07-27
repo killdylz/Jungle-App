@@ -1611,11 +1611,16 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                   );
                 })}
               </div>
-              <div style={{flexShrink:0,padding:"12px 18px",borderTop:`1px solid var(--border)`}}>
-                <button style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"12px",display:"flex",alignItems:"center",gap:"6px"}}>
-                  <Plus size={13}/> New class type
-                </button>
-              </div>
+              {/* Was a "+ New class type" button with no onClick — it rendered,
+                  it was focusable, a coach could press it, and nothing happened.
+                  The delta store WOULD carry a gym-authored class type
+                  (libraryStore.js stores a key the built-in lacks whole), but the
+                  Builder's class-type dropdown and `applyTemplate` read
+                  WORKOUT_LIBRARY directly, so the new type would appear in this
+                  modal and in no other surface. That is a feature with a real
+                  seam to move, not a missing handler — Dylan's call, tracked in
+                  the handoff. A button that does nothing is worse than either
+                  answer, so it goes. */}
             </div>
           )}
 
@@ -1757,6 +1762,24 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                                 <span style={{fontSize:"10px",padding:"3px 8px",background:classColor+"20",color:classColor,borderRadius:"999px",fontWeight:"700"}}>{ex.timing} work</span>
                               )}
                               {ex.r && <span style={{fontSize:"10px",color:"var(--muted)"}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
+                              {/* The reason a coach opens this from the Builder.
+                                  `onAddExercise` was accepted as a prop, passed
+                                  from both Builder call sites, and never called —
+                                  so the studio's whole movement catalogue was
+                                  browse-only and the plan had to be retyped by
+                                  hand. The prop's PRESENCE is the context: the
+                                  standalone Library route passes none, because
+                                  there is no class to add to from there.
+                                  The name carries the movement — six identical
+                                  "Add" buttons in a set otherwise announce the
+                                  same thing and distinguish nothing. */}
+                              {onAddExercise && !editMode && (
+                                <button onClick={()=>{const where=onAddExercise(ex);showToast(where?`Added to ${where}`:"Add a stage first");}}
+                                  aria-label={`Add ${ex.n} to class`}
+                                  style={{background:"transparent",border:`1px solid ${classColor}60`,borderRadius:"6px",padding:"4px 10px",cursor:"pointer",color:classColor,fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0}}>
+                                  <Plus size={11}/> Add
+                                </button>
+                              )}
                               {editMode && (
                                 <>
                                   {/* An emoji IS the accessible name when nothing
@@ -1913,12 +1936,17 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     }, 50);
   };
 
-  // Add an exercise discovered in the ExerciseDB to the currently-selected stage
+  // Add a movement from the studio's library to the currently-selected stage.
+  // Returns the stage NAME so the modal can say where it landed — the coach is
+  // looking at a full-screen modal and cannot see which stage is selected behind
+  // it — or null when there is no stage to add to, so the toast never claims an
+  // add that did not happen.
   const handleAddLibraryExercise = (ex) => {
     const idx = Math.min(selIdx, stages.length - 1);
-    if (idx < 0) return;
+    if (idx < 0) return null;
     const s = stages[idx];
     onStageChange(idx, { ...s, exercises: [...(s.exercises||[]), {...ex, id:"disc_"+Date.now()}] });
+    return s.name;
   };
 
   // Handle class type change from the selector
