@@ -2290,6 +2290,45 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                               relying on — last resort in the computation, and it
                               never reaches a touch device. Named after the
                               movement, since a stage has one of these per row. */}
+                          {/* Move this movement to another stage.
+                              `onMoveExercise` was threaded into BuilderScreen
+                              and never called: the root's handleMoveExercise
+                              was written, wired and had no control anywhere in
+                              the app, so a coach who put a movement in the
+                              wrong stage had exactly one route — delete it and
+                              retype it into the right one.
+
+                              A SELECT, not a drag. The row already renders a
+                              six-dot grip glyph that suggests dragging and has
+                              never been wired to anything, and dragging between
+                              two collapsible stage cards is the gesture most
+                              likely to fail on the phone a coach actually plans
+                              on. A destination list is keyboard-reachable and
+                              touch-reachable without any of that, and it names
+                              what it will do.
+
+                              Only rendered when there IS somewhere to move to —
+                              a one-stage class shows nothing rather than a
+                              dropdown with no options, which is the empty-menu
+                              version of a control that refuses the click. */}
+                          {onMoveExercise && stages.length > 1 && (
+                            <select value="" aria-label={`Move ${ex.n} to another stage`}
+                              onClick={ev=>ev.stopPropagation()}
+                              onChange={ev=>{
+                                ev.stopPropagation();
+                                const to = parseInt(ev.target.value, 10);
+                                if (Number.isNaN(to)) return;
+                                onMoveExercise(i, ei, to);
+                                setDistributeToast({msg:`↪ Moved ${ex.n} to ${stages[to]?.name || `stage ${to+1}`}`});
+                                setTimeout(()=>setDistributeToast(null), 3000);
+                              }}
+                              style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:"11px",padding:"2px",flexShrink:0,maxWidth:"34px"}}>
+                              <option value="">↪</option>
+                              {stages.map((ts,ti)=>ti===i?null:(
+                                <option key={ts.id||ti} value={ti}>{ts.name || `Stage ${ti+1}`}</option>
+                              ))}
+                            </select>
+                          )}
                           <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} aria-label={`Movement preview for ${ex.n}`} style={{background:"none",border:"none",cursor:"pointer",color:g?"var(--accent)":"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                           </button>
@@ -2921,8 +2960,21 @@ export default function App() {
   //  useClassRunner — they only ever move the runner's clock.)
   const handleStageChange   = (i, s)  => setStages(ss => { const n=[...ss]; n[i]=s; return n; });
   const handleReorderStages = arr     => setStages(arr);
+  // Reachable for the first time in session 16 — the control that calls this was
+  // never built. `exercises` is defaulted because this maps over EVERY stage,
+  // not just the two involved: a persona draft (setStages(draftStages)) or an
+  // imported file can carry a stage with no exercises array, and spreading
+  // undefined here would throw inside a setState updater and blank the Builder
+  // for a move that has nothing to do with that stage.
   const handleMoveExercise  = (fsi, exIdx, tsi) => {
-    setStages(ss => { const n=ss.map(s=>({...s,exercises:[...s.exercises]})); const [mv]=n[fsi].exercises.splice(exIdx,1); n[tsi].exercises.push(mv); return n; });
+    setStages(ss => {
+      if (!ss[fsi] || !ss[tsi] || fsi === tsi) return ss;
+      const n = ss.map(s => ({...s, exercises:[...(s.exercises||[])]}));
+      const [mv] = n[fsi].exercises.splice(exIdx, 1);
+      if (!mv) return ss;
+      n[tsi].exercises.push(mv);
+      return n;
+    });
   };
   const handleDjClass = playlistIds => {
     // The only remaining ungated path into djOrchestrator, and therefore into

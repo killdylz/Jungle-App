@@ -132,11 +132,19 @@ test.describe("smoke: the path a coach walks every class", () => {
     // carries an emoji, and matching emoji in a selector is a flake waiting to
     // happen the first time someone changes one.
     await page.getByTitle(/ready-made Jungle class/).selectOption("t2");
-    await expect(page.getByText("Primary Lift")).toBeVisible();
+    // Identified by the stage card's own Remove control rather than by a bare
+    // text match. `getByText("Primary Lift")` used to be unique and stopped
+    // being so the moment the Builder grew a move-to-stage dropdown, whose
+    // options legitimately carry every other stage's name — it resolved to
+    // three elements and failed on strict mode. The Remove button's accessible
+    // name is a STRONGER tell anyway: it proves the stage card rendered with
+    // its controls, not merely that the string appears somewhere in the DOM.
+    const stageCard = page.getByRole("button", { name: "Remove Primary Lift" });
+    await expect(stageCard).toBeVisible();
 
     await page.reload();
     await nav(page, "Class Builder");
-    await expect(page.getByText("Primary Lift")).toBeVisible();
+    await expect(stageCard).toBeVisible();
 
     const draft = await stored(page, "jungle_draft_class");
     expect(draft?.name).toBe("Iron Protocol");
