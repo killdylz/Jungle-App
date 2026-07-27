@@ -29,6 +29,32 @@ export const RETENTION_RULES = ["new_member_low_visits", "absence"];
 // rule name the constraint does not know about.
 const [RULE_NEW_MEMBER, RULE_ABSENCE] = RETENTION_RULES;
 
+// ── Who is eligible to be flagged at all ────────────────────────────────────
+// Both rules ask "is this member drifting away?". That question is meaningless
+// for two of the three membership statuses, and both are reachable from the
+// Members screen's own dropdown:
+//
+//   cancelled — they have LEFT. "At risk of leaving" is not a warning about
+//               someone who already left; it is the screen failing to notice.
+//   paused    — absent BY AGREEMENT (injury, travel, a paused membership). The
+//               absence rule fires on precisely the absence the gym agreed to.
+//
+// Both produced a flag the operator could not act on: `winBackBlockedReason`
+// already refuses a draft for anything but "active", so the screen raised an
+// alarm and then explained it would not help with it. That is the false-alarm
+// failure this file's header exists to prevent, arriving through another door.
+//
+// Stated as the EXCLUDED set rather than a whitelist of "active" on purpose. A
+// status added later (a trial, say) then defaults to being monitored: an extra
+// flag is visible and gets argued with, whereas a member silently dropped out of
+// at-risk detection is invisible, and invisible wrongness is the kind this repo
+// treats as worst. `retention.test.js` asserts this list classifies every value
+// in `MEMBER_STATUSES`, so adding one forces the decision rather than defaulting.
+export const INACTIVE_STATUSES = ["paused", "cancelled"];
+// An unknown or missing status counts as current, matching `memberStatus`'s own
+// coercion — a row with no status is a member, not a non-member.
+const isCurrentMember = m => !INACTIVE_STATUSES.includes(String(m?.status || "").toLowerCase());
+
 export const ABSENCE_DAYS = 14;        // spec: 14-day absence
 export const NEW_MEMBER_WINDOW_DAYS = 30;
 export const NEW_MEMBER_MIN_VISITS = 4; // spec: <4 visits in month one
@@ -85,7 +111,9 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
   const flags = [];
 
   (members || []).forEach(m => {
-    if (!m?.id) return;
+    // Gate 3, alongside rule 2's `activity.recording` and rule 1's known join
+    // date: a flag is a claim about a CURRENT member. See INACTIVE_STATUSES.
+    if (!m?.id || !isCurrentMember(m)) return;
     const e = idx.get(m.id);
     const visits = e?.visits || 0;
     // Rule 1 is a claim about TENURE, so it may only run on a join date we

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   atRiskMembers, retentionSummary, describeRetention, attendanceIndex, studioActivity,
-  applyRetentionActions, RETENTION_RULES,
+  applyRetentionActions, RETENTION_RULES, INACTIVE_STATUSES,
   ABSENCE_DAYS, NEW_MEMBER_MIN_VISITS,
 } from "./retention.js";
-import { RETENTION_ACTIONS, retentionAction, retentionRule } from "./store.js";
+import { RETENTION_ACTIONS, retentionAction, retentionRule, MEMBER_STATUSES } from "./store.js";
 
 // A fixed "now" so every test is deterministic — a retention rule that drifts
 // with the wall clock is untestable, and this one has to be defensible to an
@@ -315,5 +315,86 @@ describe("describeRetention agrees with the number the operator sees", () => {
   it("still describes raw flags when no counts are supplied", () => {
     const s = retentionSummary(members, att, { now: NOW });
     expect(describeRetention(s)).toContain("2 members need attention");
+  });
+});
+
+// ── SWEEP (session 12) — who is even eligible to be "at risk" ────────────────
+//
+// Both rules ask "is this member drifting away?" of every row on the roster,
+// without ever asking whether the member is still A MEMBER. Two states make that
+// question meaningless, and both are reachable from the Members screen's own
+// status dropdown:
+//
+//   cancelled — they have LEFT. "At risk of leaving" is not a warning about
+//               someone who already left; it is the screen failing to notice.
+//               RosterScreen's own history records this: the members COUNT was
+//               fixed so it could go down, and the at-risk list was not.
+//   paused    — absent BY AGREEMENT. Injury, travel, a paused membership. The
+//               absence rule fires on exactly the absence the gym agreed to.
+//
+// Both produce a flag the operator cannot act on: `winBackBlockedReason` already
+// refuses a draft for anything but "active", so the screen raises an alarm and
+// then explains it will not help with it. That is the false-alarm failure this
+// module's own header exists to prevent, arriving through a different door.
+describe("SWEEP — a flag is only meaningful for a current member", () => {
+  const NOW = Date.UTC(2026, 6, 27, 12, 0, 0);
+  const ago = d => new Date(NOW - d * 86_400_000).toISOString();
+  // Someone current, so the studio counts as recording and rule 2 stays live.
+  const CURRENT = { id: "m-cur", name: "Rita Chua", status: "active", joinedAt: "2025-01-05" };
+  const curVisit = { memberId: "m-cur", checkedInAt: ago(1) };
+
+  const flagsFor = (status) => atRiskMembers(
+    [CURRENT, { id: "m-x", name: "Xan Lee", status, joinedAt: "2025-01-05" }],
+    [curVisit, { memberId: "m-x", checkedInAt: ago(40) }],
+    { now: NOW },
+  ).filter(f => f.memberId === "m-x");
+
+  it("flags a current member who has stopped coming", () => {
+    expect(flagsFor("active")).toHaveLength(1);
+  });
+
+  it("does not flag someone who has left — they are not at risk, they are gone", () => {
+    expect(flagsFor("cancelled")).toHaveLength(0);
+  });
+
+  it("does not flag a paused membership for the absence it agreed to", () => {
+    expect(flagsFor("paused")).toHaveLength(0);
+  });
+
+  // Rule 1 has the same hole: a member who joins, pays, pauses immediately and
+  // never attends is not "failing to build a habit", they are on a pause.
+  it("does not call a paused member a new member failing to build a habit", () => {
+    const flags = atRiskMembers(
+      [CURRENT, { id: "m-new", name: "Nia Goh", status: "paused", joinedAt: new Date(NOW - 20 * 86_400_000).toISOString().slice(0, 10) }],
+      [curVisit],
+      { now: NOW },
+    );
+    expect(flags.filter(f => f.memberId === "m-new")).toHaveLength(0);
+  });
+
+  // The headline the owner reads. A roster of people who have left must not
+  // report a number that implies work to do.
+  it("does not report members who left as needing attention", () => {
+    const s = retentionSummary(
+      [CURRENT, { id: "m-a", name: "A", status: "cancelled", joinedAt: "2025-01-05" },
+                { id: "m-b", name: "B", status: "cancelled", joinedAt: "2025-01-05" }],
+      [curVisit, { memberId: "m-a", checkedInAt: ago(60) }, { memberId: "m-b", checkedInAt: ago(90) }],
+      { now: NOW },
+    );
+    expect(s.atRisk).toBe(0);
+    expect(describeRetention(s, { active: 0, handled: 0 })).toMatch(/No members currently meet an at-risk rule/);
+  });
+});
+
+// The drift guard. `INACTIVE_STATUSES` lives in retention.js because store.js
+// already imports from it and the reverse would be a cycle — so the two lists
+// cannot be derived from one another in the source, and this test is what keeps
+// them in step. Adding a membership status forces a decision here rather than
+// silently defaulting, which is the same reasoning as dbConstraints.test.js.
+describe("eligibility covers every membership status the store allows", () => {
+  it("classifies each of MEMBER_STATUSES as monitored or not", () => {
+    const monitored = MEMBER_STATUSES.filter(s => !INACTIVE_STATUSES.includes(s));
+    expect(monitored).toEqual(["active"]);
+    expect(INACTIVE_STATUSES.every(s => MEMBER_STATUSES.includes(s))).toBe(true);
   });
 });
