@@ -356,7 +356,7 @@ test.describe("a class run from the Schedule keeps the occurrence it was publish
   // happened — the confident wrong record this repo keeps deleting.
   test("offers no Start button on a week nobody is teaching yet", async ({ page }) => {
     await seedForStart(page);
-    await page.getByRole("button", { name: "›", exact: true }).click();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
     await expect(page.locator('[data-testid="start-class"]')).toHaveCount(0);
   });
 });
@@ -373,7 +373,7 @@ test.describe("publishing ahead does not inflate what the gym has done", () => {
     await expect(page.locator(RESULT)).toContainText("Added");
 
     // Now publish a week that is entirely in the future.
-    await page.getByRole("button", { name: "›", exact: true }).click();
+    await page.getByRole("button", { name: "Next week", exact: true }).click();
     await page.locator(PUBLISH).click();
     await expect(page.locator(RESULT)).toContainText("Added");
 

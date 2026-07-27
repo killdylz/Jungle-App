@@ -22,8 +22,11 @@ import { useJungleAuth } from "../AuthGate.jsx";
 // fourth column after `persona_plans.source`, `attendance.source` and the
 // retention ledgers.
 //
-// It is pinned in ONE place (here) and `AdminTeamScreen.test.js` reads the
+// It is pinned in ONE place (here) and `src/lib/dbConstraints.test.js` reads the
 // MIGRATION and asserts the two agree, so drift fails a test instead of a save.
+// (It is the `memberships.role` row of that file's GUARDED table. There is no
+// `AdminTeamScreen.test.js` — this comment named one until 2026-07-27, which
+// sent anyone checking the guard to a file that does not exist.)
 // Do not spell these strings inline anywhere else — import TEAM_ROLES.
 export const TEAM_ROLES = ["admin","manager","coach","frontdesk","member"];
 const ROLE_BLURB = {

@@ -193,11 +193,15 @@ export function CalendarScreen({onBack, onStartClass}) {
         <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
           {/* Week nav */}
           <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid var(--border)`,borderRadius:"9px",overflow:"hidden"}}>
-            <button onClick={()=>setWeekOffset(w=>w-1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>‹</button>
+            {/* A guillemet is text, so these passed the "no unnamed buttons"
+                sweep while announcing as "‹" and "›". The label says which way
+                time moves, because "previous" and "next" are the whole meaning
+                of the control and the glyph carries none of it. */}
+            <button onClick={()=>setWeekOffset(w=>w-1)} aria-label="Previous week" style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>‹</button>
             <span style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",padding:"0 4px"}}>
               {weekOffset===0?"This week":weekOffset===1?"Next week":weekOffset===-1?"Last week":`Week ${weekOffset>0?"+":""}${weekOffset}`}
             </span>
-            <button onClick={()=>setWeekOffset(w=>w+1)} style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
+            <button onClick={()=>setWeekOffset(w=>w+1)} aria-label="Next week" style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
           </div>
           {/* "Demand heat" and "Auto-fill week" are still absent — they were dead
               buttons backed by nothing (audit 1.3) and there is still no real

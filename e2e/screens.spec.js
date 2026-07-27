@@ -114,3 +114,78 @@ test.describe("every control announces itself", () => {
     });
   }
 });
+
+// ── …and announces itself with a WORD ────────────────────────────────────────
+//
+// The sweep above accepts `innerText`, and an emoji IS text. So a button whose
+// entire content is "🗑️" passes it while telling a screen reader nothing but
+// "wastebasket". The Exercise Library shipped six ✏️/🗑️ pairs in a single set
+// — one per movement, one of each pair destructive — and every one of them was
+// green under the rule above.
+//
+// A name with no letter and no digit in it is not a name. That is the whole
+// rule, and it is deliberately separate from the sweep above so a failure says
+// which of the two problems it is.
+const NO_WORDS = /^[^\p{L}\p{N}]*$/u;
+
+const symbolOnlyButtons = (page) => page.evaluate(() => {
+  const noWords = /^[^\p{L}\p{N}]*$/u;
+  const nameOf = (el) => {
+    const al = el.getAttribute("aria-label");
+    if (al && al.trim()) return al.trim();
+    return (el.innerText || "").trim();
+  };
+  return [...document.querySelectorAll("button")]
+    .filter(b => b.offsetParent !== null)
+    .map(b => ({
+      name: nameOf(b),
+      near: (b.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 70),
+    }))
+    .filter(x => x.name && noWords.test(x.name));
+});
+
+const reportSymbolOnly = (where, bad) =>
+  `${where}: ${bad.length} button(s) named only by symbols — a screen reader gets ` +
+  `no word for them:\n` + bad.map(b => `  name=${JSON.stringify(b.name)} near=${JSON.stringify(b.near)}`).join("\n");
+
+test.describe("every control announces itself in words", () => {
+  for (const [label] of SCREENS) {
+    test(`${label} has no symbol-only buttons`, async ({ page }) => {
+      await freshApp(page);
+      await nav(page, label);
+      expect(NO_WORDS.test("🗑️"), "the symbol-only rule must recognise a bare emoji").toBe(true);
+      const bad = await symbolOnlyButtons(page);
+      expect(bad, reportSymbolOnly(label, bad)).toEqual([]);
+    });
+  }
+});
+
+// ── Past the top-level screen, into a panel that only exists after a click ────
+//
+// The two sweeps above only ever see a screen's FIRST render. The Exercise
+// Library's per-movement edit and delete controls are mounted by pressing
+// "Edit", so no sweep in this repo had ever laid eyes on them — which is
+// exactly how twelve symbol-only buttons survived session 12's pass.
+test.describe("the Exercise Library's edit mode announces itself", () => {
+  test("per-movement controls carry a name, and it says which movement", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Exercise Library");
+
+    // The control is "✏️ Edit" before the click and "✏️ Done" after it, so match
+    // on the word rather than the whole label.
+    await page.getByRole("button", { name: /Edit/ }).first().click();
+    await expect(page.getByRole("button", { name: /Done/ }).first()).toBeVisible();
+
+    expect(await unnamedButtons(page), "edit mode: unnamed buttons").toEqual([]);
+    const bad = await symbolOnlyButtons(page);
+    expect(bad, reportSymbolOnly("Exercise Library edit mode", bad)).toEqual([]);
+
+    // Naming them is only half of it — six identical "Delete" buttons would pass
+    // the rule above and still leave the coach unable to tell them apart.
+    const deletes = await page.getByRole("button", { name: /^Delete / }).all();
+    expect(deletes.length, "edit mode should expose a delete per movement").toBeGreaterThan(1);
+    const names = await Promise.all(deletes.map(d => d.getAttribute("aria-label")));
+    expect(new Set(names).size, `delete controls must name their movement, got: ${names.join(", ")}`)
+      .toBe(names.length);
+  });
+});

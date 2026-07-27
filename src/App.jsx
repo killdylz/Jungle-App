@@ -2004,8 +2004,16 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                               {ex.r && <span style={{fontSize:"10px",color:"var(--muted)"}}>×{ex.r}{ex.s?` · ${ex.s}×`:""}</span>}
                               {editMode && (
                                 <>
-                                  <button onClick={()=>startEdit(ex)} style={{background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>✏️</button>
-                                  <button onClick={()=>deleteEx(ex.id)} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
+                                  {/* An emoji IS the accessible name when nothing
+                                      else is given, so these announced as
+                                      "pencil" and "wastebasket" — six identical
+                                      pairs in a set, one of them destructive,
+                                      with no way to tell which movement any of
+                                      them acted on. The name carries the
+                                      exercise for the same reason every other
+                                      icon-only control in this repo does. */}
+                                  <button onClick={()=>startEdit(ex)} aria-label={`Edit ${ex.n}`} style={{background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>✏️</button>
+                                  <button onClick={()=>deleteEx(ex.id)} aria-label={`Delete ${ex.n}`} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
                                 </>
                               )}
                             </div>
