@@ -958,11 +958,15 @@ _Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now 
 | PAR-Q | Must land in the same change that introduces individualised load |
 
 ### Structural debt (still real)
-`I6` screens split (`App.jsx` **~5,650 lines**, down from 8,780; stages 4–5 open — personas cluster,
-then Builder/Live/RoomTV behind `useClassRunner()`) · `I7` music **cut**, quarantined behind
-`FLAGS.music` · `I8` three client-side third-party accesses (Spotify token resolved by removal;
-RapidAPI key and Deezer BPM still need a server-side media proxy) · `I9` code splitting
-(**647 KB / 181 KB gzip**, measured 2026-07-25 — still growing; no `React.lazy` anywhere) ·
+`I6` screens split (`App.jsx` **4,852 lines** total, `wc -l`; down from 8,780; stage 4 ✅ done — the personas
+cluster moved to `src/screens/personas/`; **stage 5 open** — Builder/Live/RoomTV behind
+`useClassRunner()`) · `I7` music **cut**, quarantined behind `FLAGS.music` · `I8` three client-side
+third-party accesses (Spotify token resolved by removal; RapidAPI key and Deezer BPM still need a
+server-side media proxy) · `I9` code splitting (**544.29 KB / 152.88 KB gzip** local, measured
+2026-07-27; `PersonasScreen` has been lazy since session 12 and is an 89.84 KB chunk. ⚠️ The LOCAL
+build under-reports production by ~37%: with no `VITE_SUPABASE_*` vars `supabaseEnabled` folds to
+`false` and rollup drops every sync path, so a sync-only commit produces a byte-identical bundle.
+Last production measurement was 787.2 KB at `cc4a1b7` and is stale by session 14–15's wins) ·
 `I10` delta writes (AUDIT 3.2 wants this before gym #2, for `persona_plans` + `attendance` — it is
 why one bad row once poisoned every plan) ·
 ~~`I13` background retry~~ ✅ **shipped** (retry on reconnect + slow timer; the physical soak still

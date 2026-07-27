@@ -1,13 +1,41 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-27 (session 14)_
+_Last updated: 2026-07-27 (session 15)_
 
 > **▶ STARTING A NEW SESSION?** `SESSION-15-PROMPT.md` carries the pending list and the
 > blocked-on-Dylan items. Read its **§0a first** — a second session was committing to `main`
 > during session 13, and `git log` taken at session start goes stale. Then spec **§0's trust
 > ranking** and **§12**.
-> Gates: **`lint:crash` 0 · 669 unit (no todos) · 116 e2e (no fixme) · build 542.72 KB
-> + an 89.84 KB PersonasScreen chunk**.
+> Gates: **`lint:crash` 0 · 674 unit (no todos) · 126 e2e (no fixme) · build 544.29 KB
+> + an 89.84 KB PersonasScreen chunk**. App.jsx **4,852 lines** (`wc -l`).
+>
+> 🔴 **Session 15 found five defects of ONE kind: a control that renders, invites a press,
+> and does nothing.** Not one of them threw, crashed, logged, or failed a write — which is
+> why fourteen sessions of error-boundary sweeps, accessible-name sweeps and `lint:crash`
+> all passed them. In order of what it cost a coach:
+>
+> 1. **The Dashboard's second hero button emptied the screen.** It navigated to `templates`,
+>    a view retired at the `isViewEnabled` choke-point with no render branch left behind.
+>    Sidebar and footer stayed, the content area went blank, no back button. On a fresh
+>    store its label is **"New class"** — the second button on the first screen.
+> 2. **The Exercise Library was browse-only.** `onAddExercise` was accepted as a prop,
+>    passed from both Builder call sites, and never called. 330 movements, no way to put
+>    one into the class being built.
+> 3. **A class could never be taken OFF the schedule.** `setUserClasses` was only ever
+>    appended to — a typo'd class was permanent, in every week, forever.
+> 4. **An empty schedule slot refused the click.** `cursor:pointer` and a hover "+", wired
+>    to `onMouseEnter`/`onMouseLeave` and nothing else. Mouse-only and inert.
+> 5. **The Library's ⠿ drag handle never moved anything.** `cursor:grab`, no `draggable`,
+>    no handlers — while `libraryStore.js` had already been built to store reorder.
+>
+> **The generic question that found them all: "which rendered controls do nothing, and which
+> threaded props are never called?"** — not "is feature X working?". §2's method again, and
+> the highest-yield hour in this repo so far.
+>
+> ⚠️ **`onMouseEnter` counts as a handler to a naive `/^on[A-Z]/` check.** That is exactly
+> why the schedule "+" survived the first automated pass — hover is not activation. It was
+> found by reading, not by the tool. Whoever extends that checker should split activation
+> handlers from passive ones.
 >
 > ✅ **DEC-13 and DEC-12 are both ANSWERED and SHIPPED** (session 14). The library no longer
 > freezes at first edit. Do not re-raise either.
@@ -23,7 +51,7 @@ _Last updated: 2026-07-27 (session 14)_
 >
 > ⚠️ **`Measure-Object -Line` does not count blank lines.** The session-13 and -14 prompts
 > both report App.jsx at "4,684 lines" on that basis; the file was really **4,993**. It is
-> **4,742** now. Use `wc -l` or node, and treat any line count in these documents written
+> **4,852** now. Use `wc -l` or node, and treat any line count in these documents written
 > before session 14 as a non-blank count.
 >
 > ⚠️ **The build gate number CHANGED in session 12** (was 651 KB, one chunk). The personas
@@ -40,6 +68,70 @@ _Last updated: 2026-07-27 (session 14)_
 > and rollup keeps it in the common chunk, so the whole ~240 KB delta between local and production
 > sits in the MAIN chunk. Verified live: on first load the browser fetches only
 > `index-*.js` + CSS, and `PersonasScreen-*.js` is not requested until Coaches is opened.
+
+---
+
+## 🟢 Shipped SESSION 15
+
+`4bc1980` → `c694c69`, four commits, all pushed. One sweep, five defects, all of the same
+kind: **a control that renders, invites a press, and does nothing.**
+
+| Commit | What it cost a coach |
+|---|---|
+| `e691196` | The Dashboard's second hero button navigated to the retired `templates` view. **Blank content area, no back button, no error.** Now starts a fresh class, which is what its label says, with a confirm because the draft is auto-saved. Also retires `onNewSession`, a prop passed and never called. |
+| `8881eac` | `LibraryBrowserModal` never called `onAddExercise`, so the studio's 330 movements were **browse-only** — the one reason a coach opens it from the Builder. Each row now has an Add control; the handler returns the STAGE NAME so the toast says where it landed. Also removed "+ New class type", a button with no `onClick` at all. |
+| `a768d0e` | The library's ⠿ handle was `cursor:grab` with **no `draggable` and no handlers**. Wired, with the search filter closed off — the rendered index is not the stored index while searching, and writing it back would scramble the gym's catalogue. |
+| `c694c69` | An empty schedule slot showed a hover "+" wired to `onMouseEnter`/`onMouseLeave` **and nothing else**, and `setUserClasses` was append-only so **a class could never be removed**. Both closed; the "+" is a real, keyboard-reachable button that pre-fills the day and slot. |
+
+**New guard, and the durable part of this session:** `src/lib/navRoutes.test.js` reads App.jsx the
+way `dbConstraints.test.js` reads the migrations and pins the invariant for **every** view —
+anything a `setView`/`onNavigate` literal, an enabled nav entry, or the setup checklist can reach
+must have a render branch. It asserts the scanner found something first, so a regex that quietly
+matches nothing cannot make it vacuously true.
+
+**Why nothing caught these.** `lint:crash` sees valid identifiers. The e2e error-boundary sweep
+passes because **nothing throws** — React renders nothing at all, which is not a crash, and the
+boundary's calm "Something broke" never appears. "The root has children" is satisfied by the shell.
+The a11y sweeps check that a name exists and distinguishes, not that the control *does* anything.
+Every guard was asking whether something was **wrong**; these were **absent**.
+
+### Tooling: a fourth AST checker, proven before use
+
+`deadctl` (scratchpad, rebuild it — §8 style) reports three things across all `.jsx`:
+dead controls (interactive tag/role, no handler), **fake affordances** (`cursor:pointer`/`grab`
+with no handler and no wired ancestor), and props destructured by a component and never referenced.
+Proven against a fixture of **6 planted defects and 15 planted non-defects** before its output was
+believed — including a wired ancestor, a `{...spread}`, a `draggable`, and a child of a `<button>`.
+
+⚠️ **Its known blind spot, which cost a finding:** `onMouseEnter` satisfies a naive `/^on[A-Z]/`
+handler test, so the schedule "+" read as wired. **Hover is not activation.** Split activation
+handlers (`onClick`, `onKeyDown`, `onPointerDown`, `onDrop`, …) from passive ones before trusting
+it on a fresh file. The remaining reported-but-correct hits are all `<summary>` (natively
+interactive) and the mock/flag-gated screens.
+
+### Deliberately NOT fixed, with reasons
+
+- **`AnalyticsScreen`'s Export / Message all / Contact** — three handler-less buttons, but the
+  screen only renders under `FLAGS.mockAnalytics`, which is `false`. It is the N2 layout target.
+- **The Brand Studio's "Start Class"** in the LIVE PREVIEW pane — sample content by design, and
+  labelled as such. It is still a focusable no-op in the a11y tree; making the preview inert
+  (`aria-hidden` + `tabIndex={-1}`) is a tidy one-liner for the next a11y pass.
+- **The Soundtrack panel's "Match music to structure" toggle** — a `cursor:pointer` pill with no
+  handler, permanently ON. Unreachable (`subTab==="music"` needs `FLAGS.music`), but note it is a
+  **state flag, not `FLAGS.music`**, so rollup cannot fold that whole panel — the same shape as
+  session 14's 21 KB. Gating line ~2287 on `FLAGS.music` is a measurable I9 candidate.
+- **`BuilderScreen({ onMoveExercise })`** — threaded from the root, never called. There is no UI to
+  move an exercise between stages. Dead prop, or a missing feature; Dylan's call.
+- **`LiveScreen`/`DisplayScreen`({ spPaused })** and `DashboardScreen({ onProfile, djProgress })` —
+  unused props, music/profile leftovers, zero bytes. Cleanup, not defects.
+
+### Open question for Dylan
+
+**"New class type" in the Exercise Library** — removed rather than half-built. `libraryStore.js`
+*would* carry a gym-authored class type (it stores a key the built-in lacks whole), but the
+Builder's class-type dropdown and `applyTemplate` read `WORKOUT_LIBRARY` **directly**, so a new
+type would appear in that one modal and nowhere else. Wiring it means moving those reads to the
+merged library — a real seam, worth doing if a pilot gym runs a class type outside the built-in ten.
 
 ---
 
