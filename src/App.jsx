@@ -2424,7 +2424,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           the phantom AND un-orphans 459 lines in one edit. The phantom was
           rendered bare here, so it owed a modal shell — TrackSearch is a panel,
           hence the wrapper. */}
-      {showPlaylistModal && (
+      {FLAGS.music && showPlaylistModal && (
         <div onClick={()=>setShowPlaylistModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"20px",width:"min(560px,100%)",maxHeight:"86vh",overflowY:"auto",boxSizing:"border-box"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
@@ -2760,7 +2760,13 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
     };
   }, [micMode, player]);
 
-  // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, S=search, M=mic mode, Esc=back
+  // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, M=mic mode, Esc=back.
+  // S=track search ONLY when FLAGS.music is on. It had no guard, so with music
+  // cut a coach who pressed "s" mid-class got a Spotify search modal over the
+  // class they were running — the exact theatre audit 2.1 removed everywhere
+  // else. It is also why 21 KB of Spotify UI could not be folded out of the
+  // bundle: rollup cannot eliminate a component reachable from an unguarded
+  // state flag.
   useEffect(() => {
     const onKey = (e) => {
       // Ignore if user is typing in an input/textarea/select
@@ -2769,7 +2775,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       else if (e.key === "n" || e.key === "N") { onNextStage(); }
       else if (e.key === "ArrowRight") { e.preventDefault(); onSkipTimer(10); }
       else if (e.key === "ArrowLeft")  { e.preventDefault(); onSkipTimer(-10); }
-      else if (e.key === "s" || e.key === "S") { setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true); }
+      else if (FLAGS.music && (e.key === "s" || e.key === "S")) { setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true); }
       else if (e.key === "m" || e.key === "M") { handleMicMode(); }
       else if (e.key === "Escape") { if (showLiveSearch) setShowLiveSearch(false); else onBack(); }
     };
@@ -3126,7 +3132,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       </div>
 
       {/* Live search overlay */}
-      {showLiveSearch && (
+      {FLAGS.music && showLiveSearch && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
           <div style={{background:"var(--card)",borderRadius:"16px",padding:"24px",width:"100%",maxWidth:"480px",border:`1px solid var(--border)`}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>

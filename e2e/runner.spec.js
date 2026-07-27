@@ -70,4 +70,46 @@ test.describe("the coach can move the class in both directions", () => {
     await page.getByRole("button", { name: "Pause class" }).click();
     await expect(page.getByRole("button", { name: "Start class" })).toBeVisible();
   });
+
+  // The music subsystem is CUT (audit 2.1, FLAGS.music=false), and every visible
+  // music surface was removed — but the Runner's "S" keyboard shortcut kept its
+  // own way in. Pressing "s" mid-class opened a Spotify track search over the
+  // running class: a genre/BPM picker and a "Song, artist, album…" box for a
+  // service this product does not use, on the one screen a coach is looking at
+  // while a room watches. Invisible to every existing test because no test
+  // presses a key that is not on a button.
+  //
+  // The same missing guard is why 21 KB of Spotify UI could not be folded out of
+  // the main chunk — rollup cannot eliminate a component that an unguarded state
+  // flag can still reach.
+  //
+  // SCOPE OF THIS TEST, measured rather than assumed. The fix added TWO
+  // independent guards — one on the shortcut, one on the modal mount — and
+  // either alone prevents the modal, so removing just one does NOT fail this
+  // test. It fails when both are gone, which is the state the defect was
+  // actually found in. That is deliberate: the shortcut guard is the behavioural
+  // fix and the mount guard is what lets rollup drop the chunk, so they are not
+  // redundant copies of one another and neither should be deleted as "already
+  // covered".
+  test("no keyboard shortcut can reach the cut music subsystem", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Runner");
+
+    await page.keyboard.press("s");
+    await expect(page.getByText("Add track to stage")).toHaveCount(0);
+    await expect(page.getByPlaceholder("Song, artist, album…")).toHaveCount(0);
+
+    // Uppercase is a separate branch in the handler, so it is a separate press.
+    await page.keyboard.press("S");
+    await expect(page.getByText("Add track to stage")).toHaveCount(0);
+
+    // The guard must be narrow: the sibling shortcuts in the same handler still
+    // have to work, or this "fix" has broken the transport it sits next to.
+    await expect(stageCounter(page)).toHaveText("1/5");
+    await page.keyboard.press("n");
+    await expect(stageCounter(page)).toHaveText("2/5");
+
+    expectNoConsoleErrors(errors);
+  });
 });
