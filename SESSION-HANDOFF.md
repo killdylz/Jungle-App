@@ -2,7 +2,7 @@
 
 _Last updated: 2026-07-27 (session 15)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-15-PROMPT.md` carries the pending list and the
+> **▶ STARTING A NEW SESSION?** `SESSION-16-PROMPT.md` carries the pending list and the
 > blocked-on-Dylan items. Read its **§0a first** — a second session was committing to `main`
 > during session 13, and `git log` taken at session start goes stale. Then spec **§0's trust
 > ranking** and **§12**.
