@@ -20,11 +20,12 @@ import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js
 // with the tooling already here, and is arguably the better guard anyway: it
 // asserts the screen RENDERS, not merely that its identifiers resolve.
 //
-// A dormant instance of the same bug already exists in App.jsx:
-// `<SpotifySearchModal/>` is used at :4353 and :5018 and defined nowhere. It
-// never throws only because both call sites sit behind `FLAGS.music`, which is
-// false — precisely how `<AttendeeView/>` hid until session 5 found it. Left
-// alone here because music is explicitly out of scope, but it is real.
+// The dormant `<SpotifySearchModal/>` this note used to warn about is GONE —
+// decomposition stage 3 removed both call sites, and the only occurrences of that
+// name and of `<AttendeeView/>` left in App.jsx are inside comments describing
+// them. Verified in session 12 by extracting every capitalised JSX element name
+// in each source file and checking it resolves to an import or a local
+// declaration: zero unresolved across App.jsx and all four screen modules.
 
 const SCREENS = [
   // [ sidebar label, something only that screen renders ]

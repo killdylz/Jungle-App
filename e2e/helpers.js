@@ -59,6 +59,13 @@ export async function enterPin(page, pin = PIN) {
 // own labels and is covered by its own test.
 export async function nav(page, label) {
   await page.getByRole("button", { name: label, exact: true }).click();
+  // Screens split into their own chunk (I9) render a Suspense fallback for a
+  // beat after the click. Assertions like `toBeVisible` absorb that on their
+  // own, but a raw `innerText()` read does not — it captured "Loading…" and
+  // reported a stale category the app had never rendered. Waiting here means no
+  // test needs to know which screens are lazy, and adding a lazy screen later
+  // cannot silently make an existing test flaky.
+  await expect(page.getByTestId("screen-loading")).toHaveCount(0);
 }
 
 // Read a domain object back out of localStorage. The repo rule is to assert on

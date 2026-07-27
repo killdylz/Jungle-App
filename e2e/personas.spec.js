@@ -75,6 +75,11 @@ test.describe("Coaches — catalog, shape, draft", () => {
     await page.reload();
     await nav(page, "Coaches");
 
+    // Wait for the row itself before the raw text read. `nav` already clears the
+    // lazy-chunk fallback, but an `innerText()` snapshot has no auto-waiting of
+    // its own, so it is the one read shape that can capture a half-rendered
+    // screen — which is exactly what it did when Coaches became a lazy chunk.
+    await expect(page.getByText("Hanging Knee Raise").first()).toBeVisible();
     const row = (await page.locator("body").innerText())
       .match(/Hanging Knee Raise[^\n]*/)?.[0] || "";
     expect(row, "a stale stored category was rendered instead of the derived one").toContain("Core");
