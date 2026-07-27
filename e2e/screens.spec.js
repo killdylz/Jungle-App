@@ -190,6 +190,92 @@ test.describe("the Exercise Library's edit mode announces itself", () => {
   });
 });
 
+// ── Round 3: the FORM controls ───────────────────────────────────────────────
+//
+// Rounds 1 and 2 swept <button> on all nine screens. Neither looked at a single
+// <input>, <select> or <textarea>, and that is where the biggest single cluster
+// in this app was hiding: Brand Studio's FINE-TUNE TOKENS panel renders eight
+// <input type="color"> swatches whose labels sat beside them, unassociated, so
+// every one announced as an identical bare "color" control. Choosing the
+// background, the accent and the body text are three very different decisions
+// and assistive tech could not tell them apart.
+//
+// Sixteen nameless controls across three screens, including the Builder's
+// Class / Style / Preset dropdowns — whose captions are `!isMobile`, so on a
+// phone they were not merely unassociated but absent from the page entirely.
+//
+// A PLACEHOLDER counts here, deliberately. It is a weaker name than a label —
+// it disappears the moment the coach types — but it is exposed as the
+// accessible name when nothing else is, so treating it as a failure would fail
+// the search boxes, which are honestly named. The rule this enforces is the
+// same one round 2 set for buttons: a name must EXIST. The stronger
+// "distinguishes" rule is enforced by the colour-swatch assertion below, which
+// is where identical names actually cost something.
+async function namelessFields(page) {
+  return page.evaluate(() => {
+    const accName = (el) => {
+      const aria = el.getAttribute("aria-label");
+      if (aria?.trim()) return aria.trim();
+      const lb = el.getAttribute("aria-labelledby");
+      if (lb) {
+        const t = document.getElementById(lb);
+        if (t?.textContent?.trim()) return t.textContent.trim();
+      }
+      if (el.id) {
+        const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (l?.textContent?.trim()) return l.textContent.trim();
+      }
+      const wrap = el.closest("label");
+      if (wrap?.textContent?.trim()) return wrap.textContent.trim();
+      if (el.getAttribute("placeholder")?.trim()) return el.getAttribute("placeholder").trim();
+      if (el.getAttribute("title")?.trim()) return el.getAttribute("title").trim();
+      return null;
+    };
+    return [...document.querySelectorAll("input, select, textarea")]
+      .filter((el) => el.type !== "hidden" && !accName(el))
+      .map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        type: el.getAttribute("type") || "",
+        // The nearest surrounding text is what identifies the control to a human
+        // reading this failure — an empty <input> tag does not.
+        near: (el.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 60),
+        html: el.outerHTML.replace(/style="[^"]*"/, "").slice(0, 110),
+      }));
+  });
+}
+
+test.describe("every form field announces itself", () => {
+  for (const [label] of SCREENS) {
+    test(`${label} has no nameless inputs`, async ({ page }) => {
+      await freshApp(page);
+      await nav(page, label);
+      const bad = await namelessFields(page);
+      expect(bad, `${label}: ${bad.length} form field(s) with no accessible name:\n` +
+        bad.map((b) => `  <${b.tag} ${b.type}> near "${b.near}"\n    ${b.html}`).join("\n"),
+      ).toEqual([]);
+    });
+  }
+
+  // Existing is only half the rule. Eight controls all called "colour" pass the
+  // sweep above and still leave a screen-reader user unable to pick one — the
+  // same argument as the six identical "Delete" buttons in the library.
+  test("Brand Studio's colour swatches say WHICH token they set", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Brand Studio");
+
+    const swatches = page.locator('input[type="color"]');
+    const n = await swatches.count();
+    // Scanner sanity: if the panel ever stops rendering, an empty set must not
+    // pass this test by default.
+    expect(n, "the FINE-TUNE TOKENS panel must render colour swatches").toBeGreaterThan(4);
+
+    const names = await swatches.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+    expect(names.filter(Boolean).length, "every swatch needs a name").toBe(n);
+    expect(new Set(names).size,
+      `colour swatches must name their token, got: ${names.join(", ")}`).toBe(n);
+  });
+});
+
 // ── A control that announces itself and does nothing ─────────────────────────
 //
 // Both sweeps above ask whether a control has a NAME. Neither can ask whether

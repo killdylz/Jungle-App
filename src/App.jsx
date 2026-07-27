@@ -466,7 +466,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                   }
                 </div>
                 <div style={{flex:1}}>
-                  <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleLogoUpload}/>
+                  <input ref={fileRef} type="file" accept="image/*" aria-label="Upload your gym logo" style={{display:"none"}} onChange={handleLogoUpload}/>
                   <button onClick={()=>fileRef.current?.click()}
                     style={{width:"100%",padding:"9px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",marginBottom:"6px"}}>
                     {extracting ? "⏳ Reading your logo…" : draft.logo ? "🔄 Change Logo" : "📁 Upload Logo"}
@@ -1163,7 +1163,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                   </>
               }
             </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFileChange}/>
+            <input ref={fileRef} type="file" accept="image/*" aria-label="Upload a logo to generate your palette from" style={{display:"none"}} onChange={handleFileChange}/>
 
             {/* Vibe selector */}
             <div style={{marginBottom:"12px"}}>
@@ -1299,7 +1299,16 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
               {tokenLabels.map(({key,label})=>(
                 <div key={key} style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                  <input type="color" value={draftTokens[key]?.startsWith("rgba")?"var(--card)":draftTokens[key]||"#000000"}
+                  {/* The visible {label} sits to the RIGHT of the swatch and was
+                      never associated with it, so all eight tokens announced as
+                      an identical bare "color" control. Same defect as the
+                      twelve symbol-only buttons in session 12: the name has to
+                      exist AND distinguish, and eight interchangeable colour
+                      pickers for bg / surface / accent / text distinguish
+                      nothing. Named from the same `label` the sighted user
+                      reads, so the two can never drift apart. */}
+                  <input type="color" aria-label={`${label} colour`}
+                    value={draftTokens[key]?.startsWith("rgba")?"var(--card)":draftTokens[key]||"#000000"}
                     onChange={e=>setDraftTokens(d=>({...d,[key]:e.target.value}))}
                     style={{width:"30px",height:"30px",borderRadius:"6px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"1px"}}/>
                   <div style={{flex:1}}>
@@ -1646,7 +1655,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
             <div style={{flexShrink:0,padding:isMobile?"10px 14px":"12px 18px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
               {/* Mobile: class type select */}
               {isMobile && (
-                <select value={selClass} onChange={e=>setSelClass(e.target.value)}
+                <select value={selClass} onChange={e=>setSelClass(e.target.value)} aria-label="Class type to browse"
                   style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"12px",cursor:"pointer"}}>
                   {classKeys.map(k=><option key={k} value={k}>{libData[k].icon} {libData[k].label}</option>)}
                 </select>
@@ -1746,7 +1755,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                                 <input key={f} value={draftEx[f]||""} onChange={e=>setDraftEx(d=>({...d,[f]:e.target.value}))} placeholder={p}
                                   style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",outline:"none",width:w,boxSizing:"border-box"}}/>
                               ))}
-                              <select value={draftEx.timing||"none"} onChange={e=>setDraftEx(d=>({...d,timing:e.target.value}))}
+                              <select value={draftEx.timing||"none"} aria-label="Timing format for this movement" onChange={e=>setDraftEx(d=>({...d,timing:e.target.value}))}
                                 style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",cursor:"pointer"}}>
                                 {["none","emom","tabata","amrap","for time"].map(t=><option key={t} value={t}>{t}</option>)}
                               </select>
@@ -2099,7 +2108,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         {/* Right: action buttons */}
         {!isMobile && (
           <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
-            <input ref={importFileRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{display:"none"}}/>
+            <input ref={importFileRef} type="file" accept="application/json,.json" onChange={handleImportFile} aria-label="Choose a Jungle class file to open" style={{display:"none"}}/>
             <button onClick={()=>importFileRef.current?.click()} title="Open a class file saved from Jungle"
               style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--muted)",fontWeight:"600",fontSize:"13px",padding:"9px 13px",borderRadius:"9px",cursor:"pointer"}}>
               Open
@@ -2136,13 +2145,17 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       {/* Class type selector + DJ row */}
       <div style={{padding:isMobile?"8px 14px":"12px 24px",borderBottom:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
         {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Class</span>}
-        <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)}
+        {/* The "Class" / "Style" / "Preset" captions beside these three are
+            `!isMobile`, so on a phone they are not merely unassociated — they
+            are not on the page at all, and three adjacent unnamed dropdowns is
+            what a screen-reader user got. */}
+        <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)} aria-label="Class type"
           style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
           {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
         </select>
         {selectedSubKeys.length > 0 && <>
           {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
-          <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)}
+          <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)} aria-label="Class style"
             style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
           </select>
@@ -2158,6 +2171,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             const t = TEMPLATES.find(x=>x.id===e.target.value);
             if (t) onImportClass?.({ name:t.name, stages:t.stages });
           }}
+          aria-label="Start from a ready-made Jungle class"
           title="Start from a ready-made Jungle class"
           style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
           <option value="">Jungle presets…</option>
@@ -2460,20 +2474,27 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
                 <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>{stage.name} — Settings</div>
                 <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+                  {/* These three already HAD visible <label> elements. None was
+                      associated with its field — no htmlFor, and the input is a
+                      sibling rather than a child — so the text was decoration
+                      and the accessible name was empty. htmlFor rather than
+                      aria-label, because it also makes the label clickable,
+                      which widens the hit target on the phone this screen has
+                      to work on. */}
                   <div>
-                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
-                    <input value={stage.name} onChange={e=>onStageChange(selIdx,{...stage,name:e.target.value})}
+                    <label htmlFor="stage-name" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage name</label>
+                    <input id="stage-name" value={stage.name} onChange={e=>onStageChange(selIdx,{...stage,name:e.target.value})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div>
-                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
-                    <input type="number" min="1" max="60" value={Math.round(stage.dur/60)}
+                    <label htmlFor="stage-duration" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
+                    <input id="stage-duration" type="number" min="1" max="60" value={Math.round(stage.dur/60)}
                       onChange={e=>onStageChange(selIdx,{...stage,dur:parseInt(e.target.value||"1")*60})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div>
-                    <label style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
-                    <select value={stage.type} onChange={e=>onStageChange(selIdx,{...stage,type:e.target.value})}
+                    <label htmlFor="stage-type" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
+                    <select id="stage-type" value={stage.type} onChange={e=>onStageChange(selIdx,{...stage,type:e.target.value})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",cursor:"pointer",boxSizing:"border-box"}}>
                       {Object.entries(SCFG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>

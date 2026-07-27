@@ -752,7 +752,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
               <p style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",marginBottom:"10px"}}>Add a coach</p>
               <Input placeholder="Name — e.g. Coach Mike" value={form.name}
                      onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{marginBottom:"8px"}}/>
-              <Select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
+              <Select value={form.kind} aria-label="What kind of coach profile this is" onChange={e=>setForm(f=>({...f,kind:e.target.value}))} style={{marginBottom:"8px"}}>
                 {store.PERSONA_KINDS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
               </Select>
               <Input placeholder="Description (optional)" value={form.description}
