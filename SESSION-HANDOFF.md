@@ -1,12 +1,16 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-27 (session 12)_
+_Last updated: 2026-07-27 (session 13)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-13-PROMPT.md` carries the pending list and the
-> blocked-on-Dylan items. **Both of session 11's DEC-11 measurements are now decided and built**
-> — see Session 12 below. Then read spec **§0's trust ranking** and **§12**.
+> **▶ STARTING A NEW SESSION?** `SESSION-14-PROMPT.md` carries the pending list and the
+> blocked-on-Dylan items. Read its **§0a first** — a second session was committing to `main`
+> during session 13, and `git log` taken at session start goes stale. Then spec **§0's trust
+> ranking** and **§12**.
 > Gates: **`lint:crash` 0 · 656 unit (no todos) · 114 e2e (no fixme) · build 565.07 KB
 > + an 89.21 KB PersonasScreen chunk**.
+>
+> 🔴 **The one decision that gets more expensive with time: DEC-13**, the library-freeze finding
+> below. It is free to fix while no production gyms exist.
 >
 > ⚠️ **The build gate number CHANGED in session 12** (was 651 KB, one chunk). The personas
 > cluster is now lazy-loaded, so the main chunk is 565 KB and Coaches fetches its own 89 KB.
