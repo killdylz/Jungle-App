@@ -110,6 +110,26 @@ what produced the 23 above.
 `LibraryBrowserModal`. That kills the largest theoretical I9 win — worth knowing before spending
 effort on it.
 
+### 📏 I9 — retarget it. The best candidates are the surfaces that never run.
+
+§3A names Brand Studio, Analytics, Library and Team as the lazy-load list. Measured against what
+each actually buys, that ordering is wrong:
+
+| Candidate | Verdict |
+|---|---|
+| **AnalyticsScreen** (~268 lines) | **Best target.** `FLAGS.mockAnalytics` is **false**, so it is shipped to every device and **never rendered** — pure critical-path waste, the same category as `src/music/*`. It also has **zero App.jsx-local dependencies**: the cleanest extraction on the list. |
+| **`src/music/*`** (~22 KB) | Same category (`FLAGS.music` false, never run), but **not trivial**: App.jsx imports `useSpotify`, and a hook cannot be conditionally lazy-loaded. Needs a real seam, not a `React.lazy`. |
+| **BrandStudioScreen** (~564 lines) | Real win — it is the sole user of six `colors.js` exports, which would leave with it. Needs `GYM_ARCHETYPES`, `PRESET_SKINS`, `ProgramChip`; `PRESET_SKINS` is used by the root component too, so it wants a shared module rather than moving. |
+| **LibraryBrowserModal** (~299 lines) | Weakest. Its 58 KB of data **stays** (above); only the JSX leaves. |
+| **AdminTeamScreen** (168 lines) | Near-worthless alone — its imports (`supabase`, `AuthGate`) are already in main, so it would trade ~4 KB for an extra request. |
+
+A component defined inside App.jsx **cannot** be `React.lazy`'d from App.jsx, so the bottom four
+each need extracting to a file first. The `Suspense` boundary and `nav()` already handle it.
+
+⚠️ **A concurrent session was committing to this repo during session 13** (`078a55a` is not mine).
+Large App.jsx surgery was deliberately deferred rather than raced — two agents rewriting the same
+4,700-line file is a conflict nobody wins. Check `git log` before starting stage 5.
+
 ---
 
 ## 🟢 Shipped SESSION 12
