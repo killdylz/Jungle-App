@@ -8,7 +8,7 @@
 //
 // Lifted from App.jsx unchanged.
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
 import { MEMBER_STATUSES, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";

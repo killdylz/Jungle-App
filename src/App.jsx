@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
-import { Play, Pause, SkipForward, SkipBack, Plus, Trash2, Monitor, ArrowLeft, Music, LogOut, Search, Loader, Wifi, User, Sun, Moon, BookOpen, BarChart2, Calendar, X, ChevronLeft, ChevronRight, Clock, Home, Layers, Check, Mic, Download, Upload, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Plus, Monitor, ArrowLeft, Music, LogOut, Search, Wifi, User, BookOpen, BarChart2, Calendar, X, Clock, Home, Layers, Check, Mic, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
 import { FLAGS, isViewEnabled } from "./config/flags.js";
@@ -31,7 +31,7 @@ import { hexA, wcagContrast, nudgeContrast,
          generateSkinFromPalette, generateThemes, applySkinCSS, inkOn } from "./lib/colors.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
-import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
+import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
 import { AdminTeamScreen } from "./screens/AdminTeamScreen.jsx";
 import { CalendarScreen } from "./screens/CalendarScreen.jsx";

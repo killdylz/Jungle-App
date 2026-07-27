@@ -2,7 +2,6 @@
 // Moved verbatim from App.jsx in decomposition stage 3.
 import { enrichTracksWithBpm, apiGetPlaylistTracks, apiGetRecommendations,
          scoreTrackForStage, selectTracksForDuration } from "./spotifyApi.js";
-import { SCFG } from "../data/stageConfig.js";
 
 // ─── Auto-DJ orchestrator ─────────────────────────────────────────────────────
 async function runDjOrchestrator(stages, selectedPlaylistIds, setStages, setDjProgress) {

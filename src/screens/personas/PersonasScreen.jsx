@@ -14,8 +14,8 @@
 // boundary is absent), `e2e/personas.spec.js`, and the accessible-name sweep.
 // Every icon below is imported explicitly for that reason.
 
-import React, { useState, useEffect } from "react";
-import { Plus, Trash2, ArrowLeft, Search, Loader, X, Layers, Check, Upload, List, Users, Zap } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, ArrowLeft, Search, Loader, X, Layers, Check, Upload, Users, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "../../supabase.js";
 import * as store from "../../lib/store.js";
 import { uid } from "../../lib/ids.js";

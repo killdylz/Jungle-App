@@ -1,6 +1,6 @@
 // ─── TrackItem + TrackSearch ─────────────────────────────────────────────────
 // Moved verbatim from App.jsx in decomposition stage 3.
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, ArrowLeft, Music, Search, Loader, ChevronRight } from "lucide-react";
 import { Input } from "../ui/primitives.jsx";
 import { SCFG } from "../data/stageConfig.js";

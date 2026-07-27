@@ -1,12 +1,11 @@
 // ─── PlaylistImportModal ─────────────────────────────────────────────────────
 // Moved verbatim from App.jsx in decomposition stage 3.
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Music, Loader, X } from "lucide-react";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { SCFG } from "../data/stageConfig.js";
 import { openSpotifyAuthPopup } from "./spotifyAuth.js";
 import { getBpmCache, enrichTracksWithBpm, apiGetPlaylists, apiGetPlaylistTracks } from "./spotifyApi.js";
-import { TrackItem } from "./TrackSearch.jsx";
 
 function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onClose }) {
   const vw = useWindowWidth();

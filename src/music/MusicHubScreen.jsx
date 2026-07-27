@@ -1,6 +1,6 @@
 // ─── MusicHubScreen ──────────────────────────────────────────────────────────
 // Moved verbatim from App.jsx in decomposition stage 3.
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { ArrowLeft } from "lucide-react";
 import * as store from "../lib/store.js";
 import { FLAGS } from "../config/flags.js";

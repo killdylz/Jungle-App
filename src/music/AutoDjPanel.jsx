@@ -1,8 +1,7 @@
 // ─── DjPlaylistModal + AutoDjPanel ───────────────────────────────────────────
 // Moved verbatim from App.jsx in decomposition stage 3.
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { X } from "lucide-react";
-import { Select } from "../ui/primitives.jsx";
 import { SCFG } from "../data/stageConfig.js";
 import { apiGetPlaylists } from "./spotifyApi.js";
 

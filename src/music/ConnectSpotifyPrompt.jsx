@@ -1,6 +1,5 @@
 // ─── ConnectSpotifyPrompt ────────────────────────────────────────────────────
 // Moved verbatim from App.jsx in decomposition stage 3.
-import React from "react";
 
 // Shown when a music surface is opened without a connected Spotify account.
 // Spotify is optional and post-login (any user for now) — never an entry gate.
