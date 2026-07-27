@@ -18,10 +18,11 @@ import React from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
-import { occurrencesForWeek, diffOccurrences, describePublish } from "../lib/scheduleInstances.js";
+import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
+         startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 
-export function CalendarScreen({onBack}) {
+export function CalendarScreen({onBack, onStartClass}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
@@ -47,17 +48,34 @@ export function CalendarScreen({onBack}) {
   const [showAddClass, setShowAddClass] = React.useState(false);
   const [addForm, setAddForm] = React.useState({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
 
-  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat"];
+  // Seven days. This list was Mon–Sat, and because the "Add class" day picker is
+  // built from it too, the product was self-consistently unable to schedule a
+  // Sunday class — invisible rather than broken. Confirmed with Dylan in session
+  // 11 as unintended: a gym that runs Sunday classes could not use the Schedule
+  // at all. Kept in the same order as `RULE_DAYS`, which is what dates an
+  // occurrence, so the two can never disagree about which column Sunday is.
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
   // UNREFERENCED — the grid labels slots by time, not by name. Left in place
   // because this extraction is mechanical; delete it in a cleanup pass.
   const SLOT_LABELS = ["Morning","Mid-Morning","Lunch","Evening","Late"];
 
+  // ⚠ This was `startOfWeek.setDate(base.getDate() - base.getDay() + 1)`, which is
+  // right six days a week and wrong on the seventh. `getDay()` makes Sunday 0, so
+  // on a Sunday it resolved to base + 1 — TOMORROW — and the Schedule showed next
+  // week: today's own row was not on the grid at all, "This week" named the wrong
+  // week, and a Sunday class could not be seen or started on the one day it runs.
+  // Found by opening the screen on a Sunday, which is the only way it shows.
+  //
+  // Now the shared `startOfWeek`/`weekKeyOf` from scheduleInstances.js — the same
+  // pair `occurrencesForWeek` normalises with, so the week the grid DRAWS and the
+  // week it PUBLISHES can no longer disagree. `weekKeyOf` reproduces this screen's
+  // original unpadded `${year}-${monthIndex}-${date}` format exactly, so one-off
+  // rules already saved still match.
   const baseDate = new Date();
   baseDate.setDate(baseDate.getDate() + weekOffset * 7);
-  const startOfWeek = new Date(baseDate);
-  startOfWeek.setDate(baseDate.getDate() - baseDate.getDay() + 1);
-  const weekKey = `${startOfWeek.getFullYear()}-${startOfWeek.getMonth()}-${startOfWeek.getDate()}`;
+  const startOfWeek = mondayOf(baseDate);
+  const weekKey = weekKeyOf(startOfWeek);
 
   const dayDates = DAYS.map((d,i)=>{
     const dt = new Date(startOfWeek);
@@ -107,6 +125,20 @@ export function CalendarScreen({onBack}) {
     setPublished(describePublish(r));
   };
 
+  // ── §3A: start a class FROM the schedule ──────────────────────────────────
+  // The occurrence behind each grid cell, keyed on exactly what the cell shows —
+  // day, slot AND name. Keying on day+slot alone would be enough almost always,
+  // but two rules can land on one cell (the grid shows the last one) and the
+  // occurrence list is sorted by time-then-name, so the two could pick different
+  // classes: the cell would say "Hyrox Sim" and Start would open S360. Matching
+  // the name means the button can only ever start the class being pointed at.
+  const cellKey = (day, slot, name) => `${day}-${slot}-${String(name||"").trim().toLowerCase()}`;
+  const occByCell = {};
+  weekOccurrences.forEach(o => { occByCell[cellKey(o.day, o.slot, o.name)] = o; });
+  // One clock read for the whole render, so two cells cannot straddle the window
+  // boundary and disagree about what time it is.
+  const nowMs = Date.now();
+
   const suggested = FLAGS.mockAnalytics ? [
     {day:"Tue",slot:"18:00",name:"Strength Lab",reason:"high demand · +34% this slot"},
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
@@ -128,7 +160,13 @@ export function CalendarScreen({onBack}) {
   // `fillColor` went with the fill bar it coloured — see the grid cell below.
   // It thresholded a number nothing ever set, so it only ever returned grey.
 
-  const visibleDays = isMobile ? DAYS.slice(0,4) : DAYS;
+  // Every day is always rendered. This used to be `DAYS.slice(0,4)` on a phone,
+  // which silently hid Fri and Sat — the same failure as the missing Sunday, in
+  // miniature, and worse on a seven-day week. A phone scrolls the grid sideways
+  // instead: a column you can reach beats a column that does not exist.
+  const visibleDays = DAYS;
+  const dayCol = isMobile ? "minmax(64px,1fr)" : "1fr";
+  const gridCols = `${isMobile?"56px":"80px"} repeat(${visibleDays.length},${dayCol})`;
 
   return (
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px":"24px",boxSizing:"border-box"}}>
@@ -218,10 +256,12 @@ export function CalendarScreen({onBack}) {
         </div>
       )}
 
-      {/* Schedule grid */}
-      <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",overflow:"hidden",marginBottom:"16px"}}>
+      {/* Schedule grid. `overflowX:auto` is what lets a phone reach all seven
+          days; both inner grids share `gridCols`, so they scroll as one piece and
+          the date headers stay over their own columns. */}
+      <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",overflowX:"auto",overflowY:"hidden",marginBottom:"16px"}}>
         {/* Day headers */}
-        <div style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid var(--border)`}}>
+        <div style={{display:"grid",gridTemplateColumns:gridCols,borderBottom:`1px solid var(--border)`}}>
           <div style={{padding:"10px 12px",background:"var(--navy)"}}/>
           {visibleDays.map((d,i)=>(
             <div key={d} style={{padding:"10px 8px",background:"var(--navy)",borderLeft:`1px solid var(--border)`,textAlign:"center"}}>
@@ -233,14 +273,20 @@ export function CalendarScreen({onBack}) {
 
         {/* Time slot rows */}
         {SLOTS.map(slot=>(
-          <div key={slot} style={{display:"grid",gridTemplateColumns:`80px repeat(${visibleDays.length},1fr)`,borderBottom:`1px solid var(--border)`,minHeight:"80px"}}>
-            <div style={{padding:"10px 12px",background:"color-mix(in srgb, var(--navy) 40%, transparent)",display:"flex",flexDirection:"column",justifyContent:"center",borderRight:`1px solid var(--border)`}}>
+          <div key={slot} style={{display:"grid",gridTemplateColumns:gridCols,borderBottom:`1px solid var(--border)`,minHeight:"80px"}}>
+            <div style={{padding:isMobile?"10px 6px":"10px 12px",background:"color-mix(in srgb, var(--navy) 40%, transparent)",display:"flex",flexDirection:"column",justifyContent:"center",borderRight:`1px solid var(--border)`}}>
               <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>{slot}</div>
             </div>
             {visibleDays.map(day=>{
               const key = `${day}-${slot}`;
               const cls = effSchedule[key];
               const sug = suggested.find(s=>s.day===day && s.slot===slot);
+              // The dated occurrence behind this cell, and whether it is close
+              // enough to now to run. At most one or two cells on a whole week
+              // qualify, which is the point: the grid grows a Start button only
+              // on the class that is actually about to happen.
+              const occ = cls ? occByCell[cellKey(day, slot, cls.name)] : null;
+              const startable = !!(occ && onStartClass && isStartable(occ, nowMs));
               return (
                 <div key={day} style={{padding:"6px",borderLeft:`1px solid var(--border)`,position:"relative"}}>
                   {cls && (
@@ -250,7 +296,9 @@ export function CalendarScreen({onBack}) {
                       border:`1px solid ${CAT_COLOR[cls.type]||"var(--accent)"}40`,
                       borderRadius:"8px",
                       cursor:"pointer",
-                      height:"calc(100% - 2px)",
+                      // minHeight, not height: the cell still fills its row, but a
+                      // Start button can make it taller instead of overflowing.
+                      minHeight:"calc(100% - 2px)",
                       boxSizing:"border-box",
                     }}>
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
@@ -265,6 +313,23 @@ export function CalendarScreen({onBack}) {
                           class TYPE takes the space, which also gives the cell
                           a non-colour cue for what the border hue means. */}
                       {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.type}</div>}
+                      {/* §3A. Pressing this is what makes the Runner's check-ins
+                          land on the occurrence the Schedule published, instead
+                          of on a second row nobody looks at: the occurrence is
+                          CHOSEN here rather than guessed later from a name.
+                          `aria-label` and not `title` — a title does not override
+                          a button's text content for its accessible name, so
+                          every one of these would otherwise just be "Start". */}
+                      {startable && (
+                        <button data-testid="start-class"
+                          aria-label={`Start ${cls.name} at ${slot}`}
+                          onClick={()=>onStartClass(occ)}
+                          style={{marginTop:"5px",width:"100%",padding:"5px 0",background:"var(--accent)",color:"var(--on-accent)",
+                                  border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"10px",fontWeight:"800",
+                                  textTransform:"uppercase",letterSpacing:"0.5px"}}>
+                          Start
+                        </button>
+                      )}
                     </div>
                   )}
                   {!cls && sug && (

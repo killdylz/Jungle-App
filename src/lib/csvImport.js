@@ -118,6 +118,36 @@ export function parseDate(raw, { dayFirst = true } = {}) {
   }
   return null;
 }
+// Did the source cell actually STATE a time of day?
+//
+// `parseDate` cannot answer this: it defaults a bare date to 12:00 UTC, so
+// "2026-03-04" and "2026-03-04 12:00" come back identical. The distinction
+// matters because it decides what counts as one class. A studio that runs a 06:00
+// and an 18:00 class of the same name held TWO classes; a date-only export
+// genuinely cannot tell them apart, and pretending otherwise would split one
+// class per row. So the granularity follows the data: minute when the export
+// gives a time, day when it does not.
+//
+// Deliberately a separate predicate rather than a second return value from
+// parseDate — that function is exported, called from the UI, and pinned by tests
+// on its exact string result.
+export function hasTimeOfDay(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  // ISO with a time part, or a slash/dot date followed by one. Both are the forms
+  // parseDate itself reads a time out of; anything it ignores must not count here
+  // or the key would claim a precision the timestamp does not have.
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)) return true;
+  if (/^\d{1,2}[/.]\d{1,2}[/.]\d{2,4}[T ,]+\d{1,2}:\d{2}/.test(s)) return true;
+  return false;
+}
+
+// The identity of a class occurrence within one import: its name, and the moment
+// it ran to whatever precision the export actually gave.
+export function occurrenceKeyOf(name, startsAt, timed) {
+  return `${name}@${String(startsAt).slice(0, timed ? 16 : 10)}`;
+}
+
 function iso(y, mo, d, hh, mm, ss) {
   const Y = Number(y), M = Number(mo), D = Number(d);
   if (!Y || M < 1 || M > 12 || D < 1 || D > 31) return null;
@@ -180,9 +210,14 @@ export function analyzeAttendanceCsv(text, members = [], opts = {}) {
     }
 
     const className = cell(map.className) || "Imported class";
-    const classKey = `${className}@${when.slice(0, 10)}`;
+    // `timed` rides along on the class record so the APPLY step can match
+    // existing occurrences at the same precision. Two granularities for one
+    // identity is how a re-import would attach the evening class's check-ins to
+    // the morning one.
+    const timed = hasTimeOfDay(cell(map.date));
+    const classKey = occurrenceKeyOf(className, when, timed);
     if (!classes.has(classKey)) {
-      classes.set(classKey, { key: classKey, name: className, startsAt: when,
+      classes.set(classKey, { key: classKey, name: className, startsAt: when, timed,
                               classType: cell(map.classType), coachName: cell(map.coach) });
     }
 

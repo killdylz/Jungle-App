@@ -18,9 +18,10 @@ import {
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
   getDraftClass, saveDraftClass,
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
-  _deltaRows, _markSynced, _unmark, publishOccurrences,
+  _deltaRows, _markSynced, _unmark, publishOccurrences, startScheduledClass,
 } from "./store.js";
-import { analyzeAttendanceCsv } from "./csvImport.js";
+import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
+import { atRiskMembers } from "./retention.js";
 
 const ALLOWED = ["google_slides", "manual", "jungle"];
 
@@ -153,23 +154,56 @@ describe("ensureClassInstance", () => {
     expect(ensureClassInstance({ name: "S360" }).instance.id).toBe(published.id);
   });
 
-  // ⛔ THE GAP, verified but deliberately not fixed here — see SESSION-11-PROMPT §3A.
-  // The join above is keyed on NAME, and nothing ever makes the Builder's
-  // `sessionName` equal the schedule rule's name: it comes from the draft, a
-  // template or a persona and defaults to "My Workout" (App.jsx:2767, and every
-  // setSessionName call site). So in real use the names differ, the Runner mints a
-  // second occurrence, and the published row keeps zero attendance forever.
-  // Measured: identical names at slot time -> 1 occurrence; "S360" published vs
-  // "S360 — Week 4" or "My Workout" run -> 2.
+  // ── THE GAP, closed (session 11, §3A) ──────────────────────────────────────
+  // The join above is keyed on NAME, and nothing made the Builder's `sessionName`
+  // equal the schedule rule's name: it comes from the draft, a template or a
+  // persona and defaults to "My Workout". So in real use the names differed, the
+  // Runner minted a second occurrence, and the published row kept zero attendance
+  // forever. Measured before the fix: identical names at slot time -> 1
+  // occurrence; "S360" published vs "S360 — Week 4" or "My Workout" run -> 2.
   //
-  // NOT fixed by loosening the match. Guessing WHICH scheduled occurrence a coach
-  // is running would attach attendance to the wrong class permanently and
-  // invisibly. The honest fix is to let the coach start a class FROM the Schedule
-  // so the occurrence is chosen rather than inferred — a product decision.
-  // `retention.js` reads only `attendance`, never `class_instances`, so the
-  // at-risk instrument is NOT affected; per-class analytics and the
-  // schedule-vs-actual picture are.
-  it.todo("carries the Schedule's occurrence into the Runner so the names cannot diverge");
+  // NOT fixed by loosening the match — guessing WHICH scheduled occurrence a
+  // coach is running would attach attendance to the wrong class permanently and
+  // invisibly. Fixed by letting the coach start the class FROM the Schedule, so
+  // the occurrence is chosen and its id travels into the Runner.
+  //
+  // This is the test that pins the whole point of the change: the names diverge
+  // as badly as they ever did, and the check-in still lands on the published row.
+  it("carries the Schedule's occurrence into the Runner so the names cannot diverge", () => {
+    const startsAt = new Date().toISOString();
+    const published = publishOccurrences([{ startsAt, name: "S360", classType: "HIIT",
+                                            coachName: "Dylan", durationMin: 45 }]).instances[0];
+
+    // The coach taps Start on that cell. The occurrence is chosen, not inferred.
+    const started = startScheduledClass({ name: "S360", startsAt });
+    expect(started.created).toBe(false);
+    expect(started.instance.id).toBe(published.id);
+
+    // …and runs it under a completely different name — the default, the worst case.
+    const { instance } = ensureClassInstance({ name: "My Workout", classType: "HIIT",
+                                               instanceId: started.instance.id });
+    expect(instance.id).toBe(published.id);
+    expect(getClassInstances()).toHaveLength(1);
+    // The published row is untouched: still the schedule's name, coach and length.
+    expect(instance).toMatchObject({ name: "S360", coachName: "Dylan", durationMin: 45 });
+
+    // And the attendance actually lands there — the thing that was zero forever.
+    const { member } = addMember("Ana");
+    recordAttendance({ classInstanceId: instance.id, memberId: member.id });
+    expect(getAttendance().filter(a => a.classInstanceId === published.id)).toHaveLength(1);
+  });
+
+  // A pin that no longer resolves must not mint a row under an id nothing else
+  // knows about. Reloading the tab drops the pin (it is in-memory), and this is
+  // the path that has to stay safe — it degrades to the name join above, which
+  // now matches because starting from the Schedule set `sessionName`.
+  it("falls back to the name join when the pinned occurrence is gone", () => {
+    const startsAt = new Date().toISOString();
+    const published = publishOccurrences([{ startsAt, name: "S360" }]).instances[0];
+    const { instance } = ensureClassInstance({ name: "S360", instanceId: "ci-that-never-existed" });
+    expect(instance.id).toBe(published.id);
+    expect(getClassInstances()).toHaveLength(1);
+  });
 
   it("never stores a non-string in the class_type text column", () => {
     // Caught by driving the real UI: the app's classChoice is an OBJECT
@@ -201,6 +235,63 @@ describe("ensureClassInstance", () => {
     const fresh = ensureClassInstance({ name: "Tuesday 6pm" }).instance;
     expect(fresh.id).not.toBe(instance.id);
     expect(getClassInstances()).toHaveLength(2);
+  });
+});
+
+// ── §3A: starting a class from the Schedule ─────────────────────────────────
+// The third door into class_instances, and the only one that resolves an
+// occurrence from what the coach pointed at rather than from a name and a clock.
+describe("startScheduledClass", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("returns the row the Schedule already published, without writing a second", () => {
+    const startsAt = new Date().toISOString();
+    const published = publishOccurrences([{ startsAt, name: "Morning Burn", coachName: "Dylan" }]).instances[0];
+    const r = startScheduledClass({ name: "Morning Burn", startsAt, coachName: "" });
+    expect(r.instance.id).toBe(published.id);
+    expect(r.created).toBe(false);
+    // Starting must never overwrite what the Schedule wrote — the same trap as
+    // the Runner's door in session 10, where one door recorded a null duration.
+    expect(r.instance.coachName).toBe("Dylan");
+    expect(getClassInstances()).toHaveLength(1);
+  });
+
+  it("puts an unpublished class on the books rather than refusing to start it", () => {
+    const startsAt = new Date().toISOString();
+    const r = startScheduledClass({ name: "Hyrox Sim", startsAt, classType: "Hyrox",
+                                    coachName: "Mara", durationMin: 60 });
+    expect(r.created).toBe(true);
+    expect(getClassInstances()).toHaveLength(1);
+    expect(r.instance).toMatchObject({ name: "Hyrox Sim", classType: "Hyrox", coachName: "Mara", durationMin: 60 });
+  });
+
+  // THE one that matters: the row keeps the SLOT's time, not the moment Start was
+  // pressed. Otherwise publishing the week afterwards would not recognise it, and
+  // the same class would sit on the books twice — six minutes apart.
+  it("dates the occurrence to its slot, not to when Start was pressed", () => {
+    const slot = new Date(Date.now() - 6 * 60_000).toISOString();
+    const r = startScheduledClass({ name: "Morning Burn", startsAt: slot });
+    expect(r.instance.startsAt).toBe(slot);
+
+    const after = publishOccurrences([{ startsAt: slot, name: "Morning Burn" }]);
+    expect(after.created).toBe(0);
+    expect(after.already).toBe(1);
+    expect(getClassInstances()).toHaveLength(1);
+  });
+
+  it("is idempotent when a coach presses Start twice", () => {
+    const startsAt = new Date().toISOString();
+    const first  = startScheduledClass({ name: "Morning Burn", startsAt });
+    const second = startScheduledClass({ name: "Morning Burn", startsAt });
+    expect(second.instance.id).toBe(first.instance.id);
+    expect(getClassInstances()).toHaveLength(1);
+  });
+
+  it("refuses an occurrence it cannot identify instead of writing a nameless row", () => {
+    for (const bad of [null, undefined, {}, { name: "No time" }, { startsAt: new Date().toISOString() }]) {
+      expect(startScheduledClass(bad)).toBeNull();
+    }
+    expect(getClassInstances()).toHaveLength(0);
   });
 });
 
@@ -716,5 +807,236 @@ describe("_mergeAppendLog", () => {
     const { merged } = _mergeAppendLog([server], [local], true);
     expect(merged).toHaveLength(1);
     expect(merged[0].source).toBe("coach");
+  });
+});
+
+// ── SWEEP: CSV backfill → members → class_instances → attendance → retention ──
+//
+// The whole chain, over a multi-week corpus, ending on the DERIVED store. Every
+// step of this already had per-function tests and they all passed; what none of
+// them could see is the composition — the same shape as session 10's parser
+// defect, which every unit test missed and one whole-deck sweep caught.
+//
+// Why a corpus and not three rows: a studio switching to Jungle imports YEARS of
+// attendance, and the defects that matter here scale with the file. The counts
+// below are the quantification — they are what makes a "tidy-looking nit" either
+// obviously fine or obviously a must-fix.
+//
+// The clock is fixed. Retention arithmetic is all relative to now, so a corpus
+// built from `new Date()` would assert something different every day it ran.
+describe("SWEEP — a real attendance export, end to end", () => {
+  beforeEach(() => localStorage.clear());
+
+  const NOW = Date.UTC(2026, 6, 26, 12, 0, 0);
+  const dayAt = off => new Date(NOW + off * 86_400_000).toISOString().slice(0, 10);
+
+  // Ana is already on the roster, under a DIFFERENT name from the one the export
+  // uses ("A. Lim"). Only the email can match her; if it does not, she is
+  // duplicated and her four years of history splits across two members.
+  const ANA = { id: "m-ana", name: "Ana Lim", email: "ana@example.com",
+                status: "active", joinedAt: dayAt(-400) };
+
+  const CORPUS = [
+    "Member Name,Email,Date,Class,Type,Coach",
+    // Ana — matched by email despite the name, and sharing the -60 class with Ben.
+    `A. Lim,ANA@EXAMPLE.COM,${dayAt(-60)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-60)},S360,HIIT,Dylan`,
+    `A. Lim,ANA@EXAMPLE.COM,${dayAt(-30)},S360,HIIT,Dylan`,
+    `A. Lim,ANA@EXAMPLE.COM,${dayAt(-9)},GC,Hyrox,Mara`,
+    `A. Lim,ANA@EXAMPLE.COM,${dayAt(-2)},S360,HIIT,Dylan`,
+    // A genuine duplicate: same member, same class, same day, twice in the file.
+    `A. Lim,ANA@EXAMPLE.COM,${dayAt(-2)},S360,HIIT,Dylan`,
+    // Ben — a long history that stops 40 days ago.
+    `Ben Tan,ben@example.com,${dayAt(-120)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-110)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-100)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-90)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-50)},S360,HIIT,Dylan`,
+    `Ben Tan,ben@example.com,${dayAt(-40)},S360,HIIT,Dylan`,
+    // Cara — joined recently, two visits, still inside her first month.
+    `Cara Ng,cara@example.com,${dayAt(-20)},GC,Hyrox,Mara`,
+    `Cara Ng,cara@example.com,${dayAt(-18)},GC,Hyrox,Mara`,
+    // Dan — the morning AND the evening class of the same name, same day. Two
+    // real classes, two real attendances. Most studios run exactly this.
+    `Dan Ho,dan@example.com,${dayAt(-10)}T06:00,Morning Burn,HIIT,Jo`,
+    `Dan Ho,dan@example.com,${dayAt(-10)}T18:00,Morning Burn,HIIT,Jo`,
+    // Unreadable date — reported with its line, never guessed.
+    `Eve Wong,eve@example.com,sometime last spring,S360,HIIT,Dylan`,
+  ].join("\n");
+
+  const analyse = () => analyzeAttendanceCsv(CORPUS, getMembers());
+
+  it("reads the corpus without inventing or losing a class", () => {
+    saveMembers([ANA]);
+    const a = analyse();
+    expect(a.ok).toBe(true);
+
+    // One unreadable row, reported with the spreadsheet line number it is on.
+    expect(a.problems).toHaveLength(1);
+    expect(a.problems[0]).toMatchObject({ line: 18 });
+    expect(a.problems[0].why).toMatch(/couldn't read the date/);
+
+    // ONE duplicate — Ana's repeated row. Dan's second class of the day is NOT a
+    // duplicate: a studio that runs a 06:00 and an 18:00 class of the same name
+    // held two classes, and counting the second as a repeat both loses a real
+    // attendance and tells the coach it was a duplicate.
+    expect(a.skipped).toBe(1);
+    expect(a.rows).toHaveLength(15);
+    expect(a.classes).toHaveLength(14);
+
+    // Eve's row was rejected before she could become a member — a member created
+    // from a row that is not being imported is a roster entry from nowhere.
+    expect(a.newMembers.map(m => m.name).sort()).toEqual(["Ben Tan", "Cara Ng", "Dan Ho"]);
+
+    expect(describeImport(a)).toBe(
+      "15 check-ins · 14 classes · 3 new members · 1 duplicate skipped · 1 row that couldn't be read");
+  });
+
+  it("materialises the roster, the occurrences and the check-ins that reference them", () => {
+    saveMembers([ANA]);
+    const r = applyAttendanceImport(analyse());
+    expect(r).toMatchObject({ ok: true, members: 3, classes: 14, attendance: 15 });
+
+    expect(getMembers()).toHaveLength(4);
+    expect(getClassInstances()).toHaveLength(14);
+    expect(getAttendance()).toHaveLength(15);
+
+    // Ana was matched, not duplicated — one "Lim" on the roster, still under the
+    // name the gym typed rather than the one the old system exported.
+    expect(getMembers().filter(m => /Lim/.test(m.name))).toHaveLength(1);
+    expect(getMembers().find(m => m.id === "m-ana").name).toBe("Ana Lim");
+    // …and her history is all on her, including the class she shared with Ben.
+    const byId = id => getAttendance().filter(a => a.memberId === id);
+    expect(byId("m-ana")).toHaveLength(4);
+
+    // Every backfilled row stays distinguishable from a live check-in forever.
+    expect(getAttendance().every(a => a.source === "import")).toBe(true);
+
+    // Referential integrity: no check-in points at an id that does not exist.
+    const memberIds = new Set(getMembers().map(m => m.id));
+    const ciIds = new Set(getClassInstances().map(c => c.id));
+    getAttendance().forEach(a => {
+      expect(memberIds.has(a.memberId)).toBe(true);
+      expect(ciIds.has(a.classInstanceId)).toBe(true);
+    });
+  });
+
+  // THE finding this sweep exists for.
+  it("keeps a morning and an evening class of the same name as two classes", () => {
+    saveMembers([ANA]);
+    applyAttendanceImport(analyse());
+
+    const burns = getClassInstances().filter(c => c.name === "Morning Burn");
+    expect(burns).toHaveLength(2);
+    expect(burns.map(c => new Date(c.startsAt).getUTCHours()).sort((x, y) => x - y)).toEqual([6, 18]);
+
+    const dan = getMembers().find(m => m.email === "dan@example.com");
+    const danAtt = getAttendance().filter(a => a.memberId === dan.id);
+    expect(danAtt).toHaveLength(2);
+    // Two check-ins on two DIFFERENT occurrences. Collapsed onto one, the second
+    // hits 0007's unique(class_instance_id, member_id) and is dropped.
+    expect(new Set(danAtt.map(a => a.classInstanceId)).size).toBe(2);
+  });
+
+  // Re-running an overlapping export is the normal case, not an edge case: a
+  // studio exports again to pick up the last month. It must add nothing.
+  it("adds nothing when the same export is imported twice", () => {
+    saveMembers([ANA]);
+    applyAttendanceImport(analyse());
+    const second = applyAttendanceImport(analyse());
+    expect(second).toMatchObject({ ok: true, members: 0, classes: 0, attendance: 0 });
+    expect(getMembers()).toHaveLength(4);
+    expect(getClassInstances()).toHaveLength(14);
+    expect(getAttendance()).toHaveLength(15);
+  });
+
+  // The DERIVED store — the reason the backfill exists at all. Read back the
+  // instrument, not the rows: the plan looked fine in session 10 too.
+  it("feeds the retention instrument the right answers", () => {
+    saveMembers([ANA]);
+    applyAttendanceImport(analyse());
+    const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
+
+    // Cara first: a new member not building a habit is more actionable than a
+    // lapse, and fewer visits is more urgent.
+    expect(flags.map(f => f.name)).toEqual(["Cara Ng", "Ben Tan"]);
+
+    const cara = flags[0];
+    expect(cara.rule).toBe("new_member_low_visits");
+    expect(cara).toMatchObject({ visits: 2, severity: 4 });
+    expect(cara.reason).toMatch(/Joined 20 days ago and has attended 2 times/);
+
+    const ben = flags[1];
+    expect(ben.rule).toBe("absence");
+    expect(ben).toMatchObject({ visits: 7, daysSince: 40, severity: 3 });
+
+    // Ana is current and Dan is inside his grace period — neither is a warning.
+    expect(flags.map(f => f.memberId)).not.toContain("m-ana");
+    const dan = getMembers().find(m => m.email === "dan@example.com");
+    expect(flags.map(f => f.memberId)).not.toContain(dan.id);
+  });
+
+  // ⚠️ MEASURED, NOT FIXED — a decision for Dylan, recorded here because the cost
+  // is only visible at corpus scale.
+  //
+  // Rule 1 needs a join date. The CSV export does not carry one, so
+  // `applyAttendanceImport` leaves `joinedAt: ""` (honest — it does not know), and
+  // `retention.js:91` substitutes the member's FIRST IMPORTED CHECK-IN. That
+  // substitution is deliberate and pinned by `retention.test.js:68` — at n=1 it
+  // looks obviously right: a member whose history starts 20 days ago probably is
+  // new.
+  //
+  // At corpus scale it inverts. An established gym importing a SHORT recent export
+  // has a roster whose every "first visit" is inside the 30-day window, so every
+  // member with fewer than 4 visits IN THE FILE is flagged as a new member who is
+  // not building a habit — and the reason line states "Joined N days ago" as fact,
+  // about people who joined years ago.
+  //
+  // Rule 2 is explicitly gated against exactly this failure (`activity.recording`,
+  // and the note at the top of retention.js says so). Rule 1 has no equivalent
+  // gate. The number below is what a coach would see on day one.
+  //
+  // Not changed unilaterally: it would alter what the retention instrument
+  // reports, which is the commercial core, and the current behaviour is a tested
+  // decision rather than an oversight.
+  it("MEASURES how much of an established roster a short export falsely flags as new", () => {
+    // A three-week export from a gym that has been running for years. Nobody here
+    // is new; the file just does not go back far enough to show it.
+    const rows = ["Member Name,Email,Date,Class"];
+    const visitsFor = i => (i < 5 ? 2 : i < 9 ? 3 : 6);
+    for (let i = 0; i < 12; i++) {
+      for (let v = 0; v < visitsFor(i); v++) {
+        rows.push(`Member ${i},m${i}@example.com,${dayAt(-20 + v * 3)},S360`);
+      }
+    }
+    applyAttendanceImport(analyzeAttendanceCsv(rows.join("\n"), []));
+    expect(getMembers()).toHaveLength(12);
+    expect(getMembers().every(m => m.joinedAt === "")).toBe(true);
+
+    const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
+    const asNew = flags.filter(f => f.rule === "new_member_low_visits");
+
+    // 9 of 12 — three quarters of the roster, on day one, every one of them
+    // asserting a join date the import never had.
+    expect(asNew).toHaveLength(9);
+    expect(flags).toHaveLength(9);
+    asNew.forEach(f => expect(f.reason).toMatch(/^Joined \d+ days ago/));
+    // The ones with 6 visits escape only because they cleared the visit bar, not
+    // because anything knew how long they had been members.
+    expect(new Set(asNew.map(f => f.visits))).toEqual(new Set([2, 3]));
+  });
+
+  // The absence rule is gated on the studio RECORDING. A pure historical import
+  // with nothing recent must not flag the entire roster on day one — that is the
+  // difference between an instrument and noise.
+  it("does not flag the whole roster off a purely historical import", () => {
+    saveMembers([ANA]);
+    applyAttendanceImport(analyse());
+    // Drop the only recent check-ins, leaving nothing inside the last 14 days.
+    const stale = getAttendance().filter(a => Date.parse(a.checkedInAt) < NOW - 30 * 86_400_000);
+    localStorage.setItem("jungle_attendance", JSON.stringify(stale));
+
+    const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
+    expect(flags.every(f => f.rule === "new_member_low_visits")).toBe(true);
   });
 });

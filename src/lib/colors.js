@@ -238,6 +238,62 @@ export function generateThemes(swatches, avgLuma){
   ];
 }
 
+// ── Theme-polarity derivations (FR-H6) ──────────────────────────────────────
+//
+// Both of these existed inline and both assumed a DARK theme. Every skin the
+// generator produces satisfies that assumption, so the bug was invisible — until
+// a coach hand-builds a LIGHT identity in the Brand Studio's palette editor,
+// which is exactly what a boutique/wellness studio does. The editor starts from
+// the active skin's tokens and only exposes bg/card/navy/accent/green/text/muted,
+// so the dark-theme assumptions came along unchanged.
+//
+// Measured on a light custom skin (bg #fff7f0, text #1a1014):
+//   --on-green on green #ff8ab5 → 2.07:1, where the other candidate gave 8.47:1
+//   --on-accent on accent #ff2d78 → 3.36:1, where the other gave 5.23:1
+// i.e. the derivation was choosing the LESS readable of the two colours it had.
+
+/**
+ * Which ink reads on a surface: the background or the text colour.
+ *
+ * The old rule was `luminance(surface) > 0.18 ? bg : text` — right whenever `bg`
+ * is the dark one, and inverted when it is not. Asking which candidate actually
+ * contrasts more is theme-agnostic and cannot invert. On every shipped preset it
+ * returns the same answer the old rule did, because there `bg` genuinely is dark.
+ */
+export function inkOn(surfaceHex, bgHex, textHex) {
+  const vsBg = wcagContrast(bgHex, surfaceHex);
+  const vsText = wcagContrast(textHex, surfaceHex);
+  // Ties go to `text`: it is the colour the rest of the UI already reads in.
+  return vsBg > vsText ? bgHex : textHex;
+}
+
+/**
+ * A hairline border token whose polarity matches the surface it sits on.
+ *
+ * The generator gets this right per mode (`rgba(0,0,0,.12)` light,
+ * `rgba(255,255,255,.07)` dark). A hand-edited palette does not: it inherits
+ * whichever the previously active skin had, so a light identity kept a white 7%
+ * overlay on a near-white background — invisible, on every card edge, input
+ * outline, divider and grid line in the product, with no way for the coach to
+ * fix it because `border` is not an editable token.
+ *
+ * Only pure black/white overlays are touched — those are the only form the
+ * generator emits and the only form that can be polarity-wrong. Anything else is
+ * a deliberate colour and is returned untouched. The alpha the skin chose is
+ * always preserved.
+ */
+export function borderOn(borderToken, bgHex) {
+  const m = String(borderToken || "").match(/^rgba\(\s*(0|255)\s*,\s*(0|255)\s*,\s*(0|255)\s*,\s*([\d.]+)\s*\)$/);
+  if (!m) return borderToken;
+  const [, r, g, b, a] = m;
+  if (!(r === g && g === b)) return borderToken;      // not a neutral overlay
+  const rgb = hexToRgb(bgHex);
+  if (!rgb) return borderToken;
+  const surfaceIsLight = relativeLuminance(...rgb) > 0.5;
+  const want = surfaceIsLight ? "0,0,0" : "255,255,255";
+  return `rgba(${want},${a})`;
+}
+
 // ── Applying a skin to the document ─────────────────────────────────────────
 // Writes CSS custom properties onto :root. The one genuinely stateful function
 // in this module; kept here because every token it writes is computed above.
@@ -246,18 +302,18 @@ export function applySkinCSS(tokens, meta={}) {
   r.setProperty("--bg",     tokens.bg);
   r.setProperty("--card",   tokens.card);
   r.setProperty("--navy",   tokens.navy);
-  r.setProperty("--border", tokens.border);
+  // Polarity-aware, so a hand-built light palette does not keep a dark theme's
+  // invisible hairline. See borderOn.
+  r.setProperty("--border", borderOn(tokens.border, tokens.bg));
   r.setProperty("--accent", tokens.accent);
   r.setProperty("--green",  tokens.green);
   r.setProperty("--text",   tokens.text);
   r.setProperty("--muted",  tokens.muted);
-  // Compute on-accent / on-green: dark bg text for light accents, light text for dark accents
-  const _rgbA = hexToRgb(tokens.accent);
-  const _lumA = _rgbA ? relativeLuminance(..._rgbA) : 0;
-  r.setProperty("--on-accent", _lumA > 0.18 ? tokens.bg : tokens.text);
-  const _rgbG = hexToRgb(tokens.green);
-  const _lumG = _rgbG ? relativeLuminance(..._rgbG) : 0;
-  r.setProperty("--on-green", _lumG > 0.18 ? tokens.bg : tokens.text);
+  // Label colour on the accent and green fills: whichever of bg/text actually
+  // reads on them. See inkOn — this was a luminance threshold that assumed bg
+  // was the dark one, and picked the less readable colour on a light skin.
+  r.setProperty("--on-accent", inkOn(tokens.accent, tokens.bg, tokens.text));
+  r.setProperty("--on-green",  inkOn(tokens.green,  tokens.bg, tokens.text));
   // Alpha variant shortcuts for CSS-only colour transitions
   r.setProperty("--accent-10", tokens.accent + "1A");
   r.setProperty("--accent-20", tokens.accent + "33");

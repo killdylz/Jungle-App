@@ -29,7 +29,7 @@ import { onRoomState, sendRoomState } from "./lib/room.js";
 // behind — the caller keeps the vocabulary it actually speaks.
 import { hexToRgb, hexA, relativeLuminance, wcagContrast, nudgeContrast,
          extractPalette, extractDominantColor, DEFAULT_PROGRAMS,
-         generateSkinFromPalette, generateThemes, applySkinCSS } from "./lib/colors.js";
+         generateSkinFromPalette, generateThemes, applySkinCSS, inkOn } from "./lib/colors.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
 import { ThemeContext, useTheme, useWindowWidth, Btn, Input, Select, Tag, SpBadge, JungleLogo, BrandLogo, StatCard } from "./ui/primitives.jsx";
@@ -178,6 +178,18 @@ let _uid = 1;
 const uid = () => `s${_uid++}`;
 const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
 const fmtSec = s => `${s}s`;
+// "today 18:00" / "Tue 18:00" — when a scheduled occurrence starts. 24h, because
+// the Schedule's own slots are ("06:00", "18:00") and a coach comparing the two
+// should not have to translate. Says "today" for the common case rather than
+// making someone work out which weekday it is now.
+const fmtOccurrence = iso => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const t = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  const midnight = new Date(); midnight.setHours(0,0,0,0);
+  const sameDay = d >= midnight && d < new Date(midnight.getTime() + 864e5);
+  return `${sameDay ? "today" : ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]} ${t}`;
+};
 
 // calcIntervalState (the Tabata/EMOM interval sub-timer) moved to
 // src/lib/intervalTimer.js so it can be unit-tested — imported above.
@@ -1324,10 +1336,15 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
   // ── WCAG-AA contrast audit of member-visible token pairs (Fable F6 · P2 10-foot rule).
   //    Checked live against the draft tokens the coach is editing. Button-label colour
-  //    (--on-accent) is auto-derived (dark ink on a light accent, light ink on a dark one),
-  //    so we mirror that derivation here rather than treating it as an editable token.
+  //    (--on-accent) is auto-derived, so we mirror that derivation here rather than
+  //    treating it as an editable token.
+  //
+  //    `inkOn` IS that derivation, imported rather than re-implemented: this audit
+  //    used to carry its own copy of the luminance rule, so the runtime and the
+  //    badge the coach reads could disagree about what colour the button label
+  //    would actually be.
   const onAccentFor = (tk) => {
-    try { return relativeLuminance(...hexToRgb(tk.accent)) > 0.18 ? tk.bg : tk.text; }
+    try { return inkOn(tk.accent, tk.bg, tk.text); }
     catch(_){ return tk.text; }
   };
   const a11yChecks = [
@@ -2236,7 +2253,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           <div style={{minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
               <span style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"21px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
-              <button onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
+              {/* Icon-only, so it had no accessible name at all — a screen reader
+                  announced "button". aria-label and not title: a title does not
+                  override text content for a button's accessible name. */}
+              <button aria-label="Rename class" onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
@@ -2266,9 +2286,17 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             <button onClick={onOverviewDisplay} style={{border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontWeight:"600",fontSize:"13px",padding:"9px 15px",borderRadius:"9px",cursor:"pointer"}}>
               Preview on TV
             </button>
+            {/* Said "Add to schedule" while calling `onStartSession` — it starts
+                the class runner and touches the Schedule not at all. Found by
+                walking Schedule → Start → Builder → run: the one button on the
+                desktop Builder that begins a class was named after a different
+                feature, and the Schedule screen has its own real "Add to
+                schedule" in the Add class modal, so the same words meant two
+                unrelated things. Named for what it does, and matching the mobile
+                button, which had it right. */}
             <button onClick={()=>{ onStartSession(); }}
               style={{border:"none",background:"var(--accent)",color:"var(--bg)",fontWeight:"700",fontSize:"13px",padding:"9px 17px",borderRadius:"9px",cursor:"pointer"}}>
-              Add to schedule
+              ▶ Start Session
             </button>
           </div>
         )}
@@ -2754,7 +2782,7 @@ function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlayi
 // is worse than an empty ledger. store.recordConsent() exists and is wired for
 // when a real notice surface ships (QR self-check-in's first screen); it is not
 // called from here on purpose.
-function CheckInPanel({ sessionName, classType, durationMin, coachName, onClose }) {
+function CheckInPanel({ sessionName, classType, durationMin, coachName, classInstanceId, scheduledAt, onClose }) {
   // Idempotent by design, so React 19 StrictMode's double-invoke of this
   // initializer resolves to the SAME occurrence rather than minting two.
   //
@@ -2764,7 +2792,12 @@ function CheckInPanel({ sessionName, classType, durationMin, coachName, onClose 
   // the Schedule carried both, so the same class recorded different amounts of
   // itself depending on which door it came through. `coach_name` is denormalised
   // in 0007 precisely so per-coach analysis is possible over it.
-  const [ci] = useState(() => store.ensureClassInstance({ name: sessionName, classType, durationMin, coachName }).instance);
+  //
+  // `classInstanceId` is set when the coach started this class from the Schedule
+  // (§3A). It makes the occurrence CHOSEN rather than matched on a name that had
+  // no reason to agree with the schedule's — the difference between check-ins
+  // landing on the published row and landing on a second row nobody looks at.
+  const [ci] = useState(() => store.ensureClassInstance({ name: sessionName, classType, durationMin, coachName, instanceId: classInstanceId }).instance);
   const [members, setMembers]       = useState(() => store.getMembers());
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [q, setQ] = useState("");
@@ -2809,14 +2842,24 @@ function CheckInPanel({ sessionName, classType, durationMin, coachName, onClose 
     setQ("");
   };
 
+  // onClose carries the occurrence id: the runner's badge used to count the LAST
+  // row in class_instances, which is only this class by luck — a joined or pinned
+  // occurrence sits wherever it was published.
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+    <div onClick={()=>onClose(ci.id)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg)",border:`1px solid var(--border)`,borderRadius:"14px",width:"100%",maxWidth:"460px",maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <div style={{padding:"16px 18px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>
               <div style={{fontFamily:"var(--display)",fontSize:"17px",fontWeight:"700",color:"var(--text)"}}>Check in</div>
-              <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{sessionName || "Class"}</div>
+              {/* Names the OCCURRENCE, not the draft. They are the same thing
+                  until a coach renames the plan mid-class, and then the honest
+                  label is the row the check-ins are actually written to — with
+                  its slot, so which occurrence is being joined is visible before
+                  anybody is tapped in. */}
+              <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+                {[ci.name || sessionName || "Class", scheduledAt ? fmtOccurrence(scheduledAt) : ""].filter(Boolean).join(" · ")}
+              </div>
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"800",color:"var(--accent)"}}>{checkedIn.size}</div>
@@ -2862,14 +2905,14 @@ function CheckInPanel({ sessionName, classType, durationMin, coachName, onClose 
 
         <div style={{padding:"12px 18px",borderTop:`1px solid var(--border)`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px"}}>
           <span style={{fontSize:"11px",color:"var(--muted)"}}>Saved on this device, synced when online</span>
-          <Btn variant="ghost" onClick={onClose} style={{padding:"7px 14px"}}>Done</Btn>
+          <Btn variant="ghost" onClick={()=>onClose(ci.id)} style={{padding:"7px 14px"}}>Done</Btn>
         </div>
       </div>
     </div>
   );
 }
 
-function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack, sessionName, classType, coachName}) {
+function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
@@ -2890,10 +2933,15 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   // badge stays honest without the runner subscribing to storage on every tick.
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkedInCount, setCheckedInCount] = useState(0);
-  const closeCheckIn = () => {
+  // The panel hands back the occurrence it actually used. It used to be read as
+  // "the last row in class_instances", which is this class only by luck: a runner
+  // that JOINS a published occurrence (or is pinned to one, §3A) counts against a
+  // row that was written before every other class on the week, so the badge
+  // reported somebody else's attendance — or zero.
+  const closeCheckIn = (ciId) => {
     setShowCheckIn(false);
-    const ci = store.getClassInstances().slice(-1)[0];
-    setCheckedInCount(ci ? store.getAttendance().filter(a => a.classInstanceId === ci.id).length : 0);
+    const id = ciId || classInstanceId || store.getClassInstances().slice(-1)[0]?.id;
+    setCheckedInCount(id ? store.getAttendance().filter(a => a.classInstanceId === id).length : 0);
   };
 
   // Feature 7: on-the-fly search overlay
@@ -3074,7 +3122,8 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
           {showCheckIn && (
             <CheckInPanel sessionName={sessionName || "Class"} classType={classType || ""}
               durationMin={Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60) || null}
-              coachName={coachName || ""} onClose={closeCheckIn}/>
+              coachName={coachName || ""} classInstanceId={classInstanceId} scheduledAt={scheduledAt}
+              onClose={closeCheckIn}/>
           )}
           {/* HEADER */}
           <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
@@ -5961,6 +6010,35 @@ export default function App() {
     }
     setView("builder");
   };
+  // ── §3A: the coach starts a class FROM the Schedule ───────────────────────
+  // The join between the Schedule and the Runner used to be a name and a clock,
+  // and nothing made the Builder's `sessionName` equal the schedule rule's name —
+  // so publishing a week and then running that class produced TWO class_instances
+  // rows, with the check-ins on the Runner's and the published one stuck at zero
+  // attendance forever. Loosening the match would have been worse than the bug:
+  // guessing which scheduled occurrence a coach is running attaches attendance to
+  // the wrong class, permanently and invisibly.
+  //
+  // So the occurrence is chosen, not inferred. `pinnedClass` holds it for as long
+  // as the coach is running it, and CheckInPanel resolves by that id.
+  const [pinnedClass, setPinnedClass] = useState(null);
+  const handleStartScheduled = (occ) => {
+    const r = store.startScheduledClass(occ);
+    if (!r) return;
+    setPinnedClass(r.instance);
+    // The name follows the schedule, which is the other half of the fix: even if
+    // the pin is lost (a reload — this is in-memory state), `sessionName` is
+    // persisted with the draft, so the name-and-window join in
+    // ensureClassInstance lands on the same published row rather than a new one.
+    setSessionName(r.instance.name);
+    setLiveState({ playing:false, idx:0, elapsed:0 });
+    // The Builder, not the runner: the coach still has to confirm which PLAN this
+    // class runs, and dropping them into a live timer over whatever draft happened
+    // to be loaded — now wearing the scheduled class's name — would be the
+    // confident wrong guess this repo keeps deleting.
+    setView("builder");
+  };
+
   // (`handleSelectClassStyle` and `handleExportTemplate` lived here. Both took a
   //  class/sub-type key and only the Templates screen ever supplied one, so both
   //  went with it. The Builder's own Class/Style selects already cover selecting
@@ -6151,6 +6229,26 @@ export default function App() {
 
       {!isFullscreen&&<SyncBanner/>}
 
+      {/* §3A. The pinned scheduled class, stated plainly wherever the coach goes
+          next — Builder, Runner or Room TV — because it changes where check-ins
+          are recorded, and a silent pin is how attendance ends up on a class the
+          coach did not think they were teaching. Unpin is always available: this
+          says what it will do, and the coach can say no. */}
+      {!isFullscreen&&pinnedClass&&(
+        <div data-testid="pinned-class" style={{padding:"9px 20px",background:"color-mix(in srgb, var(--accent) 10%, transparent)",
+             borderBottom:`1px solid color-mix(in srgb, var(--accent) 35%, transparent)`,display:"flex",alignItems:"center",
+             justifyContent:"space-between",gap:"12px",flexWrap:"wrap"}}>
+          <p style={{fontSize:"12px",color:"var(--text)",fontWeight:"600",margin:0}}>
+            Running <strong>{pinnedClass.name}</strong> from the schedule · {fmtOccurrence(pinnedClass.startsAt)}
+            <span style={{color:"var(--muted)",fontWeight:"500"}}> — check-ins land on this class</span>
+          </p>
+          <button onClick={()=>setPinnedClass(null)} style={{padding:"4px 12px",background:"transparent",border:`1px solid var(--border)`,
+                  borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"700",flexShrink:0}}>
+            Unpin
+          </button>
+        </div>
+      )}
+
       {/* Per-view boundary (I1). The root boundary in main.jsx is the last resort;
           this one keeps the crash INSIDE the screen that threw, so the sidebar and
           nav survive and switching views is itself a recovery path. Keyed on `view`
@@ -6170,13 +6268,13 @@ export default function App() {
               ))}
               <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
             </div>
-            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""}/>}
+            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""} classInstanceId={pinnedClass?.id||null} scheduledAt={pinnedClass?.startsAt||null}/>}
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
         {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
-        {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")}/>}
+        {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")} onStartClass={handleStartScheduled}/>}
         {view==="music"&&(!FLAGS.music
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>
           : token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}

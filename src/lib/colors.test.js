@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   hexToRgb, rgbToHex, rgbToHsl, hslToRgb, hexA,
-  wcagContrast, nudgeContrast,
+  wcagContrast, nudgeContrast, relativeLuminance,
   generateSkinFromPalette, generateThemes, DEFAULT_PROGRAMS,
+  inkOn, borderOn,
 } from "./colors.js";
 
 // These arrived with decomposition stage 1 (AUDIT-FINDINGS §3.1). The extraction
@@ -156,5 +157,83 @@ describe("generateThemes — three themes, exactly one recommended", () => {
 
   it("every theme carries the default programs", () => {
     generateThemes(["#7be3a4"], 0.2).forEach(t => expect(t.programs).toBe(DEFAULT_PROGRAMS));
+  });
+});
+
+// ── Theme polarity — the assumptions that only break on a light brand ────────
+//
+// Found by driving Brand Studio → Room TV with a LIGHT hand-built palette, which
+// is what a boutique/wellness studio builds. Both derivations below were inline
+// luminance thresholds written for a dark theme; every generated skin satisfies
+// that assumption, so nothing caught it.
+describe("inkOn — which label colour actually reads on a fill", () => {
+  const LIGHT = { bg: "#fff7f0", text: "#1a1014" };
+
+  // The measured case. The old rule (`luminance > 0.18 ? bg : text`) chose bg
+  // both times, i.e. the LESS readable colour of the two it had.
+  it("picks the readable ink on a light brand, where the old threshold inverted", () => {
+    expect(inkOn("#ff8ab5", LIGHT.bg, LIGHT.text)).toBe(LIGHT.text);
+    expect(wcagContrast(inkOn("#ff8ab5", LIGHT.bg, LIGHT.text), "#ff8ab5")).toBeGreaterThan(8);
+    expect(inkOn("#ff2d78", LIGHT.bg, LIGHT.text)).toBe(LIGHT.text);
+    // AA for normal text — the old derivation gave 3.36 here.
+    expect(wcagContrast(inkOn("#ff2d78", LIGHT.bg, LIGHT.text), "#ff2d78")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("never returns the worse of the two candidates", () => {
+    const surfaces = ["#ff8ab5", "#ff2d78", "#7be3a4", "#0a0f0c", "#ffffff", "#808080"];
+    for (const bg of ["#fff7f0", "#0a0f0c"]) {
+      for (const text of ["#1a1014", "#e8efe9"]) {
+        for (const s of surfaces) {
+          const chosen = inkOn(s, bg, text);
+          const other = chosen === bg ? text : bg;
+          expect(wcagContrast(chosen, s)).toBeGreaterThanOrEqual(wcagContrast(other, s));
+        }
+      }
+    }
+  });
+
+  // Non-regression: on a DARK generated skin the new rule must agree with the old
+  // one, or every shipped gym's buttons change colour for no reason.
+  it("agrees with the old dark-theme rule on every generated skin", () => {
+    const old = tk => relativeLuminance(...hexToRgb(tk.accent)) > 0.18 ? tk.bg : tk.text;
+    for (const seed of ["#7be3a4", "#ff2d78", "#3b82f6", "#f59e0b", "#8b5cf6", "#ffffff", "#101010"]) {
+      for (const vibe of ["natural", "energetic", "bold", "luxury", "calm"]) {
+        const { tokens } = generateSkinFromPalette([seed], vibe, "dark");
+        expect(inkOn(tokens.accent, tokens.bg, tokens.text)).toBe(old(tokens));
+      }
+    }
+  });
+});
+
+describe("borderOn — a hairline that is visible on its own surface", () => {
+  it("flips a dark theme's white overlay when the surface is light", () => {
+    expect(borderOn("rgba(255,255,255,.07)", "#fff7f0")).toBe("rgba(0,0,0,.07)");
+  });
+
+  it("leaves an overlay that already matches its surface alone", () => {
+    expect(borderOn("rgba(255,255,255,.07)", "#0a0f0c")).toBe("rgba(255,255,255,.07)");
+    expect(borderOn("rgba(0,0,0,.12)", "#fff7f0")).toBe("rgba(0,0,0,.12)");
+  });
+
+  it("keeps the alpha the skin chose rather than imposing one", () => {
+    expect(borderOn("rgba(255,255,255,0.4)", "#ffffff")).toBe("rgba(0,0,0,0.4)");
+  });
+
+  // A deliberate colour is a design decision, not a polarity mistake.
+  it("does not touch a border that is not a neutral overlay", () => {
+    for (const t of ["#7be3a4", "rgba(123,227,164,.3)", "1px solid red", "", null, undefined]) {
+      expect(borderOn(t, "#fff7f0")).toBe(t);
+    }
+  });
+
+  // Every generated skin already agrees with its own mode, so this must be a
+  // no-op there — the fix exists for the hand-edited path.
+  it("is a no-op on every generated skin", () => {
+    for (const mode of ["light", "dark"]) {
+      for (const seed of ["#7be3a4", "#ff2d78", "#3b82f6"]) {
+        const { tokens } = generateSkinFromPalette([seed], "natural", mode);
+        expect(borderOn(tokens.border, tokens.bg)).toBe(tokens.border);
+      }
+    }
   });
 });

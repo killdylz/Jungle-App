@@ -10,7 +10,10 @@
 
 import { supabase, supabaseEnabled } from "../supabase.js";
 import { RETENTION_RULES } from "./retention.js";
-import { diffOccurrences } from "./scheduleInstances.js";
+import { diffOccurrences, occurrenceKey, CLASS_WINDOW_MS } from "./scheduleInstances.js";
+// One key function shared with the analysis step. Two definitions of "the same
+// class occurrence" is exactly the drift that lost a real attendance row.
+import { occurrenceKeyOf } from "./csvImport.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -1036,10 +1039,25 @@ export function saveClassInstances(list) {
 // Find-or-create the occurrence for a class being run right now. Idempotent
 // within the window so pausing and resuming, or reopening the roster, does not
 // mint a second occurrence and split one class's attendance across two rows.
-const CI_WINDOW_MS = 4 * 60 * 60 * 1000;   // same name inside 4h == the same class
-export function ensureClassInstance({ name, classType, coachName, durationMin }) {
+//
+// `instanceId` is the CHOSEN occurrence — set when the coach started this class
+// from the Schedule (see startScheduledClass). It short-circuits the name match,
+// which is what stops the two doors into this table from diverging: the Builder's
+// `sessionName` comes from a draft, a template or a persona and has no reason to
+// equal the schedule rule's name, so name matching alone left the published row
+// on zero attendance forever (session 11, §3A).
+const CI_WINDOW_MS = CLASS_WINDOW_MS;      // same name inside 4h == the same class
+export function ensureClassInstance({ name, classType, coachName, durationMin, instanceId }) {
   const list = getClassInstances();
   const now = Date.now();
+  if (instanceId) {
+    const pinned = list.find(c => c.id === instanceId);
+    if (pinned) return { instance: pinned, instances: list };
+    // The pinned row is gone — storage cleared, or a device that never had it.
+    // Fall through rather than mint a row under an id nothing else knows: the
+    // name path below is the same join, and the name it matches on IS the
+    // schedule's, because starting from the Schedule set it.
+  }
   const hit = list.find(c => (c.name || "") === (name || "") &&
                              Math.abs(new Date(c.startsAt).getTime() - now) < CI_WINDOW_MS);
   if (hit) return { instance: hit, instances: list };
@@ -1079,6 +1097,34 @@ export function publishOccurrences(occurrences) {
   const next = [...list, ...rows];
   saveClassInstances(next);
   return { created: rows.length, already: already.length, instances: next };
+}
+
+// ── §3A: start a scheduled class, so the occurrence is CHOSEN not inferred ────
+// The third caller of this table, and the only one that resolves an occurrence
+// from a coach's actual intent rather than from a name and a clock.
+//
+// A coach taps Start on the 18:00 S360 cell. Whatever the draft in the Builder is
+// called, the check-ins from that class must land on the row the Schedule
+// published — so this returns that row by IDENTITY (name @ startsAt), and the
+// caller pins its id through the Runner.
+//
+// It publishes the occurrence when the week was never published, because the
+// alternative is refusing to start a class that is plainly on the schedule. Note
+// what it does NOT do: it never dates the row `now`. The row keeps the SLOT's
+// time, so starting six minutes late does not record a class that the schedule
+// says starts at 18:00 as an 18:06 class, and publishing the week afterwards
+// still recognises it as already there.
+export function startScheduledClass(occurrence) {
+  if (!occurrence || !occurrence.startsAt || !occurrence.name) return null;
+  const list = getClassInstances();
+  const key = occurrenceKey(occurrence);
+  const hit = list.find(c => occurrenceKey(c) === key);
+  if (hit) return { instance: hit, instances: list, created: false };
+  // Reuses the publish writer so there is one mapper from occurrence to row —
+  // a second one is how the two doors came to record different amounts of the
+  // same class in session 10.
+  const r = publishOccurrences([occurrence]);
+  return { instance: r.instances[r.instances.length - 1], instances: r.instances, created: true };
 }
 
 // ── attendance: the spine. Append-only. ─────────────────────────────────────
@@ -1153,15 +1199,25 @@ export function applyAttendanceImport(analysis) {
   });
   if (newRows.length) saveMembers([...members, ...newRows]);
 
-  // 2. Class occurrences. Reuse an existing occurrence with the same name+day so
-  //    re-running an overlapping export doesn't mint a duplicate class.
+  // 2. Class occurrences. Reuse an existing occurrence so re-running an
+  //    overlapping export doesn't mint a duplicate class — matched at the SAME
+  //    precision the analysis used to decide what one class is. A day-only index
+  //    would map a studio's 06:00 and 18:00 classes of the same name onto one
+  //    row, and on the second import would hand the evening class's check-ins to
+  //    the morning one.
   const cis = getClassInstances();
   const ciIdFor = new Map();
-  const dayKey = (name, startsAt) => `${name}@${String(startsAt).slice(0, 10)}`;
-  const existingCi = new Map(cis.map(c => [dayKey(c.name, c.startsAt), c.id]));
+  const byMinute = new Map(), byDay = new Map();
+  cis.forEach(c => {
+    byMinute.set(occurrenceKeyOf(c.name, c.startsAt, true), c.id);
+    // Last wins: with no time in hand there is nothing better to prefer, and
+    // saying so is more honest than a rule that looks principled.
+    byDay.set(occurrenceKeyOf(c.name, c.startsAt, false), c.id);
+  });
   const newCis = [];
   (analysis.classes || []).forEach(c => {
-    const hit = existingCi.get(dayKey(c.name, c.startsAt));
+    const hit = c.timed ? byMinute.get(occurrenceKeyOf(c.name, c.startsAt, true))
+                        : byDay.get(occurrenceKeyOf(c.name, c.startsAt, false));
     if (hit) { ciIdFor.set(c.key, hit); return; }
     const row = { id: newId(), startsAt: c.startsAt, name: c.name,
                   classType: c.classType || "", coachName: c.coachName || "", durationMin: null };

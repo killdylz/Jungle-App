@@ -20,9 +20,39 @@
 // generation out of here is what lets the caller dedupe against what already
 // exists rather than minting a duplicate every time the button is pressed.
 
-// The Schedule grid's own week: Monday-first, six days. Mirrors CalendarScreen's
+// The Schedule grid's own week: Monday-first, seven days. Mirrors CalendarScreen's
 // DAYS so a rule saved from the grid can always be placed.
+//
+// Sunday was excluded from the GRID (not from this list) until session 11, which
+// made the exclusion invisible: a rule could hold `day: "Sun"` and simply never
+// appear or publish. Confirmed with Dylan as unintended — a gym that runs Sunday
+// classes has to be able to schedule them — so the week is seven days everywhere
+// and the two lists agree again.
 export const RULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// How far either side of its slot a class still counts as "the same class".
+//
+// ONE constant for two questions that must not drift apart: which published
+// occurrence the Runner joins (`store.ensureClassInstance`), and when the
+// Schedule offers a Start button (`isStartable`). If the button appeared outside
+// the join window, pressing it would create a second occurrence for a class the
+// gym had already published — the exact split this window exists to prevent.
+export const CLASS_WINDOW_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Is this occurrence close enough to now to be started?
+ *
+ * The Schedule shows a whole week. Starting next Thursday's class today would
+ * date a real attendance record to a class that has not happened, so the
+ * affordance exists only inside the window — and refuses on an unreadable date
+ * rather than treating it as the epoch (which would be "startable" in 1970 and
+ * nowhere else).
+ */
+export function isStartable(occurrence, now = Date.now()) {
+  const t = new Date(occurrence?.startsAt || 0).getTime();
+  if (!Number.isFinite(t) || t === 0) return false;
+  return Math.abs(t - now) < CLASS_WINDOW_MS;
+}
 
 // "45m" · "1h" · "1h15m" · "90" — the free-text `dur` column, read leniently
 // because it is typed by a human and the value only affects a display estimate.
@@ -73,12 +103,13 @@ export function weekKeyOf(monday) {
  *
  * @param rules  local `userClasses`: { id, name, type, coach, day, slot, dur, repeat, weekKey }
  * @param monday any date inside the target week; normalised to its Monday
- * @param opts   { days } — which weekdays the gym runs. Defaults to the six the
- *               Schedule grid shows, so a "daily" rule does not invent a Sunday
- *               class the grid has nowhere to display.
- * @returns occurrences sorted by time, each { ruleId, name, classType, coachName, durationMin, startsAt }
+ * @param opts   { days } — which weekdays the gym runs. Defaults to all seven;
+ *               pass a subset for a gym that is dark on some days, and a "daily"
+ *               rule will skip them rather than invent a class nobody teaches.
+ * @returns occurrences sorted by time, each
+ *          { ruleId, name, classType, coachName, durationMin, startsAt, day, slot }
  */
-export function occurrencesForWeek(rules, monday, { days = RULE_DAYS.slice(0, 6) } = {}) {
+export function occurrencesForWeek(rules, monday, { days = RULE_DAYS } = {}) {
   const wk = startOfWeek(monday);
   const key = weekKeyOf(wk);
   const out = [];
@@ -107,6 +138,13 @@ export function occurrencesForWeek(rules, monday, { days = RULE_DAYS.slice(0, 6)
         coachName: r.coach || "",
         durationMin: parseDurationMin(r.dur),
         startsAt: dt.toISOString(),
+        // Where this occurrence sits on the grid. Carried so the Schedule can
+        // find the occurrence behind a cell without re-deriving day/slot from
+        // `startsAt` — two derivations of the same fact is how the cell and the
+        // occurrence would come to disagree. `slot` is the rule's own string,
+        // untrimmed, because the grid keys its cells on exactly that value.
+        day,
+        slot: r.slot,
       });
     }
   }

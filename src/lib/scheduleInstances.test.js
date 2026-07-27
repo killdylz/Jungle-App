@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { occurrencesForWeek, diffOccurrences, occurrenceKey, describePublish,
-         parseDurationMin, parseSlot, startOfWeek, weekKeyOf, RULE_DAYS } from "./scheduleInstances.js";
+         parseDurationMin, parseSlot, startOfWeek, weekKeyOf, RULE_DAYS,
+         isStartable, CLASS_WINDOW_MS } from "./scheduleInstances.js";
 
 // The bridge between a RULE ("Tuesday 6pm, weekly") and an OCCURRENCE ("the
 // Tuesday 6pm of 14 July"). Attendance hangs off the occurrence, so a duplicate
@@ -86,10 +87,20 @@ describe("occurrencesForWeek — recurrence", () => {
     expect(o).toMatchObject({ ruleId: "uc1", name: "Tuesday Burn", classType: "HIIT", coachName: "Dylan", durationMin: 45 });
   });
 
-  it("places a daily rule on every day the gym runs", () => {
+  // Seven, not six. The default was Mon–Sat to match a grid that had no Sunday
+  // column, which meant a gym running Sunday classes silently published none.
+  it("places a daily rule on every day of the week, Sunday included", () => {
     const out = occurrencesForWeek([rule({ repeat: "daily", slot: "06:00" })], midWeek());
-    expect(out).toHaveLength(6);
-    expect(out.map(o => localOf(o.startsAt).day)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
+    expect(out).toHaveLength(7);
+    expect(out.map(o => localOf(o.startsAt).day)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  });
+
+  // Sunday belongs to the week that STARTED on Monday, not the one about to
+  // begin — the same rule `startOfWeek` applies. A Sunday rule landing seven days
+  // early would publish a class into a week the coach was not looking at.
+  it("dates a Sunday rule to the end of its own week", () => {
+    const [o] = occurrencesForWeek([rule({ day: "Sun", slot: "09:00" })], midWeek());
+    expect(localOf(o.startsAt)).toEqual({ day: "Sun", date: 19, h: 9, m: 0 });
   });
 
   it("does not invent a class on a day the gym does not run", () => {
@@ -237,5 +248,67 @@ describe("describePublish — what the coach reads afterwards", () => {
   it("reports a partial publish honestly", () => {
     expect(describePublish({ created: 2, already: 4 })).toBe("Added 2 classes to the books. 4 were already there.");
     expect(describePublish({ created: 1, already: 1 })).toBe("Added 1 class to the books. 1 was already there.");
+  });
+});
+
+// ── §3A: which cell the Schedule may offer a Start button on ─────────────────
+// The grid shows a whole week. A Start button on next Thursday's class would
+// date real attendance to a class that has not happened, so the affordance is
+// bounded by the SAME window the Runner joins on — if it were wider, pressing it
+// would mint a second occurrence for a class already published, which is the
+// split the window exists to prevent.
+describe("isStartable", () => {
+  const at = (ms) => ({ startsAt: new Date(ms).toISOString() });
+  const NOW = new Date(2026, 6, 14, 18, 0, 0, 0).getTime();
+
+  it("offers the class running right now", () => {
+    expect(isStartable(at(NOW), NOW)).toBe(true);
+  });
+
+  it("still offers it a few minutes either side of the slot", () => {
+    expect(isStartable(at(NOW - 10 * 60_000), NOW)).toBe(true);
+    expect(isStartable(at(NOW + 10 * 60_000), NOW)).toBe(true);
+  });
+
+  it("refuses a class the wrong side of the join window", () => {
+    expect(isStartable(at(NOW - 5 * 60 * 60_000), NOW)).toBe(false);
+    expect(isStartable(at(NOW + 5 * 60 * 60_000), NOW)).toBe(false);
+  });
+
+  // The boundary is the join window itself, not a number that happens to match.
+  it("uses exactly the window the Runner joins on", () => {
+    expect(isStartable(at(NOW + CLASS_WINDOW_MS - 1000), NOW)).toBe(true);
+    expect(isStartable(at(NOW + CLASS_WINDOW_MS), NOW)).toBe(false);
+  });
+
+  // An unreadable date must not read as the epoch — `new Date(0)` is a real
+  // instant, and treating a missing one as startable-in-1970 is the kind of quiet
+  // nonsense that only shows up in a test.
+  it("refuses rather than guessing at an unreadable date", () => {
+    for (const bad of [null, undefined, {}, { startsAt: "" }, { startsAt: "soon" }, { startsAt: 0 }]) {
+      expect(isStartable(bad, NOW)).toBe(false);
+    }
+  });
+});
+
+// The Schedule has to find the occurrence behind a grid cell. It could re-derive
+// day and slot from `startsAt`, but two derivations of one fact is how a cell and
+// its occurrence come to disagree — so the generator carries them.
+describe("occurrencesForWeek — locating the cell an occurrence came from", () => {
+  it("carries the day and slot the rule was drawn on", () => {
+    const [o] = occurrencesForWeek([rule()], midWeek());
+    expect(o).toMatchObject({ day: "Tue", slot: "18:00" });
+  });
+
+  it("gives a daily rule the day of each occurrence, not the rule's own", () => {
+    const out = occurrencesForWeek([rule({ repeat: "daily", day: "Mon", slot: "12:00" })], midWeek());
+    expect(out.map(o => o.day)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    expect(new Set(out.map(o => o.slot))).toEqual(new Set(["12:00"]));
+  });
+
+  // The grid keys its cells on the rule's raw slot string, so this must be that
+  // string and not a tidied version of it, or the lookup silently misses.
+  it("reports the slot exactly as the rule stores it", () => {
+    expect(occurrencesForWeek([rule({ slot: "6:05" })], midWeek())[0].slot).toBe("6:05");
   });
 });

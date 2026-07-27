@@ -177,3 +177,124 @@ test.describe("P2 · the 10-foot rule — the primary element holds its share of
     ).toBeLessThan(0.012);
   });
 });
+
+// ── SWEEP · Brand Studio → Room TV token propagation ─────────────────────────
+//
+// The gym's identity has to survive the trip to the only screen a MEMBER looks at.
+// Every skin the generator produces is dark, so the two derivations that assumed a
+// dark theme were invisible until a coach hand-builds a LIGHT palette in the
+// Brand Studio's editor — which only exposes bg/card/navy/accent/green/text/muted,
+// so a dark skin's other tokens came along unchanged.
+//
+// This is the light brand a boutique/wellness studio actually builds.
+const LIGHT_BRAND = {
+  bg: "#fff7f0", card: "#ffffff", navy: "#f3e9e0",
+  // The polarity-wrong token the editor cannot reach: a dark theme's white
+  // hairline, inherited onto a near-white surface.
+  border: "rgba(255,255,255,.07)",
+  accent: "#ff2d78", green: "#ff8ab5", text: "#1a1014", muted: "#7a6a70",
+};
+
+async function lightBrandApp(page) {
+  await page.goto("./");
+  await page.evaluate((tk) => {
+    localStorage.clear();
+    sessionStorage.setItem("jungle_pin_ok", "1");
+    localStorage.setItem("jungle_custom_skin", JSON.stringify(tk));
+    // A bare string, not JSON — `store.getSkinId` reads it with readStr.
+    localStorage.setItem("jungle_skin", "custom");
+    localStorage.setItem("jungle_gym_branding", JSON.stringify({ gymName: "Iron Habit" }));
+  }, LIGHT_BRAND);
+  await page.reload();
+}
+
+const cssVars = page => page.evaluate(() => {
+  const cs = getComputedStyle(document.documentElement);
+  const g = k => cs.getPropertyValue(k).trim();
+  const hex = h => { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(c => c + c).join(""); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+  const lum = ([r, gg, b]) => { const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(gg) + 0.0722 * f(b); };
+  const ratio = (a, b) => (Math.max(lum(hex(a)), lum(hex(b))) + 0.05) / (Math.min(lum(hex(a)), lum(hex(b))) + 0.05);
+  return {
+    bg: g("--bg"), border: g("--border"),
+    onAccent: ratio(g("--on-accent"), g("--accent")),
+    onGreen: ratio(g("--on-green"), g("--green")),
+  };
+});
+
+test.describe("a light brand survives the trip to the room", () => {
+  test("the tokens the room renders with are readable, not just the ones the coach picked", async ({ page }) => {
+    const errors = watchConsole(page);
+    await lightBrandApp(page);
+    const v = await cssVars(page);
+
+    // The label colour on the accent and green fills. The old rule
+    // (`luminance > 0.18 ? bg : text`) picked `bg` — near-white — giving 3.36:1
+    // and 2.07:1, when the other candidate it already had gave 5.23 and 8.47.
+    expect(v.onAccent).toBeGreaterThanOrEqual(4.5);
+    expect(v.onGreen).toBeGreaterThanOrEqual(4.5);
+
+    // The hairline. `rgba(255,255,255,.07)` on `#fff7f0` is invisible, and it is
+    // every card edge, input outline, divider and schedule grid line in the app.
+    expect(v.border).toMatch(/^rgba\(0,0,0/);
+    expect(v.bg).toBe(LIGHT_BRAND.bg);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // The Floor board is the mid-class member-facing surface and it is fully
+  // branded: the gym's own background, its name and its monogram.
+  test("the Floor board wears the gym's own background and name", async ({ page }) => {
+    const errors = watchConsole(page);
+    await lightBrandApp(page);
+    await gotoDisplay(page, "Floor");
+
+    await expect(page.getByText("IRON HABIT")).toBeVisible();
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(bg).toBe("rgb(255, 247, 240)");
+
+    await expect(page.getByText(/Something broke|stopped responding/i)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  // ⛔ MEASURED, NOT FIXED — a product decision for Dylan (session 11).
+  //
+  // The three Room TV boards answer "what colour is a room display?" three
+  // different ways, and two of them ignore the gym's brand entirely:
+  //
+  //   Plan  (OverviewDisplayScreen, the DEFAULT mode before a class starts)
+  //         hardcoded #050705, and NO brand mark at all
+  //   Floor (FloorLiveScreen)   var(--bg) — the gym's own, with name + monogram
+  //   Coach (DisplayScreen)     hardcoded #000, monogram but no name
+  //
+  // Measured live with the light brand above: Plan renders on rgb(5,7,5) while
+  // Floor renders on rgb(255,247,240). So on one TV, a member watching a class
+  // sees near-black, then the gym's cream, then pure black as the coach switches
+  // modes — and the board they see FIRST, walking in before class, is the
+  // unbranded one. That is the surface F6's white-label premium (A2) is sold on.
+  //
+  // Both answers are defensible and this test deliberately does not pick:
+  //   (a) room displays are deliberately dark for projector legibility — then
+  //       Floor is the odd one out, and the choice should be ONE named token
+  //       rather than three hardcoded values; or
+  //   (b) room displays are the gym's brand on the biggest screen they own — then
+  //       Plan and Coach should use var(--bg), and Plan needs the brand mark.
+  //
+  // Note the ordering constraint: adding the brand mark to Plan only works AFTER
+  // the background is settled. BrandLogo draws the gym name in var(--text), which
+  // on a light brand is dark ink — invisible on a near-black board.
+  test.fixme("the three room boards agree on whose background they wear", async ({ page }) => {
+    await lightBrandApp(page);
+    const bgOf = async (mode) => {
+      await gotoDisplay(page, mode);
+      return page.evaluate(() => {
+        const fixed = [...document.querySelectorAll("div")]
+          .find(d => { const s = getComputedStyle(d); return s.position === "fixed" && +s.zIndex >= 500; });
+        return getComputedStyle(fixed || document.body).backgroundColor;
+      });
+    };
+    const plan = await bgOf("Plan");
+    const floor = await bgOf("Floor");
+    const coach = await bgOf("Coach");
+    expect(new Set([plan, floor, coach]).size).toBe(1);
+  });
+});

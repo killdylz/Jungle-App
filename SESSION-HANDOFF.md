@@ -1,16 +1,115 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-25 (session 10, complete)_
+_Last updated: 2026-07-26 (session 11, in progress)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-10-PROMPT.md` still carries the pending list and the
-> blocked-on-Dylan items; **§3A is now DONE** and two of its three open decisions are settled
-> (see Session 10 below). Then read spec **§0's trust ranking** and **§12**.
-> `main = e8f450d`, pushed, tree clean.
-> Gates: **`lint:crash` 0 · 607 unit (no todos) · 78 e2e · build 648 KB**.
+> **▶ STARTING A NEW SESSION?** `SESSION-11-PROMPT.md` carries the pending list and the
+> blocked-on-Dylan items. **Its §3A is now DONE and its Sunday decision is settled** — see
+> Session 11 below. Then read spec **§0's trust ranking** and **§12**.
+> Gates: **`lint:crash` 0 · 644 unit (no todos) · 85 e2e + 1 fixme · build 651 KB**.
 >
-> ⚠️ **That 648 KB is the LOCAL number and it under-reports production by ~37%.** With no
+> ⚠️ **That 651 KB is the LOCAL number and it under-reports production by ~37%.** With no
 > `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the real deployed bundle is
 > **~890 KB**. See the I9 measurement below before planning any bundle work.
+
+---
+
+## 🟢 Shipped SESSION 11
+
+### §3A — the Schedule/Runner join, closed the honest way
+
+Dylan's call: **yes, the coach starts a class from the Schedule.** So the occurrence is now
+**chosen, not inferred** — the match was never loosened.
+
+- A grid cell grows a **Start** button, and only inside the same 4h window the Runner joins on
+  (`CLASS_WINDOW_MS`, now one exported constant so the button and the join cannot drift apart).
+  At most one or two cells on a whole week qualify.
+- `store.startScheduledClass(occ)` returns the row the Schedule published, or publishes it if the
+  week never was — **dated to the SLOT, never to when Start was pressed**, so publishing afterwards
+  still recognises it instead of writing the same class six minutes later.
+- The pinned occurrence's id travels App → LiveScreen → CheckInPanel, and
+  `ensureClassInstance({ instanceId })` short-circuits the name match. A banner states the pin
+  wherever the coach goes next, with **Unpin**.
+- Losing the pin (a reload — it is in-memory) degrades to the name-and-window join, which now
+  matches because starting from the Schedule sets `sessionName`. Pinned by a test.
+
+The test that pins the point: publish "S360", start it, **rename the draft to "S360 — Week 4"**,
+run it, check somebody in — one occurrence, and the check-in is on the published row.
+
+### 🔴 The Sunday decision, and the second bug it uncovered
+
+Dylan's call: **add Sunday.** `DAYS` and `RULE_DAYS` are both seven days, `occurrencesForWeek`
+defaults to all seven, and the day picker offers Sunday — the three consumers that made the old
+exclusion self-consistent and therefore invisible.
+
+Then **driving the screen on an actual Sunday found a second, independent defect the day list did
+not fix.** `CalendarScreen`'s own week arithmetic was
+`base.getDate() - base.getDay() + 1`, which is right six days a week: `getDay()` makes Sunday 0, so
+on a Sunday it resolved to **tomorrow** and the Schedule showed **next week**. Today's row was not
+on the grid, "This week" named the wrong week, and a Sunday class could not be seen or started on
+the one day it runs. It now uses the shared `startOfWeek`/`weekKeyOf`, so the week the grid **draws**
+and the week it **publishes** cannot disagree. Guarded by an e2e with the clock fixed to a Sunday.
+
+### Two more found on the same walk
+
+- **The desktop Builder's only start button said "Add to schedule"** while calling
+  `onStartSession()` — it starts the runner and touches the Schedule not at all, and the Schedule
+  screen has its own real "Add to schedule". Named for what it does.
+- **The runner's check-in badge counted the LAST row in `class_instances`**, which is this class
+  only by luck: a runner that joins a published occurrence counts against a row written before
+  every other class on the week. The panel now hands its occurrence id back on close.
+- Mobile: the grid was `DAYS.slice(0,4)` on a phone, silently hiding Fri and Sat — the missing
+  Sunday in miniature. All seven columns always render and the grid scrolls sideways instead.
+  Verified at 375px: Sunday column reachable and aligned, page body does not scroll horizontally.
+- `aria-label` added to the Builder's icon-only rename button, which had no accessible name.
+
+### 🧹 The two never-swept surfaces — both swept, both found something
+
+| Surface | Result |
+|---|---|
+| **CSV backfill → members → retention** | **Swept, and it found a data-loss defect.** The analysis keyed a class occurrence by `name@YYYY-MM-DD`, so a studio running a **06:00 and an 18:00 class of the same name** had them collapsed into one occurrence — and because 0007 has `unique(class_instance_id, member_id)`, a member who attended both had their second check-in **dropped and reported to the coach as a "duplicate"**. Two real classes, one row. The key now follows the data: minute when the export states a time, day when it does not (`hasTimeOfDay` / `occurrenceKeyOf`), and the apply step matches at the same precision — a day-only index would have handed the evening class's check-ins to the morning one on re-import. |
+| **Brand Studio → Room TV** | **Swept, and it found two dark-theme assumptions.** Both invisible until a coach hand-builds a **light** palette, which is what a boutique/wellness studio does — the editor only exposes bg/card/navy/accent/green/text/muted, so a dark skin's other tokens come along unchanged. |
+
+**The CSV sweep is now a permanent test** (`store.test.js`, "SWEEP — a real attendance export, end to end"):
+a multi-week corpus through analyse → apply → stored rows → the retention instrument, asserting
+15 check-ins / 14 classes / 1 duplicate / 1 unreadable row, referential integrity, idempotence on
+re-import, and the derived at-risk list (`[Cara sev 4, Ben sev 3]`, Ana and Dan correctly clean).
+It failed five ways before the fix.
+
+**The two brand defects, measured on a light brand** (bg `#fff7f0`, text `#1a1014`):
+
+| Token | Was | Now |
+|---|---|---|
+| `--on-green` on green `#ff8ab5` | **2.07:1** | **8.47:1** |
+| `--on-accent` on accent `#ff2d78` | **3.36:1** (fails AA) | **5.23:1** |
+| `--border` on `#fff7f0` | `rgba(255,255,255,.07)` — invisible | `rgba(0,0,0,.07)` |
+
+The contrast rule was `luminance(accent) > 0.18 ? bg : text`, which is right only when `bg` is the
+dark one — so it was **choosing the less readable of the two colours it already had**. `inkOn` asks
+which actually contrasts more; a test proves it returns the identical answer on 35 generated dark
+skins, so no shipped gym changes. The border token is polarity-corrected at apply time (`borderOn`),
+a proven no-op on every generated skin — it exists for the hand-edited path, where `border` is not
+even an editable field. The Brand Studio's own AA audit now imports `inkOn` instead of carrying its
+own copy of the rule, so the badge the coach reads cannot disagree with the runtime.
+
+### ⛔ Two things measured and deliberately NOT fixed — both need Dylan
+
+1. **Rule 1 fires on a join date it does not have.** The CSV export carries no join date, so
+   `applyAttendanceImport` leaves `joinedAt: ""` (honest), and `retention.js:91` substitutes the
+   member's **first imported check-in** — then the reason line states "Joined N days ago" as fact.
+   That substitution is deliberate and pinned by `retention.test.js:68`, and at n=1 it looks right.
+   **At corpus scale it inverts:** an established gym importing a short recent export has a roster
+   whose every "first visit" is inside the 30-day window. Measured, as a passing test: **9 of 12
+   members — three quarters of the roster — flagged as new members failing to build a habit, on day
+   one, each asserting a join date that was never in the data.** Rule 2 is explicitly gated against
+   exactly this (`activity.recording`); rule 1 has no equivalent gate. Not changed unilaterally
+   because it alters what the retention instrument reports.
+2. **The three Room TV boards answer "whose background?" three different ways.** Plan
+   (`OverviewDisplayScreen`, the **default** mode, the board a member sees walking in) hardcodes
+   `#050705` and carries **no brand mark at all**; Floor uses `var(--bg)` with the gym's name and
+   monogram; Coach hardcodes `#000`. Measured live: Plan on `rgb(5,7,5)` while Floor on
+   `rgb(255,247,240)` for the same gym. Recorded as a `test.fixme` in `display.spec.js` with both
+   defensible resolutions written out. Note the ordering constraint — adding the brand mark to Plan
+   only works after the background is settled, because `BrandLogo` draws the name in `var(--text)`.
 
 ---
 

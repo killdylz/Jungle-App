@@ -16,15 +16,17 @@ import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js
 // Found by driving the app, not by reading it: all three defects below render
 // perfectly and say the wrong thing.
 
-// The Schedule grid is a SIX-day week — `DAYS = Mon..Sat` in CalendarScreen, and
-// the "Add class" day picker is built from the same list, so Sunday is not a
+// The Schedule grid was a SIX-day week — `DAYS = Mon..Sat` in CalendarScreen, and
+// the "Add class" day picker was built from the same list, so Sunday was not a
 // schedulable day anywhere in the product. A fixture that takes its day from
-// `new Date()` is therefore unschedulable ONE DAY IN SEVEN: this suite passed all
+// `new Date()` was therefore unschedulable ONE DAY IN SEVEN: this suite passed all
 // week and failed on a Sunday, on a commit that had not touched the app at all.
 //
-// So the day is explicit. Tests that mean "a class today" keep today; tests that
-// need the class to appear in the GRID pin a weekday that always has a column.
-// `repeat: "weekly"` means the rule renders in whichever week is displayed.
+// The week is seven days as of session 11, so that particular trap is gone. The
+// day stays explicit anyway: a fixture that derives ANY value from `new Date()` is
+// a fixture whose result depends on when it ran, and this suite has already been
+// burned once by exactly that. `repeat: "weekly"` means the rule renders in
+// whichever week is displayed.
 async function seedWeek(page, day) {
   await page.evaluate((forced) => {
     const today = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
@@ -35,7 +37,8 @@ async function seedWeek(page, day) {
   }, day);
   await page.reload();
 }
-// A weekday the six-day grid always renders, for the tests that read the grid.
+// A fixed weekday for the tests that read the grid — every day has a column now,
+// but a constant is still what keeps the assertion independent of the clock.
 const GRID_DAY = "Wed";
 
 test.describe("nothing important is carried by colour alone", () => {

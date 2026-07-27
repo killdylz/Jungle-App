@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseCsv, mapHeaders, parseDate, analyzeAttendanceCsv, describeImport } from "./csvImport.js";
+import { parseCsv, mapHeaders, parseDate, analyzeAttendanceCsv, describeImport,
+         hasTimeOfDay, occurrenceKeyOf } from "./csvImport.js";
 
 const ROSTER = [
   { id: "m1", name: "Sarah Chen", email: "sarah@example.com" },
@@ -37,6 +38,45 @@ describe("mapHeaders", () => {
 
   it("is insensitive to case, underscores and extra spaces", () => {
     expect(mapHeaders(["  MEMBER_NAME ", "class_date"])).toEqual({ member: 0, date: 1 });
+  });
+});
+
+// What counts as ONE class. A studio running a 06:00 and an 18:00 class of the
+// same name held two of them; a date-only export cannot tell them apart, so the
+// granularity has to follow the data rather than being fixed at either end.
+// Fixing it at DAY collapsed the two, dropped the second attendance as a
+// "duplicate", and told the coach so — found by the end-to-end sweep in
+// store.test.js, which is where the counts are.
+describe("hasTimeOfDay", () => {
+  it("sees a time when the export states one", () => {
+    expect(hasTimeOfDay("2026-03-04T18:30:00")).toBe(true);
+    expect(hasTimeOfDay("2026-03-04 18:30")).toBe(true);
+    expect(hasTimeOfDay("04/03/2026 18:30")).toBe(true);
+    expect(hasTimeOfDay("4.3.2026, 6:00")).toBe(true);
+  });
+
+  it("says no to a bare date, so one class per day stays one class", () => {
+    expect(hasTimeOfDay("2026-03-04")).toBe(false);
+    expect(hasTimeOfDay("04/03/2026")).toBe(false);
+    expect(hasTimeOfDay("")).toBe(false);
+    expect(hasTimeOfDay(null)).toBe(false);
+  });
+
+  // The forms parseDate reads no time out of must not claim one here, or the key
+  // would assert a precision the timestamp does not actually have — parseDate
+  // defaults those to 12:00 UTC.
+  it("does not claim a precision parseDate did not produce", () => {
+    expect(hasTimeOfDay("12 March 2026 18:30")).toBe(false);
+    expect(hasTimeOfDay("March 12, 2026 6:00")).toBe(false);
+    expect(parseDate("12 March 2026 18:30")).toContain("T12:00");
+  });
+});
+
+describe("occurrenceKeyOf", () => {
+  it("keys to the minute when timed and to the day when not", () => {
+    const at = "2026-03-04T18:30:00.000Z";
+    expect(occurrenceKeyOf("Morning Burn", at, true)).toBe("Morning Burn@2026-03-04T18:30");
+    expect(occurrenceKeyOf("Morning Burn", at, false)).toBe("Morning Burn@2026-03-04");
   });
 });
 
