@@ -12,7 +12,8 @@
 // is why the phantom <SpotifySearchModal/> was resolved as part of this move.
 //
 // TempoGuide is deliberately NOT here: it needs no licence and is the display's
-// honest no-music state, so it stays with the display code in App.jsx.
+// honest no-music state, so it stays with the display code — which since I6
+// stage 5 means src/screens/runner/DisplayScreen.jsx, not App.jsx.
 export { useSpotify, MUSIC_OFF } from "./useSpotify.js";
 // IS_CONFIGURED lives in spotifyAuth.js but is not re-exported: its only consumer
 // was the deleted Spotify-gated LoginScreen. Import it directly if it earns a use.

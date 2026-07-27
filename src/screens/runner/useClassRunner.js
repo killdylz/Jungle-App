@@ -16,6 +16,7 @@
 //
 // Everything else is here, and the returned object is the whole runner API.
 import { useState, useEffect, useRef } from "react";
+import { FLAGS } from "../../config/flags.js";
 import * as store from "../../lib/store.js";
 import { onRoomState, sendRoomState } from "../../lib/room.js";
 import { apiPlay, rampVolume } from "../../music/index.js";
@@ -92,6 +93,10 @@ export function useClassRunner({
   }, [view, liveState.playing, player]);
 
   useEffect(() => {
+    // FLAGS.music first so the whole effect body — and with it the only
+    // remaining root-side reference to apiPlay/rampVolume — folds away with
+    // music cut. `view!=="live"` alone is runtime state and folds nothing.
+    if (!FLAGS.music) return;
     if (view!=="live"||!liveState.playing) return;
     const uris = (stages[liveState.idx]?.tracks||[]).map(t=>t.uri).filter(Boolean);
     if (!uris.length) return;

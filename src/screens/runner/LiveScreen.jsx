@@ -128,8 +128,16 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
   // Use activeDeviceId for playback; fall back to browser SDK device
   const playDeviceId = activeDeviceId || deviceId;
 
-  // Helper: play on the active device. If it's an external device, use REST API directly
+  // Helper: play on the active device. If it's an external device, use REST API directly.
+  //
+  // The three transport helpers below lead with FLAGS.music, and it is a
+  // build-time gate rather than a belt-and-braces runtime one: these are the
+  // last inline `api.spotify.com` fetches in the app, and without the constant
+  // first the quarantine leaks two Spotify endpoints into every gym's bundle.
+  // At runtime they are already unreachable — `playDeviceId` is null with music
+  // cut — so the gate changes nothing a coach can observe.
   const playOnDevice = (uris) => {
+    if (!FLAGS.music) return;
     if (!uris.length) return;
     if (playDeviceId === deviceId && player) {
       // Browser SDK device — use REST API to start (handles track queue properly)
@@ -141,6 +149,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
   };
 
   const pauseDevice = () => {
+    if (!FLAGS.music) return;
     if (playDeviceId === deviceId && player) {
       player.pause().catch(()=>{});
     } else if (playDeviceId) {
@@ -151,6 +160,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
   };
 
   const resumeDevice = () => {
+    if (!FLAGS.music) return;
     if (playDeviceId === deviceId && player) {
       player.resume().catch(()=>{});
     } else if (playDeviceId) {

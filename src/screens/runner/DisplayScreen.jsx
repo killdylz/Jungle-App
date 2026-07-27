@@ -114,6 +114,10 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, spPa
   const handlePlayPause = () => {
     const willPlay = !liveState.playing;
     onPlayPause();
+    // The transport toggle still works with music cut — `onPlayPause` above is
+    // the class clock, not the stereo. Only the Spotify half is gated, and on
+    // the constant so it folds rather than merely no-ops.
+    if (!FLAGS.music) return;
     if (!player || !deviceId) return;
     if (willPlay) {
       const uris = stage?.tracks?.map(t=>t.uri).filter(Boolean)||[];

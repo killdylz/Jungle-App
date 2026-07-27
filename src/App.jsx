@@ -1873,6 +1873,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   // Retroactively enrich BPM for any tracks already in stages (e.g. loaded from localStorage)
   const stageTrackIds = stages.flatMap(s=>(s.tracks||[]).map(t=>t.id)).join(",");
   useEffect(() => {
+    // FLAGS.music first: this was the last ungated reference to
+    // enrichTracksWithBpm, and a BPM lookup for a stereo the gym is not allowed
+    // to drive is work nobody asked for even when it is free.
+    if (!FLAGS.music) return;
     const allTracks = stages.flatMap(s => s.tracks || []);
     if (!allTracks.some(t => t.id && !t.bpm)) return;
     enrichTracksWithBpm(allTracks).then(enriched => {
@@ -2327,8 +2331,20 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               ))}
             </div>
 
-            {/* Soundtrack tab */}
-            {subTab==="music" && (
+            {/* Soundtrack tab.
+                Gated on FLAGS.music FIRST, and that order is the whole point.
+                `subTab` is runtime state, so `subTab==="music"` alone is a
+                condition rollup cannot evaluate — it kept ~200 lines of
+                crossfade slider, energy-curve SVG, track list and four
+                handleTrackDrag* handlers in the main chunk for a tab that no
+                path can reach with music cut. FLAGS.music is a const literal,
+                so leading with it lets the branch fold away entirely.
+
+                This is the same shape as the 21 KB found in session 14: a flag
+                is only a build-time constant where EVERY path to the flagged
+                code is itself gated, and a state variable seeded from a flag
+                does not count. */}
+            {FLAGS.music && subTab==="music" && (
               <div style={{flex:1,padding:"22px",display:"flex",flexDirection:"column",gap:"16px",overflowY:"auto"}}>
                 {/* Match music toggle */}
                 <div style={{display:"flex",alignItems:"center",gap:"12px",padding:"14px",borderRadius:"12px",background:`linear-gradient(160deg,var(--navy),var(--card))`,border:`1px solid var(--accent)`}}>
@@ -2866,6 +2882,11 @@ export default function App() {
     setStages(ss => { const n=ss.map(s=>({...s,exercises:[...s.exercises]})); const [mv]=n[fsi].exercises.splice(exIdx,1); n[tsi].exercises.push(mv); return n; });
   };
   const handleDjClass = playlistIds => {
+    // The only remaining ungated path into djOrchestrator, and therefore into
+    // spotifyApi's scoring half. Every UI that can call this is already behind
+    // FLAGS.music; this makes the handler itself foldable rather than relying
+    // on its callers, which is the rule session 14 wrote after the last leak.
+    if (!FLAGS.music) return;
     runDjOrchestrator(stages, playlistIds, setStages, setDjProgress)
       .catch(err => setDjProgress({ active:false, stage:0, total:stages.length, done:false, error:err.message||"DJ failed" }));
   };
