@@ -1,13 +1,39 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-27 (session 15)_
+_Last updated: 2026-07-27 (session 16)_
 
 > **▶ STARTING A NEW SESSION?** `SESSION-16-PROMPT.md` carries the pending list and the
-> blocked-on-Dylan items. Read its **§0a first** — a second session was committing to `main`
+> blocked-on-Dylan items — but **its §4.1 (I6), §4.2 (I9), §4.4 (dead symbols / unused props /
+> a11y) and §4.5 (Library, PersonasScreen) are now DONE**; see "Shipped session 16" below for
+> what is actually left. Read its **§0a first** — a second session was committing to `main`
 > during session 13, and `git log` taken at session start goes stale. Then spec **§0's trust
 > ranking** and **§12**.
-> Gates: **`lint:crash` 0 · 674 unit (no todos) · 126 e2e (no fixme) · build 544.29 KB
-> + an 89.84 KB PersonasScreen chunk**. App.jsx **4,852 lines** (`wc -l`).
+> Gates: **`lint:crash` 0 · 683 unit (no todos) · 144 e2e (no fixme) · build 533.39 KB
+> + an 89.89 KB PersonasScreen chunk**. App.jsx **3,183 lines** (`wc -l`), down from 4,851.
+>
+> 🟢 **SESSION 16 CLEARED THE BIG ONE. I6 stage 5 is done** — the Runner cluster now lives in
+> `src/screens/runner/` behind `useClassRunner()`, and App.jsx lost **1,668 lines (−34%)**.
+> Deferred by sessions 13, 14 and 15; the AST tooling made it safe, and the smoke test proved
+> it (a planted mutation in the extracted `FloorLiveScreen` fails `smoke.spec.js` on exactly
+> its landing assertion, so the suite is provably driving the extracted code).
+>
+> 🔴 **THE TOOL WAS WRONG BEFORE THE CODE WAS.** Three separate times this session a checker
+> or an assertion had to be fixed before its finding could be believed:
+> 1. **`deadctl`'s hover blind spot**, fixed and re-proven against **6 planted defects and 18
+>    planted non-defects** before a single finding was acted on.
+> 2. **A bundle-membership fingerprint that lied.** "Music Hub" is also a nav label;
+>    `api.spotify.com/v1/me/player/play` is also LiveScreen's own inline fetch. The checker now
+>    validates every candidate against the whole `src/` tree and reports **"cannot decide"**
+>    rather than guessing.
+> 3. **An `inert` a11y assertion that failed against CORRECT code.** `inert` does not rewrite
+>    `tabIndex`, and Playwright's role engine does not model it. What the browser actually
+>    does is **refuse the focus** — that is the only honest assertion, and it took a probe to
+>    find out. Session 14's trap, hit again and caught in time.
+>
+> ⚠️ **A backlog number was wrong and is now measured.** The prompt carried I9-leftover as
+> "`useSpotify()` drags spotifyAuth + spotifyApi into the main chunk, **~2.5 KB**". Stubbing
+> both imports and rebuilding saves **0.15 KB** — those modules were already out. The bytes
+> were in **six ungated call sites**, which is where the real **12.7 KB** came from.
 >
 > 🔴 **Session 15 found five defects of ONE kind: a control that renders, invites a press,
 > and does nothing.** Not one of them threw, crashed, logged, or failed a write — which is
@@ -68,6 +94,55 @@ _Last updated: 2026-07-27 (session 15)_
 > and rollup keeps it in the common chunk, so the whole ~240 KB delta between local and production
 > sits in the MAIN chunk. Verified live: on first load the browser fetches only
 > `index-*.js` + CSS, and `PersonasScreen-*.js` is not requested until Coaches is opened.
+
+---
+
+## 🟢 Shipped SESSION 16
+
+`a863768` → `1d4abd3`, six commits. The refactor the last three sessions deferred, plus the
+sweep line kept running alongside it.
+
+| Commit | What it did |
+|---|---|
+| `4494b72` | **I6 stage 5.** `LiveScreen`, `RoomTV`, `CheckInPanel`, `OverviewDisplayScreen`, `FloorLiveScreen`, `DisplayScreen`, a shared `displayKit`, and `useClassRunner()` all move to `src/screens/runner/`. App.jsx **4,851 → 3,183**. New shared modules `src/lib/format.js` and `src/lib/brandCopy.js` fell out of the seam. |
+| `a93bfcf` | **I9.** The music quarantine was **nominal in six places** — the Builder's Soundtrack panel gated on a state flag, the BPM-enrichment effect, `handleDjClass`, LiveScreen's three transport helpers, DisplayScreen's play/pause, and the runner's autoplay effect. **545.06 → 532.37 KB**; `api.spotify.com` occurrences 6 → 2. |
+| `fa9f018` | Brand Studio's **LIVE PREVIEW pane had a real, focusable `<button>Start Class</button>`** on sample content — reachable only by the users least able to tell it was decoration. Fixed with `inert`. Four unused props removed (`spPaused` ×3, `onProfile`). |
+| `79c29ab` | The Library's three **write paths** pinned: edit, delete, Reset-to-defaults — plus the search box, which nothing had ever asserted actually *filters*. |
+| `00e07e9` | **a11y round 3, the form fields.** Sixteen nameless controls, including **eight identical unnamed colour swatches** in Brand Studio. New sweep over all nine screens. |
+| `1d4abd3` | **Move an exercise between stages** — `onMoveExercise` was threaded in and never called, so a misplaced movement had to be deleted and retyped. `deadctl` now reports **zero** unused props repo-wide. |
+
+### What the runner extraction is, beyond a file move
+
+`useClassRunner()` is the half that is not carpentry. "What happens when a stage ends" was
+four `useEffect`s scattered between the skin loader and the share-card handler in App's root;
+reading them in order meant reading the whole root. They are now adjacent, with the reasoning
+about **which `class_instance` a check-in lands on** (`pinnedClass`, `handleStartScheduled`)
+sitting next to the panel that writes it. What stays in App and is passed IN is what more than
+one cluster needs: the class being planned, the history the Dashboard reads, the Spotify
+handles, and routing.
+
+**Deliberately NOT `React.lazy`.** That would put a network fetch between a coach tapping
+"Start class" and the room seeing a timer, on the one screen that has to work when the studio
+wifi does not. The barrel says so, so the next session does not "optimise" it.
+
+### Two traps this extraction sprang, both worth keeping
+
+- **`FloorLiveScreen` declares its OWN `fmt`** that clamps negatives and floors seconds, so an
+  overrun stage reads `0:00` on a wall a room is looking at. It **shadows** the module import.
+  A grep would have "tidied" it into the shared `fmt` and been silently wrong; the AST
+  dead-import scan caught it. `src/lib/format.test.js` now pins that as an executable
+  **negative** — `fmt(-1)` must NOT be `"0:00"` — rather than as a comment a future tidy-up
+  would delete along with the shadowing local.
+- **The `jsx` and `lint:crash` checkers are complementary and you need both.** The AST script
+  found **17 unresolved components** in the new modules that `lint:crash` cannot see (§6); the
+  crash gate then found **16 plain-identifier misses** the JSX script cannot see.
+
+### Not defects — do not re-open
+
+`deadctl`'s remaining 7 findings are all behind flags that are `false`, so none can render:
+AnalyticsScreen's three handler-less buttons (already known), **CalendarScreen's "Jungle
+Intelligence" tip action and its SUGGESTED slot chip** (both inside
+`FLAGS.mockAnalytics ? [...] : []`), and two inside the now-gated Soundtrack panel.
 
 ---
 
