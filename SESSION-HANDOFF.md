@@ -5,7 +5,7 @@ _Last updated: 2026-07-27 (session 12)_
 > **▶ STARTING A NEW SESSION?** `SESSION-13-PROMPT.md` carries the pending list and the
 > blocked-on-Dylan items. **Both of session 11's DEC-11 measurements are now decided and built**
 > — see Session 12 below. Then read spec **§0's trust ranking** and **§12**.
-> Gates: **`lint:crash` 0 · 656 unit (no todos) · 104 e2e (no fixme) · build 564.96 KB
+> Gates: **`lint:crash` 0 · 656 unit (no todos) · 114 e2e (no fixme) · build 565.07 KB
 > + an 89.21 KB PersonasScreen chunk**.
 >
 > ⚠️ **The build gate number CHANGED in session 12** (was 651 KB, one chunk). The personas
@@ -22,6 +22,93 @@ _Last updated: 2026-07-27 (session 12)_
 > and rollup keeps it in the common chunk, so the whole ~240 KB delta between local and production
 > sits in the MAIN chunk. Verified live: on first load the browser fetches only
 > `index-*.js` + CSS, and `PersonasScreen-*.js` is not requested until Coaches is opened.
+
+---
+
+## 🟢 Shipped SESSION 13
+
+`078a55a` → `0e373de`, two commits. Two sweeps, and a correction to a rule the prompt states.
+
+### 🧹 An emoji is text, so twelve buttons passed the name sweep saying nothing (`0e373de`)
+
+Session 12's rule is `named()` — aria-label, aria-labelledby, or non-empty `innerText`. **An emoji
+satisfies the third one.** The Exercise Library's edit mode shipped six ✏️/🗑️ pairs, one per
+movement, all green: a screen reader announced them "pencil" and "wastebasket", six identical pairs
+in one set, one of each pair destructive, with nothing saying WHICH movement was about to go.
+
+Those controls are mounted by pressing **Edit**, so no test in this repo had ever seen them —
+§3A's stated gap ("modals and panels that open on interaction") hiding a real defect on its first
+inspection.
+
+**Writing the new rule generally found a second defect nobody was looking for.** "A name with no
+letter and no digit is not a name", applied across all nine screens, immediately failed the
+**Schedule's `‹` / `›` week navigation**. Both now say which way time moves. (§2.4's "ask the
+generic question, not the enumerated one", again.)
+
+Two new guards, both mutation-checked: the symbol-only rule per screen, and one that drives INTO
+edit mode and additionally requires the delete labels be **distinct** — six identical "Delete"
+buttons would satisfy the rule and still leave the coach unable to tell them apart. When the delete
+label is removed again, the edit-mode test fails **and the per-screen sweep still passes**, which
+is the blind spot recorded as a result rather than as prose. e2e **104 → 114**.
+
+### 🧹 23 dead imports both lint gates are blind to — and a correction (`fc4a82e`)
+
+`no-unused-vars` ignores `/^[A-Z_]/`, so an unused UPPERCASE import is invisible to `lint` AND
+`lint:crash`. Parsed every source file (babel, not regex) and found **23 dead bindings across 10
+files** — nine in App.jsx alone, including eight lucide icons and `StatCard`, which moved to
+`primitives.jsx` in an earlier stage and was never unimported. Every remaining textual hit is a
+string ("Sun" in a weekday array, "Upload Logo" on a button), which is how they survived a grep.
+
+⚠️ **CORRECTION to §7.** It says to hunt these down "or the module stays in the chunk". For
+tree-shakeable **named** imports that is not true: a clean rebuild after removing all 23 is
+**byte-identical, same hashes**. Rollup had already eliminated every one. The rule holds only for
+side-effectful or namespace imports. The cleanup buys an accurate reading of what a file depends
+on — which is what any extraction leans on — and **zero bytes**.
+
+### 🔎 Found, NOT fixed — the "custom" library blob is a snapshot, not a delta
+
+Driving the Exercise Library end to end (add a custom movement, read back the stored object): the
+entry persists correctly, but **`jungle_library_custom` is 59,162 bytes after adding ONE exercise**
+— the whole catalogue, all ten class types. `saveLibraryCustom` upserts that same blob to Supabase
+`library_overrides` on **every** edit. Two consequences:
+
+- **Payload** — 59 KB to Postgres per keystroke-ish save, the concern `store.js:207` already names
+  for personas.
+- **The freeze** — `getLibrary()` merges saved over built-in with
+  `subTypes:{...WORKOUT_LIBRARY[k].subTypes, ...saved[k].subTypes}`. Because the saved blob contains
+  every class type, the gym's snapshot wins **everywhere**, so any future improvement to
+  `src/data/library.js` never reaches a gym that has ever pressed Save. "Editable per gym" quietly
+  becomes "frozen at first edit".
+
+The fix is a delta format plus a backward-compatible read. It changes what is written to a **synced
+table**, so it is flagged rather than done. Natural home is a new `src/lib/libraryStore.js` — which
+the `LibraryBrowserModal` extraction wants anyway.
+
+### 🔎 The Team sweep is NOT buildable now — it belongs in the live queue
+
+§3A lists "Sweep: Team/Coaches admin" under *buildable now*. It is not. `AdminTeamScreen` returns
+early on `!supabaseEnabled` and renders only *"Team accounts are available on the online version of
+Jungle."* Verified by driving the real UI — the invite form, member list and invites list never
+mount. **Blocked exactly like Room TV Follow.** The item also conflates two surfaces: "Team"
+(`AdminTeamScreen`) is blocked; "Coaches" (`PersonasScreen`) is a different screen and is drivable.
+
+Also corrected: `AdminTeamScreen.jsx` promised `AdminTeamScreen.test.js` guards `TEAM_ROLES`
+against the migration enum. **No such file exists.** The guard is real but lives in the
+`memberships.role` row of `src/lib/dbConstraints.test.js`; the comment now names the file that does.
+
+### 🛠 Tooling worth rebuilding (§7's two scripts, plus one)
+
+Rebuilt as throwaway node scripts (babel AST, so comments and strings cannot create false hits):
+a **scan** that reports for a set of declarations what imports it needs, what same-file
+declarations it leans on, and what the rest of the file still uses; a **JSX-resolution** check
+(§6 — clean across all 15 source files, and proven to catch a planted `<Phantom/>` and a
+`<Missing.Deep.Thing/>` while ignoring one in a comment); and a **dead-import** finder, which is
+what produced the 23 above.
+
+⚠️ **`WORKOUT_LIBRARY` is referenced throughout App.jsx** (Builder, class picker, root), so
+`src/data/library.js`'s 58 KB stays in the main chunk no matter what happens to
+`LibraryBrowserModal`. That kills the largest theoretical I9 win — worth knowing before spending
+effort on it.
 
 ---
 
