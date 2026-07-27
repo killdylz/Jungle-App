@@ -1,16 +1,30 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-27 (session 13)_
+_Last updated: 2026-07-27 (session 14)_
 
 > **▶ STARTING A NEW SESSION?** `SESSION-14-PROMPT.md` carries the pending list and the
 > blocked-on-Dylan items. Read its **§0a first** — a second session was committing to `main`
 > during session 13, and `git log` taken at session start goes stale. Then spec **§0's trust
 > ranking** and **§12**.
-> Gates: **`lint:crash` 0 · 656 unit (no todos) · 114 e2e (no fixme) · build 565.07 KB
-> + an 89.21 KB PersonasScreen chunk**.
+> Gates: **`lint:crash` 0 · 669 unit (no todos) · 116 e2e (no fixme) · build 542.72 KB
+> + an 89.84 KB PersonasScreen chunk**.
 >
-> 🔴 **The one decision that gets more expensive with time: DEC-13**, the library-freeze finding
-> below. It is free to fix while no production gyms exist.
+> ✅ **DEC-13 and DEC-12 are both ANSWERED and SHIPPED** (session 14). The library no longer
+> freezes at first edit. Do not re-raise either.
+>
+> 🔴 **Session 14's main chunk drop was NOT a refactor — it was a bug.** Two keyboard
+> shortcuts in the Class Runner reached the cut music subsystem: **S** opened a Spotify
+> search over the running class, and **M** asked the coach for **microphone permission** to
+> duck a player that is permanently null. Guarding them took **24.15 KB (−4.3%)** off the
+> main chunk, because rollup cannot eliminate a component an unguarded state flag can reach.
+> **The lesson generalises: a feature flag is only a build-time constant where every path to
+> the flagged code is itself gated.** Neither was reachable from a button, which is why every
+> sweep so far missed them.
+>
+> ⚠️ **`Measure-Object -Line` does not count blank lines.** The session-13 and -14 prompts
+> both report App.jsx at "4,684 lines" on that basis; the file was really **4,993**. It is
+> **4,742** now. Use `wc -l` or node, and treat any line count in these documents written
+> before session 14 as a non-blank count.
 >
 > ⚠️ **The build gate number CHANGED in session 12** (was 651 KB, one chunk). The personas
 > cluster is now lazy-loaded, so the main chunk is 565 KB and Coaches fetches its own 89 KB.
@@ -26,6 +40,85 @@ _Last updated: 2026-07-27 (session 13)_
 > and rollup keeps it in the common chunk, so the whole ~240 KB delta between local and production
 > sits in the MAIN chunk. Verified live: on first load the browser fetches only
 > `index-*.js` + CSS, and `PersonasScreen-*.js` is not requested until Coaches is opened.
+
+---
+
+## 🟢 Shipped SESSION 14
+
+`a10e1d0` → `2046c33`, five commits. Both open decisions closed, and the I9 backlog corrected
+twice — once about which candidate wins, once about why.
+
+### DEC-13 — the gym's library was a snapshot that froze at first edit (`363af31`)
+
+Adding one movement wrote the whole catalogue (10 class types, 27 sub-types, 330 exercises,
+**59,154 bytes**) to localStorage and upserted it to `library_overrides`. Worse than the payload:
+`getLibrary()` merged with `subTypes: {...built, ...saved}`, and because the blob held every class
+type, **the gym's snapshot won everywhere** — so no later improvement to `src/data/library.js`
+could ever reach a gym that had once pressed Save.
+
+`src/lib/libraryStore.js` stores only what changed, at POOL granularity (one sub-type's
+warmup/main/cooldown). Driven through the real modal: **1,082 chars instead of 59,154, −98.2%**.
+Then proven end-to-end — with a gym edit already saved, a simulated future catalogue improvement
+to an *untouched* pool arrived (CrossFit 39→40, warm-up 5→6) while the gym's own main-set edit
+stayed. **Backward compatible**: a v1 blob reads by the old rules verbatim, and the next save
+migrates it losslessly (verified: planted v1 blob → v2 at 355 chars, legacy movement intact).
+
+Two things fell out: editing back to the built-in state now **deletes** the row rather than
+storing an empty snapshot, and `_RETRY_PUSHERS` no longer upserts `data: null` over a failed
+delete.
+
+### DEC-12 — the Builder's back chevron now goes back (`a614bc5`)
+
+It called `onOverviewDisplay`, the same handler as "Preview on TV". Now `onBack`, matching the
+ten other screens. The e2e guard asserts both halves — reaches the dashboard, does **not** reach
+the TV.
+
+⚠️ The first version of that inverse assertion used `/\d+ stages/` as the Room TV tell and
+**failed against correct code**: the Dashboard's resume-building card renders that string too.
+The board's real tell is that it is full-screen — no sidebar, only an Esc control.
+
+### I9 — the top-ranked candidate was already free (`5626c9c`)
+
+The backlog said AnalyticsScreen "ships to every device and never renders". **It does not ship.**
+`FLAGS` is a module-level const of literals, so rollup folds `FLAGS.mockAnalytics` to false and
+drops the branch; none of its strings are in the main chunk before or after.
+
+`React.lazy` was built first and made it **worse** — the dynamic import defeats the folding, so a
+13.48 KB chunk got emitted and added to the SW precache (48 files/1366 KB → 49/1379 KB) for a
+screen nobody renders. As a plain **static** import the rebuild is byte-identical, same hash, and
+App.jsx loses 252 lines. Verified it still renders by flipping the flag on — no test can, since
+with the flag off it never mounts.
+
+### The two shortcuts into the cut music subsystem (`c55acc2`, `2046c33`)
+
+See the header block. **S** → Spotify search over the running class; **M** → `getUserMedia`
+microphone prompt to duck a null player, plus an AudioContext and a rAF loop analysing room audio
+on the gym's tablet. Both guarded at two points each (shortcut + mount/effect).
+
+Measured decomposition of the music mass, by stubbing the barrel and rebuilding rather than
+reading source: **UI components 21,153 B · hook+api layer 2,607 B · shared ~5,300 B.** So the
+backlog's framing was inverted — it said music "needs a real seam" because `useSpotify` is a hook
+that cannot be lazy-loaded, but the hook is 2.5 KB and the 21 KB was plain components behind a
+missing guard. **What remains is the small part** (~2.5 KB): `useSpotify()` is still called
+unconditionally at `App.jsx:4190`.
+
+⚠️ A grep said mic mode had three visible buttons as well as the shortcut. **Driving the Runner
+rendered zero of them** — the shortcut was the only reachable path. The grep inference was wrong
+and the UI corrected it.
+
+### Tooling — the three AST scripts are rebuilt, and proven
+
+`scan` / `jsx` / `dead`, `@babel/parser` + `@babel/traverse` via `createRequire`, anchored on
+declaration NAMES. **Proven before being trusted**: the JSX checker found a planted
+`<PhantomComponent/>` and `<Missing.Deep.Thing/>` in the real App.jsx while `lint:crash` reported
+zero — **§6's blind spot is still exactly as documented** — while correctly ignoring a component
+named in a line comment, in a JSX comment, in a string, lowercase intrinsics, and
+`<React.Fragment>`. Repo is clean on both checks.
+
+⚠️ One tool written this session was **discarded rather than trusted**: a "which source files
+reach the bundle" checker based on unique string literals reported `App.jsx` as ABSENT from the
+bundle, which is impossible. Its numbers were not used. The reliable method is a genuinely
+distinctive marker (`api.spotify.com`) plus a stub-and-rebuild delta.
 
 ---
 
