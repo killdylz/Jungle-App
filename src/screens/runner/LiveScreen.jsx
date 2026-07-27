@@ -11,7 +11,7 @@ import { fmt, fmtSec } from "../../lib/format.js";
 import { prefersReducedMotion } from "./displayKit.js";
 import { CheckInPanel } from "./CheckInPanel.jsx";
 
-export function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onPrevStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
+export function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, onDisplayMode, onNextStage, onPrevStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;

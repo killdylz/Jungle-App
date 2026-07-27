@@ -10,7 +10,7 @@ import { DisplayScreen } from "./DisplayScreen.jsx";
 // whole-class live board, "coach" = the in-runner coach display. Fable P1/P2:
 // the mode switch is a transient overlay (the running surface keeps the whole
 // screen) with buttons sized for an across-the-room tap.
-export function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, spPaused, onPlayPause, canFollow, follow, onFollow, remote }) {
+export function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, nowPlaying, player, deviceId, onPlayPause, canFollow, follow, onFollow, remote }) {
   const reduce = prefersReducedMotion();
   const [ctl, setCtl] = useState(true);
   useEffect(() => {
@@ -30,7 +30,7 @@ export function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, n
     <div onMouseMove={wake} onTouchStart={wake} style={{position:"relative",flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {mode==="studio" && <OverviewDisplayScreen stages={S} sessionName={SN} liveState={LS} onBack={onExit}/>}
       {mode==="floor"  && <FloorLiveScreen stages={S} liveState={LS} nowPlaying={NP} onBack={onExit}/>}
-      {mode==="coach"  && <DisplayScreen stages={S} liveState={LS} onBack={onExit} player={player} deviceId={deviceId} spPaused={spPaused} nowPlaying={NP} onPlayPause={onPlayPause}/>}
+      {mode==="coach"  && <DisplayScreen stages={S} liveState={LS} onBack={onExit} player={player} deviceId={deviceId} nowPlaying={NP} onPlayPause={onPlayPause}/>}
       {/* zIndex must clear the DISPLAY SURFACES below it. `OverviewDisplayScreen`
           ("Plan") renders position:fixed inset:0 at zIndex:500, so at the old
           zIndex:80 it painted straight over this bar — and Plan is the DEFAULT

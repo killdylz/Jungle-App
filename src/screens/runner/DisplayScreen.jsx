@@ -55,7 +55,7 @@ export function TempoGuide({ bpm, color, reduce, hasTracks }) {
   );
 }
 
-export function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, nowPlaying, onPlayPause}) {
+export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowPlaying, onPlayPause}) {
   const vw = useWindowWidth();
   const reduce = prefersReducedMotion();
   const isMobile = vw < 480;

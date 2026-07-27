@@ -189,3 +189,76 @@ test.describe("the Exercise Library's edit mode announces itself", () => {
       .toBe(names.length);
   });
 });
+
+// ── A control that announces itself and does nothing ─────────────────────────
+//
+// Both sweeps above ask whether a control has a NAME. Neither can ask whether
+// the named control DOES anything — the gap session 15 named, and Brand Studio
+// is where it bites hardest.
+//
+// Its LIVE PREVIEW pane is a picture of the gym's own app, ending in a real
+// accent-coloured <button>Start Class</button> over invented sample content
+// ("Strength Lab · with Priya · 18:30"). A sighted user reads the frame and
+// knows it is a mockup. A keyboard user tabs into it, and a screen reader
+// announces "Start Class, button" in exactly the voice it uses for the real
+// one on the Dashboard — so the only users who cannot tell it is decoration are
+// the ones relying on the a11y tree to tell them.
+//
+// The fix is `inert` on the pane. This test is here because `inert` is the kind
+// of attribute that silently does nothing if it fails to serialise, and an
+// invisible no-op is precisely what it is guarding against.
+//
+// WHAT THIS ASSERTS, AND WHAT IT DELIBERATELY DOES NOT. The first draft checked
+// `getByRole("button", {name:/Start Class/})` toHaveCount(0) and `tabIndex < 0`.
+// Both FAILED against correct code, and probing the live page is what showed
+// why: `inert` does not rewrite `tabIndex` (the property still reads 0), and
+// Playwright's role engine does not model `inert` either, so a role query still
+// matches. What the browser really does — verified in the probe — is REFUSE THE
+// FOCUS: `btn.focus()` leaves `document.activeElement` untouched. That refusal
+// is the guarantee a keyboard user actually experiences, so that is what is
+// asserted here. Asserting the other two would have been asserting something
+// false about the platform and calling it a bug in the app.
+test.describe("the Brand Studio preview is a picture, not a control panel", () => {
+  test("the sample Start Class button renders but cannot be reached", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Brand Studio");
+
+    // Scanner sanity FIRST: a selector that matches nothing would make every
+    // assertion below vacuously true. Prove the pane and its sample button are
+    // actually on the page before asserting anything about their reachability.
+    const pane = page.locator("[inert]");
+    await expect(pane, "the preview pane must exist and carry inert").toHaveCount(1);
+    await expect(
+      pane.getByText("Start Class"),
+      "the sample button must still RENDER — it is the preview's content, not a bug",
+    ).toHaveCount(1);
+
+    const probe = await page.evaluate(() => {
+      const el = [...document.querySelectorAll("button")]
+        .find(b => /Start Class/.test(b.textContent || ""));
+      if (!el) return { found: false };
+      const pane = el.closest("[inert]");
+      const before = document.activeElement;
+      el.focus();
+      return {
+        found: true,
+        insideInertPane: !!pane,
+        // The browser's own view of the subtree. If this is false the attribute
+        // reached the DOM as a string but the engine is ignoring it.
+        paneIsInert: pane ? pane.inert === true : false,
+        // The load-bearing one: focus was requested and refused.
+        focusRefused: document.activeElement !== el,
+        focusWentTo: (document.activeElement?.textContent || "").trim().slice(0, 30),
+        focusUnchanged: document.activeElement === before,
+      };
+    });
+
+    expect(probe.found, "the sample button must exist for this test to mean anything").toBe(true);
+    expect(probe.insideInertPane, "the sample button must sit inside the inert pane").toBe(true);
+    expect(probe.paneIsInert, "the browser must actually honour inert on the pane").toBe(true);
+    expect(
+      probe.focusRefused,
+      `the preview's sample button took focus — a keyboard user can reach a control that does nothing (focus landed on "${probe.focusWentTo}")`,
+    ).toBe(true);
+  });
+});

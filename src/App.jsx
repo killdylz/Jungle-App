@@ -660,7 +660,7 @@ function PinScreen({onUnlock}) {
 }
 
 // ─── DashboardScreen ──────────────────────────────────────────────────────────
-function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionHistory=[], stages=[], sessionName="", nowPlaying=null, djProgress=null}) {
+function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], stages=[], sessionName="", nowPlaying=null, djProgress=null}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isNarrow = vw < 1000;
@@ -1382,7 +1382,24 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 class length, which Jungle does know. The preview still needs
                 content to be a preview — it just has to say that it is sample. */}
             <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>LIVE PREVIEW · your colours and fonts, on sample content</div>
-            <div style={{background:"var(--bg)",borderRadius:"12px",padding:"16px",border:`1px solid var(--border)`}}>
+            {/* `inert`, not `aria-hidden` + `tabIndex={-1}`.
+                This pane is a PICTURE of the gym's app, and it ends in a live
+                accent-coloured <button>Start Class</button> on sample content.
+                Sighted users read it as a mockup from the surrounding frame; a
+                keyboard or screen-reader user got a real, focusable "Start
+                Class" that announces itself like every other button on the
+                screen and does nothing — the same class of defect as session
+                15's five dead controls, but reachable only by the people least
+                able to tell it was decoration.
+                `tabIndex={-1}` here would not have worked: it takes the
+                CONTAINER out of the tab order and leaves every descendant in.
+                `aria-hidden` alone is worse than nothing — hiding a subtree
+                that still contains a focusable element is itself a violation,
+                because focus can land somewhere the a11y tree says is absent.
+                `inert` (React 19 passes it through) does both, for the whole
+                subtree, and keeps doing both if the preview grows another
+                control. */}
+            <div inert style={{background:"var(--bg)",borderRadius:"12px",padding:"16px",border:`1px solid var(--border)`}}>
               {/* Mini nav */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
                 {/* The gym's own name, because this is the white-label preview —
@@ -2736,8 +2753,13 @@ export default function App() {
   // wants the bottom bar but not phone-sized text.
   const isCompact = vw < COMPACT_NAV_PX;
 
+  // `spPaused` is deliberately NOT destructured. useSpotify still returns it —
+  // the hook's shape is the quarantine's contract and must not shrink — but the
+  // root threaded it through App -> LiveScreen, App -> RoomTV -> DisplayScreen
+  // and not one of the three ever read it. A prop list is the honest statement
+  // of what a component depends on, and I6 stage 5 leans on exactly that.
   const { token, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices,
-          nowPlaying, spPaused, authError, spError, profile, logout } = useSpotify();
+          nowPlaying, authError, spError, profile, logout } = useSpotify();
 
   // Account auth (Google via AuthGate) + local-first store wiring. Declared with
   // the other top-level hooks — before any early return below — so the hook
@@ -3149,7 +3171,7 @@ export default function App() {
             of text. One boundary for every lazy screen, so stage 5 adds screens
             here without adding plumbing. */}
         <Suspense fallback={<ScreenLoading/>}>
-        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
+        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} onBack={()=>setView("dashboard")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
@@ -3162,11 +3184,11 @@ export default function App() {
               ))}
               <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
             </div>
-            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onPrevStage={handlePrevStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""} classInstanceId={pinnedClass?.id||null} scheduledAt={pinnedClass?.startsAt||null}/>}
+            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onPrevStage={handlePrevStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""} classInstanceId={pinnedClass?.id||null} scheduledAt={pinnedClass?.startsAt||null}/>}
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
-        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} spPaused={spPaused} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
+        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")} onStartClass={handleStartScheduled}/>}
         {view==="music"&&(!FLAGS.music
