@@ -1549,6 +1549,39 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
     startEdit(ex);
   };
   const handleReset = () => { resetLibrary(); setLibData(WORKOUT_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
+
+  // ── Reordering a pool ──────────────────────────────────────────────────────
+  // The row rendered a ⠿ handle with `cursor:grab` and no `draggable` and no
+  // handlers: the pointer changed to a grab hand and the row would not move.
+  // libraryStore.js already stores a pool (one subType's warmup/main/cooldown
+  // list) as the unit of change precisely "because those lists are ordered and
+  // reorder is a real editing operation", so the persistence for this was
+  // designed before the gesture existed.
+  //
+  // `canReorder` carries the one trap. `exercises` is `rawEx` FILTERED BY
+  // SEARCH, so while a search is active the rendered index is not the stored
+  // index — dropping row 2 onto row 0 of a filtered view would splice the wrong
+  // two movements in the saved list and silently scramble the gym's catalogue.
+  // With no search the two lists are the same array, so indices agree. Reorder
+  // is also an edit, and lives in edit mode with add/rename/delete rather than
+  // being the one mutation a browsing coach can trigger by accident.
+  const canReorder = editMode && !search && !!sub;
+  const exDragIdx = useRef(null);
+  const [exDragOver, setExDragOver] = useState(null);
+  const handleExDragStart = (e, i) => { exDragIdx.current = i; e.dataTransfer.effectAllowed = "move"; };
+  const handleExDragOver  = (e, i) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setExDragOver(i); };
+  const handleExDrop      = (e, i) => {
+    e.preventDefault();
+    setExDragOver(null);
+    const from = exDragIdx.current;
+    exDragIdx.current = null;
+    if (from === null || from === i) return;
+    const arr = [...rawEx];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(i, 0, moved);
+    updateExerciseList(arr);
+  };
+  const handleExDragEnd = () => { setExDragOver(null); exDragIdx.current = null; };
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
 
   const stageLabels = {warmup:"Warm-up",main:"Main set",cooldown:"Cool-down"};
@@ -1706,12 +1739,19 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                     </div>
                   )}
 
-                  {exercises.map(ex=>{
+                  {exercises.map((ex,exIdx)=>{
                     const isEditing = editMode && editingId===ex.id;
                     return (
-                      <div key={ex.id} style={{
+                      <div key={ex.id}
+                        draggable={canReorder && !isEditing}
+                        onDragStart={canReorder?e=>handleExDragStart(e,exIdx):undefined}
+                        onDragOver={canReorder?e=>handleExDragOver(e,exIdx):undefined}
+                        onDrop={canReorder?e=>handleExDrop(e,exIdx):undefined}
+                        onDragEnd={canReorder?handleExDragEnd:undefined}
+                        style={{
                         background:isEditing?classColor+"12":"var(--navy)",
-                        border:`1px solid ${isEditing?classColor+"60":"var(--border)"}`,
+                        border:`1px solid ${isEditing?classColor+"60":exDragOver===exIdx?classColor:"var(--border)"}`,
+                        opacity:exDragOver===exIdx?0.6:1,
                         borderRadius:"10px",padding:"12px 14px",
                         transition:"border-color 0.15s,background 0.15s"
                       }}>
@@ -1740,8 +1780,12 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                           </div>
                         ) : (
                           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-                            {/* Drag handle */}
-                            <div style={{color:"var(--muted)",fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>
+                            {/* Drag handle — only where the gesture exists. It
+                                used to render always, so a browsing coach got a
+                                grab cursor on a row that could not move, and a
+                                searching coach got one on a row whose position
+                                is a filtered artefact. */}
+                            {canReorder && <div style={{color:"var(--muted)",fontSize:"14px",flexShrink:0,cursor:"grab",opacity:0.4}}>⠿</div>}
                             {/* Info. `g` is the folded-in Glossary entry (or null).
                                 It only fills gaps — a gym's own muscles text and
                                 notes always win over the built-in reference. */}
