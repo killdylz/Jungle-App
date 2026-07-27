@@ -76,10 +76,15 @@ export function BrandLogo({ size=26, showName=false, gymBranding }) {
       </span>
     );
   }
+  // Monogram tile. The ink is `--on-accent`, not `--bg`: `--bg` is only the right
+  // answer when the background is the dark one, which is the dark-theme
+  // assumption session 11 removed from the token itself. Hardcoding `--bg` here
+  // reintroduced it on every placement of the mark — measured at 3.36 on the light
+  // brand, below AA, against 5.23 for the token.
   if (name) {
     return (
       <span style={wrap}>
-        <span style={{width:`${size}px`,height:`${size}px`,borderRadius:`${Math.round(size*0.28)}px`,background:"var(--accent)",color:"var(--bg)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:disp,fontWeight:"800",fontSize:`${Math.round(size*0.58)}px`,flexShrink:0,lineHeight:1}}>{name.trim().charAt(0).toUpperCase()}</span>
+        <span style={{width:`${size}px`,height:`${size}px`,borderRadius:`${Math.round(size*0.28)}px`,background:"var(--accent)",color:"var(--on-accent)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:disp,fontWeight:"800",fontSize:`${Math.round(size*0.58)}px`,flexShrink:0,lineHeight:1}}>{name.trim().charAt(0).toUpperCase()}</span>
         {showName && <span style={{fontFamily:disp,fontSize:`${Math.round(size*0.62)}px`,fontWeight:"800",letterSpacing:"1.5px",color:"var(--text)",whiteSpace:"nowrap",textTransform:"uppercase"}}>{name}</span>}
       </span>
     );

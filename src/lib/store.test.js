@@ -957,18 +957,22 @@ describe("SWEEP — a real attendance export, end to end", () => {
     applyAttendanceImport(analyse());
     const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
 
-    // Cara first: a new member not building a habit is more actionable than a
-    // lapse, and fewer visits is more urgent.
-    expect(flags.map(f => f.name)).toEqual(["Cara Ng", "Ben Tan"]);
+    // Ben first: a longer absence is more urgent. Cara is here on the ABSENCE
+    // rule, not the new-member rule — the import gave her no join date, so
+    // nothing knows how long she has been a member. What it does know is that she
+    // has not been seen in 18 days, and that is what the flag says.
+    expect(flags.map(f => f.name)).toEqual(["Ben Tan", "Cara Ng"]);
 
-    const cara = flags[0];
-    expect(cara.rule).toBe("new_member_low_visits");
-    expect(cara).toMatchObject({ visits: 2, severity: 4 });
-    expect(cara.reason).toMatch(/Joined 20 days ago and has attended 2 times/);
-
-    const ben = flags[1];
+    const ben = flags[0];
     expect(ben.rule).toBe("absence");
     expect(ben).toMatchObject({ visits: 7, daysSince: 40, severity: 3 });
+
+    const cara = flags[1];
+    expect(cara.rule).toBe("absence");
+    expect(cara).toMatchObject({ visits: 2, daysSince: 18, severity: 2 });
+    expect(cara.reason).toMatch(/Last attended 18 days ago, after 2 visits/);
+    // No flag off this import may assert a join date the file never carried.
+    flags.forEach(f => expect(f.reason).not.toMatch(/^Joined/));
 
     // Ana is current and Dan is inside his grace period — neither is a warning.
     expect(flags.map(f => f.memberId)).not.toContain("m-ana");
@@ -976,30 +980,24 @@ describe("SWEEP — a real attendance export, end to end", () => {
     expect(flags.map(f => f.memberId)).not.toContain(dan.id);
   });
 
-  // ⚠️ MEASURED, NOT FIXED — a decision for Dylan, recorded here because the cost
-  // is only visible at corpus scale.
+  // ✅ MEASURED, THEN FIXED (session 12, Dylan's call).
   //
-  // Rule 1 needs a join date. The CSV export does not carry one, so
+  // Rule 1 is a claim about tenure. The CSV export carries no join date, so
   // `applyAttendanceImport` leaves `joinedAt: ""` (honest — it does not know), and
-  // `retention.js:91` substitutes the member's FIRST IMPORTED CHECK-IN. That
-  // substitution is deliberate and pinned by `retention.test.js:68` — at n=1 it
-  // looks obviously right: a member whose history starts 20 days ago probably is
-  // new.
+  // rule 1 used to substitute the member's FIRST IMPORTED CHECK-IN. At n=1 that
+  // reads as obviously right: a member whose history starts 20 days ago probably
+  // is new.
   //
-  // At corpus scale it inverts. An established gym importing a SHORT recent export
-  // has a roster whose every "first visit" is inside the 30-day window, so every
-  // member with fewer than 4 visits IN THE FILE is flagged as a new member who is
-  // not building a habit — and the reason line states "Joined N days ago" as fact,
-  // about people who joined years ago.
+  // At corpus scale it inverted. An established gym importing a SHORT recent
+  // export has a roster whose every "first visit" is inside the 30-day window, so
+  // every member with fewer than 4 visits IN THE FILE was announced as a new
+  // member not building a habit — 9 of 12 here — each reason line stating "Joined
+  // N days ago" as fact about people who joined years ago.
   //
-  // Rule 2 is explicitly gated against exactly this failure (`activity.recording`,
-  // and the note at the top of retention.js says so). Rule 1 has no equivalent
-  // gate. The number below is what a coach would see on day one.
-  //
-  // Not changed unilaterally: it would alter what the retention instrument
-  // reports, which is the commercial core, and the current behaviour is a tested
-  // decision rather than an oversight.
-  it("MEASURES how much of an established roster a short export falsely flags as new", () => {
+  // Rule 1 now requires a join date it actually holds, which is the same gate
+  // rule 2 has had since it was written. This test keeps the corpus, because the
+  // defect was invisible at n=1 and the guard has to be asked the hard question.
+  it("does not call an established roster new members off a short export", () => {
     // A three-week export from a gym that has been running for years. Nobody here
     // is new; the file just does not go back far enough to show it.
     const rows = ["Member Name,Email,Date,Class"];
@@ -1014,16 +1012,19 @@ describe("SWEEP — a real attendance export, end to end", () => {
     expect(getMembers().every(m => m.joinedAt === "")).toBe(true);
 
     const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
-    const asNew = flags.filter(f => f.rule === "new_member_low_visits");
 
-    // 9 of 12 — three quarters of the roster, on day one, every one of them
-    // asserting a join date the import never had.
-    expect(asNew).toHaveLength(9);
+    // Nobody is called a new member, and no reason line asserts a join date.
+    expect(flags.filter(f => f.rule === "new_member_low_visits")).toHaveLength(0);
+    flags.forEach(f => expect(f.reason).not.toMatch(/Joined/));
+
+    // The instrument is not silenced — it just says the true thing instead. The
+    // same 9 members are surfaced, now on the evidence the file actually carries:
+    // they have not been seen in ≥14 days while the studio is still recording.
     expect(flags).toHaveLength(9);
-    asNew.forEach(f => expect(f.reason).toMatch(/^Joined \d+ days ago/));
-    // The ones with 6 visits escape only because they cleared the visit bar, not
-    // because anything knew how long they had been members.
-    expect(new Set(asNew.map(f => f.visits))).toEqual(new Set([2, 3]));
+    expect(flags.every(f => f.rule === "absence")).toBe(true);
+    flags.forEach(f => expect(f.daysSince).toBeGreaterThanOrEqual(14));
+    // The three with 6 visits are current, not lucky: their last visit is recent.
+    expect(new Set(flags.map(f => f.visits))).toEqual(new Set([2, 3]));
   });
 
   // The absence rule is gated on the studio RECORDING. A pure historical import
@@ -1037,6 +1038,10 @@ describe("SWEEP — a real attendance export, end to end", () => {
     localStorage.setItem("jungle_attendance", JSON.stringify(stale));
 
     const flags = atRiskMembers(getMembers(), getAttendance(), { now: NOW });
-    expect(flags.every(f => f.rule === "new_member_low_visits")).toBe(true);
+    // With both gates in place this is now the strong claim: a purely historical
+    // import flags NOBODY. Rule 2 is suppressed because the studio is not
+    // recording, and rule 1 because an import knows nobody's join date. Every
+    // name on that screen would have been an artefact of the backfill.
+    expect(flags).toHaveLength(0);
   });
 });

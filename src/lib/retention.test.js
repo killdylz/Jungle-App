@@ -65,8 +65,25 @@ describe("Rule 1 — new member not building a habit", () => {
     expect(f.every(x => x.rule !== "new_member_low_visits")).toBe(true);
   });
 
-  it("falls back to the first visit when the roster has no joined date (CSV backfill)", () => {
+  // The gate that makes rule 1 symmetric with rule 2. A CSV backfill carries no
+  // join date, and the member's first imported check-in is NOT one — it is the
+  // start of the file. Guessing it announces most of an established roster as new
+  // members (measured in store.test.js) while stating a date that was never in
+  // the data. Silence here is the honest answer; rule 2 still catches a real lapse.
+  it("does NOT call someone a new member when the roster has no joined date (CSV backfill)", () => {
     const f = atRiskMembers([member("m1", "Ada", "")], [visit("m1", 20)], { now: NOW });
+    expect(f.every(x => x.rule !== "new_member_low_visits")).toBe(true);
+  });
+
+  it("ignores an unparseable joined date rather than reading it as the epoch", () => {
+    const f = atRiskMembers([member("m1", "Ada", "sometime last spring")], [visit("m1", 20)], { now: NOW });
+    expect(f.every(x => x.rule !== "new_member_low_visits")).toBe(true);
+  });
+
+  // The other half of the gate: a member the studio actually enrolled still gets
+  // rule 1, because `addMember` always records a join date.
+  it("still flags a member whose joined date IS known", () => {
+    const f = atRiskMembers([member("m1", "Ada", daysAgo(20))], [visit("m1", 18)], { now: NOW });
     expect(f[0].rule).toBe("new_member_low_visits");
   });
 });

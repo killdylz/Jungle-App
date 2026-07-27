@@ -3435,12 +3435,19 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
 
   const cols = isMobile ? 1 : isTablet ? Math.min(stages.length, 2) : Math.min(stages.length, 4);
 
+  // The surround and the bezel are the gym's, not a hardcoded near-black. This is
+  // the board a member sees FIRST, walking in before class, so it is the surface
+  // the white-label premium is actually sold on — and it used to be the one screen
+  // in the room that ignored the brand entirely. Every generated skin is dark, so
+  // in practice these stay projector-dark; a hand-built light palette now goes
+  // light because the gym chose to, which is the point.
   return (
-    <div style={{position:"fixed",inset:0,background:"#050705",zIndex:500,display:"flex",flexDirection:"column",overflow:"auto",padding:isMobile?"0":"24px"}}>
+    <div style={{position:"fixed",inset:0,background:"var(--bg)",zIndex:500,display:"flex",flexDirection:"column",overflow:"auto",padding:isMobile?"0":"24px"}}>
 
-      {/* TV bezel frame */}
+      {/* TV bezel frame. `--card` rather than `--bg` so the framed-screen device
+          survives in both polarities without a literal colour. */}
       <div style={{
-        flex:1,background:"#050705",borderRadius:isMobile?"0":"16px",
+        flex:1,background:"var(--card)",borderRadius:isMobile?"0":"16px",
         padding:isMobile?"0":"14px",
         boxShadow:isMobile?"none":"0 30px 80px rgba(0,0,0,.6)",
         display:"flex",flexDirection:"column",overflow:"hidden",
@@ -3463,6 +3470,12 @@ function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
                 background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
                 cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",flexShrink:0
               }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
+              {/* The mark the other two boards already carried. Floor uses the
+                  same call, so a member switching modes sees one identity rather
+                  than three. Safe here only because the background above is now a
+                  brand token: BrandLogo draws the name in `--text`, which on a
+                  light brand is dark ink and was invisible on the old near-black. */}
+              <BrandLogo size={24} showName/>
               <div>
                 <p style={{fontSize:tvFont(26),fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
                   {sessionName||"Class Plan Overview"}
@@ -3932,9 +3945,12 @@ function DisplayScreen({stages, liveState, onBack, player, deviceId, spPaused, n
   );
 
   // ── Timer-Only preset ──
+  // `--bg`, like the screen's other three presets. This was the last hardcoded
+  // `#000` on a room board: switching Coach from Full to Timer-Only swapped the
+  // gym's background for pure black mid-class, on the same TV.
   if (preset === "timer") {
     return (
-      <div style={{minHeight:"100vh",background:"#000",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
+      <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",flexDirection:"column",position:"relative"}} onClick={()=>showSettings&&setShowSettings(false)}>
         <div style={{position:"absolute",top:"16px",left:"20px",right:"20px",display:"flex",justifyContent:"space-between",alignItems:"center",zIndex:100}}>
           <div style={{flex:1,overflow:"hidden",marginRight:"12px"}}>
             <StageJourney compact={true}/>

@@ -69,6 +69,9 @@ async function primaryFraction(page) {
 const MODES = {
   Coach: { ready: () => /remaining/ }, // coach display: timer + "remaining"
   Floor: { ready: () => /clockwise · \d+ stations/ }, // floor board members read
+  // The DEFAULT mode — the board a member sees walking in, before a class starts.
+  // Its summary line is the marker: "N stages · Nm · N exercises".
+  Plan: { ready: () => /\d+ stages · / },
 };
 
 async function gotoDisplay(page, mode) {
@@ -84,8 +87,13 @@ const VIEWPORTS = [
   { name: "4K", width: 3840, height: 2160 },
 ];
 
+// The two boards that run DURING a class and put a clock on the wall. Plan is a
+// pre-class overview with no timer, so the 10-foot rule below does not apply to
+// it — it navigates like the others (MODES) but is not one of the timer surfaces.
+const TIMER_MODES = ["Coach", "Floor"];
+
 test.describe("P2 · the 10-foot rule — the primary element holds its share of the wall", () => {
-  for (const mode of Object.keys(MODES)) {
+  for (const mode of TIMER_MODES) {
   for (const vp of VIEWPORTS) {
     test(`${mode}-display timer is 8–12% of height at ${vp.name}`, async ({ page }) => {
       const errors = watchConsole(page);
@@ -256,45 +264,111 @@ test.describe("a light brand survives the trip to the room", () => {
     expectNoConsoleErrors(errors);
   });
 
-  // ⛔ MEASURED, NOT FIXED — a product decision for Dylan (session 11).
+  // ✅ MEASURED (session 11), DECIDED AND FIXED (session 12, Dylan's call).
   //
-  // The three Room TV boards answer "what colour is a room display?" three
-  // different ways, and two of them ignore the gym's brand entirely:
+  // The three Room TV boards used to answer "what colour is a room display?"
+  // three different ways, and the one a member sees FIRST ignored the brand:
   //
   //   Plan  (OverviewDisplayScreen, the DEFAULT mode before a class starts)
   //         hardcoded #050705, and NO brand mark at all
   //   Floor (FloorLiveScreen)   var(--bg) — the gym's own, with name + monogram
-  //   Coach (DisplayScreen)     hardcoded #000, monogram but no name
+  //   Coach (DisplayScreen)     var(--bg) on three presets, hardcoded #000 on the
+  //                             fourth, so switching to Timer-Only went black
   //
-  // Measured live with the light brand above: Plan renders on rgb(5,7,5) while
-  // Floor renders on rgb(255,247,240). So on one TV, a member watching a class
-  // sees near-black, then the gym's cream, then pure black as the coach switches
-  // modes — and the board they see FIRST, walking in before class, is the
-  // unbranded one. That is the surface F6's white-label premium (A2) is sold on.
+  // Measured live with the light brand above: Plan rendered on rgb(5,7,5) while
+  // Floor rendered on rgb(255,247,240). On one TV, a member walking in saw
+  // near-black, then the gym's cream as the class started.
   //
-  // Both answers are defensible and this test deliberately does not pick:
-  //   (a) room displays are deliberately dark for projector legibility — then
-  //       Floor is the odd one out, and the choice should be ONE named token
-  //       rather than three hardcoded values; or
-  //   (b) room displays are the gym's brand on the biggest screen they own — then
-  //       Plan and Coach should use var(--bg), and Plan needs the brand mark.
+  // The decision: room displays are the gym's brand on the biggest screen they
+  // own. Every generated skin is dark, so these stay projector-dark in practice —
+  // a light board now happens only because a coach built a light palette.
   //
-  // Note the ordering constraint: adding the brand mark to Plan only works AFTER
-  // the background is settled. BrandLogo draws the gym name in var(--text), which
-  // on a light brand is dark ink — invisible on a near-black board.
-  test.fixme("the three room boards agree on whose background they wear", async ({ page }) => {
+  // HOW THIS MEASURES. Session 11's version read the first `position:fixed`
+  // element with `zIndex>=500` and fell back to `document.body`. Only Plan has
+  // one, so Floor and Coach were both scored on the BODY — a board could paint
+  // itself pure black over a cream body and still pass. It also compared Plan's
+  // outer surround against Floor's root, which is why it read as a bigger
+  // disagreement than it was: Plan's inner screen was already `var(--bg)`; the
+  // surround and the bezel were the literal ones.
+  //
+  // So: collect every element that covers the viewport and paints something, and
+  // require all of them to be the gym's own tokens. That is the real invariant —
+  // no full-screen surface on a room board may be a colour the gym did not pick —
+  // and it is blind to which element happens to be the root.
+  test("the three room boards agree on whose background they wear", async ({ page }) => {
+    const errors = watchConsole(page);
     await lightBrandApp(page);
-    const bgOf = async (mode) => {
+
+    const paintsOf = async (mode) => {
+      // Back to the app shell first: a board is fullscreen, so `gotoDisplay`'s
+      // "Class Runner" nav button does not exist while one is open. Reload rather
+      // than Escape — the brand lives in localStorage and survives, and the three
+      // boards do not all exit the same way.
+      await page.reload();
       await gotoDisplay(page, mode);
       return page.evaluate(() => {
-        const fixed = [...document.querySelectorAll("div")]
-          .find(d => { const s = getComputedStyle(d); return s.position === "fixed" && +s.zIndex >= 500; });
-        return getComputedStyle(fixed || document.body).backgroundColor;
+        const vw = innerWidth, vh = innerHeight;
+        const out = [];
+        for (const el of document.querySelectorAll("*")) {
+          const r = el.getBoundingClientRect();
+          if (r.width < vw * 0.9 || r.height < vh * 0.9) continue;
+          const bg = getComputedStyle(el).backgroundColor;
+          if (bg && bg !== "transparent" && !bg.startsWith("rgba(0, 0, 0, 0)")) out.push(bg);
+        }
+        return out;
       });
     };
-    const plan = await bgOf("Plan");
-    const floor = await bgOf("Floor");
-    const coach = await bgOf("Coach");
-    expect(new Set([plan, floor, coach]).size).toBe(1);
+
+    const cs = await page.evaluate(() => {
+      const g = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+      return { bg: g("--bg"), card: g("--card"), navy: g("--navy") };
+    });
+    // Read from the tokens rather than retyped, so this cannot drift from the skin.
+    const asRgb = hex => { const h = hex.replace("#", ""); const n = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); return `rgb(${n.join(", ")})`; };
+    const brand = new Set([cs.bg, cs.card, cs.navy].map(asRgb));
+
+    for (const mode of ["Plan", "Floor", "Coach"]) {
+      const paints = await paintsOf(mode);
+      expect(paints.length, `${mode} paints no full-screen surface`).toBeGreaterThan(0);
+      paints.forEach(p =>
+        expect(brand, `${mode} paints ${p}, which is not one of the gym's tokens`).toContain(p));
+    }
+    expectNoConsoleErrors(errors);
+  });
+
+  // The other half of the decision. A background alone is not a brand: Plan was
+  // the only board carrying no mark, and it is the one a member looks at longest.
+  test("the Plan board a member walks in to carries the gym's name", async ({ page }) => {
+    const errors = watchConsole(page);
+    await lightBrandApp(page);
+    await gotoDisplay(page, "Plan");
+
+    await expect(page.getByText("IRON HABIT")).toBeVisible();
+    // Visible, not merely present: the ordering constraint that made this unsafe
+    // before the background was settled. BrandLogo draws the name in `--text`,
+    // which on this brand is near-black ink and was invisible on the old board.
+    const ink = await page.getByText("IRON HABIT").evaluate(el => getComputedStyle(el).color);
+    expect(ink).toBe("rgb(26, 16, 20)");
+
+    await expect(page.getByText(/Something broke|stopped responding/i)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  // The monogram tile hardcoded `var(--bg)` as its ink on the `--accent` fill —
+  // the exact dark-theme assumption session 11 removed from `--on-accent` itself,
+  // reintroduced at every placement of the mark. On this brand that is near-white
+  // on hot pink: 3.36:1, below AA, against 5.23:1 for the token.
+  test("the brand monogram uses the readable ink, not the background colour", async ({ page }) => {
+    await lightBrandApp(page);
+    await gotoDisplay(page, "Plan");
+
+    const tile = page.getByText("I", { exact: true }).first();
+    const seen = await tile.evaluate(el => {
+      const cs = getComputedStyle(el);
+      return { color: cs.color, bg: cs.backgroundColor };
+    });
+    expect(seen.bg).toBe("rgb(255, 45, 120)");     // --accent
+    expect(seen.color).toBe("rgb(26, 16, 20)");    // --text, via --on-accent
+    expect(seen.color).not.toBe("rgb(255, 247, 240)");
   });
 });

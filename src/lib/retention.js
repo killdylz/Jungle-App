@@ -88,7 +88,19 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
     if (!m?.id) return;
     const e = idx.get(m.id);
     const visits = e?.visits || 0;
-    const joinedMs = msOf(m.joinedAt) ?? e?.firstMs ?? null;
+    // Rule 1 is a claim about TENURE, so it may only run on a join date we
+    // actually hold. It used to fall back to the member's first recorded
+    // check-in, which reads as obviously right at n=1 and inverts at corpus
+    // scale: an established gym importing a short recent export has a roster
+    // whose every "first visit" lands inside the 30-day window, so most of it is
+    // announced as new members failing to build a habit — each citing a join date
+    // that was never in the data. Measured: 9 of 12. Rule 2 has been gated
+    // against exactly this failure since it was written (`activity.recording`);
+    // this is rule 1's equivalent gate. `addMember` always sets `joinedAt`, so
+    // only CSV-imported members are affected, and they are precisely the members
+    // whose tenure is unknown. An honest silence beats a confident wrong date —
+    // and a member who really has stopped coming is still caught by rule 2.
+    const joinedMs = msOf(m.joinedAt);
 
     // ── Rule 1: a new member who isn't building a habit.
     // Month one is when a membership is won or lost, so this fires while there is
