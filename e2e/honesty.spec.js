@@ -65,7 +65,8 @@ test.describe("nothing important is carried by colour alone", () => {
     const errors = watchConsole(page);
     await freshApp(page);
     await nav(page, "Class Builder");
-    await page.getByRole("button", { name: /Preview on TV/ }).click();
+    // `.first()` — two controls share this action on the Builder; see smoke.spec.js.
+    await page.getByRole("button", { name: /Preview on TV/ }).first().click();
 
     const body = await page.locator("body").innerText();
     // Name · duration, for the sample class's own stage names.

@@ -125,7 +125,7 @@ test.describe("Coaches — catalog, shape, draft", () => {
     await loadSampleCoach(page);
 
     await page.getByRole("button", { name: /Draft from this shape/ }).click();
-    await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();  // two share this action; see smoke.spec.js
 
     const draft = await stored(page, "jungle_draft_class");
     const warmup = draft.stages.find((s) => /warm/i.test(s.name));
@@ -151,7 +151,7 @@ test.describe("Coaches — catalog, shape, draft", () => {
     // Draft the coach's actual saved class rather than a generated one — this is
     // the path that works with Supabase off.
     await page.getByRole("button", { name: "Draft", exact: true }).first().click();
-    await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();  // two share this action; see smoke.spec.js
 
     const draft = await stored(page, "jungle_draft_class");
 

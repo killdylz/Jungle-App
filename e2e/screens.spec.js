@@ -61,3 +61,55 @@ test.describe("every screen renders", () => {
     });
   }
 });
+
+// ── Every control announces itself ───────────────────────────────────────────
+//
+// An icon-only button with no accessible name is announced as "button" — a
+// screen reader user hears the same word for play, skip, rename and delete, and
+// a voice-control user has nothing to say to reach it. It is invisible to every
+// other test in this suite, because the icon renders perfectly.
+//
+// `title` is deliberately NOT accepted. It is the last resort in the accessible
+// name computation, it never reaches a touch device, and this repo has already
+// fixed one button (the Builder's rename, session 11) by replacing exactly that.
+// The rule is `aria-label`, so that is what this asserts.
+//
+// The nine screens are the same list as above, so a screen added to SCREENS is
+// swept here too without anyone remembering to.
+const unnamedButtons = (page) => page.evaluate(() => {
+  const named = (el) => {
+    if (el.getAttribute("aria-label")?.trim()) return true;
+    const by = el.getAttribute("aria-labelledby");
+    if (by && by.split(/\s+/).some(id => document.getElementById(id)?.textContent.trim())) return true;
+    // `innerText` respects text-transform and hidden content, which is what a
+    // screen reader gets; `textContent` would count a visually-hidden node.
+    return !!(el.innerText || "").trim();
+  };
+  return [...document.querySelectorAll("button")]
+    .filter(b => b.offsetParent !== null)            // rendered, not display:none
+    .filter(b => !named(b))
+    .map(b => ({
+      title: b.getAttribute("title") || "",
+      testid: b.getAttribute("data-testid") || "",
+      // Enough markup to FIND it. These buttons are icon-only and inline-styled,
+      // so the style block is noise and the svg path is the identity — the
+      // failure message has to be actionable without a screenshot.
+      icon: (b.querySelector("svg")?.innerHTML || "").slice(0, 70),
+      // The nearest surrounding text is what actually identifies the control to
+      // a human reading this failure — an icon path does not.
+      near: (b.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 70),
+      html: b.outerHTML.replace(/style="[^"]*"/, "").slice(0, 120),
+    }));
+});
+
+test.describe("every control announces itself", () => {
+  for (const [label] of SCREENS) {
+    test(`${label} has no unnamed buttons`, async ({ page }) => {
+      await freshApp(page);
+      await nav(page, label);
+      const bad = await unnamedButtons(page);
+      expect(bad, `${label}: ${bad.length} button(s) with no accessible name:\n` +
+        bad.map(b => `  title=${JSON.stringify(b.title)} near=${JSON.stringify(b.near)}\n    icon=${b.icon}`).join("\n")).toEqual([]);
+    });
+  }
+});

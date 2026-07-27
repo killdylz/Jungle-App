@@ -959,7 +959,7 @@ function AnalyticsScreen({onBack}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"22px",flexWrap:"wrap",gap:"12px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}>
+          <button onClick={onBack} aria-label="Back" style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
           <div>
@@ -1375,7 +1375,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"28px",boxSizing:"border-box"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"24px"}}>
-        <button onClick={onBack} style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:"var(--text)",display:"flex"}}>
+        <button onClick={onBack} aria-label="Back" style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:"var(--text)",display:"flex"}}>
           <ArrowLeft size={16}/>
         </button>
         <div>
@@ -2247,7 +2247,14 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       <div style={{height:"84px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,background:"var(--card)",gap:"12px"}}>
         {/* Left: back + session name */}
         <div style={{display:"flex",alignItems:"center",gap:"14px",minWidth:0,flex:1}}>
-          <button onClick={()=>onOverviewDisplay()} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
+          {/* ⚠️ ICON/ACTION MISMATCH — named for what it DOES, not what it looks
+              like. The comment above calls this "back" and it draws a left
+              chevron, but it calls `onOverviewDisplay` — the same handler as the
+              "Preview on TV" button 35 lines below. So the Builder has two
+              controls for one action and one of them is dressed as Back. Which
+              way to resolve it (make it go back, or drop the duplicate) is a
+              design call, so this labels it truthfully and leaves it. */}
+          <button onClick={()=>onOverviewDisplay()} aria-label="Preview on TV" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <div style={{minWidth:0}}>
@@ -2419,7 +2426,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                     <div style={{fontSize:"11px",color:"var(--muted)"}}>{cfg.label || s.type} · {fmt(s.dur)}</div>
                   </div>
                   <span style={{fontSize:"11px",color:"var(--muted)",flexShrink:0}}>{(s.exercises||[]).length} ex</span>
-                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
+                  {/* Named after the stage it deletes. A plan has five of these
+                      and a bare "Remove" is five identical controls — the same
+                      reasoning as the roster's per-member buttons. */}
+                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} aria-label={`Remove ${s.name || cfg.label || "stage"}`} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
@@ -2438,7 +2448,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                           </svg>
                           <div style={{flex:1,fontSize:"13px",color:"var(--text)"}}>{ex.n}</div>
                           <div style={{fontSize:"12px",color:"var(--muted)"}}>{[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest}`].filter(Boolean).join(" ")}</div>
-                          <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} title="Movement preview" style={{background:"none",border:"none",cursor:"pointer",color:g?"var(--accent)":"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
+                          {/* `title` alone is not an accessible name worth
+                              relying on — last resort in the computation, and it
+                              never reaches a touch device. Named after the
+                              movement, since a stage has one of these per row. */}
+                          <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} aria-label={`Movement preview for ${ex.n}`} style={{background:"none",border:"none",cursor:"pointer",color:g?"var(--accent)":"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                           </button>
                         </div>
@@ -2912,7 +2926,7 @@ function CheckInPanel({ sessionName, classType, durationMin, coachName, classIns
   );
 }
 
-function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
+function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, spPaused, nowPlaying, onDisplayMode, onNextStage, onPrevStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 768;
@@ -3128,7 +3142,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
           {/* HEADER */}
           <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-              <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
+              <button onClick={onBack} aria-label="Back to class plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               </button>
               <div>
@@ -3225,28 +3239,31 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMobile?"16px":"18px",padding:"0 24px 20px",flexShrink:0}}>
                 {/* Prev stage */}
                 {liveState.idx > 0 && (
-                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
+                  <button onClick={onPrevStage} aria-label="Previous stage" style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill={"var(--text)"}><path d="M11 19V5l-8 7 8 7Zm9 0V5l-8 7 8 7Z"/></svg>
                   </button>
                 )}
                 {/* Skip back track */}
-                <button onClick={()=>player?.previousTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
+                <button onClick={()=>player?.previousTrack()} aria-label="Previous track" style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                   <SkipBack size={20}/>
                 </button>
-                {/* Play/Pause — large accent button */}
-                <button onClick={handlePlayPause} style={{width:isMobile?"76px":"84px",height:isMobile?"76px":"84px",borderRadius:"50%",background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 0 40px color-mix(in srgb, var(--accent) 25%, transparent)`,flexShrink:0}}>
+                {/* Play/Pause — large accent button. The name has to say which
+                    state the press will produce, and it changes with the state:
+                    a static "Play/pause" tells a screen-reader user nothing about
+                    whether the class is currently running. */}
+                <button onClick={handlePlayPause} aria-label={liveState.playing ? "Pause class" : "Start class"} style={{width:isMobile?"76px":"84px",height:isMobile?"76px":"84px",borderRadius:"50%",background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 0 40px color-mix(in srgb, var(--accent) 25%, transparent)`,flexShrink:0}}>
                   {liveState.playing
                     ? <svg width="30" height="30" viewBox="0 0 24 24" fill={"var(--bg)"}><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
                     : <svg width="30" height="30" viewBox="0 0 24 24" fill={"var(--bg)"}><path d="M8 5l11 7-11 7V5z"/></svg>
                   }
                 </button>
                 {/* Skip forward track */}
-                <button onClick={()=>player?.nextTrack()} style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
+                <button onClick={()=>player?.nextTrack()} aria-label="Next track" style={{width:isMobile?"52px":"50px",height:isMobile?"52px":"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                   <SkipForward size={20}/>
                 </button>
                 {/* Next stage */}
                 {liveState.idx < stages.length - 1 && (
-                  <button onClick={onNextStage} style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
+                  <button onClick={onNextStage} aria-label="Next stage" style={{width:"50px",height:"50px",borderRadius:"50%",border:`1px solid var(--border)`,background:"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"var(--text)"}}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill={"var(--text)"}><path d="M13 5v14l8-7-8-7ZM4 5v14l8-7L4 5Z"/></svg>
                   </button>
                 )}
@@ -4964,7 +4981,7 @@ function PersonasScreen({ onBack, onDraftToBuilder }) {
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <button onClick={onBack} aria-label="Back" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
           <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACHES</p>
           <p style={{fontSize:"12px",color:"var(--muted)"}}>Every coach's classes, style and formats — Jungle learns them and drafts new classes to match</p>
@@ -5996,6 +6013,12 @@ export default function App() {
   const handleAddStage     = ()             => setStages(ss => [...ss, {id:uid(),type:"circuit",name:`Stage ${ss.length+1}`,dur:600,exercises:[],tracks:[]}]);
   const handleRemoveStage  = i             => setStages(ss => ss.filter((_,j)=>j!==i));
   const handleNextStage    = ()             => setLiveState(ls => ls.idx<stages.length-1 ? {...ls,idx:ls.idx+1,elapsed:0} : ls);
+  // The Runner's back button was wired to `handleNextStage` — the same handler as
+  // forward — so a coach who advanced too early and reached for "back" skipped
+  // the room ANOTHER stage on. Found by the accessible-name sweep: the control
+  // had no name, so nothing in the suite had ever referred to it, and both
+  // buttons render a correct-looking icon either way.
+  const handlePrevStage    = ()             => setLiveState(ls => ls.idx>0 ? {...ls,idx:ls.idx-1,elapsed:0} : ls);
   const handleSkipTimer    = secs           => setLiveState(ls => ({...ls, elapsed:Math.max(0,Math.min(ls.elapsed+secs,(stages[ls.idx]?.dur||1)-1))}));
   const handleStageChange   = (i, s)  => setStages(ss => { const n=[...ss]; n[i]=s; return n; });
   const handleReorderStages = arr     => setStages(arr);
@@ -6229,7 +6252,7 @@ export default function App() {
             {deviceId&&isMobile&&<Wifi size={13} color={"var(--green)"}/>}
             {/* "Share with Class" minted a base64 URL into a route that no longer
                 exists. The N4 member link replaces it (audit 2.2). */}
-            <button onClick={()=>setShowProfile(true)} style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
+            <button onClick={()=>setShowProfile(true)} aria-label="Your profile and settings" style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
               {displayProfile?.images?.[0]?.url?<img src={displayProfile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
             </button>
           </div>
@@ -6284,7 +6307,7 @@ export default function App() {
               ))}
               <button onClick={()=>{setRoomTvMode(liveState.playing?"floor":"studio");setView("room-tv");}} style={{padding:"7px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",border:"1px solid var(--border)",background:"transparent",color:"var(--text)",display:"inline-flex",alignItems:"center",gap:"6px"}}><Monitor size={14}/> Room TV</button>
             </div>
-            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""} classInstanceId={pinnedClass?.id||null} scheduledAt={pinnedClass?.startsAt||null}/>}
+            {runnerTab==="run"&&<LiveScreen stages={stages} onBack={()=>{player?.pause().catch(()=>{}); setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder");}} liveState={liveState} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} player={player} deviceId={deviceId} activeDeviceId={activeDeviceId} setActiveDeviceId={setActiveDeviceId} devices={devices} refreshDevices={refreshDevices} spPaused={spPaused} nowPlaying={nowPlaying} onDisplayMode={()=>{setRoomTvMode("coach");setView("room-tv");}} onNextStage={handleNextStage} onPrevStage={handlePrevStage} onSkipTimer={handleSkipTimer} onAddTrack={handleAddTrack} sessionName={sessionName} classType={[classChoice?.classType, classChoice?.subType].filter(Boolean).join(" · ")} coachName={displayProfile?.display_name || ""} classInstanceId={pinnedClass?.id||null} scheduledAt={pinnedClass?.startsAt||null}/>}
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}

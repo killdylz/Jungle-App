@@ -28,7 +28,13 @@ test.describe("smoke: the path a coach walks every class", () => {
 
     // ── Builder ──
     await nav(page, "Class Builder");
-    await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
+    // `.first()`: the Builder has TWO controls for this one action — the labelled
+    // button, and a top-bar left-chevron wired to the same handler while dressed
+    // as the Back button every other screen puts in that exact spot. The chevron
+    // was invisible to this suite until session 12's sweep gave it a name, which
+    // is how the duplication surfaced. Left in place; whether to drop it or make
+    // it navigate is a design call (see the note at its definition in App.jsx).
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /DJ This Class/ })).toHaveCount(0);
 
     // ── Runner ──
