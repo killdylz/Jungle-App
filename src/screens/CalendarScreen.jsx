@@ -91,7 +91,9 @@ export function CalendarScreen({onBack, onStartClass}) {
   // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
   const effSchedule = { ...schedule };
   userClasses.forEach(uc => {
-    const entry = { name:uc.name, coach:uc.coach||"", fill:uc.fill||0, type:uc.type, dur:uc.dur||"45m", custom:true, repeat:uc.repeat };
+    // `id` carries through so a cell can name the RULE it came from. Without it
+    // the grid could only ever add (see removeClass below).
+    const entry = { id:uc.id, name:uc.name, coach:uc.coach||"", fill:uc.fill||0, type:uc.type, dur:uc.dur||"45m", custom:true, repeat:uc.repeat };
     if (uc.repeat === "daily") { DAYS.forEach(d => { effSchedule[`${d}-${uc.slot}`] = entry; }); }
     else if (uc.repeat === "weekly") { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
     else if (uc.weekKey === weekKey) { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
@@ -104,6 +106,22 @@ export function CalendarScreen({onBack, onStartClass}) {
     setShowAddClass(false);
     setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
   };
+  // `setUserClasses` was only ever appended to — there was no way to take a
+  // class OFF the schedule. A gym setting one up for the first time (the pilot's
+  // literal first hour) could typo a name, schedule the wrong slot, or stop
+  // running a class, and the grid would carry it forever. The class card even
+  // had `cursor:pointer` promising the interaction that did not exist.
+  //
+  // Removing a RULE, not an occurrence: a daily rule paints seven cells and one
+  // remove clears all seven, so the confirm says which class rather than which
+  // cell. Published occurrences and their attendance are untouched — those are
+  // dated history, and a class that ran did run.
+  const removeClass = (id, name) => {
+    if (!id) return;
+    if (!window.confirm(`Remove "${name}" from the schedule? Classes already run keep their attendance.`)) return;
+    setUserClasses(list => list.filter(c => c.id !== id));
+  };
+
   // ── B4: publish this week ─────────────────────────────────────────────────
   // The grid holds RULES ("Tuesday 6pm, weekly"). Attendance hangs off dated
   // OCCURRENCES, and until now nothing turned one into the other — the Runner
@@ -299,13 +317,23 @@ export function CalendarScreen({onBack, onStartClass}) {
                       background:`${CAT_COLOR[cls.type]||"var(--accent)"}18`,
                       border:`1px solid ${CAT_COLOR[cls.type]||"var(--accent)"}40`,
                       borderRadius:"8px",
-                      cursor:"pointer",
+                      position:"relative",
                       // minHeight, not height: the cell still fills its row, but a
                       // Start button can make it taller instead of overflowing.
                       minHeight:"calc(100% - 2px)",
                       boxSizing:"border-box",
                     }}>
-                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.name}</div>
+                      {/* Named for the class AND the slot: a weekly class paints
+                          one cell but a daily one paints seven, and "Remove"
+                          alone would be seven identical controls. */}
+                      {cls.id && (
+                        <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`}
+                          onClick={()=>removeClass(cls.id, cls.name)}
+                          style={{position:"absolute",top:"2px",right:"2px",background:"transparent",border:"none",padding:"2px",cursor:"pointer",color:"var(--muted)",lineHeight:0,opacity:0.55}}>
+                          <X size={11}/>
+                        </button>
+                      )}
+                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"14px"}}>{cls.name}</div>
                       <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
                       {/* The fill bar and its "%" are gone. Nothing in the
                           product ever SETS `fill` — no capacity field, no
@@ -348,12 +376,30 @@ export function CalendarScreen({onBack, onStartClass}) {
                       <div style={{fontSize:isMobile?"9px":"10px",fontWeight:"600",color:"var(--text)",marginTop:"1px"}}>{sug.name}</div>
                     </div>
                   )}
+                  {/* An empty slot invited a click and refused it. This was a
+                      div with a pointer cursor and a "+" revealed on hover,
+                      wired to onMouseEnter/onMouseLeave and NOTHING ELSE — the
+                      most direct way to say "put a class here" in the whole
+                      product, and it did nothing. The Add-a-class modal it
+                      should open already existed, three lines below, with `day`
+                      and `slot` fields that this now fills in.
+
+                      A button, not a div: an opacity-0 hover target is not
+                      reachable by keyboard at all, so focus reveals it the same
+                      way the mouse does, and the name says which cell it is —
+                      thirty-five identical "Add" buttons would distinguish
+                      nothing. */}
                   {!cls && !sug && (
-                    <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:0}}
+                    <button
+                      onClick={()=>{ setAddForm(f=>({...f, day, slot})); setShowAddClass(true); }}
+                      aria-label={`Add a class on ${day} at ${slot}`}
                       onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-                      onMouseLeave={e=>e.currentTarget.style.opacity="0"}>
-                      <span style={{fontSize:"18px",color:"var(--muted)"}}>+</span>
-                    </div>
+                      onMouseLeave={e=>e.currentTarget.style.opacity="0"}
+                      onFocus={e=>e.currentTarget.style.opacity="1"}
+                      onBlur={e=>e.currentTarget.style.opacity="0"}
+                      style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",opacity:0,background:"transparent",border:"none",padding:0}}>
+                      <span style={{fontSize:"18px",color:"var(--muted)"}} aria-hidden="true">+</span>
+                    </button>
                   )}
                 </div>
               );
