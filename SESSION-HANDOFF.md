@@ -12,9 +12,16 @@ _Last updated: 2026-07-27 (session 12)_
 > cluster is now lazy-loaded, so the main chunk is 565 KB and Coaches fetches its own 89 KB.
 >
 > ⚠️ **Both are LOCAL numbers and they under-report production by ~37%.** With no
-> `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the pre-split deployed bundle was
-> **~890 KB**, and **the split ratio in production has not been measured** — the personas chunk
-> imports `supabase`, so it will not simply be 89 KB there. See the I9 measurement below.
+> `VITE_SUPABASE_*` vars, rollup eliminates every sync path. **Production is now MEASURED** off
+> the live deploy of `cc4a1b7`: **main 787.2 KB + personas 88.3 KB = 875.5 KB**, against a
+> pre-split single bundle of ~890 KB. So first load dropped **~103 KB (−11.5%)**.
+>
+> The personas chunk is **88.3 KB in production vs 89.21 KB locally — essentially identical**,
+> which corrected an expectation written earlier the same session: that chunk imports `supabase`,
+> so it was assumed to be much larger in production. It is not. `supabase` is a shared dependency
+> and rollup keeps it in the common chunk, so the whole ~240 KB delta between local and production
+> sits in the MAIN chunk. Verified live: on first load the browser fetches only
+> `index-*.js` + CSS, and `PersonasScreen-*.js` is not requested until Coaches is opened.
 
 ---
 

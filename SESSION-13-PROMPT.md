@@ -4,7 +4,8 @@ Keep building. Clear what's left, and when the named backlog is empty keep going
 specs, then regression-test aggressively, then ship the good-to-haves. The goal is a full
 end-to-end application.
 
-`main = 110fb5d`, tree clean, **not yet pushed**. Gates green:
+`main = cc4a1b7`, tree clean, **pushed and deployed** (CI run 30234131895 green, live bundle
+`index-B1KMLuJn.js` serving, no console errors). Gates green:
 **`lint:crash` 0 · 656 unit (no todos) · 104 e2e (no fixme) · build 564.96 KB + 89.21 KB chunk**.
 App.jsx **4,965 lines** (was 6,309).
 
@@ -167,17 +168,34 @@ _Session 12 closed both DEC-11 items. Three new entries take their place, all sm
 2. **Physical offline soak** — router off 5 min mid-class. **P7 flips to ✅ only after this.**
 3. **Cross-device Room TV Follow** — coded, never verified.
 4. **Install the PWA** on phone + room TV.
-5. **NEW — measure the production split.** The 565/89 KB numbers are local. The personas chunk
-   imports `supabase`, so its production size is not 89 KB and the ratio is unmeasured.
+5. ~~Measure the production split.~~ **DONE** at the end of session 12 — see §5.
 
 ---
 
-## 5. 📏 I9 — re-measure before planning more
+## 5. 📏 I9 — production is now measured
 
-⚠️ **The build gate under-reports production by ~37%.** With no `VITE_SUPABASE_*` vars,
-`supabaseEnabled` folds to `false` and rollup eliminates every sync path. Pre-split, local read
-651 KB and the deployed bundle was **~890 KB**. A sync-only commit produces a **byte-identical
-local bundle** — which looks exactly like this repo's documented stale-`dist/` bug and is not it.
+**Measured off the live deploy of `cc4a1b7`:**
+
+| | Local build | Production (live) |
+|---|---|---|
+| main chunk | 564.96 KB | **787.2 KB** |
+| PersonasScreen chunk | 89.21 KB | **88.3 KB** |
+| first load | 565 KB | **787 KB** (down from ~890 KB pre-split, **−103 KB / −11.5%**) |
+
+⚠️ **A prediction made earlier in session 12 was wrong, and the correction is the useful part.**
+The personas chunk was expected to be much larger in production because it imports `supabase`. It
+is **within 1 KB of the local size**. `supabase` is a *shared* dependency, so rollup keeps it in the
+common chunk — which means **the entire ~240 KB local-vs-production delta sits in the MAIN chunk**,
+and splitting a screen out moves only that screen's own code. Plan stage 5 on that basis: extracting
+a screen buys you roughly what the screen's local chunk weighs, not a share of the supabase mass.
+
+Verified live: on first load the browser fetches only `index-*.js` + CSS; `PersonasScreen-*.js` is
+not requested until Coaches is opened.
+
+⚠️ **The build gate still under-reports production by ~37%.** With no `VITE_SUPABASE_*` vars,
+`supabaseEnabled` folds to `false` and rollup eliminates every sync path. A sync-only commit
+produces a **byte-identical local bundle** — which looks exactly like this repo's documented
+stale-`dist/` bug and is not it.
 
 To measure: build with dummy credentials, `npx vite build --sourcemap`, attribute bytes via the
 `.map`, then **delete `dist/` and rebuild without the vars** so no dummy URL stays baked in.
@@ -289,8 +307,7 @@ Expect **0 crash findings · 656 unit (no todos) · 104 e2e (no fixme) · main c
 ~89 KB PersonasScreen chunk**. CI runs the same chain on Linux; the Playwright-in-CI question was
 settled in session 6 — **do not re-investigate**.
 
-⚠️ **`main` is committed but NOT pushed.** Five commits are waiting: `6ad2fd7`, `e9c81bd`,
-`4c6ed57`, `d5ce182`, `110fb5d`.
+✅ **Session 12 is pushed and deployed.** `a3e8b72..cc4a1b7`, six commits, CI green on Linux.
 
 ## 9. Suggested order for session 13
 
