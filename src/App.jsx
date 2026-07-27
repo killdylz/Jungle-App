@@ -2728,7 +2728,14 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
   const [micActive, setMicActive] = useState(false); // currently ducking (speech detected)
   const handleMicMode = () => setMicMode(m => !m);
   useEffect(() => {
-    if (!micMode) { if (player) player.setVolume(NORMAL_VOL).catch(()=>{}); return; }
+    // FLAGS.music guard, and this one is about more than bytes. Every action
+    // below is `player.setVolume(...)` behind `if (player)`, and with music cut
+    // `player` is permanently null — so without this the effect asked a coach
+    // for MICROPHONE PERMISSION mid-class, opened an AudioContext and ran a
+    // requestAnimationFrame loop analysing room audio on a tablet, to duck a
+    // player that does not exist. A privacy prompt is not a thing to raise for
+    // a feature that cannot act.
+    if (!FLAGS.music || !micMode) { if (player) player.setVolume(NORMAL_VOL).catch(()=>{}); return; }
     let cancelled=false, stream, ctx, raf, analyser, ducked=false, quiet=0;
     const THRESH=0.055, RELEASE=18;
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return;
@@ -2760,8 +2767,11 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
     };
   }, [micMode, player]);
 
-  // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, M=mic mode, Esc=back.
-  // S=track search ONLY when FLAGS.music is on. It had no guard, so with music
+  // F15: Keyboard shortcuts — Space=play/pause, N=next stage, ←/→=skip ±10s, Esc=back.
+  // S=track search and M=mic mode are BOTH music-only and both now gated. They
+  // were the last two ways into the cut subsystem, and neither was reachable
+  // from a button, which is why every sweep so far missed them.
+  // S: it had no guard, so with music
   // cut a coach who pressed "s" mid-class got a Spotify search modal over the
   // class they were running — the exact theatre audit 2.1 removed everywhere
   // else. It is also why 21 KB of Spotify UI could not be folded out of the
@@ -2776,7 +2786,7 @@ function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, a
       else if (e.key === "ArrowRight") { e.preventDefault(); onSkipTimer(10); }
       else if (e.key === "ArrowLeft")  { e.preventDefault(); onSkipTimer(-10); }
       else if (FLAGS.music && (e.key === "s" || e.key === "S")) { setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true); }
-      else if (e.key === "m" || e.key === "M") { handleMicMode(); }
+      else if (FLAGS.music && (e.key === "m" || e.key === "M")) { handleMicMode(); }
       else if (e.key === "Escape") { if (showLiveSearch) setShowLiveSearch(false); else onBack(); }
     };
     window.addEventListener("keydown", onKey);

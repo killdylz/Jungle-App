@@ -93,6 +93,21 @@ test.describe("the coach can move the class in both directions", () => {
   // covered".
   test("no keyboard shortcut can reach the cut music subsystem", async ({ page }) => {
     const errors = watchConsole(page);
+
+    // "M" armed mic-mode, whose whole job is ducking the music player's volume.
+    // With music cut the player is permanently null, so it asked the coach for
+    // MICROPHONE PERMISSION mid-class and then analysed room audio in a rAF loop
+    // to duck nothing. Record the request rather than the UI: a permission
+    // prompt has no accessible name to assert on, and the browser may or may not
+    // surface one depending on policy.
+    await page.addInitScript(() => {
+      window.__gum = [];
+      const md = navigator.mediaDevices;
+      if (md && md.getUserMedia) {
+        md.getUserMedia = (c) => { window.__gum.push(c); return Promise.reject(new Error("blocked by test")); };
+      }
+    });
+
     await freshApp(page);
     await nav(page, "Class Runner");
 
@@ -103,6 +118,11 @@ test.describe("the coach can move the class in both directions", () => {
     // Uppercase is a separate branch in the handler, so it is a separate press.
     await page.keyboard.press("S");
     await expect(page.getByText("Add track to stage")).toHaveCount(0);
+
+    await page.keyboard.press("m");
+    await page.keyboard.press("M");
+    expect(await page.evaluate(() => window.__gum.length),
+      "pressing M requested the microphone with music cut").toBe(0);
 
     // The guard must be narrow: the sibling shortcuts in the same handler still
     // have to work, or this "fix" has broken the transport it sits next to.
