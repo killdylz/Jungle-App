@@ -1,15 +1,121 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-26 (session 11, in progress)_
+_Last updated: 2026-07-27 (session 12)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-11-PROMPT.md` carries the pending list and the
-> blocked-on-Dylan items. **Its §3A is now DONE and its Sunday decision is settled** — see
-> Session 11 below. Then read spec **§0's trust ranking** and **§12**.
-> Gates: **`lint:crash` 0 · 644 unit (no todos) · 85 e2e + 1 fixme · build 651 KB**.
+> **▶ STARTING A NEW SESSION?** `SESSION-13-PROMPT.md` carries the pending list and the
+> blocked-on-Dylan items. **Both of session 11's DEC-11 measurements are now decided and built**
+> — see Session 12 below. Then read spec **§0's trust ranking** and **§12**.
+> Gates: **`lint:crash` 0 · 656 unit (no todos) · 104 e2e (no fixme) · build 564.96 KB
+> + an 89.21 KB PersonasScreen chunk**.
 >
-> ⚠️ **That 651 KB is the LOCAL number and it under-reports production by ~37%.** With no
-> `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the real deployed bundle is
-> **~890 KB**. See the I9 measurement below before planning any bundle work.
+> ⚠️ **The build gate number CHANGED in session 12** (was 651 KB, one chunk). The personas
+> cluster is now lazy-loaded, so the main chunk is 565 KB and Coaches fetches its own 89 KB.
+>
+> ⚠️ **Both are LOCAL numbers and they under-report production by ~37%.** With no
+> `VITE_SUPABASE_*` vars, rollup eliminates every sync path; the pre-split deployed bundle was
+> **~890 KB**, and **the split ratio in production has not been measured** — the personas chunk
+> imports `supabase`, so it will not simply be 89 KB there. See the I9 measurement below.
+
+---
+
+## 🟢 Shipped SESSION 12
+
+`a3e8b72` → `110fb5d`, five commits. Both DEC-11 decisions built, three surfaces swept, and the
+structural change the bundle work was waiting on.
+
+### Both DEC-11 decisions — Dylan answered, both built (`6ad2fd7`)
+
+**Retention rule 1 now requires a join date it actually holds.** The CSV export carries none, so
+the rule used to substitute the member's **first imported check-in** and then state "Joined N days
+ago" as fact. At n=1 that looks obviously right. At corpus scale it inverted: **9 of 12** members
+of an established gym announced as new members failing to build a habit, each citing a date that
+was never in the data. Rule 2 has been gated against exactly this since it was written
+(`activity.recording`); this is rule 1's equivalent gate. `addMember` always sets `joinedAt`, so
+only imported members are affected — precisely the ones whose tenure is unknown.
+
+The instrument is not silenced, it says the true thing instead: **the same 9 members still
+surface, now on the absence rule**, on evidence the file carries. And a purely historical import
+now flags **nobody**, which is a stronger claim than the old test could make.
+
+**The three Room TV boards wear the gym's brand.** Plan — the DEFAULT board, the one a member sees
+walking in — painted a hardcoded `#050705` surround and carried no brand mark at all; Coach's
+Timer-Only preset painted `#000` while its other three presets used `var(--bg)`, so switching
+preset mid-class went black on the same TV. Both now use brand tokens and Plan gained the mark
+Floor already had.
+
+⚠️ **Session 11's fixme mismeasured this**, and the correction matters: it read the first
+`position:fixed` element at `zIndex>=500` and **fell back to `document.body`**. Only Plan has one,
+so Floor and Coach were both scored on the BODY — a board could have painted itself pure black over
+a cream body and passed. Plan's *inner* screen was already `var(--bg)`; the surround and bezel were
+the literal ones. The replacement collects every element covering the viewport and requires all of
+them to be the gym's own tokens, read from live CSS rather than retyped.
+
+**Found on the same walk:** `BrandLogo`'s monogram tile hardcoded `var(--bg)` as its ink on the
+`--accent` fill — the exact dark-theme assumption session 11 removed from `--on-accent` itself,
+reintroduced at every placement of the mark. **3.36:1 on the light brand, below AA**, against 5.23.
+
+### 🧹 Three sweeps (`e9c81bd`, `4c6ed57`, `d5ce182`)
+
+| Surface | Result |
+|---|---|
+| **Member data export (B5 / PDPA)** | **Two omissions.** `externalRef` — the member's id in the gym's previous system, editable and synced — was absent from BOTH exports; in the roster export that is worse than incomplete, since that function exists to be portability and a gym leaving Jungle could not rebuild the link to where it came from. And **the entire `retention_actions` ledger** — the gym's own record of deciding this person was at risk, phoning them, and what the coach wrote down — was not disclosed at all. The export returned what the member DID and omitted what was concluded about them. |
+| **Win-back → ledger re-flag cycle** | **Correct, and now driven.** Recorded as plainly as a defect would be. An action suppresses its flag until the member is seen again; the full cycle (flag → "I've reached out" → real check-in through the Class Runner → 20 days → flagged again, ACTIVE) now runs end to end with `page.clock`. The ledger keeps July's action unmutated. |
+| **Accessible names, nine screens** | **26 buttons had no accessible name** — every one announced as "button". Now zero, guarded by a test walking the same `SCREENS` list `screens.spec.js` already maintains. |
+
+**The at-risk list was flagging members who had already left.** Both rules asked "is this member
+drifting away?" of every roster row without asking whether they were still a member. `cancelled`
+members have LEFT — "at risk of leaving" is the screen failing to notice. `paused` members are
+absent BY AGREEMENT. Both produced flags the operator could not act on (`winBackBlockedReason`
+already refuses a draft for anything but active), and worse, **they outranked real flags**: someone
+who left 50 days ago sorts above a current member who lapsed 30 days ago, so the list an owner
+reads first was led by people who had already gone. Third gate added, stated as the EXCLUDED set so
+a status added later defaults to being monitored, with a test asserting it classifies every value
+in `MEMBER_STATUSES`.
+
+⚠️ **Consequence:** `winBackBlockedReason`'s non-null branch no longer has an ordinary path to it.
+Its remaining job is a status the vocabulary does not know arriving from a server row —
+`_rowToMember` passes status through raw rather than through `memberStatus`.
+
+**The a11y sweep found a functional defect.** The Class Runner's **back button was wired to
+`onNextStage`** — the same handler as forward; there was no previous-stage handler in the app at
+all. A coach who advanced too early and reached for "back" moved the room ANOTHER stage on,
+mid-class. It survived because every control on that surface was icon-only, so **no test could
+refer to one** and the Runner's transport had no spec. Naming the controls is what made
+`e2e/runner.spec.js` writable, and writing it found this immediately.
+
+**Also flagged, not resolved:** the Builder's top-bar left-chevron calls `onOverviewDisplay` — the
+same handler as the "Preview on TV" button 35 lines below — while sitting exactly where every other
+screen puts Back. Two controls, one action, one dressed as navigation it does not perform. Labelled
+truthfully; whether to drop it or wire it to real back-navigation is a design call (§4).
+
+### 🏗 I6 stage 4 + the I9 win it was gating (`110fb5d`)
+
+**App.jsx 6,349 → 4,965 lines.** The personas cluster moved to
+`src/screens/personas/PersonasScreen.jsx` (1,424 lines) and became a **lazy chunk**.
+
+**Main chunk 653.06 → 564.96 KB, plus an 89.21 KB PersonasScreen chunk** fetched only when a coach
+opens Coaches. Gzip 183.6 → 157.4 KB.
+
+**Deleting the imports is most of the point.** Seven modules — personas.seed, personaAggregate,
+movementTaxonomy, blueprints, generationPresets, slidesImport, planParser — plus `ui/labels.js` are
+no longer imported by App.jsx at all. A dead `import` still pulls the module into the chunk, so
+leaving those lines would have moved 1,400 lines of source and **not one byte of bundle**.
+⚠️ `no-unused-vars` found 27 of them but **does NOT report unused UPPERCASE names** (the rule
+ignores `/^[A-Z_]/`), so the constant imports had to be checked by hand. That is the trap.
+
+`uid` moved to `src/lib/ids.js` rather than being copied — two modules each with `_uid = 1` would
+both mint `"s1"`, and React reconciling two different stages as the same node is a bug that looks
+like state corruption.
+
+**§6's blind spot, closed for this change:** every capitalised JSX element name in App.jsx and all
+four screen modules was extracted and checked against that file's imports and local declarations —
+**zero unresolved**. That also retired a stale warning in `screens.spec.js`: the
+`<SpotifySearchModal/>` phantom it described was removed by stage 3, and only comments mention it.
+
+**The lazy boundary broke one test, honestly.** `personas.spec.js` reads `body.innerText()` raw,
+with no auto-waiting, and captured the Suspense fallback. `nav()` in `e2e/helpers.js` now waits for
+the fallback's **testid** (not the words "Loading…" — three other screens render exactly that text
+and `nav` would hang on whichever was fetching) so no test needs to know which screens are split.
 
 ---
 
@@ -72,7 +178,10 @@ and the week it **publishes** cannot disagree. Guarded by an e2e with the clock 
 **The CSV sweep is now a permanent test** (`store.test.js`, "SWEEP — a real attendance export, end to end"):
 a multi-week corpus through analyse → apply → stored rows → the retention instrument, asserting
 15 check-ins / 14 classes / 1 duplicate / 1 unreadable row, referential integrity, idempotence on
-re-import, and the derived at-risk list (`[Cara sev 4, Ben sev 3]`, Ana and Dan correctly clean).
+re-import, and the derived at-risk list (Ana and Dan correctly clean).
+_Session 12 note: that list read `[Cara sev 4, Ben sev 3]` when written. Rule 1's join-date gate
+changed it to `[Ben sev 3 absence, Cara sev 2 absence]` — Cara is still surfaced, on the rule the
+data can actually support. The test asserts the new values._
 It failed five ways before the fix.
 
 **The two brand defects, measured on a light brand** (bg `#fff7f0`, text `#1a1014`):
