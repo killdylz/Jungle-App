@@ -785,7 +785,14 @@ function DashboardScreen({onNavigate, onNewSession, onProfile, profile, sessionH
               {hasDraft && <div style={{height:"8px",borderRadius:"4px",background:"var(--navy)",overflow:"hidden",marginBottom:"16px",maxWidth:"420px"}}><div style={{height:"100%",width:`${Math.min(100,totalStages*20)}%`,background:"var(--accent)"}}/></div>}
               <div style={{display:"flex",gap:"10px",flexWrap:"wrap"}}>
                 <button onClick={()=>onNavigate("builder")} style={{padding:"11px 20px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"14px",boxShadow:"var(--glow)"}}>{hasDraft?"Resume building":"New class"}</button>
-                <button onClick={()=>onNavigate("templates")} style={{padding:"11px 20px",background:"var(--navy)",color:"var(--text)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"14px"}}>{hasDraft?"New class":"Browse templates"}</button>
+                {/* Was onNavigate("templates") — a view retired at the
+                    isViewEnabled choke-point with no render branch left behind,
+                    so it emptied the content area and stranded the coach with no
+                    way back. The four nav arrays route through that choke-point;
+                    this button did not, which is how a retired screen survived in
+                    the one place that is not a menu. With no draft the primary
+                    button already says "New class", so the second one is noise. */}
+                {hasDraft && <button onClick={onNewSession} style={{padding:"11px 20px",background:"var(--navy)",color:"var(--text)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"14px"}}>New class</button>}
               </div>
             </div>
           </div>
@@ -4435,6 +4442,16 @@ export default function App() {
     runDjOrchestrator(stages, playlistIds, setStages, setDjProgress)
       .catch(err => setDjProgress({ active:false, stage:0, total:stages.length, done:false, error:err.message||"DJ failed" }));
   };
+  // "New class" on the Dashboard, for a coach who already has a draft. The draft
+  // is auto-saved on every change (store.saveDraftClass above), so replacing it
+  // is the one destructive action on that screen — hence the confirm, matching
+  // how the Library guards a movement delete.
+  const handleNewClass = () => {
+    if (stages.length && !window.confirm("Start a new class? Your current plan will be replaced.")) return;
+    setStages(mkStages());
+    setSessionName("My Workout");
+    setView("builder");
+  };
   const handleSelectTemplate = t => {
     const saved = templateTracks[t.id]||{};
     setStages(t.stages.map((s,i) => ({...s,id:uid(),tracks:[...(saved[i]||[])],exercises:s.exercises.map(e=>({...e}))})));
@@ -4707,7 +4724,7 @@ export default function App() {
             of text. One boundary for every lazy screen, so stage 5 adds screens
             here without adding plumbing. */}
         <Suspense fallback={<ScreenLoading/>}>
-        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={()=>setView("builder")} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
+        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} onProfile={()=>setShowProfile(true)} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
         {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} onBack={()=>setView("dashboard")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
