@@ -128,7 +128,12 @@ export function RosterScreen({ onBack }) {
   };
   const exportRoster = () => download(rosterCsv(members, attendance), rosterCsvFilename(gymName));
   const exportMember = (m) => {
-    const csv = memberCsv(m, attendance, classes, { gymName });
+    // `actions` too, not just attendance: the retention ledger is personal data
+    // held about this member — the gym's own record of flagging and contacting
+    // them — and an access request that returns only what they DID, omitting
+    // what was concluded about them, answers the easy half. memberCsv filters it
+    // by member id the same way it filters attendance.
+    const csv = memberCsv(m, attendance, classes, { gymName, retentionActions: actions });
     if (csv) download(csv, memberCsvFilename(m));
   };
 

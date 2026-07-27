@@ -72,6 +72,21 @@ const isoMinute = ts => {
 
 const SOURCE_LABEL = { qr: "Self check-in", coach: "Checked in by coach", import: "Imported from previous system" };
 
+// What the gym DID about a flag, in words a member would understand. The raw
+// values are the `retention_actions.action` enum (0008); "reopened" is an
+// operator undoing their own dismissal, which is still an event about this
+// person and is disclosed as such rather than netted out.
+const ACTION_LABEL = {
+  acted: "Contacted",
+  dismissed: "Reviewed and no action taken",
+  reopened: "Reopened for follow-up",
+};
+// The rule that raised the flag, stated the way the rule itself is stated.
+const RULE_LABEL = {
+  new_member_low_visits: "New member with few visits in their first month",
+  absence: "No recorded attendance for over two weeks",
+};
+
 function indexClasses(classInstances) {
   const byId = new Map();
   for (const c of classInstances || []) if (c && c.id) byId.set(c.id, c);
@@ -83,9 +98,12 @@ function indexClasses(classInstances) {
  * @param member          { id, name, email, status, joinedAt }
  * @param attendance      the FULL attendance list; filtered here by member id
  * @param classInstances  for naming each class the check-in belongs to
- * @param opts            { gymName } — whose record this is, on the document
+ * @param opts            { gymName, retentionActions }
+ *                        `gymName` — whose record this is, on the document.
+ *                        `retentionActions` — the FULL ledger; filtered here by
+ *                        member id, exactly as `attendance` is.
  */
-export function memberCsv(member, attendance = [], classInstances = [], { gymName = "" } = {}) {
+export function memberCsv(member, attendance = [], classInstances = [], { gymName = "", retentionActions = [] } = {}) {
   if (!member) return null;
   const classes = indexClasses(classInstances);
   const mine = (attendance || [])
@@ -104,6 +122,13 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
   rows.push(["Email", member.email || ""]);
   rows.push(["Membership status", statusLabel(member.status)]);
   rows.push(["Joined", isoDate(member.joinedAt)]);
+  // The member's id in whatever system the gym used before Jungle. It is an
+  // identifier for this person, it is editable on the roster screen, and it
+  // synced to `members.external_ref` — so it is held, and an access request that
+  // omits it is answering a narrower question than the one that was asked.
+  // Written only when there is one: a blank labelled row invites the reader to
+  // wonder what was withheld.
+  if (member.externalRef) rows.push(["Reference from previous system", member.externalRef]);
   rows.push(["Classes attended", String(mine.length)]);
   rows.push([]);
 
@@ -123,6 +148,41 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
         c.classType || "",
         c.coachName || "",
         SOURCE_LABEL[a.source] || a.source || "",
+      ]);
+    }
+  }
+
+  // ── What the gym recorded ABOUT them ───────────────────────────────────────
+  // Attendance is what the member did; this is what the gym concluded and did
+  // back. `retention_actions` (0008) is an append-only ledger of "we flagged
+  // her as at-risk, we phoned her on the 4th, here is the note the coach left",
+  // and it is the most consequential personal data in the system — it decides
+  // whether someone gets a call. An export that returns the attendance grid and
+  // silently omits this answers the easy half of the request.
+  //
+  // ⚠️ The note is staff free text. PDPA's Fifth Schedule lets an organisation
+  // withhold opinion data kept solely for an evaluative purpose, and nothing
+  // here can tell "said she's travelling" (plainly factual) from an evaluative
+  // remark. That call belongs to the gym, which is the organisation with the
+  // duty — so the export shows the note rather than deciding for them, and the
+  // section is labelled so it is obvious what is being handed over. Flagged for
+  // the lawyer review in LEGAL §7 rather than settled here.
+  const theirs = (retentionActions || [])
+    .filter(r => r && r.memberId === member.id)
+    .sort((a, b) => String(a.occurredAt || "").localeCompare(String(b.occurredAt || "")));
+
+  rows.push([]);
+  rows.push(["Membership follow-up recorded by the gym"]);
+  rows.push(["Date", "Why they were flagged", "What was done", "Note"]);
+  if (!theirs.length) {
+    rows.push(["No retention actions have been recorded."]);
+  } else {
+    for (const r of theirs) {
+      rows.push([
+        isoDate(r.occurredAt),
+        RULE_LABEL[r.rule] || r.rule || "",
+        ACTION_LABEL[r.action] || r.action || "",
+        r.note || "",
       ]);
     }
   }
@@ -146,7 +206,13 @@ export function rosterCsv(members = [], attendance = [], { includeCancelled = tr
   }
 
   const list = (members || []).filter(m => m && (includeCancelled || m.status !== "cancelled"));
-  const rows = [["Name", "Email", "Status", "Joined", "Visits", "Last seen"]];
+  // `Reference` last, after the derived columns: this file is read by humans far
+  // more often than it is re-imported, and the previous system's key is the
+  // least interesting column to a person and the most important one to a
+  // migration. Dropping it made this a readable summary rather than the backup
+  // and portability artefact the function exists to be — a gym leaving Jungle
+  // could not have rebuilt the link to the system it came from.
+  const rows = [["Name", "Email", "Status", "Joined", "Visits", "Last seen", "Reference"]];
   for (const m of list) {
     rows.push([
       m.name || "",
@@ -155,6 +221,7 @@ export function rosterCsv(members = [], attendance = [], { includeCancelled = tr
       isoDate(m.joinedAt),
       String(visits.get(m.id) || 0),
       isoDate(last.get(m.id)),
+      m.externalRef || "",
     ]);
   }
   return BOM + csvRows(rows) + "\r\n";

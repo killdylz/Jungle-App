@@ -99,7 +99,7 @@ describe("round-trip — what we write, our own reader reads back", () => {
 
   it("re-reads an exported roster into the same names and emails", () => {
     const grid = parseCsv(rosterCsv(members, attendance));
-    expect(grid[0]).toEqual(["Name", "Email", "Status", "Joined", "Visits", "Last seen"]);
+    expect(grid[0]).toEqual(["Name", "Email", "Status", "Joined", "Visits", "Last seen", "Reference"]);
     expect(grid.slice(1).map(r => r[0])).toEqual(["Sarah Chen", "Raj Kumar", "Mei Ling"]);
     expect(grid[1][1]).toBe("sarah@example.com");
   });
@@ -233,5 +233,86 @@ describe("filenames", () => {
 
   it("caps a pathological name rather than emitting a 4KB filename", () => {
     expect(safeFilePart("x".repeat(500)).length).toBe(60);
+  });
+});
+
+// ── SWEEP — the compliance surface, asked the hard question ──────────────────
+//
+// The tests above pin the FORMAT of what is written. None of them asks the
+// question a statutory request actually asks: is this EVERYTHING? A compliance
+// export is defined by what it omits, and an omission renders perfectly — the
+// file opens, every column is populated, and the answer is still wrong.
+//
+// So this block drives the export off the store's real member shape rather than
+// off a list retyped here. A field added to a member in six months' time fails
+// this test until it is either exported or deliberately excluded, which is the
+// only version of this guard that cannot go stale.
+describe("SWEEP — does the access export hold everything the gym holds", () => {
+  // Every field `store.js` puts on a member (see its "Local shape" comment and
+  // `addMember`), populated. `id` is ours, not theirs — an internal key is not
+  // personal data and is deliberately not on the document.
+  const INTERNAL_ONLY = ["id"];
+  // `status` IS disclosed, as the human label the member would recognise
+  // ("Left", not "cancelled"), so a raw-value search is the wrong instrument for
+  // it. Asserted by label below and by the format tests above.
+  const BY_LABEL = ["status"];
+  const FULL_MEMBER = {
+    id: "m-full",
+    name: "Priya Raman",
+    email: "priya@example.com",
+    status: "active",
+    joinedAt: "2025-03-04",
+    // The member's ID in the gym's PREVIOUS system. Editable in the roster
+    // screen, synced to `members.external_ref`, and personal data by any
+    // reading — it is an identifier for this person.
+    externalRef: "GYMPASS-88213",
+  };
+
+  it("writes every member field the store holds, not just the ones it was built with", () => {
+    const csv = memberCsv(FULL_MEMBER, [], [], { gymName: "The Garage" });
+    const missing = Object.entries(FULL_MEMBER)
+      .filter(([k, v]) => !INTERNAL_ONLY.includes(k) && !BY_LABEL.includes(k) && v)
+      .filter(([, v]) => !csv.includes(String(v)))
+      .map(([k]) => k);
+    expect(missing, `held but not disclosed: ${missing.join(", ")}`).toEqual([]);
+    expect(csv).toMatch(/Membership status,Active/);
+  });
+
+  // What the gym RECORDED ABOUT this member, as opposed to what the member did.
+  // `retention_actions` (0008) is an append-only ledger of "we flagged her as
+  // at-risk, we phoned her on the 4th, here is the note the coach left". That is
+  // personal data held about an identifiable individual and it is the most
+  // consequential thing in the system — it is a judgement that decides whether
+  // someone gets called. An access request that returns attendance and silently
+  // omits it answers the easy half.
+  it("discloses the retention actions the gym recorded about them", () => {
+    const actions = [
+      { id: "r1", memberId: "m-full", rule: "absence", action: "acted",
+        note: "Phoned — said she is travelling until August", occurredAt: "2026-07-04T02:00:00.000Z" },
+      { id: "r2", memberId: "someone-else", rule: "absence", action: "dismissed",
+        note: "not hers", occurredAt: "2026-07-05T02:00:00.000Z" },
+    ];
+    const csv = memberCsv(FULL_MEMBER, [], [], { gymName: "The Garage", retentionActions: actions });
+    expect(csv).toMatch(/2026-07-04/);
+    expect(csv).toMatch(/travelling until August/);
+    // The same rule the roster export follows: one person's request must never
+    // disclose another member's record.
+    expect(csv).not.toMatch(/not hers/);
+  });
+
+  it("says so plainly when nothing was ever recorded about them", () => {
+    const csv = memberCsv(FULL_MEMBER, [], [], { gymName: "The Garage", retentionActions: [] });
+    expect(csv).toMatch(/No retention actions/i);
+  });
+});
+
+describe("SWEEP — the roster export is portable, not just readable", () => {
+  // The stated purpose of `rosterCsv` is portability and the gym's own backup.
+  // A backup that drops a column is not a backup, and the column it drops here
+  // is the one that links every member back to the system they came from.
+  it("carries the external reference a re-import would need", () => {
+    const csv = rosterCsv([{ id: "m1", name: "Priya Raman", email: "p@example.com",
+                             status: "active", joinedAt: "2025-03-04", externalRef: "GYMPASS-88213" }], []);
+    expect(csv).toMatch(/GYMPASS-88213/);
   });
 });
