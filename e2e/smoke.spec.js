@@ -28,13 +28,10 @@ test.describe("smoke: the path a coach walks every class", () => {
 
     // ── Builder ──
     await nav(page, "Class Builder");
-    // `.first()`: the Builder has TWO controls for this one action — the labelled
-    // button, and a top-bar left-chevron wired to the same handler while dressed
-    // as the Back button every other screen puts in that exact spot. The chevron
-    // was invisible to this suite until session 12's sweep gave it a name, which
-    // is how the duplication surfaced. Left in place; whether to drop it or make
-    // it navigate is a design call (see the note at its definition in App.jsx).
-    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();
+    // DEC-12 resolved (session 14): "Preview on TV" is now ONE control. It used
+    // to be two — the labelled button plus a top-bar chevron wired to the same
+    // handler while dressed as Back — so the count is the assertion.
+    await expect(page.getByRole("button", { name: "Preview on TV" })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /DJ This Class/ })).toHaveCount(0);
 
     // ── Runner ──
@@ -93,6 +90,31 @@ test.describe("smoke: the path a coach walks every class", () => {
                            /connect a wearable/i, /set a weekly benchmark/i]) {
       await expect(page.getByText(promise)).toHaveCount(0);
     }
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // DEC-12. The Builder's top-bar chevron sat where every other screen puts
+  // Back, drew a back chevron, and opened the Room TV preview instead. A coach
+  // reaching for Back got a full-screen display board and had to find their way
+  // out of it. Both halves are asserted: the chevron goes back, AND it does not
+  // land on the TV — testing only the first would pass if it did both.
+  test("the Builder's back chevron goes back, not to the TV", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+
+    await nav(page, "Class Builder");
+    await expect(page.getByRole("button", { name: "Rename class" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+
+    await expect(page.getByText(/GOOD (MORNING|AFTERNOON|EVENING), COACH/)).toBeVisible();
+    // The inverse half. "N stages" is NOT the tell — the Dashboard's resume-
+    // building card renders that too, and using it here produced a failing test
+    // against correct code. What actually distinguishes the Room TV board is
+    // that it is full-screen: the sidebar is gone and its only control is Esc.
+    await expect(page.getByRole("button", { name: /Esc/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Class Builder", exact: true })).toBeVisible();
 
     expectNoConsoleErrors(errors);
   });
