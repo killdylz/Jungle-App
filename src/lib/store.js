@@ -1416,7 +1416,12 @@ export async function hydrateAttendance() {
 // a local consent ledger) and is not something a blind retry can honestly close.
 const _RETRY_PUSHERS = {
   class_schedule_rules: () => saveUserClasses(getUserClasses()),
-  library_overrides:    () => saveLibraryCustom(getLibraryCustom()),
+  // "No overrides" is a real state for this table — a gym that resets, or edits
+  // back to the built-in catalogue, has its row DELETED (DEC-13). Re-pushing
+  // blindly would upsert `data: null` and resurrect the row the failed write was
+  // trying to remove, so the retry has to mirror whichever operation failed.
+  library_overrides:    () => { const d = getLibraryCustom();
+                          if (d) saveLibraryCustom(d); else resetLibraryCustom(); },
   brand_profiles:       () => _bgUpsert("brand_profiles", { gym_id: _ctx.gymId,
                           branding: getGymBranding(), active_skin_id: getSkinId(),
                           custom_skin_tokens: getCustomSkinTokens() }, "gym_id"),

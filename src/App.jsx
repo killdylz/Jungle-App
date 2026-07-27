@@ -22,6 +22,7 @@ import { calcIntervalState, floorPacer } from "./lib/intervalTimer.js";
 import { setupProgress, describeSetup } from "./lib/setupProgress.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { onRoomState, sendRoomState } from "./lib/room.js";
+import { mergeLibrary, diffLibrary } from "./lib/libraryStore.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
 // their ~45 call sites was inside a function that moved, so App.jsx no longer
 // converts colour spaces itself. That is the shape a good extraction leaves
@@ -251,30 +252,23 @@ function mkStages() {
 // WORKOUT_LIBRARY moved to src/data/library.js (imported above).
 
 // ─── Editable library helpers ─────────────────────────────────────────────────
+// DEC-13: what is STORED is now the delta against WORKOUT_LIBRARY, not a
+// snapshot of the whole catalogue. src/lib/libraryStore.js carries the why and
+// the v1 compatibility; both functions here are deliberately thin so the merge
+// rules live in one tested place.
 function getLibrary() {
   try {
-    const saved = store.getLibraryCustom();
-    if (saved) {
-      const merged = {};
-      const allKeys = [...new Set([...Object.keys(WORKOUT_LIBRARY), ...Object.keys(saved)])];
-      allKeys.forEach(k => {
-        if (saved[k]) {
-          merged[k] = {
-            ...(WORKOUT_LIBRARY[k] || {}),
-            ...saved[k],
-            subTypes: { ...(WORKOUT_LIBRARY[k]?.subTypes || {}), ...(saved[k]?.subTypes || {}) },
-          };
-        } else {
-          merged[k] = WORKOUT_LIBRARY[k];
-        }
-      });
-      return merged;
-    }
+    return mergeLibrary(WORKOUT_LIBRARY, store.getLibraryCustom());
   } catch(_) {}
   return WORKOUT_LIBRARY;
 }
 function saveLibrary(data) {
-  store.saveLibraryCustom(data);
+  const delta = diffLibrary(WORKOUT_LIBRARY, data);
+  // A coach who edits something and then edits it back is not a customised gym.
+  // Dropping the row rather than storing an empty delta is what stops them being
+  // frozen out of future catalogue improvements for a change they undid.
+  if (delta) store.saveLibraryCustom(delta);
+  else store.resetLibraryCustom();
 }
 function resetLibrary() {
   store.resetLibraryCustom();
