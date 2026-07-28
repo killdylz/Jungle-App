@@ -1433,7 +1433,11 @@ lesson. Two more were found by mutation testing catching *weak tests*, not weak 
   separator would have shredded them. Sequence identity is now JSON. A repo-wide NUL scan is part
   of the pre-commit check now; re-run it if anything looks binary to git.
 
-> ### 👉 STARTING A NEW SESSION? Paste `NEXT-SESSION-PROMPT.md` as your opening message.
+> ### 👉 STARTING A NEW SESSION? Read `SESSION-20-PROMPT.md`.
+> _(This line used to point at `NEXT-SESSION-PROMPT.md`, which was the **session 5** prompt from
+> 2026-07-19 and fifteen sessions stale. It is now `docs/history/NEXT-SESSION-PROMPT-session5.md`.
+> Everything below this line is a historical record of session 4 and is kept for its findings, not
+> its instructions.)_
 > It is the cold-start brief: what Jungle is, what shipped, **the persona-depth build that is
 > next** (editable Class Blueprints + a movement taxonomy), the UI-language pass, the
 > desktop/mobile plan, and every gotcha. This file is the detailed history behind it.
@@ -1541,7 +1545,7 @@ verified to fail the suite). That process earned its keep three times:
    fact about the *data* ("alerts paused"), and `atRisk` is `null` — never `0`.
    ⚠️ **Engine only — no UI yet.** That's the first thing to finish (N3-UI in §12).
 
-**⭐ RECOMMENDED NEXT** — see the top of this file and `NEXT-SESSION-PROMPT.md`:
+**⭐ RECOMMENDED NEXT** _(as of session 4 — historical; the live list is `SESSION-20-PROMPT.md` §10)_:
 1. **D1 — movement taxonomy.** The foundation blueprints stand on; immediately improves
    parsing and generation.
 2. **D2/D3 — Class Blueprints + presets.** The main build.
