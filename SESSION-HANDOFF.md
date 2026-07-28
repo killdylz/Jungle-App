@@ -46,7 +46,9 @@ _Last updated: 2026-07-28 (session 17)_
 >
 > 📏 **Production bundle re-measured** (was three sessions stale at 787.2 KB): **776.85 KB main +
 > 91.19 KB chunk = 868 KB, 214.43 KB gzip**, built with dummy `VITE_SUPABASE_*` vars so rollup
-> keeps the sync paths. The local gate build under-reports by **~45%**, not ~37%.
+> keeps the sync paths. The local gate build strips **~241 KB** off the main chunk — quote that
+> delta, not a percentage: the spec's long-carried "~37%" is ambiguous about which side you
+> divide by (241/776.85 = 31%, 241/535.94 = 45%), and it meant neither consistently.
 >
 > **Shipped session 17** — `a85120c` → `e0f62ac`, four commits:
 > `fae0ab9` dialog semantics + focus trapping on all seven live overlays ·

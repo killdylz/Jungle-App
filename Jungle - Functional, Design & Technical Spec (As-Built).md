@@ -964,7 +964,9 @@ cluster moved to `src/screens/personas/`; **stage 5 open** — Builder/Live/Room
 third-party accesses (Spotify token resolved by removal; RapidAPI key and Deezer BPM still need a
 server-side media proxy) · `I9` code splitting (**544.29 KB / 152.88 KB gzip** local, measured
 2026-07-27; `PersonasScreen` has been lazy since session 12 and is an 89.84 KB chunk. ⚠️ The LOCAL
-build under-reports production by ~45%: with no `VITE_SUPABASE_*` vars `supabaseEnabled` folds to
+build under-reports production by **~241 KB on the main chunk** — quote that delta, not a
+percentage, because "~37%" was carried here for three sessions and is ambiguous about which side
+you divide by (241/776.85 = 31%, 241/535.94 = 45%). With no `VITE_SUPABASE_*` vars `supabaseEnabled` folds to
 `false` and rollup drops every sync path, so a sync-only commit produces a byte-identical bundle.
 **Re-measured session 17 at `843547d`: 776.85 KB main + 91.19 KB PersonasScreen (868 KB total),
 214.43 KB gzip**, by building with dummy `VITE_SUPABASE_*` vars set so the sync paths survive —
