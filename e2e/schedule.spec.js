@@ -55,9 +55,11 @@ test.describe("a drawn schedule becomes classes on the books", () => {
       expect(Number.isNaN(Date.parse(c.startsAt))).toBe(false);
       expect(c.name).toBeTruthy();
     }
-    // Each rule's own details survive onto its occurrence.
+    // Each rule's own details survive onto its occurrence. `classType` is the
+    // CATALOGUE KEY, not the label the grid draws — this line used to assert
+    // "HIIT" and was pinning the defect below.
     const burn = ci.find(c => c.name === "Morning Burn");
-    expect(burn).toMatchObject({ classType: "HIIT", coachName: "Dylan", durationMin: 45 });
+    expect(burn).toMatchObject({ classType: "hiit", coachName: "Dylan", durationMin: 45 });
     expect(ci.find(c => c.name === "Hyrox Sim").durationMin).toBe(60);
     expect(ci.filter(c => c.name === "Daily Mobility")).toHaveLength(7);
     // The Sunday one exists and is a real Sunday — the day the grid used to have
@@ -389,5 +391,95 @@ test.describe("publishing ahead does not inflate what the gym has done", () => {
     expect(shown).toBeLessThan(ci.length);
 
     expectNoConsoleErrors(errors);
+  });
+});
+
+// ── One column, one vocabulary ───────────────────────────────────────────────
+//
+// `class_instances.class_type` is what N2's cohort analytics group by, and it
+// had THREE writers speaking two taxonomies:
+//
+//   Builder → Runner   catalogue KEYS      "hiit", "gym-barre-ms4pk827"
+//   Schedule publish   display STRINGS     "HIIT", "Mobility"
+//   CSV import         a foreign system's own column, verbatim
+//
+// So one gym running one class type through two doors wrote "hiit" and "HIIT",
+// which no `group by` reunites — and class_instances is the append-only spine,
+// so nothing recovers it afterwards. Session 20 fixed the Runner's half (it was
+// writing "hiit · amrap") and recorded that both doors then agreed; they did
+// not, because the Schedule's dropdown was a hand-maintained list of eight
+// capitalised strings that no other surface in the app had ever heard of.
+//
+// It cost more than analytics: that list was ALSO the only class types a gym
+// could schedule, so a gym running CrossFit, Pilates or Bootcamp could not put
+// one on the schedule at all, and a gym-authored type (DEC-16) was invisible
+// here — the exact "appears in one modal and nowhere else" failure DEC-16 was
+// decided to avoid.
+test.describe("the schedule and the runner name a class type the same way", () => {
+  test("publishing writes the catalogue KEY, and heals a rule saved before this", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedRules(page);
+
+    // POSITIVE CONTROL (§0b#1): the rules are stored with the OLD display
+    // strings. Without this, a heal and a fixture that never landed look alike.
+    const rulesBefore = await stored(page, "jungle_user_classes");
+    expect(rulesBefore.map(r => r.type), "precondition: legacy display strings are what is stored")
+      .toEqual(["HIIT", "Hyrox", "Mobility"]);
+
+    await page.locator(PUBLISH).click();
+    await expect(page.locator(RESULT)).toContainText("Added");
+
+    const ci = await stored(page, "jungle_class_instances");
+    const typeOf = name => ci.find(c => c.name === name).classType;
+
+    // THE ASSERTION. `hiit` is the key the Builder's dropdown carries and the
+    // Runner writes; "HIIT" is what this door used to write for the same class.
+    expect(typeOf("Morning Burn"), "a published occurrence must record the catalogue key").toBe("hiit");
+    expect(typeOf("Hyrox Sim")).toBe("hyrox");
+
+    // 🔴 AND THE ONE THAT MUST NOT BE MAPPED. "Mobility" was on the old dropdown
+    // and no catalogue class type answers to it. Guessing a near-neighbour would
+    // invent programming the gym never chose, invisibly.
+    expect(typeOf("Daily Mobility"),
+      "an unrecognised type must keep its own text rather than be guessed at").toBe("Mobility");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // The other half of the cost, and the one a coach actually feels.
+  test("offers the same class types the Builder does, including the gym's own", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Schedule");
+    await page.getByRole("button", { name: "+ Add class" }).click();
+
+    const values = await page.getByLabel("Class type").locator("option")
+      .evaluateAll(os => os.map(o => o.value));
+
+    // Every built-in type is schedulable. CrossFit, Pilates and Bootcamp were
+    // simply absent before — a gym running them could not draw its own week.
+    expect(values).toEqual(expect.arrayContaining(
+      ["crossfit", "spin", "circuit", "strength", "hiit", "yoga", "boxing", "pilates", "bootcamp", "hyrox"]));
+    // And the values are keys, not labels — this is what reaches the column.
+    expect(values.every(v => v === v.toLowerCase()),
+      `the dropdown must carry keys, got ${JSON.stringify(values)}`).toBe(true);
+  });
+
+  test("a class added through the dialog stores the key, not the label", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Schedule");
+    await page.getByRole("button", { name: "+ Add class" }).click();
+    await page.getByPlaceholder("Class name").fill("Saturday Grind");
+    await page.getByLabel("Class type").selectOption("pilates");
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+
+    const rule = (await stored(page, "jungle_user_classes")).find(r => r.name === "Saturday Grind");
+    expect(rule, "precondition: the rule must have been created").toBeTruthy();
+    expect(rule.type).toBe("pilates");
+
+    await page.locator(PUBLISH).click();
+    await expect(page.locator(RESULT)).toContainText("Added");
+    const ci = await stored(page, "jungle_class_instances");
+    expect(ci.find(c => c.name === "Saturday Grind").classType).toBe("pilates");
   });
 });

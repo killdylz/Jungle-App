@@ -184,3 +184,37 @@ export function mergeLibrary(builtIn, blob) {
 export function isLegacyLibraryBlob(blob) {
   return !!blob && typeof blob === "object" && !Array.isArray(blob) && blob.v !== LIBRARY_BLOB_VERSION;
 }
+
+// ── One vocabulary for class_instances.class_type ───────────────────────────
+//
+// That column is what N2's cohort analytics group by, and it had THREE writers
+// speaking two taxonomies. The Builder → Runner door writes a library KEY
+// (`hiit`, or `gym-barre-ms4pk827` for a gym-authored type). The Schedule wrote
+// whatever its own hand-maintained `CAT_COLOR` map was keyed by — display
+// strings, capitalised: `HIIT`, `Mobility`. So one gym running one class type
+// through two doors produced `"hiit"` and `"HIIT"`, which no `group by` will
+// ever bring back together, and the column is not recoverable after the fact.
+//
+// Session 20 fixed the Runner's half (it was writing `"hiit · amrap"`) and
+// recorded that both doors now agreed. They did not: the separator went away,
+// the case mismatch stayed. This is the other half.
+//
+// 🔴 IT RETURNS THE RAW STRING WHEN NOTHING MATCHES, deliberately. The Schedule
+// offered `Mobility`, which is not a class type the catalogue has at all, and
+// mapping it to a near-neighbour would invent programming a gym never chose.
+// Same reasoning `retention.js` gives for `INACTIVE_STATUSES` being an excluded
+// set: an unrecognised value stays visible and keeps its own text, because
+// silently rewriting data is worse than carrying a value we cannot classify.
+export function resolveClassType(raw, lib) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const keys = Object.keys(lib || {});
+  if (keys.includes(s)) return s;                       // already a key
+  const want = s.toLowerCase();
+  // Key first, then label: `hiit`'s label is "HIIT" and `strength`'s is
+  // "Strength Training", so both spellings a gym could have stored resolve.
+  const byKey = keys.find(k => k.toLowerCase() === want);
+  if (byKey) return byKey;
+  const byLabel = keys.find(k => String(lib[k]?.label ?? "").trim().toLowerCase() === want);
+  return byLabel || s;
+}

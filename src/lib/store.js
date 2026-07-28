@@ -14,6 +14,9 @@ import { diffOccurrences, occurrenceKey, CLASS_WINDOW_MS } from "./scheduleInsta
 // One key function shared with the analysis step. Two definitions of "the same
 // class occurrence" is exactly the drift that lost a real attendance row.
 import { occurrenceKeyOf } from "./csvImport.js";
+// libraryStore.js has no imports of its own, so this cannot close a cycle back
+// through libraryAccess.js (which imports THIS file).
+import { resolveClassType } from "./libraryStore.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -1204,7 +1207,11 @@ export function recordAttendance({ classInstanceId, memberId, source = "coach" }
 // routed through attendanceSource() like every other call site. It is also what
 // makes a backfilled row distinguishable from a live check-in forever, which
 // matters when Phase 2 reports on data the studio did not capture in Jungle.
-export function applyAttendanceImport(analysis) {
+// `lib` is the gym's merged catalogue, passed in by the caller because
+// `getLibrary()` lives in libraryAccess.js, which imports THIS file. Optional:
+// without it an imported type is stored exactly as the file gave it, which is
+// the behaviour this had before — so no existing caller changes meaning.
+export function applyAttendanceImport(analysis, lib = null) {
   if (!analysis?.ok) return { ok: false, error: analysis?.error || "nothing to import" };
 
   // 1. Members. Keyed by the analysis's own "new:<key>" placeholders.
@@ -1238,8 +1245,16 @@ export function applyAttendanceImport(analysis) {
     const hit = c.timed ? byMinute.get(occurrenceKeyOf(c.name, c.startsAt, true))
                         : byDay.get(occurrenceKeyOf(c.name, c.startsAt, false));
     if (hit) { ciIdFor.set(c.key, hit); return; }
+    // The THIRD door into class_type, and the one whose vocabulary we control
+    // least: a foreign system's own "Type" column, verbatim. A backfill from a
+    // gym's old software wrote "HIIT" while the Runner wrote "hiit" for the same
+    // class, so the history being imported to make N2 possible arrived already
+    // ungroupable against the classes recorded since. Resolved to a catalogue
+    // key where one matches; an unrecognised type keeps its own text, which is
+    // the honest answer for a vocabulary that was never ours.
     const row = { id: newId(), startsAt: c.startsAt, name: c.name,
-                  classType: c.classType || "", coachName: c.coachName || "", durationMin: null };
+                  classType: lib ? resolveClassType(c.classType, lib) : (c.classType || ""),
+                  coachName: c.coachName || "", durationMin: null };
     ciIdFor.set(c.key, row.id);
     newCis.push(row);
   });

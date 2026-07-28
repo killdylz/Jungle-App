@@ -557,6 +557,36 @@ Sarah Chen,sarah@example.com,2026-03-06,Thursday 6pm,GC`;
     expect(getAttendance()).toHaveLength(3);
   });
 
+  // ── The third door into class_instances.class_type ────────────────────────
+  // A backfill carries the OLD system's vocabulary. Left alone it wrote "HIIT"
+  // while the Runner wrote "hiit" for the same class, so the very history being
+  // imported to make N2 possible arrived ungroupable against everything
+  // recorded since.
+  const TYPED = `Member,Date,Class,Type
+Sarah Chen,2026-03-04,Tuesday 6pm,HIIT
+Tom Reed,2026-03-05,Wednesday 7pm,Strength Training
+Ann Poh,2026-03-06,Friday 6pm,Aqua Aerobics`;
+  const LIB = { hiit: { label: "HIIT" }, strength: { label: "Strength Training" } };
+  const typeOf = name => getClassInstances().find(c => c.name === name).classType;
+
+  it("resolves an imported class type to the catalogue's key", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(TYPED, []), LIB);
+    expect(getClassInstances(), "precondition: three occurrences must exist").toHaveLength(3);
+    expect(typeOf("Tuesday 6pm")).toBe("hiit");
+    expect(typeOf("Wednesday 7pm")).toBe("strength");
+    // Not ours to guess at — a type the catalogue has never heard of keeps the
+    // text the gym's old system used.
+    expect(typeOf("Friday 6pm")).toBe("Aqua Aerobics");
+  });
+
+  // The CONTROL for the test above: without a catalogue nothing is resolved, so
+  // a pass there cannot come from the fixture simply being lowercase already.
+  it("stores the file's own wording when no catalogue is supplied", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(TYPED, []));
+    expect(typeOf("Tuesday 6pm")).toBe("HIIT");
+    expect(typeOf("Wednesday 7pm")).toBe("Strength Training");
+  });
+
   it("marks every backfilled row source='import' so it stays distinguishable from a live check-in", () => {
     applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
     expect(getAttendance().every(a => a.source === "import")).toBe(true);

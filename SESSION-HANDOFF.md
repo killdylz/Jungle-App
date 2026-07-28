@@ -1,12 +1,110 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-28 (session 20)_
+_Last updated: 2026-07-28 (session 21)_
 
 > 📁 **Sessions 6–18 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 21 — the column session 20 called fixed still had two vocabularies
+
+> **Gates green.** `lint:crash` **0** · **759 unit** (27 files, no todos) · **245 e2e**
+> (28 spec files, no fixmes) · five-chunk build: index **204.50 KB** (unchanged — the member
+> path is untouched) + StaffApp **339.17 KB** + PersonasScreen **91.04 KB** + ClassSummary
+> **5.81 KB** + summaryApi **0.85 KB**. App.jsx **not touched**.
+>
+> **A12/A13 confirmed still not done** at the top of the session, so N4 remains code nobody
+> has run and nothing below depends on it.
+
+### 🔴 The finding: `class_instances.class_type` had THREE writers and TWO taxonomies
+
+Session 20 fixed the Runner's half of this column (it was writing `"hiit · amrap"`, a display
+string) and recorded that **"both doors now write the same vocabulary."** They did not. The
+separator went away; the mismatch did not. Driving both doors in one run and reading the
+stored row back:
+
+| Door | Offered a coach | Wrote |
+|---|---|---|
+| Builder → Runner | `crossfit, spin, circuit, strength, hiit, yoga, boxing, pilates, bootcamp, hyrox` | `"hiit"`, `"gym-barre-…"` |
+| Schedule publish | `HIIT, Strength, Hyrox, Circuit, Spin, Yoga, Boxing, Mobility` | `"HIIT"`, `"Mobility"` |
+| CSV backfill | — | the old system's own column, verbatim |
+
+So one gym running one class type through two doors wrote `"hiit"` and `"HIIT"`, which no
+`group by` reunites, in an append-only table nothing recovers afterwards. **N2's cohort
+grouping was still permanently broken.**
+
+🔴 **`e2e/schedule.spec.js` was PINNING the defect** — `expect(burn).toMatchObject({classType:
+"HIIT"})` — while `e2e/checkin.spec.js` pinned the lowercase key. Two specs, one column,
+contradictory contracts, both green.
+
+### It cost more than analytics, and this is the half a coach actually feels
+
+The Schedule's eight capitalised strings came from `CAT_COLOR`, a hand-maintained map that was
+**also the only class types a gym could schedule**. So:
+
+- A gym running **CrossFit, Pilates or Bootcamp could not put one on the schedule at all.**
+- A **gym-authored type (DEC-16) was invisible here** — the exact "appears in one modal and
+  nowhere else" failure DEC-16 was decided to prevent.
+- `CAT_COLOR` was a duplicate of colour data the catalogue already holds, and **had already
+  drifted**: Hyrox was `#22D3A6` there and `#F59E0B` in `library.js`.
+
+### What shipped
+
+| | |
+|---|---|
+| `src/lib/libraryStore.js` | **`resolveClassType(raw, lib)`** — key → key, legacy display string → key (by key then by label), **unrecognised → verbatim**. 12 unit tests. |
+| `src/screens/CalendarScreen.jsx` | `CAT_COLOR` **deleted**. Dropdown, colours and grid labels all read `getLibrary()`. Legacy rule types healed **on read** (not migrated on mount — `mountWrites.spec.js`). |
+| `src/lib/store.js` | `applyAttendanceImport(analysis, lib)` — the third door. `lib` optional, so no existing caller changes meaning. |
+| `src/screens/RosterScreen.jsx` | Passes `getLibrary()` into the import. |
+| `e2e/schedule.spec.js` | The `"HIIT"` assertion corrected + 3 new tests. |
+| `e2e/scheduleEdit.spec.js` | 3 new tests on the legacy-type pairing below. |
+
+### The decisions worth not re-litigating
+
+- **`"Mobility"` is NOT mapped.** The old dropdown offered it and no catalogue type answers to
+  it. Mapping it to a near-neighbour would invent programming the gym never chose, invisibly.
+  It keeps its own text — the same reasoning `retention.js` gives for `INACTIVE_STATUSES`.
+- 🔴 **An unrecognised type stays SELECTABLE in the edit dialog.** This is session 20's §0b#2
+  trap arriving from the other side: a `<select>` whose value matches no option renders on its
+  **first** option, so a coach opening the dialog to fix a *coach's name* would have saved the
+  class as CrossFit with nothing on screen saying so. Proven by mutation — `Received:
+  "crossfit"`. Before you narrow a set of options, check what the edit path does with a value
+  that is no longer in it.
+- **Healed on READ, not migrated on load.** The stored rule keeps its old text until the coach
+  next edits it; both the grid and the publish path see the key regardless.
+- **Rules stay in `resolveClassType`'s "raw" fallback rather than being dropped.** A silently
+  dropped class type is invisible wrongness.
+
+### Method notes
+
+- 🔴 **The read-back caught my own half-fix.** I normalised the grid's copy of the rules and
+  left `occurrencesForWeek(userClasses, …)` reading the raw ones. The grid showed the healed
+  value while the stored occurrence still said `"HIIT"` — **visually correct, wrong in
+  storage**, which is exactly the shape of both session-20 defects.
+- **A mutation that changes nothing proves nothing.** `k.toLowerCase() === want` → `k === want`
+  left all 757 tests green, because `want` is already lowercased and every catalogue key is
+  lowercase by construction. That is redundant defensive code, not a test gap — but for a
+  moment it looked like a hole in the suite. Re-mutated on the value that actually carries the
+  behaviour (`want = s.toLowerCase()` → `want = s`) and **9 tests failed for the right reason.**
+- **The e2e suite could not have found this**, because a spec was asserting the wrong value.
+  A green suite is evidence the code matches the tests, not that the tests match the product.
+- 🔴 **`Grep`'s output on Windows path-normalises `//` into `\`.** Comment lines came back as
+  `\ Local persona shape:` and `{\* Schedule grid`, which read as syntax errors that could not
+  possibly build. `Read` shows the real text. **Do not diagnose source from Grep's rendering.**
+- **A recon spec, written and deleted** (`zz-recon-classtype.spec.js`), printed what each door
+  wrote plus a positive control. Suite is back to **28 spec files**.
+- Five value mutations, each reverted with the inverse, never `git checkout`.
+
+### Still open
+
+The grid tints a cell by appending hex alpha (`${c}18`), so a **non-hex** colour produced
+`var(--accent)18` — not a colour — and the cell lost its background *and* border. Fixed with a
+hex guard, which now matters because gym-authored types (`makeClassType` → `color:
+"var(--accent)"`) can finally be scheduled. Verified by screenshot across all five cases.
 
 ---
 
@@ -128,148 +226,3 @@ to `docs/`; sessions 6–18 moved verbatim to `docs/history/HANDOFF-ARCHIVE.md`.
 finds no bare filename left. References inside `docs/history/**` were **deliberately left
 alone**: they are records of what was true then, exactly like `FABLE-AUDIT-PROMPT.md`'s stale
 `NEXT-SESSION-PROMPT.md` pointer, which §4.4 of the session-20 prompt already ruled on.
-
----
-
-## Session 19 — N4 is built. The product has a member-facing surface.
-
-> **Gates green.** `lint:crash` **0** · **741 unit** (27 files, no todos) · **219 e2e**
-> (27 spec files, no fixmes) · build clean. App.jsx unchanged at **3,382 lines**.
->
-> 🟢 **N4 — the member magic-link summary — is BUILT**, in the order the spec insisted on:
-> **token and Edge Functions first, page second.** It is the last Phase-1 gap and the only
-> screen in Jungle a person without an account can open. ⛔ It goes live when Dylan does
-> **`DYLAN-QUEUE.md` A12** — one secret, two function pastes, one migration. ~25 minutes.
->
-> ### The structural finding, and it would have shipped broken without it
-> `main.jsx` wraps `App` in `AuthGate`, and **with Supabase configured `AuthGate` shows a
-> sign-in wall to anyone without a session.** A member tapping their class link would have
-> been asked to log into their gym's staff app. No route inside `App` could have fixed
-> that, because `App` never renders. **The summary page is therefore routed above
-> `AuthGate`.** This is invisible locally — the credential-less build has no wall to hit —
-> so `e2e/memberSummary.spec.js` asserts *"no app shell and no sign-in"* rather than merely
-> *"the summary is there"*.
->
-> ### What the design refuses to do
-> - **The token is class-scoped, never member-scoped.** A leaked link exposes one class's
->   programming — the same content the share card already publishes to Instagram — and names
->   nobody. There is no member id in the payload and no join to a person in the read path.
-> - **RLS was not loosened to `anon`, and 0007's policies were not touched.** `summary-read`
->   uses the service-role key only *after* an HMAC + expiry check, and only for the one class
->   named in the signature. Pinned by a test that greps the real `.ts` for `members?`,
->   `attendance?`, `consent_records?`, `profiles?`.
-> - **`summary-token` never touches the service-role key at all** — it runs under the
->   caller's JWT so *RLS is the authorization check*. A function that cannot escalate cannot
->   be tricked into escalating.
-> - **The token lives in the URL fragment, not a query string.** A fragment never leaves the
->   browser; a bearer credential in `?s=` lands in access logs and leaks via `Referer`.
-> - **Not JWT.** One algorithm, not named anywhere the token can influence. A format that
->   cannot express `alg: none` cannot be confused into accepting it.
-> - **`summaryContent()` is an allow-list, not a cleaner.** A new field on a stage object
->   cannot reach a member by default. That single property is what the class-scoping
->   guarantee actually rests on.
->
-> ### 🔴 The lesson this session: A GUARD THAT REPAIRS WHAT IT INSPECTS REPORTS SUCCESS
-> The token core is duplicated into both Edge Functions (a function pasted into the Supabase
-> dashboard cannot import from `src/`), so `classToken.mirror.test.js` reads the real `.ts`
-> files and compares them byte-for-byte. It imported `extractCore` from
-> `scripts/sync-token-core.mjs` — **which ran its sync at import time.** Importing the helper
-> re-wrote the files, silently repairing the drift a moment before measuring it. I hand-edited
-> a copy to `v2`, ran the test, and it passed **and the file was back to `v1`**. Fixed by
-> guarding the script's side effects behind a run-as-main check.
-> **Fifth session running that the guard was wrong before the code was.** Assume your checker
-> is broken until it has failed for the right reason.
->
-> ### 🔴 A test that accepts every failure reason asserts nothing
-> The token's malformed-input test originally accepted any of `malformed | bad-signature |
-> bad-payload` — which is every failure reason there is, so it only proved `ok === false`.
-> Tightened to pin the exact reason per input; the loose version **passed** against a mutation
-> that removed the version-prefix check entirely. Same family as session 18's "expected state
-> is already the default state".
->
-> ### The root bundle is now split, and the member pays a fifth of what staff pay
-> `main.jsx` lazy-loads `ClassSummary` and `StaffApp` (a new 15-line wrapper pairing `AuthGate`
-> with `App` so nothing can import `App` past the auth wall). Measured on a
-> **production-shaped build** (dummy `VITE_SUPABASE_*` so rollup keeps the sync paths):
->
-> | | before | after |
-> |---|---|---|
-> | a **member** downloads | 776.85 KB | **206.69 KB** (`index` 198.29 + `ClassSummary` 5.49 + `summaryApi` 2.91) |
-> | **staff** download | 776.85 KB | 782.71 KB (`index` + `StaffApp` 584.42) |
->
-> **~570 KB off the member path**, 5.9 KB onto staff. Verified by grepping the emitted chunks
-> for `GoTrueClient`/`PostgrestClient` — **supabase-js is in `StaffApp`, not in the member
-> path.** ⚠️ The credential-less local build strips the sync code and shows *no* supabase in
-> *any* chunk, so it cannot answer this question; the dummy-vars build is the one that can.
->
-> ### Two real regressions the split caused, both found and fixed
-> 1. **A flash of near-black on load.** The skin is applied by `applySkinCSS`, which now runs
->    only once the lazy chunk lands. For a gym with a light palette that is a dark flash —
->    the exact "whose background do you wear" failure `display.spec.js` exists about, moved
->    earlier in the load. Fixed with `bootColours()`: `applySkinCSS` caches the last-painted
->    `bg`/`muted`, and `main.jsx` paints them before React mounts. Measured by holding the
->    chunk with `page.route` so the boot state stops being a race — **`rgb(10,15,12)` before,
->    the gym's `rgb(255,247,240)` after.**
-> 2. **Two `display.spec.js` tests read `:root` custom properties before the app mounted** and
->    computed `NaN`. New `waitForApp()` in `e2e/helpers.js`. ⚠️ **Any future test that reads a
->    computed style (rather than asserting on an element, which auto-waits) must call it.**
->
-> ### A behaviour worth knowing about
-> **Changing only the fragment is a same-document navigation** — the browser does not re-run
-> `main.jsx`, so pasting a member link into a tab that already has the app open leaves the app
-> on screen and looks exactly like a broken link. The first person to do that would have been
-> whoever verified the feature. `main.jsx` now reloads on a `hashchange` that carries a token.
-> (Probed directly: `goto('#s=…')` kept the app; `reload()` showed the summary.)
->
-> ### Files added
-> `src/lib/classToken.js` (+ `.test.js`, `.mirror.test.js`) · `src/lib/summaryContent.js` (+ test)
-> · `src/lib/summaryApi.js` (+ test) · `src/screens/ClassSummary.jsx` · `src/StaffApp.jsx` ·
-> `src/screens/runner/MemberLinkDialog.jsx` · `e2e/memberSummary.spec.js` ·
-> `supabase/functions/summary-token/index.ts` · `supabase/functions/summary-read/index.ts` ·
-> `supabase/migrations/0009_class_summaries.sql` · `scripts/sync-token-core.mjs`
->
-> ---
->
-> ## Session 19, part 2 — the PersonasScreen sweep, and it paid immediately
->
-> **Gates: `lint:crash` 0 · 741 unit · 233 e2e · build clean.** (e2e 219 → 233.)
->
-> The Coaches screen had never been swept past its first render. It was the worst
-> accessibility surface in the app by a distance:
->
-> | Surface | unnamed buttons | nameless fields |
-> |---|---|---|
-> | Base, **with a coach loaded** | **13** — Delete persona, Delete movement ×11, Remove plan | 0 |
-> | Change class shape | 18 | **5** role dropdowns |
-> | **Edit plan** (`PersonaPlanEditor`) | **29** | **33** |
->
-> All now zero, labelled in the house style (`aria-label` naming the item, as
-> `members.spec.js` already expects with `/Edit Ada/`). Seven Coaches panels added to
-> `e2e/revealed.spec.js`; proven by deleting one label and watching 11 findings appear
-> across three panels.
->
-> ### 🔴 "Revealed" is not only about a CLICK — it can be about there being DATA
-> With no coach loaded the Coaches screen has **two** buttons, which is why
-> `screens.spec.js` passed it for eighteen sessions. Load the shipped sample coach and the
-> *same first render* grows thirteen icon-only destructive controls. **A screen-level sweep
-> against an empty store is a sweep of an empty screen.** Worth re-checking the other eight
-> screens in a data-loaded state.
->
-> ### 🔴 A scanner false positive, and it nearly made me label two unreachable buttons
-> `a11yScan.js` decided visibility with `offsetParent !== null`. Inside a **collapsed
-> `<details>`** an element reports `offsetParent` non-null *and a real 162×37 box* — but
-> `checkVisibility()` is false and it cannot take focus. Meanwhile the naming rules read
-> `innerText`, which correctly returns `""` for unrendered content. **The two halves of the
-> scan disagreed: invisible enough to have no name, visible enough to be judged for not
-> having one.** Now `offsetParent !== null && checkVisibility()` — an AND, so it can only
-> ever remove a finding the browser itself calls invisible. `namelessFields` was
-> deliberately left alone: it has no `<details>` false positive and adding a filter there
-> could only suppress real findings.
->
-> ### Still open after this session
-> **A gym class type through the Runner to a check-in** (never driven) · **the other eight
-> screens re-swept with data loaded** (see above — this is now a known gap, not a
-> hypothesis) · the 147 KB of this file and 9 audit files still at repo root.
-> **N2/N3 remain correctly blocked on attendance volume, which is blocked on the pilot.**
-
----

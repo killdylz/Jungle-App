@@ -1,9 +1,10 @@
 // ─── Planning & schedule (AUDIT-FINDINGS §3.1, decomposition stage 2) ────────
 // A leaf screen: one prop (`onBack`), and everything else it needs it imports.
 //
-// All of its constants (DAYS, SLOTS, CAT_COLOR) are LOCAL to the component and
-// came with it — nothing else in the app referenced them, which is what made
-// this a leaf despite its size.
+// Its constants (DAYS, SLOTS) are LOCAL to the component and came with it —
+// nothing else in the app referenced them, which is what made this a leaf
+// despite its size. `CAT_COLOR` was the third; it is gone, because being a leaf
+// is not a reason to keep a private copy of the gym's class-type catalogue.
 //
 // The mock analytics below (suggested slots, trainer load, "AI tips") are gated
 // behind `FLAGS.mockAnalytics`, which is false: they evaluate to empty arrays
@@ -23,20 +24,32 @@ import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
+import { getLibrary } from "../lib/libraryAccess.js";
+import { resolveClassType } from "../lib/libraryStore.js";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
 // Before this, the overlay had no dialog role, and Tab walked out of it into the
 // 50 focusable controls of the schedule grid behind it.
-// DAYS / SLOTS / CAT_COLOR stay component-local (see the file header) and are
-// passed in, rather than hoisted to module scope to suit this extraction.
+// DAYS / SLOTS stay component-local (see the file header) and are passed in,
+// rather than hoisted to module scope to suit this extraction. `classTypes`
+// comes the same way, but from `getLibrary()` rather than from a constant.
 //
 // One dialog for both add and edit. The fields are identical — an edit IS the
 // add form with the rule's current values in it — so a second component would be
 // the same markup twice, and the second copy is where the day dropdown quietly
 // stops matching the first.
-function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, catColor, editing }) {
+function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, classTypes, editing }) {
   const title = editing ? "Edit class" : "Add class";
+  // 🔴 A rule whose type the catalogue does not have — `Mobility`, which the old
+  // hard-coded list offered and no class type answers to — must still be
+  // SELECTABLE, or opening this dialog to fix a coach's name would quietly
+  // re-type the class to whichever option happens to be first. Hiding a value a
+  // user can also edit, without giving them a way to keep it, is the failure
+  // session 20's check-in list nearly shipped in the other direction.
+  const opts = !addForm.type || classTypes.some(t => t.value === addForm.type)
+    ? classTypes
+    : [...classTypes, { value: addForm.type, label: addForm.type }];
   const dlg = useDialog(onClose, title);
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
@@ -47,7 +60,7 @@ function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, c
         </div>
         <input autoFocus value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="Class name" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",marginBottom:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"14px"}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
-          <select aria-label="Class type" value={addForm.type} onChange={e=>setAddForm(f=>({...f,type:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{Object.keys(catColor).map(t=><option key={t} value={t}>{t}</option>)}</select>
+          <select aria-label="Class type" value={addForm.type} onChange={e=>setAddForm(f=>({...f,type:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{opts.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select>
           <input value={addForm.coach} onChange={e=>setAddForm(f=>({...f,coach:e.target.value}))} placeholder="Coach" style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
           <select aria-label="Day" value={addForm.day} onChange={e=>setAddForm(f=>({...f,day:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{days.map(d=><option key={d} value={d}>{d}</option>)}</select>
           <select aria-label="Time slot" value={addForm.slot} onChange={e=>setAddForm(f=>({...f,slot:e.target.value}))} style={{padding:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}>{slots.map(sl=><option key={sl} value={sl}>{sl}</option>)}</select>
@@ -88,7 +101,9 @@ export function CalendarScreen({onBack, onStartClass}) {
     store.saveUserClasses(userClasses);
   }, [userClasses]);
   const [showAddClass, setShowAddClass] = React.useState(false);
-  const [addForm, setAddForm] = React.useState({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+  // `type` starts empty rather than at a hard-coded `"HIIT"`: the catalogue is
+  // the gym's, so the default has to come from it (see `blankForm` below).
+  const [addForm, setAddForm] = React.useState({name:"",type:"",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
 
   // Seven days. This list was Mon–Sat, and because the "Add class" day picker is
   // built from it too, the product was self-consistently unable to schedule a
@@ -127,14 +142,54 @@ export function CalendarScreen({onBack, onStartClass}) {
     return dt.getDate();
   });
 
-  const CAT_COLOR = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
+  // ── The gym's catalogue, not a second copy of it ──────────────────────────
+  // This screen used to carry `CAT_COLOR` — a hand-maintained map of eight
+  // display strings to hex colours, which was BOTH the grid's palette and the
+  // "Class type" dropdown's entire vocabulary. It was a duplicate of data the
+  // catalogue already holds (`WORKOUT_LIBRARY[k].color`) and it had already
+  // drifted: Hyrox was `#22D3A6` here and `#F59E0B` there.
+  //
+  // Two costs, and the second is the expensive one:
+  //   1. The dropdown offered a DIFFERENT set of class types from the Builder's.
+  //      A gym running CrossFit, Pilates or Bootcamp could not put it on the
+  //      schedule at all, and a gym-authored type (DEC-16) was invisible here —
+  //      the exact "appears in one modal and nowhere else" failure DEC-16 was
+  //      decided to avoid.
+  //   2. It wrote its display string into `class_instances.class_type`, which is
+  //      what N2 groups by. See `resolveClassType`.
+  //
+  // Read per render like every other `getLibrary()` caller, deliberately: a
+  // coach who adds a class type in the Library modal sees it here immediately.
+  const LIB = getLibrary();
+  const classTypes = Object.entries(LIB).map(([value, c]) => ({
+    value, label: `${c.icon || ""} ${c.label || value}`.trim(),
+  }));
+  // The grid tints a cell by appending 8-bit hex alpha (`${c}18`, `${c}40`), so
+  // the value MUST be 6-digit hex. Two types are not: one the catalogue lacks
+  // (a legacy "Mobility" rule) and — since the dropdown now offers them — a
+  // gym-authored type, which `makeClassType` gives `color: "var(--accent)"`.
+  // Either produced `var(--accent)18`, which is not a colour, so the cell lost
+  // its background AND its border and stopped reading as a class at all.
+  const GRID_FALLBACK = "#7A8A94";
+  const typeColor = t => {
+    const c = LIB[t]?.color || "";
+    return /^#[0-9a-f]{6}$/i.test(c) ? c : GRID_FALLBACK;
+  };
 
   // Only the gym's own classes appear — the mock base schedule is gone (audit 2.2).
   const schedule = {};
 
+  // Rules saved before the above hold a display string (`"HIIT"`). Healed on
+  // READ rather than migrated on load — `mountWrites.spec.js` exists to keep a
+  // screen from persisting anything just by being opened, and `getPersonas()`
+  // already sets the precedent of normalising a stored shape on the way out.
+  // The stored rule keeps its old text until the coach next edits it, and both
+  // the grid and the publish path below see the key regardless.
+  const rules = userClasses.map(uc => ({ ...uc, type: resolveClassType(uc.type, LIB) }));
+
   // F5: merge user classes (with recurrence) onto the base schedule for the viewed week
   const effSchedule = { ...schedule };
-  userClasses.forEach(uc => {
+  rules.forEach(uc => {
     // `id` carries through so a cell can name the RULE it came from. Without it
     // the grid could only ever add (see removeClass below).
     const entry = { id:uc.id, name:uc.name, coach:uc.coach||"", fill:uc.fill||0, type:uc.type, dur:uc.dur||"45m", custom:true, repeat:uc.repeat };
@@ -164,10 +219,12 @@ export function CalendarScreen({onBack, onStartClass}) {
   // same `diffOccurrences` the publish path uses.
   const [editingId, setEditingId] = React.useState(null);
 
+  const blankForm = () => ({name:"",type:classTypes[0]?.value||"",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+
   const closeClassDialog = () => {
     setShowAddClass(false);
     setEditingId(null);
-    setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+    setAddForm(blankForm());
   };
 
   // The grid renders a DERIVED entry that carries no day/slot/weekKey, so the
@@ -176,7 +233,10 @@ export function CalendarScreen({onBack, onStartClass}) {
     const rule = userClasses.find(c => c.id === id);
     if (!rule) return;
     setAddForm({
-      name: rule.name || "", type: rule.type || "HIIT", coach: rule.coach || "",
+      // Normalised on the way IN as well as on the way out, so saving an edit
+      // writes the key even for a rule stored before this change.
+      name: rule.name || "", type: resolveClassType(rule.type, LIB) || classTypes[0]?.value || "",
+      coach: rule.coach || "",
       day: rule.day || "Mon", slot: rule.slot || "06:00",
       dur: rule.dur || "45m", repeat: rule.repeat || "weekly",
     });
@@ -236,7 +296,11 @@ export function CalendarScreen({onBack, onStartClass}) {
   const [published, setPublished] = React.useState("");
   React.useEffect(() => { setPublished(""); }, [weekOffset]);
 
-  const weekOccurrences = occurrencesForWeek(userClasses, startOfWeek, { days: DAYS });
+  // `rules`, not `userClasses` — this is the door onto `class_instances`, so it
+  // must see the normalised type. Driving the UI and reading the stored row back
+  // is what caught this: the grid above was already showing the healed value
+  // while the published occurrence still carried `"HIIT"`.
+  const weekOccurrences = occurrencesForWeek(rules, startOfWeek, { days: DAYS });
   const pending = diffOccurrences(weekOccurrences, instances);
   const publishWeek = () => {
     const r = store.publishOccurrences(weekOccurrences);
@@ -338,7 +402,7 @@ export function CalendarScreen({onBack, onStartClass}) {
                     fontSize:"12px",fontWeight:"700",opacity:pending.create.length?1:0.55}}>
             Publish week{pending.create.length ? ` · ${pending.create.length}` : ""}
           </button>
-          <button onClick={()=>setShowAddClass(true)} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
+          <button onClick={()=>{setAddForm(blankForm());setShowAddClass(true);}} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             + Add class
           </button>
         </div>
@@ -357,7 +421,7 @@ export function CalendarScreen({onBack, onStartClass}) {
       {showAddClass && (
         <AddClassDialog onClose={closeClassDialog} addForm={addForm}
           setAddForm={setAddForm} addClass={addClass} editing={!!editingId}
-          days={DAYS} slots={SLOTS} catColor={CAT_COLOR}/>
+          days={DAYS} slots={SLOTS} classTypes={classTypes}/>
       )}
 
       {/* Schedule grid. `overflowX:auto` is what lets a phone reach all seven
@@ -396,8 +460,8 @@ export function CalendarScreen({onBack, onStartClass}) {
                   {cls && (
                     <div style={{
                       padding:"7px 8px",
-                      background:`${CAT_COLOR[cls.type]||"var(--accent)"}18`,
-                      border:`1px solid ${CAT_COLOR[cls.type]||"var(--accent)"}40`,
+                      background:`${typeColor(cls.type)}18`,
+                      border:`1px solid ${typeColor(cls.type)}40`,
                       borderRadius:"8px",
                       position:"relative",
                       // minHeight, not height: the cell still fills its row, but a
@@ -433,7 +497,9 @@ export function CalendarScreen({onBack, onStartClass}) {
                           confident wrong number is worse than no number. The
                           class TYPE takes the space, which also gives the cell
                           a non-colour cue for what the border hue means. */}
-                      {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cls.type}</div>}
+                      {/* The cell shows the catalogue's LABEL; `cls.type` is now
+                          a key, and a gym-authored one reads `gym-barre-ms4pk827`. */}
+                      {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{LIB[cls.type]?.label || cls.type}</div>}
                       {/* §3A. Pressing this is what makes the Runner's check-ins
                           land on the occurrence the Schedule published, instead
                           of on a second row nobody looks at: the occurrence is

@@ -14,6 +14,7 @@ import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
+import { getLibrary } from "../lib/libraryAccess.js";
 import { memberCsv, rosterCsv, memberCsvFilename, rosterCsvFilename } from "../lib/csvExport.js";
 import { p6Summary, P6_TARGET_SEC } from "../lib/checkinMetrics.js";
 import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
@@ -83,7 +84,10 @@ export function RosterScreen({ onBack }) {
     setAnalysis(analyzeAttendanceCsv(csv, members, { dayFirst }));
   };
   const apply = () => {
-    const r = store.applyAttendanceImport(analysis);
+    // The catalogue comes from here rather than from inside the store, so a
+    // backfilled class type lands in the same vocabulary the Schedule and the
+    // Runner write. See `resolveClassType`.
+    const r = store.applyAttendanceImport(analysis, getLibrary());
     setResult(r);
     setAnalysis(null);
     setCsv("");

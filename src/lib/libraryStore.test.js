@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { WORKOUT_LIBRARY } from "../data/library.js";
-import { diffLibrary, mergeLibrary, isLegacyLibraryBlob, LIBRARY_BLOB_VERSION } from "./libraryStore.js";
+import { diffLibrary, mergeLibrary, isLegacyLibraryBlob, LIBRARY_BLOB_VERSION,
+         resolveClassType } from "./libraryStore.js";
 
 // DEC-13. The thing under test is not "does a diff work" — it is the PROMISE
 // "the studio's movement catalogue, editable per gym". A gym must be able to
@@ -153,5 +154,64 @@ describe("libraryStore — blobs written before DEC-13", () => {
     expect(mergeLibrary(WORKOUT_LIBRARY, "nonsense")).toBe(WORKOUT_LIBRARY);
     expect(mergeLibrary(WORKOUT_LIBRARY, [1, 2])).toBe(WORKOUT_LIBRARY);
     expect(diffLibrary(WORKOUT_LIBRARY, null)).toBeNull();
+  });
+});
+
+// ── resolveClassType: one vocabulary for class_instances.class_type ──────────
+//
+// The column N2 groups by had three writers and two taxonomies. The Schedule
+// wrote its own capitalised display strings ("HIIT", "Mobility") from a
+// hand-maintained map; the Builder → Runner door writes catalogue KEYS
+// ("hiit", "gym-barre-ms4pk827"). One gym running one class type through both
+// doors produced two values no `group by` can reunite, and class_instances is
+// append-only, so nothing recovers it afterwards.
+//
+// These pin the exact contract the Schedule now relies on, INCLUDING the case
+// that must NOT be mapped.
+describe("resolveClassType — the schedule and the runner must agree", () => {
+  it("passes a catalogue key through untouched", () => {
+    expect(resolveClassType("hiit", WORKOUT_LIBRARY)).toBe("hiit");
+    expect(resolveClassType("crossfit", WORKOUT_LIBRARY)).toBe("crossfit");
+  });
+
+  // The whole point: every type the old Schedule dropdown could produce, except
+  // Mobility, is one of these. Before this, publishing wrote the left column.
+  it.each([
+    ["HIIT", "hiit"], ["Strength", "strength"], ["Hyrox", "hyrox"],
+    ["Circuit", "circuit"], ["Spin", "spin"], ["Yoga", "yoga"], ["Boxing", "boxing"],
+  ])("heals the legacy display string %s to the key %s", (legacy, key) => {
+    expect(resolveClassType(legacy, WORKOUT_LIBRARY)).toBe(key);
+  });
+
+  // Labels, not just keys — "Strength Training" is the catalogue's label for a
+  // key that is only "strength", so a value copied off the screen still lands.
+  it("matches a catalogue label as well as a key", () => {
+    expect(resolveClassType("Strength Training", WORKOUT_LIBRARY)).toBe("strength");
+    expect(resolveClassType("Boxing / Kickboxing", WORKOUT_LIBRARY)).toBe("boxing");
+    expect(resolveClassType("  crossfit  ", WORKOUT_LIBRARY)).toBe("crossfit");
+  });
+
+  // 🔴 THE ONE THAT MUST NOT MAP. The old dropdown offered "Mobility" and the
+  // catalogue has no class type that answers to it. Mapping it to a
+  // near-neighbour would invent programming the gym never chose, and the gym
+  // cannot tell that happened. It keeps its own text and stays visible.
+  it("keeps an unrecognised type verbatim rather than guessing", () => {
+    expect(resolveClassType("Mobility", WORKOUT_LIBRARY)).toBe("Mobility");
+    expect(resolveClassType("Aerial Silks", WORKOUT_LIBRARY)).toBe("Aerial Silks");
+  });
+
+  // A gym-authored key (DEC-16) is a first-class type, not an unknown.
+  it("passes a gym-authored key through", () => {
+    const lib = { ...WORKOUT_LIBRARY, "gym-barre-x1": { label: "Barre", subTypes: {} } };
+    expect(resolveClassType("gym-barre-x1", lib)).toBe("gym-barre-x1");
+    expect(resolveClassType("Barre", lib)).toBe("gym-barre-x1");
+  });
+
+  it("survives junk without throwing", () => {
+    expect(resolveClassType("", WORKOUT_LIBRARY)).toBe("");
+    expect(resolveClassType(null, WORKOUT_LIBRARY)).toBe("");
+    expect(resolveClassType(undefined, WORKOUT_LIBRARY)).toBe("");
+    expect(resolveClassType("hiit", null)).toBe("hiit");
+    expect(resolveClassType("hiit", {})).toBe("hiit");
   });
 });

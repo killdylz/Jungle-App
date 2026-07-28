@@ -243,3 +243,98 @@ test.describe("changing a class already on the schedule", () => {
     expect(instances.map(i => i.name)).toContain("Old Name");
   });
 });
+
+// ── The legacy type an edit must not silently rewrite ────────────────────────
+//
+// The Schedule's class-type dropdown used to be a hand-maintained list of eight
+// capitalised display strings, one of which was "Mobility" — a class type the
+// catalogue does not have. The dropdown now offers catalogue KEYS, which is what
+// makes `class_instances.class_type` one vocabulary (see schedule.spec.js).
+//
+// 🔴 That change had a way of being WORSE than the defect it fixed. A rule
+// stored as "Mobility" has no matching <option>, and a <select> whose value
+// matches nothing renders on its FIRST option — so a coach opening this dialog
+// to correct a typo in the coach's name would have saved the class as CrossFit,
+// with nothing on screen saying so. Hiding a value the user can also edit,
+// without giving them a way to keep it, is the same trap session 20's check-in
+// list nearly shipped in the other direction: filter without a creation path.
+//
+// So an unrecognised type stays SELECTABLE and stays SELECTED.
+test.describe("a class type the catalogue lacks survives an edit", () => {
+  test("keeps Mobility through an unrelated edit instead of re-typing the class", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await page.evaluate((k) => {
+      localStorage.setItem(k, JSON.stringify([
+        { id: "uc-mob", name: "Deep Stretch", type: "Mobility", coach: "Mara",
+          day: "Tue", slot: "18:00", dur: "30m", repeat: "weekly" },
+      ]));
+    }, KEY);
+    await page.reload();
+    await nav(page, "Schedule");
+
+    // POSITIVE CONTROL: the rule really is stored with the unmappable type.
+    expect((await stored(page, KEY))[0].type,
+      "precondition: the rule must start on a type the catalogue lacks").toBe("Mobility");
+
+    await page.getByRole("button", { name: "Edit Deep Stretch on Tue at 18:00" }).click();
+
+    // The dialog shows it rather than falling back to the first option.
+    await expect(page.getByLabel("Class type")).toHaveValue("Mobility");
+
+    // An edit to a DIFFERENT field — the case where a silent re-type would be
+    // invisible, because the coach never went near the type dropdown.
+    await page.getByPlaceholder("Coach").fill("Priya");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    const rule = (await stored(page, KEY))[0];
+    expect(rule.coach, "precondition: the edit must have been saved").toBe("Priya");
+    expect(rule.type, "an unrelated edit must not re-type the class").toBe("Mobility");
+  });
+
+  // And the coach can still move it onto a real catalogue type when they choose
+  // to — the legacy value is a way back, not a trap of its own.
+  test("lets the coach move a legacy type onto a catalogue one", async ({ page }) => {
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await page.evaluate((k) => {
+      localStorage.setItem(k, JSON.stringify([
+        { id: "uc-mob", name: "Deep Stretch", type: "Mobility", coach: "",
+          day: "Tue", slot: "18:00", dur: "30m", repeat: "weekly" },
+      ]));
+    }, KEY);
+    await page.reload();
+    await nav(page, "Schedule");
+
+    await page.getByRole("button", { name: "Edit Deep Stretch on Tue at 18:00" }).click();
+    await page.getByLabel("Class type").selectOption("yoga");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    expect((await stored(page, KEY))[0].type).toBe("yoga");
+  });
+
+  // A rule stored as "HIIT" is healed, so saving an unrelated edit writes the
+  // key — the stored rule catches up with the column without a migration.
+  test("writes the catalogue key when a legacy display string is edited", async ({ page }) => {
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await page.evaluate((k) => {
+      localStorage.setItem(k, JSON.stringify([
+        { id: "uc-h", name: "Sunrise Burn", type: "HIIT", coach: "",
+          day: "Tue", slot: "18:00", dur: "45m", repeat: "weekly" },
+      ]));
+    }, KEY);
+    await page.reload();
+    await nav(page, "Schedule");
+
+    expect((await stored(page, KEY))[0].type, "precondition: stored as the display string").toBe("HIIT");
+
+    await page.getByRole("button", { name: "Edit Sunrise Burn on Tue at 18:00" }).click();
+    await expect(page.getByLabel("Class type")).toHaveValue("hiit");
+    await page.getByPlaceholder("Coach").fill("Dylan");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    expect((await stored(page, KEY))[0].type).toBe("hiit");
+  });
+});

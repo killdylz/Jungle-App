@@ -1755,3 +1755,152 @@ The two server-side steps are DONE and VERIFIED: migration `0006` applied (`pers
 - ✅ **Sales-integrity sweep (2026-07-18, `cb6e77f`)** — the last four ungated fabricated-data leaks are gone: Dashboard "248 members" KPI → real "Total sessions"; Schedule "Jungle Intelligence" AI tips gated behind `mockAnalytics`; Exercise Library Discover packs (fake gyms / import counts / no-op Import) gated behind the **new `mockDiscover` flag**; dead "Share with Class" links gated behind `attendeeShare`. **Flags now covering all mock/theatre surfaces:** `mockAnalytics`, `mockMembers`, `mockSchedule`, `attendeeShare`, `mockIntegrations`, `mockDiscover` — all default OFF. No known ungated fabricated data remains on live surfaces (the Brand-Studio "LIVE PREVIEW" dashboard is a labelled theming preview, intentionally illustrative).
 - Carryover: redeploy the `smart-build` Edge Function (Supabase → Edge Functions → paste `supabase/functions/smart-build/index.ts` → Deploy) if the LLM brand recommendation isn't live.
 - **Dev-server note (recurring):** a second chat often holds port 5173 in this folder; start your own on a fixed alt port (`launch.json` → `--port 5180 --strictPort`, `autoPort:false`) and navigate to `http://localhost:5180/Jungle-App/`, then revert `launch.json` to `port:5173` before committing. Vite ignores the harness `PORT` env; Browser-pane screenshots hang on this app — verify with `read_page`/`get_page_text`/`javascript_tool` computed-style checks.
+
+---
+
+_Moved out of `SESSION-HANDOFF.md` in session 21, keeping that file at two blocks._
+
+---
+
+## Session 19 — N4 is built. The product has a member-facing surface.
+
+> **Gates green.** `lint:crash` **0** · **741 unit** (27 files, no todos) · **219 e2e**
+> (27 spec files, no fixmes) · build clean. App.jsx unchanged at **3,382 lines**.
+>
+> 🟢 **N4 — the member magic-link summary — is BUILT**, in the order the spec insisted on:
+> **token and Edge Functions first, page second.** It is the last Phase-1 gap and the only
+> screen in Jungle a person without an account can open. ⛔ It goes live when Dylan does
+> **`DYLAN-QUEUE.md` A12** — one secret, two function pastes, one migration. ~25 minutes.
+>
+> ### The structural finding, and it would have shipped broken without it
+> `main.jsx` wraps `App` in `AuthGate`, and **with Supabase configured `AuthGate` shows a
+> sign-in wall to anyone without a session.** A member tapping their class link would have
+> been asked to log into their gym's staff app. No route inside `App` could have fixed
+> that, because `App` never renders. **The summary page is therefore routed above
+> `AuthGate`.** This is invisible locally — the credential-less build has no wall to hit —
+> so `e2e/memberSummary.spec.js` asserts *"no app shell and no sign-in"* rather than merely
+> *"the summary is there"*.
+>
+> ### What the design refuses to do
+> - **The token is class-scoped, never member-scoped.** A leaked link exposes one class's
+>   programming — the same content the share card already publishes to Instagram — and names
+>   nobody. There is no member id in the payload and no join to a person in the read path.
+> - **RLS was not loosened to `anon`, and 0007's policies were not touched.** `summary-read`
+>   uses the service-role key only *after* an HMAC + expiry check, and only for the one class
+>   named in the signature. Pinned by a test that greps the real `.ts` for `members?`,
+>   `attendance?`, `consent_records?`, `profiles?`.
+> - **`summary-token` never touches the service-role key at all** — it runs under the
+>   caller's JWT so *RLS is the authorization check*. A function that cannot escalate cannot
+>   be tricked into escalating.
+> - **The token lives in the URL fragment, not a query string.** A fragment never leaves the
+>   browser; a bearer credential in `?s=` lands in access logs and leaks via `Referer`.
+> - **Not JWT.** One algorithm, not named anywhere the token can influence. A format that
+>   cannot express `alg: none` cannot be confused into accepting it.
+> - **`summaryContent()` is an allow-list, not a cleaner.** A new field on a stage object
+>   cannot reach a member by default. That single property is what the class-scoping
+>   guarantee actually rests on.
+>
+> ### 🔴 The lesson this session: A GUARD THAT REPAIRS WHAT IT INSPECTS REPORTS SUCCESS
+> The token core is duplicated into both Edge Functions (a function pasted into the Supabase
+> dashboard cannot import from `src/`), so `classToken.mirror.test.js` reads the real `.ts`
+> files and compares them byte-for-byte. It imported `extractCore` from
+> `scripts/sync-token-core.mjs` — **which ran its sync at import time.** Importing the helper
+> re-wrote the files, silently repairing the drift a moment before measuring it. I hand-edited
+> a copy to `v2`, ran the test, and it passed **and the file was back to `v1`**. Fixed by
+> guarding the script's side effects behind a run-as-main check.
+> **Fifth session running that the guard was wrong before the code was.** Assume your checker
+> is broken until it has failed for the right reason.
+>
+> ### 🔴 A test that accepts every failure reason asserts nothing
+> The token's malformed-input test originally accepted any of `malformed | bad-signature |
+> bad-payload` — which is every failure reason there is, so it only proved `ok === false`.
+> Tightened to pin the exact reason per input; the loose version **passed** against a mutation
+> that removed the version-prefix check entirely. Same family as session 18's "expected state
+> is already the default state".
+>
+> ### The root bundle is now split, and the member pays a fifth of what staff pay
+> `main.jsx` lazy-loads `ClassSummary` and `StaffApp` (a new 15-line wrapper pairing `AuthGate`
+> with `App` so nothing can import `App` past the auth wall). Measured on a
+> **production-shaped build** (dummy `VITE_SUPABASE_*` so rollup keeps the sync paths):
+>
+> | | before | after |
+> |---|---|---|
+> | a **member** downloads | 776.85 KB | **206.69 KB** (`index` 198.29 + `ClassSummary` 5.49 + `summaryApi` 2.91) |
+> | **staff** download | 776.85 KB | 782.71 KB (`index` + `StaffApp` 584.42) |
+>
+> **~570 KB off the member path**, 5.9 KB onto staff. Verified by grepping the emitted chunks
+> for `GoTrueClient`/`PostgrestClient` — **supabase-js is in `StaffApp`, not in the member
+> path.** ⚠️ The credential-less local build strips the sync code and shows *no* supabase in
+> *any* chunk, so it cannot answer this question; the dummy-vars build is the one that can.
+>
+> ### Two real regressions the split caused, both found and fixed
+> 1. **A flash of near-black on load.** The skin is applied by `applySkinCSS`, which now runs
+>    only once the lazy chunk lands. For a gym with a light palette that is a dark flash —
+>    the exact "whose background do you wear" failure `display.spec.js` exists about, moved
+>    earlier in the load. Fixed with `bootColours()`: `applySkinCSS` caches the last-painted
+>    `bg`/`muted`, and `main.jsx` paints them before React mounts. Measured by holding the
+>    chunk with `page.route` so the boot state stops being a race — **`rgb(10,15,12)` before,
+>    the gym's `rgb(255,247,240)` after.**
+> 2. **Two `display.spec.js` tests read `:root` custom properties before the app mounted** and
+>    computed `NaN`. New `waitForApp()` in `e2e/helpers.js`. ⚠️ **Any future test that reads a
+>    computed style (rather than asserting on an element, which auto-waits) must call it.**
+>
+> ### A behaviour worth knowing about
+> **Changing only the fragment is a same-document navigation** — the browser does not re-run
+> `main.jsx`, so pasting a member link into a tab that already has the app open leaves the app
+> on screen and looks exactly like a broken link. The first person to do that would have been
+> whoever verified the feature. `main.jsx` now reloads on a `hashchange` that carries a token.
+> (Probed directly: `goto('#s=…')` kept the app; `reload()` showed the summary.)
+>
+> ### Files added
+> `src/lib/classToken.js` (+ `.test.js`, `.mirror.test.js`) · `src/lib/summaryContent.js` (+ test)
+> · `src/lib/summaryApi.js` (+ test) · `src/screens/ClassSummary.jsx` · `src/StaffApp.jsx` ·
+> `src/screens/runner/MemberLinkDialog.jsx` · `e2e/memberSummary.spec.js` ·
+> `supabase/functions/summary-token/index.ts` · `supabase/functions/summary-read/index.ts` ·
+> `supabase/migrations/0009_class_summaries.sql` · `scripts/sync-token-core.mjs`
+>
+> ---
+>
+> ## Session 19, part 2 — the PersonasScreen sweep, and it paid immediately
+>
+> **Gates: `lint:crash` 0 · 741 unit · 233 e2e · build clean.** (e2e 219 → 233.)
+>
+> The Coaches screen had never been swept past its first render. It was the worst
+> accessibility surface in the app by a distance:
+>
+> | Surface | unnamed buttons | nameless fields |
+> |---|---|---|
+> | Base, **with a coach loaded** | **13** — Delete persona, Delete movement ×11, Remove plan | 0 |
+> | Change class shape | 18 | **5** role dropdowns |
+> | **Edit plan** (`PersonaPlanEditor`) | **29** | **33** |
+>
+> All now zero, labelled in the house style (`aria-label` naming the item, as
+> `members.spec.js` already expects with `/Edit Ada/`). Seven Coaches panels added to
+> `e2e/revealed.spec.js`; proven by deleting one label and watching 11 findings appear
+> across three panels.
+>
+> ### 🔴 "Revealed" is not only about a CLICK — it can be about there being DATA
+> With no coach loaded the Coaches screen has **two** buttons, which is why
+> `screens.spec.js` passed it for eighteen sessions. Load the shipped sample coach and the
+> *same first render* grows thirteen icon-only destructive controls. **A screen-level sweep
+> against an empty store is a sweep of an empty screen.** Worth re-checking the other eight
+> screens in a data-loaded state.
+>
+> ### 🔴 A scanner false positive, and it nearly made me label two unreachable buttons
+> `a11yScan.js` decided visibility with `offsetParent !== null`. Inside a **collapsed
+> `<details>`** an element reports `offsetParent` non-null *and a real 162×37 box* — but
+> `checkVisibility()` is false and it cannot take focus. Meanwhile the naming rules read
+> `innerText`, which correctly returns `""` for unrendered content. **The two halves of the
+> scan disagreed: invisible enough to have no name, visible enough to be judged for not
+> having one.** Now `offsetParent !== null && checkVisibility()` — an AND, so it can only
+> ever remove a finding the browser itself calls invisible. `namelessFields` was
+> deliberately left alone: it has no `<details>` false positive and adding a filter there
+> could only suppress real findings.
+>
+> ### Still open after this session
+> **A gym class type through the Runner to a check-in** (never driven) · **the other eight
+> screens re-swept with data loaded** (see above — this is now a known gap, not a
+> hypothesis) · the 147 KB of this file and 9 audit files still at repo root.
+> **N2/N3 remain correctly blocked on attendance volume, which is blocked on the pilot.**
+
+---
