@@ -1,8 +1,48 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-28 (session 18)_
+_Last updated: 2026-07-28 (session 18, second half)_
 
-> **▶ STARTING A NEW SESSION?** Read this block, then the session-17 block below it, then spec
+> **▶ STARTING A NEW SESSION? READ `SESSION-19-PROMPT.md`.** It supersedes this block and
+> `SESSION-17-PROMPT.md`. Gates at `2058625`: **`lint:crash` 0 · 683 unit · 202 e2e ·
+> build 537.75 KB + 89.97 KB**. App.jsx **3,382 lines**.
+>
+> 🟢 **Dylan answered all nine Part B decisions.** Six shipped in session 18's second half:
+> 3 dead symbols deleted · **`eslint-plugin-react` added, closing the crash gate's twelve-session
+> JSX blind spot** (proven: a planted `<ThisComponentDoesNotExist/>` fails the gate) · 12 session
+> prompts moved to `docs/history/` · the stale `claude-opus-4-8` default fixed · **DEC-16 built** ·
+> Sentry deferred until the lawyer, `storage-js` left alone.
+>
+> 🔴 **AND DEC-16 SHIPPED A REGRESSION THAT I FOUND AN HOUR LATER.** Wiring the catalogue READS was
+> only half the job: `applyTemplate` builds its stage skeleton from `CLASS_STAGE_TEMPLATES`, a
+> SEPARATE built-in constant that can never hold a `gym-` key. Selecting a gym's own class type
+> returned early and **left the previous type's stages in place** — the dropdown said Barre and the
+> Builder showed CrossFit. Worse than "nothing happens", because the label and the content
+> disagreed silently. Fixed by `DEFAULT_STAGE_TEMPLATE` (`06554cb`).
+>
+> **The generalisable lesson: the feature you just shipped is the most likely place to find the
+> next defect, and your own new test is the least likely thing to catch it.**
+>
+> 🔴 **TWO WAYS A TEST WAS VACUOUS THIS SESSION — both passed against real defects:**
+> 1. **A frozen clock makes any `Date.now()`-derived id non-unique.** `page.clock.setFixedTime`
+>    freezes `Date.now()` outright (two reads 1.5s apart both returned `1784520000000`), so a
+>    re-founded schedule rule gets the SAME id and "the id survived" passes either way. Fix:
+>    advance the clock between the actions you are distinguishing.
+> 2. **An assertion whose expected state is already the default state.** "The draft has stages
+>    including a warmup and a cooldown" — a fresh Builder already has exactly that from
+>    `mkStages()`. Fix: establish a known-DIFFERENT starting point, then assert the change.
+>
+> 🟢 **`DYLAN-QUEUE.md`** is the live blocked-on-Dylan list — exact dashboard clicks, commands,
+> expected output, failure modes and undo steps, split into "config he can finish alone" (11 tasks)
+> and "decisions only". Two things it surfaced that were on no previous list: **the Supabase region
+> has never been confirmed as `ap-southeast-1`** (and cannot be changed in place), and
+> `persona-ai`'s Anthropic branch defaulted to a two-generation-stale model.
+>
+> **Shipped session 18** — `c2db26f` → `2058625`, ten commits. Full table in `SESSION-19-PROMPT.md` §1.
+>
+> **Next:** N4 (approved — Edge Function and token FIRST, page second), then the PersonasScreen
+> revealed-panel sweep, then a gym class type driven through the Runner.
+
+> **▶ SESSION 18 (first half) CONTEXT.** Read this block, then the session-17 block below it, then spec
 > **§0**'s trust ranking and **§12**. Gates at `c29a9c9`: **`lint:crash` 0 · 683 unit (no todos) ·
 > 195 e2e (no fixme) · build 536.86 KB + an 89.97 KB PersonasScreen chunk**.
 >
