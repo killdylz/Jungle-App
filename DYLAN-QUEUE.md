@@ -11,6 +11,14 @@ undo it. Nothing in Part A needs me.
 
 **Delete this file when it is empty.** Spec §12 remains the backlog of record.
 
+> 🔴 **Status check, session 20 (2026-07-28):** confirmed with Dylan that **A12 and A13 are both
+> still outstanding**. That means N4 — the member magic-link summary, built in session 19 — is
+> still **code that has never executed**: the two Edge Functions have never handled a request and
+> migration 0009 has never been run. Nothing in sessions 19 or 20 changes that, and no test in the
+> repo can, by construction. **A1 is also still unconfirmed**, and it is the one item on this
+> whole list that gets dramatically more expensive the longer it waits — a Supabase project's
+> region cannot be changed after creation, and A1 is a five-minute read-only check.
+
 > ⚠️ Supabase moves its dashboard menus occasionally. Where a path has changed, the thing you are
 > looking for is named in **bold** — use the dashboard search (`Ctrl+K`) for that word.
 > ⚠️ The legal items come from the Fable audit. They are **not legal advice** and I have not

@@ -1,16 +1,49 @@
-# React + Vite
+# Jungle
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A white-label class operating system for boutique fitness studios. React + Vite + Supabase,
+deployed to GitHub Pages.
 
-Currently, two official plugins are available:
+It is an **experience layer**, not a booking system. Every feature is judged by whether it
+improves the life of the **trainer** (plans faster, runs the room without fighting software), the
+**owner** (sees who is slipping away, looks premium), or the **member** (walks into a room that
+knows them).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+The local build runs with no Supabase credentials: no network, no auth, a fixed PIN (`080921`),
+and sync paths that no-op cleanly. That is the build the test suite targets.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Gates
 
-## Expanding the ESLint configuration
+```bash
+npm run lint:crash && npm test && npm run test:e2e && npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+`lint:crash` must be **0**. It is not the style baseline — the ~215 messages from the full eslint
+config are an advisory baseline and are not part of the gate. CI runs the same chain on Linux.
+
+## Where things live
+
+| Path | What it is |
+|---|---|
+| `SESSION-HANDOFF.md` | What the last **two** sessions shipped, and why. Start here. Older blocks are in `docs/history/HANDOFF-ARCHIVE.md` — keep this file to two. |
+| `SESSION-21-PROMPT.md` | The live build prompt: current state, traps, backlog, suggested order. Supersedes every earlier one. |
+| `DYLAN-QUEUE.md` | Everything blocked on Dylan — exact dashboard clicks, commands, expected output, undo steps. Delete it when it is empty. |
+| `Jungle - Functional, Design & Technical Spec (As-Built).md` | The spec. **§12 is the backlog of record** and supersedes §7c. |
+| `docs/` | Audit, legal, GTM, product and UI direction documents. |
+| `docs/history/` | Retired session prompts and the handoff archive. **Records, not pointers** — paths and numbers in them were true when written. |
+| `e2e/` | Playwright, driving the real UI. The most trustworthy claim in the repo. |
+| `src/lib/*.test.js` | Vitest, pinning the arithmetic. |
+| `supabase/migrations/` | Applied by hand in the Supabase dashboard, in order. `supabase/SETUP.md` explains. |
+
+## Conventions worth knowing before you change anything
+
+- **Read back the STORED object, not just the rendered one.** Most defects this repo has shipped
+  were cases where the two disagreed.
+- **Prove a test can fail** — mutate a value, confirm the failure, revert with the inverse
+  mutation. Never `git checkout` the file.
+- **An honest blank beats a confident wrong guess.** A screen with nothing to say must say so
+  rather than show a reassuring zero.

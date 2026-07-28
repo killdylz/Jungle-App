@@ -92,7 +92,7 @@ tells the coach so rather than pretending.
 > 🔴 **RLS is never loosened to `anon`.** `summary-read` uses the service-role key *after*
 > validating an HMAC signature and expiry, and reads only the one class named in that token.
 > It never touches `members`, `attendance`, `consent_records` or `profiles` — pinned by
-> `src/lib/classToken.mirror.test.js`. See `LEGAL-AND-SECURITY.md` §4.
+> `src/lib/classToken.mirror.test.js`. See `../docs/LEGAL-AND-SECURITY.md` §4.
 
 > ⚠️ The token core is duplicated into both functions because a function pasted into the
 > dashboard cannot import from `src/`. **Never edit a copy by hand** — edit

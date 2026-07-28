@@ -1,4 +1,4 @@
-# SPEC-PATCHES — mechanical edits to `Jungle - Functional, Design & Technical Spec (As-Built).md`
+# SPEC-PATCHES — mechanical edits to `../Jungle - Functional, Design & Technical Spec (As-Built).md`
 
 > ## ✅ APPLIED 2026-07-20. This file is now history — do not re-apply.
 >

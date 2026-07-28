@@ -88,7 +88,7 @@ Everything downstream of it is now gated on **volume and on Dylan**, not on code
 - **N4 member magic-link** — the only member-facing surface, and the last Phase-1 gap — waits on an
   Edge Function Dylan must deploy. ⛔ Do not build the page first; that is the `<AttendeeView/>` mistake.
 - **F1's 1:1 path** waits on a migration decision (and PAR-Q must land in the same change).
-- **Backups** — the free tier has none. `LEGAL-AND-SECURITY.md` §3 hole #1, and it is Day 1.
+- **Backups** — the free tier has none. `docs/LEGAL-AND-SECURITY.md` §3 hole #1, and it is Day 1.
 
 ---
 
@@ -242,7 +242,7 @@ audit** on token pairs — compliance turned into a feature, exactly as specifie
 
 **Gap — now closed in code (session 19).** The spec's purpose sentence is *"the member experiences
 the studio's brand"*, and until N4 the member-visible surface was half-built. The magic-link view
-is now **built** and follows the `LEGAL-AND-SECURITY.md` §4 design; it renders the gym's own
+is now **built** and follows the `docs/LEGAL-AND-SECURITY.md` §4 design; it renders the gym's own
 palette (snapshotted at publish time, so a Brand Studio custom palette survives) with **no Jungle
 mark anywhere**, and it is the first screen on which F6 can actually be judged. It goes live when
 Dylan completes `DYLAN-QUEUE.md` A12. The legacy
@@ -308,7 +308,7 @@ that layer can be added later *without altering existing columns*.
 | `members` | `gym_id`, `name`, `email?`, `status`, `joined_at` | **Roster rows, not auth users.** This is what makes attendance capture require zero member adoption. |
 | `class_instances` | `gym_id`, `starts_at`, `coach_id`, `format` | A class *occurrence*. Explicitly **not booking** — no reservation, no payment. The no-CRM line in schema form. |
 | `attendance` | `class_instance_id`, `member_id`, `source: qr\|coach\|import`, `checked_in_at` | **Immutable** — insert-only RLS, same pattern as `session_history`. |
-| `consent_records` | `member_id`, `gym_id`, `scope`, `policy_version`, `method`, `granted_at`, `withdrawn_at` | Append-only. Ships in Phase 1 **even though biometrics don't** — cheap insurance. A **consent ledger, PDPA-first, with graduated scopes** (see `LEGAL-AND-SECURITY.md`). |
+| `consent_records` | `member_id`, `gym_id`, `scope`, `policy_version`, `method`, `granted_at`, `withdrawn_at` | Append-only. Ships in Phase 1 **even though biometrics don't** — cheap insurance. A **consent ledger, PDPA-first, with graduated scopes** (see `docs/LEGAL-AND-SECURITY.md`). |
 
 *Design note carried from Fable:* graduated consent scopes. `roster/attendance` is notice-level
 now; `biometric_live`, `biometric_store`, `coach_view`, `export` are explicit opt-in later.
@@ -889,7 +889,7 @@ means three different things here:
   chrome. PWA in fullscreen covers it, and no desktop shell is planned.
 - **Member's phone** — the magic-link summary (N4). This is the one that could eventually want a
   store presence, and the one **still blocked on an Edge Function** to issue a signed class token.
-  QR self-check-in is **deferred**, not next — design in `LEGAL-AND-SECURITY.md` §4.
+  QR self-check-in is **deferred**, not next — design in `docs/LEGAL-AND-SECURITY.md` §4.
 
 ---
 
@@ -904,7 +904,7 @@ and JSON must never reach a coach's eyes. Errors say what to **do**.
 
 **✅ The U1 pass has since shipped.** The table of offending strings that stood here is gone
 because the strings are gone — it described the code as of 2026-07-19 and would now read as a lie.
-The complete replacement copy is maintained in **`UI-UX-DIRECTION.md` §4**, which is the
+The complete replacement copy is maintained in **`docs/UI-UX-DIRECTION.md` §4**, which is the
 authoritative U1 worklist.
 
 The label maps are extracted to **`src/ui/labels.js`** — `ROLE_LABEL`, `SCHEME_LABEL` and friends,
@@ -928,8 +928,8 @@ _Added 2026-07-19, consolidating §7b and §7c with the new work above._
 
 ### Now — finishing what is half-built
 
-_Re-ranked to match `WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now core**, see
-`PRODUCT-DIRECTION.md` §5._
+_Re-ranked to match `docs/WEEK-PLAN.md`. **N4 has moved up from "Next" — it is now core**, see
+`docs/PRODUCT-DIRECTION.md` §5._
 
 | # | Item |
 |---|---|
@@ -990,7 +990,7 @@ quota twice)
 
 ### Deferred
 **F4-QR — QR self-check-in Edge Function.** Moved here from "Next": a service-role write path,
-blocked on a hand-deploy, and **not** required for the pilot. Design in `LEGAL-AND-SECURITY.md` §4.
+blocked on a hand-deploy, and **not** required for the pilot. Design in `docs/LEGAL-AND-SECURITY.md` §4.
 **Do not loosen RLS to `anon`.**
 **Templates screen + Glossary retired** (AUDIT 2.3) — folded into the Builder picker ("Jungle
 presets") and Library rows rather than deleted. Note the trap this sprang: retiring the Templates
@@ -1080,7 +1080,7 @@ remaining instance of the wrong framing in the repo.
 **Resolved framing: the gym is the organisation; Jungle is a data intermediary.** The gym holds the
 obligations to its members; Jungle processes on the gym's instructions. That determines the
 contract, the retention policy and parts of the architecture, and it is now written down — with the
-DPO, breach-notification and Do Not Call specifics — in **`LEGAL-AND-SECURITY.md`**, which is
+DPO, breach-notification and Do Not Call specifics — in **`docs/LEGAL-AND-SECURITY.md`**, which is
 authoritative for all of it. Two consequences that reach into the code: a **sub-processor must be
 named in the gym's DPA** (which is why adding Sentry is a legal decision, not a library choice —
 crash payloads can carry member names), and DNC bears directly on win-back messaging (N3/N5).
@@ -1097,7 +1097,7 @@ because it is the kind of thing that is cheap to settle early and expensive to s
 ### 14.4 Where the commercial numbers live
 
 Pricing, unit economics, the addressable Singapore market, and the first-gym commercial arrangement
-are maintained in **`GTM-SINGAPORE.md`**, which is authoritative for all of them. **Each number
+are maintained in **`docs/GTM-SINGAPORE.md`**, which is authoritative for all of them. **Each number
 carries its confidence tag there** — sourced, estimated, or guess — rather than being restated here
 where the tag would drift loose from the figure.
 
