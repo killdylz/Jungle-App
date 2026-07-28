@@ -1,8 +1,67 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-28 (session 17)_
+_Last updated: 2026-07-28 (session 18)_
 
-> **▶ STARTING A NEW SESSION?** Read this block, then spec **§0**'s trust ranking and **§12**.
+> **▶ STARTING A NEW SESSION?** Read this block, then the session-17 block below it, then spec
+> **§0**'s trust ranking and **§12**. Gates at `c29a9c9`: **`lint:crash` 0 · 683 unit (no todos) ·
+> 195 e2e (no fixme) · build 536.86 KB + an 89.97 KB PersonasScreen chunk**.
+>
+> 🟢 **A coach can finally CHANGE a class on the schedule.** Session 15 added remove and stopped
+> there, so fixing a typo meant remove-and-re-add — which mints a new `id`, and the id is the
+> rule's identity, stamped onto every occurrence as `ruleId`. Each cell now has an Edit beside its
+> Remove. An edit **deliberately does not rewrite already-published occurrences**: a rule is a
+> template, publishing stamps a copy, and `class_instances` is the append-only spine attendance
+> hangs off — the same principle `removeClass` states. A rename on a published week therefore makes
+> that week publishable again, and **"Publish week · N" lighting back up IS the disclosure** — it
+> is computed from the same `diffOccurrences` the publish path uses, so it cannot drift from what
+> publishing would do.
+>
+> 🔴 **A FIXED CLOCK MAKES ANY `Date.now()`-DERIVED ID TEST VACUOUS.** The load-bearing assertion
+> for the above is "the stored id survived". Mutating the edit to assign a fresh id — the exact
+> defect the feature prevents — left **all six tests green**. Probed: `page.clock.setFixedTime`
+> **freezes `Date.now()`** (two reads 1.5s apart both returned `1784520000000`), and a rule's id is
+> `uc${Date.now()}`, so a re-founded rule is minted with the *same id* as the one it replaced.
+> Fixed by advancing the clock between the add and the edit; both tests now fail under the
+> mutation. **Generalise it: a test that freezes time cannot tell two objects created from
+> `Date.now()` apart.** (It also means `uc${Date.now()}` can collide for two rules made in the same
+> millisecond — not reachable by hand today, and left alone rather than switched to `store.newId()`
+> because the id format crosses the sync boundary that is unverifiable locally.)
+>
+> 🟢 **The non-button interaction sweep is DONE, and `onPaste` never existed.** Asking the generic
+> question — "which DOM event handlers does no test ever fire?" — beat the enumerated one. An AST
+> scan of every `on*` on an **intrinsic (lowercase)** element (60% of `on*` attributes in this app
+> are component props like `onClose`/`onBack`, which are deadctl's territory) found the app's whole
+> DOM surface is **14 event types across 64 files**. **`onPaste` has zero occurrences — there were
+> never any paste handlers to sweep**; take it off the list. Exactly two handlers were fired by no
+> test: `onTouchStart` on the Room TV wrapper and `onBlur` on the schedule's empty-slot "+". Both
+> were CORRECT when probed, so `e2e/nonButtonInput.spec.js` pins behaviour rather than fixing a
+> bug — each is the only way its user reaches the feature (a Room TV is a wall-mounted tablet, and
+> every existing Room TV test wakes the bar with `page.mouse.move()`, the one input such a display
+> never receives).
+>
+> ⚠️ **`onTouchStart` is not strictly load-bearing** — Chromium synthesizes `mousemove` after
+> `touchstart` (probed: `pointerdown, touchstart, mousemove, mousedown, click` all fire on a tap).
+> It fires first and is the only path on an engine that does not synthesize, so it stays.
+>
+> **Shipped session 18** — `c2db26f` → `c29a9c9`, three commits:
+> `34925db` the event-handler sweep + `e2e/nonButtonInput.spec.js` ·
+> `4c6e4f5` edit-a-scheduled-class (6 tests) + the fixed-clock finding ·
+> `c29a9c9` `SLOT_LABELS` removed.
+>
+> ⛔ **Three dead symbols remain, and they are still Dylan's yes/no** — re-verified dead at
+> `c2db26f`: `nudgeForContrast`, `resolveSubBrand` (`src/lib/colors.js`), `fetchBpmData`
+> (`src/music/spotifyApi.js`, still in its export list). All three are exported module API standing
+> for features implemented and never wired (FR-H8 sub-brands, Deezer BPM, a superseded contrast
+> nudge), so deleting one is a product decision, not a cleanup. **`SLOT_LABELS` was removed** —
+> it was never the same kind of thing: not exported, not a feature, an unreferenced local const
+> whose own comment asked for exactly that cleanup pass.
+>
+> **Still open, in the order I'd take them:** N4 (⛔ Dylan, Edge Function — still the only
+> member-facing surface) · OPS backups (⛔ Dylan) · the live-verification queue (§5, unexercisable
+> locally) · I14 hydrate pagination · I8 media proxy · DEC-16 gym-authored class type · the 14
+> session prompts + 145 KB handoff at repo root (`docs/history/`, Dylan's call).
+
+> **▶ SESSION 17 CONTEXT (retained).** Read this block, then spec **§0**'s trust ranking and **§12**.
 > `SESSION-17-PROMPT.md` carries the blocked-on-Dylan list, but **its §4.3 (I10) is wrong** —
 > see below. Read its **§0a** first; `git log` taken at session start goes stale.
 > Gates at `e0f62ac`: **`lint:crash` 0 · 683 unit (no todos) · 189 e2e (no fixme) ·
