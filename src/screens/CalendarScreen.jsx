@@ -98,9 +98,11 @@ export function CalendarScreen({onBack, onStartClass}) {
   // occurrence, so the two can never disagree about which column Sunday is.
   const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
-  // UNREFERENCED — the grid labels slots by time, not by name. Left in place
-  // because this extraction is mechanical; delete it in a cleanup pass.
-  const SLOT_LABELS = ["Morning","Mid-Morning","Lunch","Evening","Late"];
+  // `SLOT_LABELS` (["Morning","Mid-Morning","Lunch","Evening","Late"]) lived here
+  // unreferenced from decomposition stage 2 until session 18. The grid labels
+  // slots by time, not by name, and nothing ever read it. Its own comment asked
+  // for exactly this cleanup pass. git history keeps it if a named-slot UI is
+  // ever wanted.
 
   // ⚠ This was `startOfWeek.setDate(base.getDate() - base.getDay() + 1)`, which is
   // right six days a week and wrong on the seventh. `getDay()` makes Sunday 0, so
