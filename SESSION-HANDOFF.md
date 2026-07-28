@@ -6,7 +6,10 @@ _Last updated: 2026-07-28 (session 17)_
 > `SESSION-17-PROMPT.md` carries the blocked-on-Dylan list, but **its §4.3 (I10) is wrong** —
 > see below. Read its **§0a** first; `git log` taken at session start goes stale.
 > Gates at `e0f62ac`: **`lint:crash` 0 · 683 unit (no todos) · 189 e2e (no fixme) ·
-> build 535.94 KB + an 89.97 KB PersonasScreen chunk**. App.jsx **3,232 lines** (`wc -l`).
+> build 535.94 KB + an 89.97 KB PersonasScreen chunk**. App.jsx **3,337 lines** (`wc -l`), up
+> from 3,183 — the three dialog components extracted out of `{cond && …}` blocks cost ~150 lines
+> of markup that moved rather than grew. ⚠️ `(Get-Content).Count` matches `wc -l` here;
+> `Measure-Object -Line` reports 3,076 because it skips blank lines (§0b).
 >
 > 🔴 **THE BIGGEST FIND: six effects pushed the app's DEFAULTS over the gym's real branding.**
 > Six places had the shape `useState(() => store.getX())` + `useEffect(() => store.saveX(x), [x])`.
