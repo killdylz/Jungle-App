@@ -1,205 +1,511 @@
 # Everything waiting on Dylan
 
-_Written 2026-07-28 at `04cd5fa` (session 18). Consolidates §5 of the session prompts, LEGAL
-§§1–6, TECH-PLAN §§5–6 and the live-verification queue into one list with actual steps._
+_Written 2026-07-28 at `80d303a` (session 18). Consolidates §5 of the session prompts, LEGAL
+§§1–6, TECH-PLAN §§5–6 and the live-verification queue._
 
-**Delete this file when it is empty.** It is a working checklist, not a spec — the spec's §12 is
-still the backlog of record.
+**Part A is configuration and testing you can finish on your own** — every step has the exact
+clicks, the exact commands, what "it worked" looks like, what to do when it doesn't, and how to
+undo it. Nothing in Part A needs me.
 
-Ordered by what unblocks the most. Tier 1 blocks the pilot; Tier 2 unblocks code I cannot write
-without you; Tier 3 is answering questions, and answering IS the whole task.
+**Part B is decisions.** Answering them is your whole job there; the code that follows is mine.
+
+**Delete this file when it is empty.** Spec §12 remains the backlog of record.
+
+> ⚠️ Supabase moves its dashboard menus occasionally. Where a path has changed, the thing you are
+> looking for is named in **bold** — use the dashboard search (`Ctrl+K`) for that word.
+> ⚠️ The legal items come from the Fable audit. They are **not legal advice** and I have not
+> verified them against current PDPC guidance. The S$ figures are estimates, not quotes.
+
+---
+---
+
+# PART A — you can do all of this yourself
+
+| # | Task | Time | Risk |
+|---|---|---|---|
+| A1 | Confirm the Supabase region | 5 min | none (read-only) |
+| A2 | Move the project to Singapore — **only if A1 says you must** | 60–90 min | medium, fully reversible |
+| A3 | Supabase Pro + backups | 10 min | none |
+| A4 | The restore drill | 45 min | none (staging only) |
+| A5 | Redeploy the two Edge Functions | 10 min | low, instantly revertible |
+| A6 | Switch persona reasoning to Claude | 10 min | low, revertible |
+| A7 | Drive a real deck through Slides import | 30 min | none |
+| A8 | UptimeRobot monitors | 15 min | none |
+| A9 | Register as DPO | 20 min | none |
+| A10 | Brief a lawyer | 1 email | none |
+| A11 | The live-verification queue (7 checks) | ~2 h | none |
 
 ---
 
-## 🔴 Tier 1 — before any real member data exists
+## A1 · Confirm the Supabase region — do this before anything else
 
-### 1. Check the Supabase region FIRST — it may already be wrong
+**Why first.** PDPA transfer limitation (LEGAL §1) requires the DPA to name where member data
+lives, and **a Supabase project's region cannot be changed after creation.** Right now you have no
+real member data, so fixing it is a 90-minute rebuild. After the pilot it becomes a data migration.
 
-Do this before anything else on this list, because the fix gets impossible once real member data
-lands. PDPA transfer limitation (LEGAL §1) requires you to know and name where data lives, and the
-DPA has to state it.
+### Steps
+1. Go to <https://supabase.com/dashboard> and sign in.
+2. Click your project (the one whose URL matches the `VITE_SUPABASE_URL` GitHub secret).
+3. Left sidebar → **Settings** (gear, bottom) → **General**.
+4. Find the **Region** row.
 
-1. Supabase dashboard → your project → **Settings → General**.
-2. Read **Region**. You want **Southeast Asia (Singapore) · `ap-southeast-1`**.
-3. If it is anything else: **you cannot change a project's region in place.** Create a new project
-   in `ap-southeast-1`, run migrations `0001`→`0008` into it in order, re-point the two GitHub
-   secrets (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`), redeploy, and delete the old project.
-   That is a ~1 hour job now and a migration-with-live-data job later.
+### What you want to see
+> **Southeast Asia (Singapore)** — `ap-southeast-1`
 
-**Tell me the region either way** — the DPA and the customer agreement both need it in writing.
+### What to do next
+- **If it says Singapore** → ✅ done. Write the exact string down; item A10 needs it. Skip A2.
+- **If it says anything else** (e.g. `us-east-1`, `eu-west-2`, `ap-southeast-2` Sydney) → do A2.
 
-### 2. Supabase Pro + a restore you have actually done
-
-The free tier has **no backups**. This is LEGAL §3 hole #1 and TECH-PLAN §5's first failure point.
-US$25/mo.
-
-1. Dashboard → **Settings → Billing → upgrade to Pro**.
-2. **Settings → Database → Backups** — confirm daily backups are now listed.
-3. **Do the restore drill.** An untested backup is a hope, not a backup:
-   - Create a second free project called `jungle-staging` (also `ap-southeast-1`).
-   - Download a backup from prod, restore it into staging.
-   - Open staging's SQL editor and run `select count(*) from public.attendance;` — confirm it is
-     not zero and matches prod.
-4. That staging project is also TECH-PLAN §6's staging environment, so this buys two things at
-   once. From then on the rule is: **every migration runs on staging first, same day, both
-   recorded in SESSION-HANDOFF.**
-
-### 3. The IP letter — start the lawyer this week
-
-LEGAL §2. A gym could contest ownership of software you built while freelancing for them. This is
-a 2-page letter, **S$500–1,500**, and days rather than weeks. The audit's words: *do not launch
-without it.*
-
-Brief for the lawyer — three points:
-- (a) Jungle, its code, designs and derived models are yours/your company's, developed outside the
-  scope of the freelance engagement, no gym resources claimed;
-- (b) the gym's data and its coaches' programming content remain the gym's, licensed to Jungle
-  only to operate the service;
-- (c) no exclusivity.
-
-While you have them, scope the rest of the pack (LEGAL §6) — customer agreement, DPA schedule,
-member privacy notice, coach-content clause. **S$1,500–3,500 total, 2–4 weeks elapsed**, which is
-why it starts now and runs parallel to the build. Two things to hand them: the Supabase region
-from item 1, and the sub-processor list — **Supabase, Google (Gemini) and/or Anthropic, GitHub**.
-
-### 4. Register yourself as DPO — free, minutes
-
-LEGAL §1: mandatory for every Singapore organisation regardless of size. PDPC's online form. Do it
-in the gap while the lawyer is drafting.
-
-> Items 3 and 4 are from the Fable audit and are explicitly *not* legal advice — they are the map
-> of what to ask a lawyer, and I have not verified them against current PDPC guidance.
+### Also check now, while you are here
+On the same page, note the **Project ID** (also called the reference — a 20-character string like
+`abcdefghijklmnopqrst`). You will want it in A4.
 
 ---
 
-## 🟠 Tier 2 — unblocks code I cannot write without you
+## A2 · Move the project to Singapore — ONLY if A1 said so
 
-### 5. Redeploy `persona-ai` (5 minutes)
+Skip entirely if A1 said Singapore.
 
-The deployed function is v7; the repo has changes past it. This blocks verifying the whole
-blueprint→generate path, which blocks B3/D2 below.
+### First: check whether you have real data
+Left sidebar → **SQL Editor** → **New query**. Paste and **Run**:
 
-1. Dashboard → **Edge Functions → `persona-ai`**.
-2. Open `supabase/functions/persona-ai/index.ts` from the repo, paste the whole file in.
-3. **Deploy.**
-4. Same for `smart-build` if the LLM brand recommendation is not live —
-   `supabase/functions/smart-build/index.ts`, same steps.
-
-### 6. I15 — switch persona reasoning off the free tier
-
-Right now persona reasoning runs on free Gemini (`gemini-2.5-flash`). **Do this before ingesting a
-large corpus**, or re-extraction costs the quota twice.
-
-Dashboard → **Edge Functions → Manage secrets**, add:
-
-```
-PERSONA_LLM_PROVIDER = anthropic
-ANTHROPIC_API_KEY    = <your key from console.anthropic.com>
+```sql
+select 'members' as t, count(*) from public.members
+union all select 'attendance', count(*) from public.attendance
+union all select 'class_instances', count(*) from public.class_instances
+union all select 'coach_personas', count(*) from public.coach_personas
+union all select 'persona_plans', count(*) from public.persona_plans;
 ```
 
-Then redeploy `persona-ai` (item 5 does this).
+- **All zeros, or only your own test rows** → take the **Clean rebuild** path. 60 minutes, no risk.
+- **Real member names you recognise** → stop and tell me. Do not improvise a data migration;
+  I will write you an export/import script. (This is the one place in Part A where you should
+  come back to me, and only in this specific case.)
 
-⚠️ **One decision inside this one.** With no third secret, the function falls back to a hardcoded
-default of `claude-opus-4-8`, which is a generation behind. Set the model explicitly:
+### Clean rebuild path
+
+**Step 1 — create the new project.**
+1. Dashboard → **New project**.
+2. Name: `jungle` (or `jungle-prod`).
+3. **Region: Southeast Asia (Singapore) `ap-southeast-1`.** ← the entire point
+4. Set a database password. **Save it in your password manager now** — it is shown once.
+5. Wait ~2 minutes for provisioning.
+
+**Step 2 — run the migrations, in order, one at a time.**
+In the NEW project: **SQL Editor** → **New query**. For each file below, open it from
+`C:\Users\dylan\jungle-app\supabase\migrations\`, copy the *entire* contents, paste, **Run**, and
+wait for "Success" before starting the next:
 
 ```
-PERSONA_LLM_MODEL = claude-opus-5      # best reasoning, highest cost
-PERSONA_LLM_MODEL = claude-sonnet-5    # ~the sweet spot for corpus extraction
+0001_auth_foundation.sql      ← EDIT THIS ONE FIRST, see below
+0002_rbac_write_hardening.sql
+0003_phase1_domain_tables.sql
+0004_brand_active_skin.sql
+0005_coach_personas.sql
+0006_persona_generations.sql
+0007_attendance_spine.sql
+0008_retention_actions.sql
 ```
 
-Say the word and I will change the hardcoded default in the repo so it stops being stale — I have
-left it alone because it affects what you get billed.
+> 🔴 **Before running `0001`:** it contains `owner@example.com` in three places (around lines 202,
+> 213 and 215). Replace **all three** with your own email — this is what allowlists you as gym
+> admin. If you skip it you will be locked out of your own project and have to re-run 0001.
+> In your editor: Find & Replace, `owner@example.com` → `dylanrodrigues2710@gmail.com`.
 
-### 7. N4 — the member magic-link summary
+Order matters — later files reference tables the earlier ones create. If you paste one out of
+order you will get `relation "public.x" does not exist`; just run the missing earlier file and
+carry on.
 
-**The highest-value item in the entire backlog, and the only member-facing surface in the
-product.** The share-card half is shipped; the link half needs an Edge Function.
+**Step 3 — configure auth.**
+1. **Authentication → Providers → Email** → ensure **Email** is enabled.
+2. **Authentication → URL Configuration → Redirect URLs** → add both:
+   - `https://killdylz.github.io/Jungle-App/`
+   - `http://localhost:5173/`
 
-⛔ **Do not let me build the page first** — a member-facing page with no token behind it is the
-kind of thing that ships and then quietly leaks a roster.
+**Step 4 — copy the new keys.**
+**Settings → API**, copy:
+- **Project URL** → e.g. `https://<new-ref>.supabase.co`
+- **anon public** key (the long one). **Not** `service_role` — that must never reach the browser.
 
-What it needs, following the LEGAL §4 pattern that already exists for QR check-in:
-- An Edge Function that issues a **signed, class-scoped, short-lived token**
-  (`{class_instance_id, gym_id, exp, HMAC}`) using the service-role key.
-- No member accounts, no login, no member PII in the URL.
-- **The standing rule: never loosen RLS to `anon`.** The Edge Function is the boundary.
+**Step 5 — re-point GitHub.**
+1. <https://github.com/killdylz/Jungle-App> → **Settings → Secrets and variables → Actions**.
+2. Click `VITE_SUPABASE_URL` → **Update** → paste the new Project URL → **Update secret**.
+3. Same for `VITE_SUPABASE_ANON_KEY`.
 
-**What I need from you:** a yes to build it, and then a paste-and-deploy when I hand you the
-function. Roughly a day of my work plus your deploy. It also gates P2 (Capacitor).
+**Step 6 — redeploy.**
+```powershell
+cd "C:\Users\dylan\jungle-app"; .\deploy.ps1 -Message "Point at Singapore Supabase project"
+```
+If the tree is clean it will say "Nothing to deploy". In that case trigger the build by hand:
+GitHub → **Actions** → **Deploy to GitHub Pages** → **Run workflow** → branch `main` → **Run**.
 
-### 8. B3 / D2 — drive a real deck through Slides import
+**Step 7 — verify.**
+1. Wait for the Actions run to go green (~2–3 min).
+2. Open <https://killdylz.github.io/Jungle-App/> in a **private window**.
+3. You should get the **Sign in** screen. Enter your email → magic link → sign in.
+4. You should land as admin. If you see **Not authorized**, the `0001` email edit did not take —
+   re-run `0001` with the right email.
 
-Needs decks only you have. After item 5 is deployed:
+**Step 8 — redo the Edge Function setup.** A new project has no functions and no secrets, so
+now do **A5 and A6** against the new project before deleting the old one.
 
-1. Open the Coaches screen → import a real Google Slides deck you have used for a class.
-2. Save a blueprint from it.
-3. Generate a class from that blueprint.
-4. Tell me whether `stats.blueprint > 0` — or just send me the screen.
+**Step 9 — delete the old project.** Only once steps 7 and 8 pass.
+Old project → **Settings → General** → scroll to the bottom → **Delete project**.
 
-This is the wedge feature ("Jungle learns how each coach already programs") and it has never been
-run against a real corpus. If it fails on your decks, that is the most important bug in the
-product and I cannot see it from here.
+**Undo at any point:** put the two old secret values back in GitHub and re-run the workflow. The
+old project is untouched until step 9.
 
 ---
 
-## 🟡 Tier 3 — questions where answering is the whole task
+## A3 · Supabase Pro + backups
 
-No work beyond a yes/no. Several have been open since session 7.
+The free tier has **no backups at all**. This is LEGAL §3's first hole and TECH-PLAN §5's first
+failure point. **US$25/month.**
 
-| # | Question | Recommendation |
+### Steps
+1. Dashboard → your project → **Settings → Billing** (or **Organization → Billing**).
+2. **Upgrade to Pro** on the organisation that owns the project. Card details, confirm.
+3. Go to **Database → Backups**.
+4. You should now see **Daily backups** with a retention window (7 days on Pro).
+
+### What "it worked" looks like
+The Backups page lists at least one dated entry with a **Download** option. On a fresh upgrade the
+first backup can take up to 24 hours to appear — that is normal, come back tomorrow for A4.
+
+### If the Backups page still says the feature needs a paid plan
+You upgraded a different organisation from the one owning this project. Dashboard → top-left
+**organisation switcher** → confirm which org the project sits in, and upgrade that one.
+
+---
+
+## A4 · The restore drill — do the thing, don't assume it
+
+An untested backup is a hope. This is explicitly part of LEGAL §3 hole #1, and it doubles as your
+staging environment (TECH-PLAN §6).
+
+### Step 1 — create the staging project
+1. Dashboard → **New project**, name `jungle-staging`.
+2. **Same region as prod** (Singapore).
+3. Free tier is fine. Save the database password.
+
+### Step 2 — install the Postgres client tools (one-off)
+You need `psql`/`pg_restore`. In PowerShell:
+```powershell
+winget install -e --id PostgreSQL.PostgreSQL.17
+```
+Then close and reopen PowerShell and check:
+```powershell
+psql --version
+```
+Expected: `psql (PostgreSQL) 17.x`.
+
+If `psql` is not found, add it to PATH for this session (adjust the version folder if different):
+```powershell
+$env:PATH += ";C:\Program Files\PostgreSQL\17\bin"; psql --version
+```
+
+### Step 3 — download a prod backup
+Prod project → **Database → Backups** → newest entry → **Download**. You get a `.backup` or
+`.sql.gz` file. Note where it saved (usually `C:\Users\dylan\Downloads`).
+
+### Step 4 — get the staging connection string
+Staging project → **Settings → Database** → **Connection string** → **URI** tab.
+It looks like:
+```
+postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+```
+Replace `[YOUR-PASSWORD]` with the staging DB password you saved.
+
+### Step 5 — restore into staging
+For a `.sql.gz`:
+```powershell
+cd "$env:USERPROFILE\Downloads"
+# unzip first (7-Zip, or this if you have gzip):
+tar -xzf <filename>.sql.gz
+psql "postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres" -f <filename>.sql
+```
+For a `.backup` (custom format):
+```powershell
+pg_restore --clean --if-exists --no-owner --no-privileges `
+  -d "postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres" `
+  "<filename>.backup"
+```
+
+Expect a wall of output and **some errors are normal** — lines mentioning `role "supabase_admin"
+does not exist`, `extension ... already exists`, or `must be owner of` are Supabase-managed
+objects and can be ignored. What must NOT appear is errors on `public.attendance`,
+`public.members`, `public.class_instances`.
+
+### Step 6 — prove it actually restored
+Staging project → **SQL Editor** → **New query**:
+```sql
+select 'members' as t, count(*) from public.members
+union all select 'attendance', count(*) from public.attendance
+union all select 'class_instances', count(*) from public.class_instances;
+```
+Run the identical query on **prod**. **The numbers must match.** That is the drill passing.
+
+### If the restore fails entirely
+The fallback that still proves something: unzip the dump and search it for a member name you
+recognise (`Ctrl+F` in a text editor, or `Select-String -Path dump.sql -Pattern "SomeName"`). If
+the data is in the file, the backup is real and only your restore tooling is wrong — which is a
+much smaller problem, and worth telling me about.
+
+### After this
+Keep `jungle-staging`. New rule from here on: **every migration runs on staging first, then prod,
+the same day, both recorded in SESSION-HANDOFF.**
+
+---
+
+## A5 · Redeploy the two Edge Functions
+
+The deployed `persona-ai` is v7; the repo is ahead of it. This blocks A7.
+
+### Steps
+1. Dashboard → your project → **Edge Functions** (left sidebar).
+2. Click **`persona-ai`**.
+3. Find the code editor / **Deploy a new version**.
+4. Open `C:\Users\dylan\jungle-app\supabase\functions\persona-ai\index.ts`.
+5. Select all (`Ctrl+A`), copy (`Ctrl+C`), and paste over the entire contents in the dashboard.
+6. Click **Deploy**. Wait for the success toast.
+7. Repeat 2–6 for **`smart-build`** with
+   `C:\Users\dylan\jungle-app\supabase\functions\smart-build\index.ts`.
+
+### If there is no `persona-ai` function listed
+It was never deployed to this project (expected if you just did A2). Click **Create function**,
+name it exactly `persona-ai` (lowercase, hyphen), paste, deploy. Same for `smart-build`.
+
+### How to check it worked
+Edge Functions → `persona-ai` → **Invocations** / **Logs**. Then in the app (Coaches screen) do
+anything that generates — a new invocation should appear within seconds. A `200` is good. A `500`
+here is usually a missing secret → do A6.
+
+### Undo
+The Functions page keeps previous versions; you can redeploy an earlier one. There is nothing
+persistent to corrupt — functions are stateless.
+
+---
+
+## A6 · Switch persona reasoning to Claude (I15)
+
+Persona reasoning currently runs on **free Gemini** (`gemini-2.5-flash`). Do this **before**
+ingesting a large corpus, or re-extraction burns the quota twice.
+
+### Step 1 — get an Anthropic API key
+1. <https://console.anthropic.com> → sign in → **API Keys** → **Create Key**.
+2. Copy it (starts `sk-ant-`). Shown once.
+3. Add credit: **Billing** → add a payment method. Start with US$20; corpus extraction is cheap.
+
+### Step 2 — set three secrets
+Dashboard → **Edge Functions → Secrets** (may be under **Settings → Edge Functions**) → **Add new
+secret**, three times:
+
+| Name | Value |
+|---|---|
+| `PERSONA_LLM_PROVIDER` | `anthropic` |
+| `ANTHROPIC_API_KEY` | `sk-ant-...` (your key) |
+| `PERSONA_LLM_MODEL` | `claude-sonnet-5` |
+
+> 🔴 **The third one is not optional.** Without it the function falls back to a hardcoded
+> `claude-opus-4-8`, which is a generation behind. Use `claude-sonnet-5` for the quality/cost sweet
+> spot on corpus extraction, or `claude-opus-5` if you want maximum reasoning quality and don't
+> mind paying several times more per deck.
+
+### Step 3 — redeploy
+Secrets are read at invocation, but redeploy anyway so you know exactly what is live:
+repeat **A5** for `persona-ai`.
+
+### How to check it worked
+Coaches screen → run any generation → Edge Functions → `persona-ai` → **Logs**. You are looking
+for a successful call with no `GEMINI_API_KEY not set` or `ANTHROPIC_API_KEY not set`. Then check
+<https://console.anthropic.com> → **Usage** — a non-zero token count is proof it reached Anthropic.
+
+### Undo
+Delete the `PERSONA_LLM_PROVIDER` secret (or set it to `gemini`). It falls straight back to the
+free tier.
+
+---
+
+## A7 · Drive a real deck through Slides import
+
+**This is the most valuable thing in Part A.** The wedge of the entire pitch is "Jungle learns how
+each coach already programs, from the slides they've written for years", and it has never been run
+against a real corpus. Needs decks only you have. Do A5 first.
+
+### Steps
+1. Open the live site, sign in.
+2. Go to **Coaches**.
+3. Start a **Google Slides import**. Authorise with the Google account that owns the deck when
+   prompted (this uses a separate Cloud project from your login OAuth — expect a consent screen
+   that says "unverified", which is correct; it is in Testing mode).
+4. Pick a **real deck you have actually taught from**. Not a test file.
+5. Let it extract. Save a **blueprint**.
+6. Generate a class from that blueprint.
+
+### What to record and send me
+- Did extraction find the classes, or silently drop slides?
+- Is `stats.blueprint > 0`? (If the number is not on screen: F12 → **Application → Local Storage**
+  → find `jungle_persona_generations`, look at the newest entry.)
+- Does the generated class look like something **you** would teach, or like generic filler?
+- A screenshot of the generated class.
+
+Honest answers matter more than a pass. If it produces plausible-looking nonsense from your real
+decks, that is the most important bug in the product and I cannot see it from here.
+
+---
+
+## A8 · UptimeRobot — 15 minutes, free
+
+The only thing that will tell you the site is down before a coach does.
+
+1. <https://uptimerobot.com> → free account.
+2. **Add New Monitor**:
+   - Type **HTTPS**, name `Jungle live`, URL `https://killdylz.github.io/Jungle-App/`,
+     interval 5 minutes.
+3. **Add New Monitor** again:
+   - Type **HTTPS**, name `Jungle Supabase`, URL
+     `https://<your-project-ref>.supabase.co/rest/v1/` , interval 5 minutes.
+   - This returns `401` without a key, which is a *healthy* response. Under **Advanced → Alert
+     when status code is NOT** set it to accept `401`, or use "keyword exists" instead. If the
+     free tier will not let you accept a 401, monitor
+     `https://<ref>.supabase.co/auth/v1/health` instead, which returns `200`.
+4. **My Settings → Alert Contacts** → add your email (and phone if you want SMS).
+
+---
+
+## A9 · Register yourself as DPO
+
+LEGAL §1: mandatory for every Singapore organisation, any size. Free, minutes.
+
+1. Go to the PDPC website (<https://www.pdpc.gov.sg>) and find **DPO registration** — it is filed
+   through ACRA's BizFile for a registered entity, or PDPC's own form.
+2. Register yourself as the Data Protection Officer for your entity.
+3. Record the DPO email you used — the member privacy notice template (A10) needs it.
+
+> I have not verified the current filing route; PDPC has changed it before. If the site sends you
+> somewhere different, follow the site — it is authoritative and this document is not.
+
+---
+
+## A10 · Brief a lawyer — one email, this week
+
+The clock is **2–4 weeks** and it runs in parallel with everything else, which is why it starts
+now. **S$1,500–3,500** for the full pack; the IP letter alone is **S$500–1,500** and can be days.
+
+The audit's position: *do not launch without the IP letter.*
+
+### Copy-paste brief
+
+> I run a small software product (Jungle — class management for boutique gyms) and I'm about to
+> pilot it at a Singapore gym where I also freelance as a trainer. I need, in order of urgency:
+>
+> 1. **An IP acknowledgment letter** signed by the pilot gym confirming: (a) the software, its
+>    designs and derived models are my company's property, developed outside the scope of my
+>    freelance engagement with no gym resources claimed; (b) the gym's data and its coaches'
+>    programming content remain the gym's, licensed to me only to operate the service; (c) no
+>    exclusivity.
+> 2. **A SaaS customer agreement** — licence, fees, light SLA, liability cap around 12 months of
+>    fees, termination with data return/deletion, and clear allocation that the gym is the
+>    "organisation" under PDPA and I am a **data intermediary**.
+> 3. **Data-processing terms** as a schedule to (2): scope and purpose, security measures, breach
+>    notice to the gym within 48 hours, named sub-processors, where data is stored, deletion on
+>    exit.
+> 4. **A gym-branded member privacy notice template** — what's collected (name, contact,
+>    attendance), purposes, DPO contact, access/correction rights.
+> 5. A clause covering **coach content ownership and portability**.
+>
+> Facts you'll need: member data is stored in Supabase (Postgres) in **[REGION FROM A1]**.
+> Sub-processors are **Supabase**, **Anthropic and/or Google (LLM processing of class-planning
+> content, not member PII)**, and **GitHub** (static hosting). Attendance records are
+> insert-only. I have registered as DPO of my entity.
+
+Fill in `[REGION FROM A1]` before sending. Also ask them the DEC-12b question: **what retention
+note needs to appear on a PDPA data export.**
+
+---
+
+## A11 · The live-verification queue
+
+None of this is reachable from my side: the local build has no Supabase credentials, and the live
+site sits behind real Google/email auth — the PIN bypass only exists in the credential-less local
+build. All seven need you on the deployed site.
+
+Do them in this order; 1 and 2 are the ones that protect data.
+
+### 1. Live sync round-trip (×3)
+1. Sign in on the live site, go to **Exercise Library**.
+2. Press **Edit**, rename one movement, press **Done**.
+3. Open a **different browser or device**, sign in, go to Exercise Library.
+4. ✅ The rename is there.
+5. Repeat twice more with a **reorder** and a **delete**.
+
+### 2. Offline → online re-push (I13)
+1. On the live site, turn **Wi-Fi off**.
+2. Make a library edit. It should save locally with no error.
+3. Turn Wi-Fi **back on**. **Do not reload.**
+4. Wait ~60 seconds.
+5. ✅ On another device, the edit has arrived. If it only appears after a reload, tell me — that
+   is I13 failing and it is a real bug.
+
+### 3. Verify a schedule REMOVE syncs
+1. Add a class to the schedule, wait ~30s, confirm it appears on a second device.
+2. Remove it on device A.
+3. Reload device B.
+4. ✅ It is gone. **If it comes back, stop and tell me** — a server-wins hydrate against a local
+   delete has cost data in this repo before.
+
+### 4. Physical offline soak — P7 only goes ✅ after this
+1. Start a class in the Runner.
+2. Turn the **router** off for 5 minutes mid-class.
+3. Keep using it — check people in, advance stages.
+4. Router back on.
+5. ✅ Nothing was lost and the check-ins reach the server.
+
+### 5. Cross-device Room TV Follow — coded, never once verified
+1. Device A (phone): start a class in the Runner.
+2. Device B (TV/laptop): **Class Runner → Room TV**, then move the mouse / tap to wake the bar and
+   press **Follow**.
+3. ✅ B mirrors A's stage and timer within ~1 second.
+4. If B says "Following this room — waiting for the coach's runner to start…" forever, tell me.
+
+### 6. Install the PWA
+On your phone (Safari → Share → **Add to Home Screen**) and on the room TV. Confirm it opens
+full-screen with the Jungle icon and still works with Wi-Fi off.
+
+### 7. Team admin screen, end to end
+**Team** in the sidebar. Add a coach, change a role, remove them. Never driven by anyone. Report
+anything that does nothing.
+
+---
+---
+
+# PART B — decisions only, no work for you beyond answering
+
+Reply with a line each. Several unblock work I can start the same day. Nothing here needs you to
+touch a dashboard.
+
+| # | Question | My recommendation |
 |---|---|---|
-| 9 | **3 dead symbols.** `nudgeForContrast`, `resolveSubBrand` (`src/lib/colors.js`), `fetchBpmData` (`src/music/spotifyApi.js`). All exported, none called, re-verified dead at `c2db26f`. They stand for features implemented and never wired (FR-H8 sub-brands, Deezer BPM, a superseded contrast nudge). | **Delete all three** (~90 lines). git history keeps them; FR-H8 would be re-derived anyway. |
-| 10 | **DEC-16 — can a gym author its own class type?** Today `libraryStore.js` could carry it, but the Builder dropdown, `applyTemplate`, `smartPickClass` and the root's initial `classChoice` all read `WORKOUT_LIBRARY` directly, so a gym-authored type would appear in one modal and nowhere else. | **Not yet.** ~10 call sites move to a merged `getLibrary()`. Worth doing when a gym asks; not before the pilot. |
-| 11 | **`eslint-plugin-react`** — closes the crash gate's blind spot for `<UndefinedComponent/>`. Session 16 produced 17 of these at once that the gate reported as zero. | **Yes.** It is a devDependency and a gate change, no runtime effect. The AST script and `screens.spec.js` cover it today, but in-tooling is better. |
-| 12 | **Sentry** — the ErrorBoundary currently swallows crashes silently. | **Not before the lawyer.** Crash payloads can carry member names, which makes Sentry a **sub-processor** and puts it in the DPA (LEGAL §6). Cheap to add after; expensive to have added quietly. |
-| 13 | **`storage-js`** — ~22 KB pulled into the bundle by the supabase-js constructor, apparently unused. | Low stakes. Leave it unless bundle size becomes the complaint. |
-| 14 | **Docs cleanup** — 14 session prompts, a 145 KB `SESSION-HANDOFF.md` and 9 audit files at repo root. | **Yes** — `git mv` the session prompts to `docs/history/`. Costs nothing, and root is now genuinely hard to read. |
-| 15 | **DEC-12c** — `winBackBlockedReason` is nearly unreachable. Keep as defence or fold away? | Keep. It is cheap and it is a guard on messaging a lapsed member. |
-| 16 | **DEC-12b** — the retention note in a PDPA export. | Not a code change — one line in the lawyer review (LEGAL §7). Fold into item 3. |
-
----
-
-## 🔵 Tier 4 — only verifiable on the deployed site
-
-The local build has no Supabase credentials, so none of this is reachable from here. The live site
-also sits behind real Google/email auth — the PIN bypass only exists in the credential-less local
-build, so **driving the deployed app past login needs you.**
-
-1. **Live sync check ×3.** Also exercises I13 (kill Wi-Fi mid-write, restore, confirm it re-pushes
-   *without a reload*) and I14 paging. **Cheapest way in: edit or reorder something in the
-   Exercise Library** — `e2e/libraryEdit.spec.js` documents exactly what the local half of that
-   write looks like, so you can compare. Confirm the DEC-13 delta blob round-trips.
-2. **Verify a schedule REMOVE syncs** — and does not come back on the next hydrate. A server-wins
-   hydrate against a local delete has cost data here before.
-3. **Physical offline soak** — router off 5 minutes mid-class. **P7 only flips to ✅ after this.**
-4. **Cross-device Room TV Follow** — coded, never once verified. Note it moved in session 16:
-   `sendRoomState`/`onRoomState` are called from `useClassRunner.js` now, not App.
-5. **Install the PWA** on your phone and on the room TV.
-6. **The Team admin screen, end to end.** Never driven by anyone.
-7. **Re-measure the production bundle off the live deploy.** I measured 776.85 KB + 91.19 KB
-   locally with dummy credentials, which reproduces production's *shape* but is not the deployed
-   artifact.
-
----
-
-## ⚪ Tier 5 — ops and go-to-market
-
-- **UptimeRobot** — free, 15 minutes. Two monitors: the live site, and a Supabase health probe.
-  The only thing that will tell you the site is down before a coach does.
-- **Pricing.** GTM §2's hypothesis has never been tested on a real gym. Worth one conversation at
-  The Garage before the first invoice.
-- **Staff-offboarding note** for the gym runbook: the Google OAuth allowlist (0001) is the tenant
-  boundary — remove the email, access ends. One paragraph.
+| B1 | **N4 — member magic-link summary.** The only member-facing surface in the product and the last Phase-1 gap. Needs an Edge Function issuing a signed, class-scoped, short-lived token — no member accounts, no login, no PII in the URL, and RLS never loosened to `anon`. Roughly a day of my work, then one paste-and-deploy from you (same as A5). | **Yes, build it.** It is the highest-value item in the backlog and it also gates P2 (Capacitor). |
+| B2 | **3 dead symbols** — `nudgeForContrast`, `resolveSubBrand` (`src/lib/colors.js`), `fetchBpmData` (`src/music/spotifyApi.js`). All exported, none called, re-verified dead. They stand for features built and never wired (FR-H8 sub-brands, Deezer BPM, a superseded contrast nudge). | **Delete all three** (~90 lines). git history keeps them. |
+| B3 | **DEC-16 — can a gym author its own class type?** Today it would appear in one modal and nowhere else: the Builder dropdown, `applyTemplate`, `smartPickClass` and the root's `classChoice` all read `WORKOUT_LIBRARY` directly. | **Not yet.** ~10 call sites move to a merged `getLibrary()`. Do it when a gym asks. |
+| B4 | **`eslint-plugin-react`** — closes the crash gate's blind spot for `<UndefinedComponent/>`. Session 16 produced 17 at once that the gate reported as zero. | **Yes.** devDependency + gate change, no runtime effect. |
+| B5 | **Sentry** — the ErrorBoundary swallows crashes silently today. | **Not until the lawyer is done.** Crash payloads can carry member names, making Sentry a **sub-processor** that belongs in the DPA (LEGAL §6). Add it right after A10 lands. |
+| B6 | **`storage-js`** — ~22 KB pulled in by the supabase-js constructor, apparently unused. | Leave it. Not worth the risk for 22 KB. |
+| B7 | **Docs cleanup** — 14 session prompts, a 145 KB `SESSION-HANDOFF.md` and 9 audit files at repo root. | **Yes** — `git mv` the session prompts into `docs/history/`. |
+| B8 | **DEC-12c** — `winBackBlockedReason` is nearly unreachable. Keep or fold away? | **Keep.** Cheap, and it guards against messaging a lapsed member. |
+| B9 | **Should I update the hardcoded `claude-opus-4-8` default** in `persona-ai`? | **Yes** — but A6 sets `PERSONA_LLM_MODEL` explicitly, so it stops mattering either way. |
 
 ---
 
 ## If you only do four things this week
 
-1. **Check the region** (item 1) — 5 minutes, and it is the one that gets expensive to fix.
-2. **Email a lawyer** (item 3) — the clock is 2–4 weeks and it runs in parallel with everything.
-3. **Upgrade to Pro and do the restore drill** (item 2) — US$25 and an hour.
-4. **Redeploy `persona-ai` and drive one real deck through it** (items 5 and 8) — this is the
-   feature the whole pitch rests on and it has never met a real corpus.
+1. **A1 — check the region.** 5 minutes, and it is the only item that gets dramatically more
+   expensive the longer it waits.
+2. **A10 — email the lawyer.** The 2–4 week clock starts the day you send it.
+3. **A3 + A4 — Pro and the restore drill.** US$25 and about an hour, and it removes the single
+   worst failure mode you currently have.
+4. **A5 + A7 — redeploy and put one real deck through it.** This is the feature the whole pitch
+   rests on and it has never met a real corpus.
 
-Items 9–16 are one message of yes/nos whenever you have ten minutes, and several of them unblock
-work I can start immediately.
+Part B is one message of yes/nos whenever you have ten minutes.
