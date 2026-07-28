@@ -12,6 +12,23 @@ import { prefersReducedMotion } from "./displayKit.js";
 import { CheckInPanel } from "./CheckInPanel.jsx";
 import { MemberLinkDialog } from "./MemberLinkDialog.jsx";
 
+// ⚠️ `classType` IS DATA, NOT A LABEL. This screen never renders it — its only
+// two uses are the `ensureClassInstance` calls below, which write it to
+// `class_instances.class_type`, the column N2's cohort analytics group by.
+//
+// App.jsx used to pass `[classType, subType].join(" · ")` here: a display string
+// assembled for a header that does not exist, written straight into a permanent
+// analysis column. So the Runner recorded `"hiit · amrap"` while the Schedule's
+// publish path recorded `"HIIT"` for the same class — two doors into one column,
+// two vocabularies, and no query that can ever group them together. For a
+// gym-authored type it was worse: `"gym-barre-ms4pk827 · general"`, a key with a
+// label glued to it, matching nothing.
+//
+// This is the same defect the check-in panel's own header already describes for
+// `duration_min` and `coach_name` — "the same class recorded different amounts
+// of itself depending on which door it came through" — in the one field that
+// pass missed. Found session 20 by driving a gym's own class type to a check-in
+// and reading the STORED occurrence back.
 export function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, onDisplayMode, onNextStage, onPrevStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;

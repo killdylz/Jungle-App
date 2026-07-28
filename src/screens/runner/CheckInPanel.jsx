@@ -3,6 +3,8 @@ import { Check, Plus } from "lucide-react";
 import { Btn } from "../../ui/primitives.jsx";
 import { useDialog } from "../../ui/dialog.js";
 import * as store from "../../lib/store.js";
+import { MEMBER_STATUS_LABEL } from "../../lib/store.js";
+import { isCurrentMember } from "../../lib/retention.js";
 import { recordSession as recordCheckinSession } from "../../lib/checkinMetrics.js";
 import { fmtOccurrence } from "../../lib/format.js";
 
@@ -57,7 +59,34 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
 
   const checkedIn = new Set(attendance.filter(a => a.classInstanceId === ci.id).map(a => a.memberId));
   const term  = q.trim().toLowerCase();
-  const shown = members.filter(m => !term || (m.name || "").toLowerCase().includes(term));
+
+  // ── Who the sweep list offers, and why it is not simply "everyone" ──────────
+  // This panel used to render `store.getMembers()` unfiltered, and it was the
+  // only surface in the app with no view on membership status: `retention.js`
+  // refuses to flag a paused or cancelled member, `RosterScreen` counts only
+  // active ones and dims the rest behind a "Left" badge — and then the Runner
+  // offered all three as identical full-brightness rows. An owner read
+  // "Roster · 1" on one screen and tapped through three names on the other.
+  //
+  // The cost is P6, the design law this panel exists to serve: under 5 seconds
+  // per member. That budget is spent scanning the list, and the list grows
+  // forever — every member a gym ever loses stays in it, so the sweep gets
+  // slower precisely as the gym gets older.
+  //
+  // But a filter alone would have been WORSE than the bug. `canAdd` below
+  // refuses quick-add for a name that already belongs to somebody, cancelled
+  // included — so hiding a returning member without a way to reach them would
+  // leave a person standing in the room who can be neither found nor added.
+  //
+  // Hence: current members by default, and SEARCH sees everyone. Typing a name
+  // is the coach saying "this specific person is here", which is exactly when a
+  // member who left should reappear — labelled, so checking them in is a
+  // deliberate act rather than a mis-tap.
+  const shown = term
+    ? members.filter(m => (m.name || "").toLowerCase().includes(term))
+    : members.filter(isCurrentMember);
+  // Distinguished from "the roster is empty", which is a different sentence.
+  const hiddenNotCurrent = !term && members.length - shown.length;
   // Offer quick-add only when what's typed isn't already somebody — otherwise the
   // coach creates a duplicate roster row for a member who's simply mis-spelled.
   const canAdd = !!term && !members.some(m => (m.name || "").trim().toLowerCase() === term);
@@ -124,11 +153,25 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
           )}
           {shown.map(m => {
             const inRoom = checkedIn.has(m.id);
+            // Only ever true for a row the search surfaced, since the default
+            // list has none. The row stays at full opacity on purpose: the
+            // Members screen can dim a "Left" member because it is being read,
+            // and this one is being TAPPED, mid-class, at arm's length. The
+            // badge is a WORD, so it survives both the glance and the screen
+            // reader — dimming alone would announce nothing.
+            const notCurrent = !isCurrentMember(m);
             return (
               // 46px tall: a thumb target a coach can hit without looking. P6.
               <button key={m.id} onClick={()=>check(m)} disabled={inRoom}
                 style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",padding:"13px 12px",marginBottom:"4px",borderRadius:"9px",border:`1px solid ${inRoom?"var(--accent)":"var(--border)"}`,background:inRoom?"color-mix(in srgb, var(--accent) 12%, transparent)":"transparent",cursor:inRoom?"default":"pointer",textAlign:"left"}}>
-                <span style={{fontSize:"14px",fontWeight:"600",color:"var(--text)"}}>{m.name}</span>
+                <span style={{display:"flex",alignItems:"center",gap:"8px",minWidth:0}}>
+                  <span style={{fontSize:"14px",fontWeight:"600",color:"var(--text)"}}>{m.name}</span>
+                  {notCurrent && (
+                    <span style={{fontSize:"9px",fontWeight:"800",letterSpacing:"0.5px",textTransform:"uppercase",padding:"2px 6px",borderRadius:"4px",border:`1px solid var(--border)`,color:"var(--muted)",flexShrink:0}}>
+                      {MEMBER_STATUS_LABEL[m.status] || m.status}
+                    </span>
+                  )}
+                </span>
                 {inRoom
                   ? <Check size={16} color="var(--accent)"/>
                   : <span style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600"}}>Tap</span>}
@@ -137,9 +180,17 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
           })}
           {!shown.length && !canAdd && (
             <p style={{fontSize:"12px",color:"var(--muted)",textAlign:"center",padding:"24px 12px",lineHeight:"1.6"}}>
-              {members.length
-                ? "No one matches that name."
-                : "No members yet — type a name above to add the first one as they walk in."}
+              {/* Three different situations, and the old code had words for two
+                  of them. With every member paused or cancelled the list is
+                  empty while NOTHING was searched for, and it used to answer
+                  "No one matches that name" — a reply to a question the coach
+                  had not asked, and one that hides the real reason the room
+                  looks empty. */}
+              {!members.length
+                ? "No members yet — type a name above to add the first one as they walk in."
+                : hiddenNotCurrent
+                  ? `No current members — all ${members.length} on the roster are paused or have left. Type a name to find one of them, or to add someone new.`
+                  : "No one matches that name."}
             </p>
           )}
         </div>

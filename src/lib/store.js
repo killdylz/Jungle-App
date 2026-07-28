@@ -871,6 +871,25 @@ export function memberStatus(s) {
   return MEMBER_STATUSES.includes(s) ? s : "active";
 }
 
+// Plain words for those three values. The UI never shows a raw enum (U1), and
+// the map lives beside the constant so a new status cannot be added to one
+// without the other going blank. "Cancelled" is deliberately not called
+// "deleted": nothing is deleted, and the attendance history stays.
+//
+// Here rather than in a screen because session 20 needed a SECOND UI consumer —
+// the check-in sweep, which now says which rows are not current members. Two
+// screens spelling "Left" separately is one rename away from disagreeing about
+// what a member's status is called.
+//
+// ⚠️ `csvExport.js` keeps its own copy ON PURPOSE and must not be "fixed" to
+// import this one: that module has zero imports by design, and pulling in this
+// file would drag the whole localStorage + Supabase seam into a pure formatter.
+export const MEMBER_STATUS_LABEL = {
+  active:    "Active",
+  paused:    "Paused",
+  cancelled: "Left",
+};
+
 // ── retention_actions: what the operator DID about a flag (N3) ──────────────
 // Append-only, mirroring attendance and consent_records: insert-only push, and
 // hydrate MERGES rather than letting the server win. Local shape:

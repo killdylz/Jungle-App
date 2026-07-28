@@ -53,7 +53,14 @@ const [RULE_NEW_MEMBER, RULE_ABSENCE] = RETENTION_RULES;
 export const INACTIVE_STATUSES = ["paused", "cancelled"];
 // An unknown or missing status counts as current, matching `memberStatus`'s own
 // coercion — a row with no status is a member, not a non-member.
-const isCurrentMember = m => !INACTIVE_STATUSES.includes(String(m?.status || "").toLowerCase());
+//
+// EXPORTED because the check-in sweep asks the same question (session 20). It
+// used to answer it by not asking: `CheckInPanel` offered every row in the
+// roster, so a member who left two years ago sat in the mid-class list at full
+// brightness, indistinguishable from someone standing in the room. Two
+// definitions of "is this still one of our members" is exactly the drift that
+// makes one screen say `Roster · 1` while another lists three names.
+export const isCurrentMember = m => !INACTIVE_STATUSES.includes(String(m?.status || "").toLowerCase());
 
 export const ABSENCE_DAYS = 14;        // spec: 14-day absence
 export const NEW_MEMBER_WINDOW_DAYS = 30;

@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
-import { MEMBER_STATUSES, memberStatus } from "../lib/store.js";
+import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
@@ -25,16 +25,6 @@ import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
 import { ArrowLeft, Check, Upload, Download } from "lucide-react";
 
 const EMPTY_FORM = { name: "", email: "", joinedAt: "", status: "active" };
-
-// Plain words for the three values `members.status` allows. The UI never shows a
-// raw enum (U1), and the map lives beside the constant so a new status cannot be
-// added to one without the other going blank. "Cancelled" is deliberately not
-// called "deleted": nothing is deleted, and the attendance history stays.
-const MEMBER_STATUS_LABEL = {
-  active:    "Active",
-  paused:    "Paused",
-  cancelled: "Left",
-};
 
 export function RosterScreen({ onBack }) {
   const vw = useWindowWidth();

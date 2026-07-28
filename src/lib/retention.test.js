@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   atRiskMembers, retentionSummary, describeRetention, attendanceIndex, studioActivity,
-  applyRetentionActions, RETENTION_RULES, INACTIVE_STATUSES,
+  applyRetentionActions, RETENTION_RULES, INACTIVE_STATUSES, isCurrentMember,
   ABSENCE_DAYS, NEW_MEMBER_MIN_VISITS,
 } from "./retention.js";
 import { RETENTION_ACTIONS, retentionAction, retentionRule, MEMBER_STATUSES } from "./store.js";
@@ -396,5 +396,44 @@ describe("eligibility covers every membership status the store allows", () => {
     const monitored = MEMBER_STATUSES.filter(s => !INACTIVE_STATUSES.includes(s));
     expect(monitored).toEqual(["active"]);
     expect(INACTIVE_STATUSES.every(s => MEMBER_STATUSES.includes(s))).toBe(true);
+  });
+});
+
+// `isCurrentMember` was a private helper until session 20 gave it a second
+// caller: the Runner's check-in sweep, which decides who is offered a row
+// mid-class. It is now a shared contract rather than an implementation detail
+// of the flagging rules, so its edges are pinned here directly — a change that
+// only broke the check-in list would otherwise be caught by nothing in `npm test`.
+describe("isCurrentMember", () => {
+  it("counts an active member, and anyone whose status is unknown or missing", () => {
+    expect(isCurrentMember({ status: "active" })).toBe(true);
+    // The stated reason INACTIVE_STATUSES is an excluded set rather than an
+    // "active" whitelist: a row written by an older build, or a status added
+    // later, must default to BEING SHOWN. A member silently dropped out of the
+    // check-in list is invisible, and invisible wrongness is the worst kind.
+    expect(isCurrentMember({ status: "" })).toBe(true);
+    expect(isCurrentMember({})).toBe(true);
+    expect(isCurrentMember({ status: "trial" })).toBe(true);
+  });
+
+  it("excludes the two statuses that mean 'not in the room'", () => {
+    expect(isCurrentMember({ status: "paused" })).toBe(false);
+    expect(isCurrentMember({ status: "cancelled" })).toBe(false);
+    // Case-folded, because a hydrated row is whatever Postgres returned.
+    expect(isCurrentMember({ status: "Cancelled" })).toBe(false);
+  });
+
+  it("does not confuse the members.status spelling with entity_status", () => {
+    // `members.status` is "cancelled" (two Ls); the sibling `entity_status` enum
+    // in 0001 is "canceled" (one L). Both are legal, in different columns. The
+    // one-L spelling is NOT a member status, so it must fall through to current
+    // rather than silently hiding someone from the sweep list.
+    expect(isCurrentMember({ status: "canceled" })).toBe(true);
+  });
+
+  it("survives a null member without throwing", () => {
+    // It runs inside a `.filter` over whatever localStorage held.
+    expect(isCurrentMember(null)).toBe(true);
+    expect(isCurrentMember(undefined)).toBe(true);
   });
 });
