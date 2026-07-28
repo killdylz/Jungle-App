@@ -7,7 +7,12 @@ import * as store from "./lib/store.js";
 import { uid } from "./lib/ids.js";
 import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
-import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES, DEFAULT_STAGE_TEMPLATE } from "./data/library.js";
+// WORKOUT_LIBRARY is deliberately NOT imported here any more. DEC-16 moved every
+// read to `getLibrary()` (the merged catalogue), and the one place that still
+// legitimately wants the built-in — "Reset to defaults" — takes it as
+// `BUILT_IN_LIBRARY` from libraryAccess. Re-adding it here is how a surface
+// quietly goes back to being blind to a gym's own class types.
+import { STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES, DEFAULT_STAGE_TEMPLATE } from "./data/library.js";
 // personas.seed, personaAggregate, movementTaxonomy, blueprints, generationPresets,
 // slidesImport and planParser are no longer imported here AT ALL: the personas
 // cluster was their only consumer and it now owns them (I6 stage 4). Deleting the
@@ -661,7 +666,10 @@ function PinScreen({onUnlock}) {
 }
 
 // ─── DashboardScreen ──────────────────────────────────────────────────────────
-function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], stages=[], sessionName="", nowPlaying=null, djProgress=null}) {
+// `djProgress` was threaded in here and never read — a leftover from the music
+// cut. Removed in session 18's regression pass; `deadctl` is back to zero unused
+// props repo-wide.
+function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], stages=[], sessionName="", nowPlaying=null}) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isNarrow = vw < 1000;
@@ -3319,7 +3327,7 @@ export default function App() {
             of text. One boundary for every lazy screen, so stage 5 adds screens
             here without adding plumbing. */}
         <Suspense fallback={<ScreenLoading/>}>
-        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying} djProgress={djProgress}/>}
+        {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying}/>}
         {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} onBack={()=>setView("dashboard")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
