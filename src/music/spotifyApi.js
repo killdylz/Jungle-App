@@ -80,30 +80,13 @@ function normTrack(sp, af) {
   return { t:sp.name, a:sp.artists.map(x=>x.name).join(", "), bpm:Math.round(af?.tempo||0), uri:sp.uri, id:sp.id, albumArt:sp.album?.images?.[1]?.url||sp.album?.images?.[0]?.url||null, dur:Math.round((sp.duration_ms||0)/1000) };
 }
 
-// ── Deezer BPM helpers (no API key required) ────────────────────────
-async function fetchBpmData(title, artist) {
-  const cacheKey = `${title}|${artist}`.toLowerCase().replace(/\s+/g,"_");
-  try {
-    const cached = JSON.parse(localStorage.getItem("gsb_bpm_cache")||"{}");
-    if (cached[cacheKey]) return cached[cacheKey];
-    // Try Deezer public API (no key required)
-    const q = encodeURIComponent(`track:"${title}" artist:"${artist}"`);
-    const r = await fetch(`https://api.deezer.com/search?q=${q}&limit=1`);
-    if (!r.ok) return null;
-    const d = await r.json();
-    const trackId = d.data?.[0]?.id;
-    if (!trackId) return null;
-    const r2 = await fetch(`https://api.deezer.com/track/${trackId}`);
-    if (!r2.ok) return null;
-    const t = await r2.json();
-    if (!t.bpm) return null;
-    const result = { bpm: Number(t.bpm)||0, key: "", camelot: "" };
-    const cache = JSON.parse(localStorage.getItem("gsb_bpm_cache")||"{}");
-    cache[cacheKey] = result;
-    localStorage.setItem("gsb_bpm_cache", JSON.stringify(cache));
-    return result;
-  } catch { return null; }
-}
+// `fetchBpmData` (Deezer BPM lookup, no API key) was defined here with no caller
+// anywhere in the repo. Removed in session 18 on Dylan's call, after sitting on
+// the dead-symbol list since session 8.
+//
+// It is also the last of LEGAL §3 hole #5's two client-side third-party accesses
+// to leave the source: Deezer was to go with the music cut, and it now has. The
+// RapidAPI key field in the Library is the remaining half of that hole.
 
 function camelotCompat(a, b) {
   if (!a || !b) return 0.5;
@@ -229,15 +212,11 @@ function bpmMismatch(bpm, stageType) {
   return bpm < cfg.bpmMin || bpm > cfg.bpmMax;
 }
 
-// ⚠ DEAD — `fetchBpmData` (Deezer) has no caller anywhere in the repo. It is moved
-// flagged rather than deleted, on the same rule session 6 applied to
-// nudgeForContrast and resolveSubBrand: relocating code is not the moment to
-// decide a feature's fate. It joins the dead-symbol list awaiting a yes/no.
 export {
   SPOTIFY_GENRES, rampVolume,
   spFetch, searchTracks, searchPlaylists, getAudioFeatures,
   getBpmCache, saveBpmCache, enrichTracksWithBpm, apiGetRecommendations, getSpotifyProfile,
-  normSpTrack, normTrack, fetchBpmData, camelotCompat,
+  normSpTrack, normTrack, camelotCompat,
   scoreTrackForStage, selectTracksForDuration,
   apiPlay, apiGetDevices, apiTransferPlayback, apiGetPlaylists, apiGetPlaylistTracks,
   bpmColor, bpmMismatch,

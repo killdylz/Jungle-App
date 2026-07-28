@@ -15,7 +15,9 @@
 //   PERSONA_LLM_PROVIDER  = gemini | anthropic | openai
 //       (default: PERSONA_LLM_PROVIDER, else the shared LLM_PROVIDER, else gemini)
 //   PERSONA_LLM_MODEL     = model id (default per provider: gemini-2.5-flash /
-//                           claude-opus-4-8 / gpt-4o-mini)
+//                           claude-sonnet-5 / gpt-4o-mini). SET THIS EXPLICITLY
+//                           in production — a hardcoded default goes stale and
+//                           this one already did once.
 //   GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY   (same keys as smart-build)
 // Only authenticated users can call it (Supabase verifies the JWT by default).
 
@@ -288,9 +290,16 @@ async function openai(system: string, prompt: string, opts: LlmOpts = {}) {
 async function anthropic(system: string, prompt: string, opts: LlmOpts = {}) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("ANTHROPIC_API_KEY not set");
-  // Default to the latest Claude. Opus 4.8 rejects temperature / budget_tokens, so
-  // we send neither — the grounding in the prompt does the steering.
-  const model = Deno.env.get("PERSONA_LLM_MODEL") || "claude-opus-4-8";
+  // A hardcoded default here goes stale silently — this one said `claude-opus-4-8`
+  // for two model generations, so anyone who set PERSONA_LLM_PROVIDER=anthropic
+  // without also setting a model got yesterday's Claude and no warning. Sonnet 5
+  // is the default because corpus extraction is a volume job where it is the
+  // quality/cost sweet spot; set PERSONA_LLM_MODEL=claude-opus-5 for maximum
+  // reasoning quality on a small corpus. Set the secret explicitly in production
+  // and this line stops mattering, which is the real fix.
+  // Opus rejects temperature / budget_tokens, so we send neither — the grounding
+  // in the prompt does the steering, and that holds across models.
+  const model = Deno.env.get("PERSONA_LLM_MODEL") || "claude-sonnet-5";
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },

@@ -17,6 +17,7 @@
 // Run: npx eslint . --config eslint.crash.config.js
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
+import react from 'eslint-plugin-react'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -27,7 +28,9 @@ export default defineConfig([
     // `eslint-disable-next-line react-hooks/exhaustive-deps` comments, and eslint
     // errors on a disable comment naming a rule it can't resolve. Loading the
     // plugin makes those comments resolve without pulling in its ~100 messages.
-    plugins: { 'react-hooks': reactHooks },
+    // `react` is registered for ONE rule — see `react/jsx-no-undef` below. Its
+    // other ~100 rules stay off; this is the crash gate, not the style baseline.
+    plugins: { 'react-hooks': reactHooks, react },
     // Those same disable comments are "unused" here (the rule they name is off in
     // this config), which would emit a warning per comment. That's an artifact of
     // the narrow rule set, not a finding — silence it so any output from this gate
@@ -45,6 +48,19 @@ export default defineConfig([
     rules: {
       // Undefined / misbound identifiers — the 9f71f61 class of bug.
       'no-undef': 'error',
+
+      // 🔴 THE HOLE `no-undef` COULD NOT SEE, closed in session 18 on Dylan's call.
+      // `no-undef` resolves plain identifiers but NOT JSX element names: `const a
+      // = Foo` is caught, `<Foo/>` is not. That gap bit twice in session 6, once
+      // in session 7, and produced SEVENTEEN unresolved components at once during
+      // session 16's runner extraction — every one invisible here, every one a
+      // white screen behind a polite error boundary.
+      //
+      // Three guards covered it until now, and all three stay: this rule,
+      // `e2e/screens.spec.js` asserting the boundary is absent on all nine
+      // screens, and `src/lib/navRoutes.test.js` for the sibling case (a screen
+      // that is ABSENT rather than undefined — this rule cannot see that one).
+      'react/jsx-no-undef': 'error',
       'no-const-assign': 'error',
       'no-class-assign': 'error',
       'no-func-assign': 'error',

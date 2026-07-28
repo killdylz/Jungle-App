@@ -53,20 +53,12 @@ export function wcagContrast(hex1,hex2){
   return(lighter+0.05)/(darker+0.05);
 }
 
-// ⚠️ UNREFERENCED at the time of extraction — nothing in the app calls this.
-// Superseded by `nudgeContrast` below, which is direction-aware; this one only
-// ever lightens, so it cannot fix dark ink on a light background. Moved rather
-// than deleted because deleting is a separate decision from relocating, and a
-// mechanical stage should not smuggle one in. Delete it or wire it, but do not
-// leave it here indefinitely.
-export function nudgeForContrast(fgHex, bgHex, target=4.5, maxIter=30){
-  let [h,s,l]=rgbToHsl(...hexToRgb(fgHex));
-  let iter=0;
-  while(wcagContrast(rgbToHex(...hslToRgb(h,s,l)),bgHex)<target && iter<maxIter){
-    l=Math.min(1,l+0.03);iter++;
-  }
-  return rgbToHex(...hslToRgb(h,s,l));
-}
+// `nudgeForContrast` lived here unreferenced from decomposition stage 1 until
+// session 18, when Dylan answered the yes/no it had been waiting on since
+// session 7. It only ever LIGHTENED, so it could not fix dark ink on a light
+// background — `nudgeContrast` below superseded it by being direction-aware.
+// git history has it if the one-directional behaviour is ever wanted back.
+
 // FR-H6/D4: direction-aware contrast nudge (darkens ink on light bg, lightens on dark bg).
 export function nudgeContrast(fgHex, bgHex, target=4.5, maxIter=40){
   let [h,s,l]=rgbToHsl(...hexToRgb(fgHex));
@@ -201,22 +193,11 @@ export function generateSkinFromPalette(swatches, vibe="natural", mode="dark") {
   };
 }
 
-// ⚠️ UNREFERENCED at the time of extraction — FR-H8 (sub-brands) is implemented
-// here but was never wired to any surface. Kept for the same reason as
-// `nudgeForContrast`: relocating is not the moment to decide a feature's fate.
-// FR-H8: a sub-brand is a child theme overriding accent + numeralStyle (often voice), inheriting the rest.
-export function resolveSubBrand(parent, overrides={}) {
-  if (!parent) return null;
-  return {
-    ...parent,
-    name: overrides.name || `${parent.name} sub-brand`,
-    parentName: parent.name,
-    isSubBrand: true,
-    tokens: { ...parent.tokens, accent: overrides.accent || parent.tokens.accent, green: overrides.green || parent.tokens.green },
-    numeralStyle: overrides.numeralStyle || parent.numeralStyle,
-    voice: overrides.voice || parent.voice,
-  };
-}
+// FR-H8 (sub-brands) was implemented here as `resolveSubBrand` and never wired to
+// any surface. Removed in session 18 on Dylan's call. A sub-brand was a child
+// theme overriding accent + numeralStyle + voice and inheriting the rest — a
+// dozen lines to re-derive from git history if a chain ever needs it, and the
+// shape would likely change anyway once a real second brand exists to model it on.
 
 // FR-H1: one palette -> three independently contrast-clamped themes (one recommended).
 export function generateThemes(swatches, avgLuma){
