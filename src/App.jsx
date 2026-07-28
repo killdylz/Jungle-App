@@ -24,7 +24,8 @@ import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./dat
 // line is the half of the move that actually costs bytes.
 import { setupProgress, describeSetup } from "./lib/setupProgress.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
-import { mergeLibrary, diffLibrary } from "./lib/libraryStore.js";
+import { getLibrary, saveLibrary, resetLibrary, BUILT_IN_LIBRARY,
+         newClassTypeKey, makeClassType } from "./lib/libraryAccess.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
@@ -199,14 +200,17 @@ function getDayClasses(dayAbbrev){
   getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
   return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
 }
-// Smart class picker: match an NLP prompt (or studio default) to a WORKOUT_LIBRARY class.
+// Smart class picker: match an NLP prompt (or studio default) to a class type.
+// Reads the MERGED catalogue (DEC-16), so "build me a barre class" can land on a
+// type this gym authored rather than only on the ten built-in ones.
 function smartPickClass(prompt){
-  const keys = Object.keys(WORKOUT_LIBRARY);
+  const LIB = getLibrary();
+  const keys = Object.keys(LIB);
   const pr = (prompt||"").toLowerCase();
-  let hit = pr && keys.find(k => pr.includes(k.toLowerCase()) || pr.includes((WORKOUT_LIBRARY[k].label||"").toLowerCase()));
-  if(!hit && pr){ hit = keys.find(k => (WORKOUT_LIBRARY[k].label||"").toLowerCase().split(/[^a-z]+/).some(w=>w.length>2 && pr.includes(w))); }
+  let hit = pr && keys.find(k => pr.includes(k.toLowerCase()) || pr.includes((LIB[k].label||"").toLowerCase()));
+  if(!hit && pr){ hit = keys.find(k => (LIB[k].label||"").toLowerCase().split(/[^a-z]+/).some(w=>w.length>2 && pr.includes(w))); }
   const classType = hit || keys[0];
-  const subType = Object.keys(WORKOUT_LIBRARY[classType]?.subTypes||{})[0] || null;
+  const subType = Object.keys(LIB[classType]?.subTypes||{})[0] || null;
   return { classType, subType };
 }
 
@@ -224,28 +228,10 @@ function mkStages() {
 
 // WORKOUT_LIBRARY moved to src/data/library.js (imported above).
 
-// ─── Editable library helpers ─────────────────────────────────────────────────
-// DEC-13: what is STORED is now the delta against WORKOUT_LIBRARY, not a
-// snapshot of the whole catalogue. src/lib/libraryStore.js carries the why and
-// the v1 compatibility; both functions here are deliberately thin so the merge
-// rules live in one tested place.
-function getLibrary() {
-  try {
-    return mergeLibrary(WORKOUT_LIBRARY, store.getLibraryCustom());
-  } catch(_) {}
-  return WORKOUT_LIBRARY;
-}
-function saveLibrary(data) {
-  const delta = diffLibrary(WORKOUT_LIBRARY, data);
-  // A coach who edits something and then edits it back is not a customised gym.
-  // Dropping the row rather than storing an empty delta is what stops them being
-  // frozen out of future catalogue improvements for a change they undid.
-  if (delta) store.saveLibraryCustom(delta);
-  else store.resetLibraryCustom();
-}
-function resetLibrary() {
-  store.resetLibraryCustom();
-}
+// getLibrary / saveLibrary / resetLibrary moved to src/lib/libraryAccess.js in
+// session 18 (DEC-16). They lived here, which meant App.jsx was the only file
+// that could see a gym's edits — every other surface read the built-in
+// WORKOUT_LIBRARY constant directly. That was the whole seam behind DEC-16.
 
 // STAGE_LIBRARY_MAP moved to src/data/library.js (imported above).
 
@@ -1561,7 +1547,30 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
     updateExerciseList([...rawEx,ex]);
     startEdit(ex);
   };
-  const handleReset = () => { resetLibrary(); setLibData(WORKOUT_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
+
+  // DEC-16: a class type this gym authored. The key is prefixed and
+  // timestamp-suffixed (`newClassTypeKey`) so it can never collide with a
+  // built-in one — `mergeLibrary` treats a key the built-in lacks as gym-owned
+  // and stores it WHOLE, so a collision would silently turn the gym's type into
+  // an override of a built-in and lose it on the next catalogue improvement.
+  //
+  // `makeClassType` supplies the shape rather than the call site building it,
+  // because a type missing `subTypes` would crash the Builder's dropdown on the
+  // next render, and that is exactly the kind of thing a second author forgets.
+  const addClassType = () => {
+    const label = window.prompt("Name this class type (e.g. Barre, Reformer, Kids)");
+    if (label === null) return;                 // Cancel — not the same as empty
+    const name = label.trim();
+    if (!name) return;
+    const key = newClassTypeKey(name);
+    persist({ ...libData, [key]: makeClassType(name) });
+    setSelClass(key);
+    showToast(`Added ${name}`);
+  };
+  // BUILT_IN_LIBRARY, deliberately, not getLibrary(): "reset to defaults" means
+  // the built-in catalogue. Reading the merged one here would reset to whatever
+  // the gym currently has, i.e. to nothing.
+  const handleReset = () => { resetLibrary(); setLibData(BUILT_IN_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
 
   // ── Reordering a pool ──────────────────────────────────────────────────────
   // The row rendered a ⠿ handle with `cursor:grab` and no `draggable` and no
@@ -1658,16 +1667,21 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
                   );
                 })}
               </div>
-              {/* Was a "+ New class type" button with no onClick — it rendered,
-                  it was focusable, a coach could press it, and nothing happened.
-                  The delta store WOULD carry a gym-authored class type
-                  (libraryStore.js stores a key the built-in lacks whole), but the
-                  Builder's class-type dropdown and `applyTemplate` read
-                  WORKOUT_LIBRARY directly, so the new type would appear in this
-                  modal and in no other surface. That is a feature with a real
-                  seam to move, not a missing handler — Dylan's call, tracked in
-                  the handoff. A button that does nothing is worse than either
-                  answer, so it goes. */}
+              {/* DEC-16, answered yes in session 18. This button existed once
+                  with no onClick — it rendered, it was focusable, a coach could
+                  press it, and nothing happened — so session 15 deleted it. The
+                  delta store could always carry a gym-authored type
+                  (`libraryStore.js` stores a key the built-in lacks whole); what
+                  was missing was that every other surface read the BUILT-IN
+                  catalogue, so the type would have appeared here and nowhere
+                  else. Those reads now go through `getLibrary()`, so the button
+                  comes back — and this time it is only here because it works. */}
+              {editMode && (
+                <button onClick={addClassType}
+                  style={{width:"100%",marginTop:"8px",padding:"9px",background:"transparent",border:`1px dashed var(--border)`,borderRadius:"9px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"700"}}>
+                  + New class type
+                </button>
+              )}
             </div>
           )}
 
@@ -1895,6 +1909,9 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
 // hook deliberately does not override.
 function SmartBuildDialog({ onClose, smartPrompt, setSmartPrompt, runSmartBuild, smartBusy, applyTemplate }) {
   const dlg = useDialog(onClose, "Build a class");
+  // DEC-16: the merged catalogue, so "Or insert a template" offers the gym's own
+  // class types alongside the built-in ten.
+  const LIB = getLibrary();
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
       <div {...dlg} onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"22px",width:"min(480px,100%)",boxSizing:"border-box",outline:"none"}}>
@@ -1909,7 +1926,7 @@ function SmartBuildDialog({ onClose, smartPrompt, setSmartPrompt, runSmartBuild,
         </div>
         <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Or insert a template</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",maxHeight:"240px",overflowY:"auto"}}>
-          {Object.entries(WORKOUT_LIBRARY).map(([k,cls])=>(
+          {Object.entries(LIB).map(([k,cls])=>(
             <button key={k} onClick={()=>{ const sub=Object.keys(cls.subTypes||{})[0]||null; applyTemplate(k,sub); onClose(); }} style={{display:"flex",alignItems:"center",gap:"8px",padding:"10px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
               <span style={{fontSize:"18px"}}>{cls.icon}</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.label}</span>
             </button>
@@ -1991,10 +2008,14 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   // Pending template change — { classType, subType } — shown when stages have custom exercises
   const [templatePrompt, setTemplatePrompt] = useState(null);
 
-  // Class type / sub-type selection
-  const classKeys = Object.keys(WORKOUT_LIBRARY);
+  // Class type / sub-type selection. DEC-16: the MERGED catalogue, so a
+  // gym-authored type is selectable here and not only visible in the Library.
+  // Read per render rather than memoised — that is what makes a type created in
+  // the Library modal appear in this dropdown without any cross-component wiring.
+  const LIB = getLibrary();
+  const classKeys = Object.keys(LIB);
   const selectedClass   = classChoice?.classType || classKeys[0];
-  const selectedSubKeys = Object.keys(WORKOUT_LIBRARY[selectedClass]?.subTypes || {});
+  const selectedSubKeys = Object.keys(LIB[selectedClass]?.subTypes || {});
   const selectedSub     = classChoice?.subType || selectedSubKeys[0] || null;
 
   // Helper: does a stage have any manually-authored exercises?
@@ -2038,7 +2059,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
   // Handle class type change from the selector
   const handleClassChange = (classType) => {
-    const firstSub = Object.keys(WORKOUT_LIBRARY[classType]?.subTypes||{})[0]||null;
+    const firstSub = Object.keys(LIB[classType]?.subTypes||{})[0]||null;
     onClassChoiceChange({classType, subType:firstSub});
     if (anyCustom) {
       setTemplatePrompt({classType, subType:firstSub});
@@ -2149,7 +2170,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               </button>
             </div>
             {!isMobile && <div style={{fontSize:"12px",color:"var(--muted)"}}>
-              {Math.round(totalDur/60)} min · {stages.length} stages · {WORKOUT_LIBRARY[selectedClass]?.label||selectedClass} · target RPE 7–8
+              {Math.round(totalDur/60)} min · {stages.length} stages · {LIB[selectedClass]?.label||selectedClass} · target RPE 7–8
             </div>}
           </div>
         </div>
@@ -2198,14 +2219,14 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             are not on the page at all, and three adjacent unnamed dropdowns is
             what a screen-reader user got. */}
         <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)} aria-label="Class type"
-          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
-          {classKeys.map(k=><option key={k} value={k}>{WORKOUT_LIBRARY[k].icon} {WORKOUT_LIBRARY[k].label}</option>)}
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          {classKeys.map(k=><option key={k} value={k}>{LIB[k].icon} {LIB[k].label}</option>)}
         </select>
         {selectedSubKeys.length > 0 && <>
           {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
           <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)} aria-label="Class style"
-            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${WORKOUT_LIBRARY[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
-            {selectedSubKeys.map(sk=><option key={sk} value={sk}>{WORKOUT_LIBRARY[selectedClass].subTypes[sk].label}</option>)}
+            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+            {selectedSubKeys.map(sk=><option key={sk} value={sk}>{LIB[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
         {/* Jungle presets — the six starter classes that used to be their own
@@ -2267,7 +2288,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       {templatePrompt && (
         <div style={{padding:"10px 24px",background:"#F59E0B18",borderBottom:`1px solid #F59E0B50`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",color:"var(--text)",flex:1,minWidth:"200px"}}>
-            <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {WORKOUT_LIBRARY[templatePrompt.classType]?.icon} {WORKOUT_LIBRARY[templatePrompt.classType]?.label} template?</span>
+            <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {LIB[templatePrompt.classType]?.icon} {LIB[templatePrompt.classType]?.label} template?</span>
             {" "}This will replace your current stages.
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
@@ -2928,8 +2949,11 @@ export default function App() {
 
   const [classChoice, setClassChoice] = useState(() => {
     if (savedDraft?.classChoice?.classType) return savedDraft.classChoice;
-    const fc = Object.keys(WORKOUT_LIBRARY)[0];
-    return { classType:fc, subType:Object.keys(WORKOUT_LIBRARY[fc]?.subTypes||{})[0]||null };
+    // DEC-16: merged, so a gym whose first class type is their own does not get
+    // silently reset to the built-in first key on every fresh load.
+    const LIB0 = getLibrary();
+    const fc = Object.keys(LIB0)[0];
+    return { classType:fc, subType:Object.keys(LIB0[fc]?.subTypes||{})[0]||null };
   });
   const [view,        setView]        = useState("dashboard");
   const [stages,      setStages]      = useState(() => savedDraft?.stages || mkStages());
@@ -3047,8 +3071,9 @@ export default function App() {
     // Item 9: land on the right Builder class type (strength/circuit/hyrox…) so the
     // header + BPM targets match. Sets the selector only — does NOT apply a template,
     // so the drafted persona stages are preserved.
-    if (builderClass && WORKOUT_LIBRARY[builderClass]) {
-      const sub = Object.keys(WORKOUT_LIBRARY[builderClass].subTypes || {})[0] || null;
+    const LIB = getLibrary();
+    if (builderClass && LIB[builderClass]) {
+      const sub = Object.keys(LIB[builderClass].subTypes || {})[0] || null;
       setClassChoice({ classType: builderClass, subType: sub });
     }
     setView("builder");

@@ -20,7 +20,7 @@ import { supabase, supabaseEnabled } from "../../supabase.js";
 import * as store from "../../lib/store.js";
 import { uid } from "../../lib/ids.js";
 import { SEED_PERSONAS } from "../../data/personas.seed.js";
-import { WORKOUT_LIBRARY } from "../../data/library.js";
+import { getLibrary } from "../../lib/libraryAccess.js";
 import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "../../lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "../../lib/movementTaxonomy.js";
 import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "../../lib/blueprints.js";
@@ -955,7 +955,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
                         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} class{prof.planCount===1?"":"es"}</span></p>
                         <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
-                        <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{WORKOUT_LIBRARY[builderClass]?.label||builderClass}</b></span>
+                        <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{getLibrary()[builderClass]?.label||builderClass}</b></span>
                       </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>
