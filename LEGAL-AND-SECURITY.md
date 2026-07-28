@@ -86,6 +86,16 @@ validates HMAC + expiry + gym match, then inserts attendance with the **service-
 photo goes stale in minutes. ~1 day of work + a deploy — **defer until a gym asks**; the coach
 sweep is the pilot path.
 
+> 🟢 **Session 19: this design is now BUILT, for N4 rather than for QR.** `src/lib/classToken.js`
+> is the signed, class-scoped, expiring token described above — HMAC-SHA256 over
+> `{class_instance_id, gym_id, exp}`, mirrored byte-for-byte into two Edge Functions
+> (`summary-token` issues under the caller's JWT so RLS is the authorization check;
+> `summary-read` validates then reads with the service-role key). **RLS was not loosened to
+> `anon`.** So when a gym does ask for QR check-in, the token half already exists and only the
+> *write* path is new — which is the part that actually needs the 15-minute TTL, the per-token
+> rate limit, and a real consent notice as its first screen. **N4's TTL is 14 days on purpose:
+> it is a read of programming, not a write of attendance. Do not copy that number to QR.**
+
 ## 5. Multi-tenancy: one project or one per gym?
 
 **One Supabase project for all gyms, RLS-isolated.** Argument: the entire schema is already

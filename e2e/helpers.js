@@ -68,6 +68,17 @@ export async function nav(page, label) {
   await expect(page.getByTestId("screen-loading")).toHaveCount(0);
 }
 
+// Wait until the staff app has actually MOUNTED.
+//
+// Needed since N4 split the root: AuthGate + App are a lazily-loaded chunk, so
+// for a beat after `load` the document is the Suspense fallback and the skin's
+// CSS custom properties are not on :root yet. Any test that reads a computed
+// style (rather than asserting on an element, which auto-waits) has to come
+// through here first — otherwise it reads "" and computes NaN.
+export async function waitForApp(page) {
+  await expect(page.getByRole("button", { name: "Class Runner", exact: true })).toBeVisible();
+}
+
 // Read a domain object back out of localStorage. The repo rule is to assert on
 // what was STORED, not only what was rendered: session 4's defects were mostly
 // cases where those two disagreed.

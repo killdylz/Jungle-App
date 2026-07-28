@@ -62,6 +62,42 @@ select id, '@yourstudio.com', 'domain', 'coach' from public.gyms where slug = 'j
 ```
 Roles: `admin`, `manager`, `coach`, `frontdesk`, `member`. A signed-in user with no matching entry has **no access** to any gym.
 
+---
+
+## Member links (N4) — two Edge Functions and one secret
+
+The member class summary is the only part of Jungle a person without an account can open.
+It needs one secret and two functions. **Full click-by-click steps are `DYLAN-QUEUE.md` A12**;
+this is the reference version.
+
+**The secret.** Generate 32 random bytes and set it as an Edge Function secret named
+`JUNGLE_SUMMARY_SECRET`:
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+It never goes in GitHub and never reaches the browser. Both functions read the *same* value —
+one signs, the other verifies, so if they differ every member link fails at once.
+
+**The functions.**
+
+| Function | Source | Verify JWT | Why |
+|---|---|---|---|
+| `summary-token` | `supabase/functions/summary-token/index.ts` | **ON** | Mints links. Only a signed-in coach may call it. Runs entirely under the caller's JWT, so **RLS is the authorization check** — it never uses the service-role key. |
+| `summary-read` | `supabase/functions/summary-read/index.ts` | 🔴 **OFF** | Opened by a member with no account. The signed token is the credential. |
+
+**The migration.** `supabase/migrations/0009_class_summaries.sql` creates the table holding
+what a member sees. Without it links still work, but show no movement list — and the app
+tells the coach so rather than pretending.
+
+> 🔴 **RLS is never loosened to `anon`.** `summary-read` uses the service-role key *after*
+> validating an HMAC signature and expiry, and reads only the one class named in that token.
+> It never touches `members`, `attendance`, `consent_records` or `profiles` — pinned by
+> `src/lib/classToken.mirror.test.js`. See `LEGAL-AND-SECURITY.md` §4.
+
+> ⚠️ The token core is duplicated into both functions because a function pasted into the
+> dashboard cannot import from `src/`. **Never edit a copy by hand** — edit
+> `src/lib/classToken.js` and run `node scripts/sync-token-core.mjs`.
+
 ## What's next (later phases)
 This is the foundation (RBAC-SPEC build order steps 1–2: auth + users/memberships/allowlist + tenant scoping). Still to come, on top of this: moving the library/glossary/templates/sessions from `localStorage` into per-gym tables, the member vs staff shell split, the permission-matrix admin UI, and the LLM proxy (an Edge Function that holds the model key server-side).
 

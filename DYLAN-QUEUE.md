@@ -34,6 +34,8 @@ undo it. Nothing in Part A needs me.
 | A9 | Register as DPO | 20 min | none |
 | A10 | Brief a lawyer | 1 email | none |
 | A11 | The live-verification queue (7 checks) | ~2 h | none |
+| **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
+| **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 
 ---
 
@@ -477,9 +479,139 @@ full-screen with the Jungle icon and still works with Wi-Fi off.
 anything that does nothing.
 
 ---
+
+## A12 · Turn on member links (N4) — the member-facing half of the product
+
+You approved this in session 18 and it is **built and tested**. What is left is three
+paste-jobs on your side. Do A5 first if you have not (same skill, and it warms you up).
+
+Until you do this, the "Member link" button in the Class Runner honestly says links
+aren't available. Nothing is broken in the meantime.
+
+### Step 1 — make the signing secret
+
+This is the key that makes a member link unforgeable. It must be random and it must never
+leave Supabase. Generate one in PowerShell:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+Copy the line it prints. **Do not reuse a password, and do not put it in GitHub** — this
+one lives only in Supabase's Edge Function secrets.
+
+### Step 2 — set it as a secret
+
+Dashboard → **Edge Functions → Secrets** (may be under **Settings → Edge Functions**) →
+**Add new secret**:
+
+| Name | Value |
+|---|---|
+| `JUNGLE_SUMMARY_SECRET` | the string from step 1 |
+
+> 🔴 Both functions below read this **same** secret. One signs links, the other checks
+> them, so if they ever disagree every member link stops working at once and the error
+> looks exactly like a broken link. There is only one secret on purpose.
+
+### Step 3 — deploy the two functions
+
+Same flow as A5. Dashboard → **Edge Functions** → **Create function** for each:
+
+| Function name (exact) | Paste from | **Verify JWT** |
+|---|---|---|
+| `summary-token` | `supabase\functions\summary-token\index.ts` | **ON** (the default — leave it) |
+| `summary-read`  | `supabase\functions\summary-read\index.ts`  | 🔴 **OFF** |
+
+**The JWT setting is the one thing here you must get right.**
+- `summary-token` mints links, so only a signed-in coach may call it → **ON**.
+- `summary-read` is opened by a member who has no account and never will → **OFF**.
+  With it on, every member link returns "not authorised" and the page will say the link
+  isn't valid.
+
+The toggle is on the function's own page (**Details** / **Settings**), labelled
+**Verify JWT with legacy secret** or **Enforce JWT verification** depending on the
+dashboard version.
+
+### Step 4 — run migration 0009
+
+**SQL Editor → New query** → paste the whole of
+`C:\Users\dylan\jungle-app\supabase\migrations\0009_class_summaries.sql` → **Run**.
+Safe to re-run. If you have done A4, run it on **staging first**, then prod the same day.
+
+This creates the table that holds what a member actually sees — the movement list. Skip
+it and links still work, but they show only the class name, time and coach, and the app
+will tell the coach that when they create one.
+
+### What "it worked" looks like
+See **A13** — the only real test is opening one on a phone.
+
+### If something is wrong
+- Coach sees **"Couldn't create the link"** → the secret is missing, or `summary-token`
+  was not deployed. Check **Edge Functions → summary-token → Logs**.
+- Coach sees **"the studio's database hasn't been set up for published classes"** →
+  step 4 was skipped. The link still works; it is just thin.
+- Member sees **"This link isn't valid"** immediately → `summary-read` still has
+  **Verify JWT ON**, or the two functions were given different secrets.
+
+### Undo
+Delete the `JUNGLE_SUMMARY_SECRET` secret. Every existing link stops working immediately
+and the coach-side button reports an honest error. The table can stay; it holds no
+member data. Nothing else in the app is affected.
+
 ---
 
-# PART B — decisions only, no work for you beyond answering
+## A13 · Send yourself a member link and open it on your phone
+
+The whole point of N4, and the first time anything in Jungle has been seen by a
+non-staff member. Ten minutes, and it needs a phone that is **not** signed in.
+
+1. On the live site, go to **Class Runner** and start a class with some movements in it.
+2. Press **Link** in the top bar (next to Check in).
+3. Copy the link, send it to yourself on WhatsApp.
+4. Open it **on your phone**, ideally in a private tab so there is no session.
+
+### What you should see
+Your gym's name and colours, the class name and date, and the movement list. **No
+sign-in. No Jungle branding anywhere.**
+
+### What to tell me
+- Does it look like *your* studio, or like a generic app?
+- Is the movement list what you actually taught?
+- Anything a member would find confusing.
+- 🔴 **Does it name anybody?** It must not — not the member, not who attended. If any
+  person's name other than the coach's appears, stop and tell me immediately.
+
+---
+---
+
+# PART B — all answered, kept as the record
+
+**Nothing here needs you.** You answered every one of these in session 18; they are
+listed so the decisions have somewhere to live until the spec absorbs them.
+
+| # | Question | Your answer | State |
+|---|---|---|---|
+| B1 | N4 member magic-link summary | **Yes, build it** | ✅ **Built** (session 19). Deploy = **A12**. |
+| B2 | 3 dead symbols | **Delete** | ✅ Done |
+| B3 | DEC-16 gym-authored class type | **Yes** | ✅ Done |
+| B4 | `eslint-plugin-react` | **Yes** | ✅ Done — crash gate now catches `<UndefinedComponent/>` |
+| B5 | Sentry | **Not until the lawyer is done** | ⏸ Waiting on A10 |
+| B6 | `storage-js` (~22 KB) | **Leave it** | ✅ Closed |
+| B7 | Docs cleanup | **Yes** | ✅ Session prompts moved to `docs/history/` |
+| B8 | `winBackBlockedReason` | **Keep** | ✅ Closed |
+| B9 | `claude-opus-4-8` default | **Yes, update** | ✅ Done — A6 sets it explicitly anyway |
+
+**There are no open questions for you right now.** When there are, they go back here.
+
+---
+
+# PART B (archive of the original wording)
+
+Kept only because the reasoning is sometimes worth re-reading. Skip it.
+
+<details>
+<summary>Original Part B</summary>
+
 
 Reply with a line each. Several unblock work I can start the same day. Nothing here needs you to
 touch a dashboard.
@@ -496,6 +628,8 @@ touch a dashboard.
 | B8 | **DEC-12c** — `winBackBlockedReason` is nearly unreachable. Keep or fold away? | **Keep.** Cheap, and it guards against messaging a lapsed member. |
 | B9 | **Should I update the hardcoded `claude-opus-4-8` default** in `persona-ai`? | **Yes** — but A6 sets `PERSONA_LLM_MODEL` explicitly, so it stops mattering either way. |
 
+</details>
+
 ---
 
 ## If you only do four things this week
@@ -508,4 +642,6 @@ touch a dashboard.
 4. **A5 + A7 — redeploy and put one real deck through it.** This is the feature the whole pitch
    rests on and it has never met a real corpus.
 
-Part B is one message of yes/nos whenever you have ten minutes.
+**A12 + A13 are the fun ones** — 35 minutes, and at the end of them there is something you can
+show a member. They do not block anything else, so do them when you want a win rather than a
+chore. Part B is empty; there is nothing waiting on an answer from you.

@@ -1,9 +1,118 @@
 # Jungle — Session Handoff
 
+_Last updated: 2026-07-28 (session 19)_
+
+---
+
+## Session 19 — N4 is built. The product has a member-facing surface.
+
+> **Gates green.** `lint:crash` **0** · **741 unit** (27 files, no todos) · **219 e2e**
+> (27 spec files, no fixmes) · build clean. App.jsx unchanged at **3,382 lines**.
+>
+> 🟢 **N4 — the member magic-link summary — is BUILT**, in the order the spec insisted on:
+> **token and Edge Functions first, page second.** It is the last Phase-1 gap and the only
+> screen in Jungle a person without an account can open. ⛔ It goes live when Dylan does
+> **`DYLAN-QUEUE.md` A12** — one secret, two function pastes, one migration. ~25 minutes.
+>
+> ### The structural finding, and it would have shipped broken without it
+> `main.jsx` wraps `App` in `AuthGate`, and **with Supabase configured `AuthGate` shows a
+> sign-in wall to anyone without a session.** A member tapping their class link would have
+> been asked to log into their gym's staff app. No route inside `App` could have fixed
+> that, because `App` never renders. **The summary page is therefore routed above
+> `AuthGate`.** This is invisible locally — the credential-less build has no wall to hit —
+> so `e2e/memberSummary.spec.js` asserts *"no app shell and no sign-in"* rather than merely
+> *"the summary is there"*.
+>
+> ### What the design refuses to do
+> - **The token is class-scoped, never member-scoped.** A leaked link exposes one class's
+>   programming — the same content the share card already publishes to Instagram — and names
+>   nobody. There is no member id in the payload and no join to a person in the read path.
+> - **RLS was not loosened to `anon`, and 0007's policies were not touched.** `summary-read`
+>   uses the service-role key only *after* an HMAC + expiry check, and only for the one class
+>   named in the signature. Pinned by a test that greps the real `.ts` for `members?`,
+>   `attendance?`, `consent_records?`, `profiles?`.
+> - **`summary-token` never touches the service-role key at all** — it runs under the
+>   caller's JWT so *RLS is the authorization check*. A function that cannot escalate cannot
+>   be tricked into escalating.
+> - **The token lives in the URL fragment, not a query string.** A fragment never leaves the
+>   browser; a bearer credential in `?s=` lands in access logs and leaks via `Referer`.
+> - **Not JWT.** One algorithm, not named anywhere the token can influence. A format that
+>   cannot express `alg: none` cannot be confused into accepting it.
+> - **`summaryContent()` is an allow-list, not a cleaner.** A new field on a stage object
+>   cannot reach a member by default. That single property is what the class-scoping
+>   guarantee actually rests on.
+>
+> ### 🔴 The lesson this session: A GUARD THAT REPAIRS WHAT IT INSPECTS REPORTS SUCCESS
+> The token core is duplicated into both Edge Functions (a function pasted into the Supabase
+> dashboard cannot import from `src/`), so `classToken.mirror.test.js` reads the real `.ts`
+> files and compares them byte-for-byte. It imported `extractCore` from
+> `scripts/sync-token-core.mjs` — **which ran its sync at import time.** Importing the helper
+> re-wrote the files, silently repairing the drift a moment before measuring it. I hand-edited
+> a copy to `v2`, ran the test, and it passed **and the file was back to `v1`**. Fixed by
+> guarding the script's side effects behind a run-as-main check.
+> **Fifth session running that the guard was wrong before the code was.** Assume your checker
+> is broken until it has failed for the right reason.
+>
+> ### 🔴 A test that accepts every failure reason asserts nothing
+> The token's malformed-input test originally accepted any of `malformed | bad-signature |
+> bad-payload` — which is every failure reason there is, so it only proved `ok === false`.
+> Tightened to pin the exact reason per input; the loose version **passed** against a mutation
+> that removed the version-prefix check entirely. Same family as session 18's "expected state
+> is already the default state".
+>
+> ### The root bundle is now split, and the member pays a fifth of what staff pay
+> `main.jsx` lazy-loads `ClassSummary` and `StaffApp` (a new 15-line wrapper pairing `AuthGate`
+> with `App` so nothing can import `App` past the auth wall). Measured on a
+> **production-shaped build** (dummy `VITE_SUPABASE_*` so rollup keeps the sync paths):
+>
+> | | before | after |
+> |---|---|---|
+> | a **member** downloads | 776.85 KB | **206.69 KB** (`index` 198.29 + `ClassSummary` 5.49 + `summaryApi` 2.91) |
+> | **staff** download | 776.85 KB | 782.71 KB (`index` + `StaffApp` 584.42) |
+>
+> **~570 KB off the member path**, 5.9 KB onto staff. Verified by grepping the emitted chunks
+> for `GoTrueClient`/`PostgrestClient` — **supabase-js is in `StaffApp`, not in the member
+> path.** ⚠️ The credential-less local build strips the sync code and shows *no* supabase in
+> *any* chunk, so it cannot answer this question; the dummy-vars build is the one that can.
+>
+> ### Two real regressions the split caused, both found and fixed
+> 1. **A flash of near-black on load.** The skin is applied by `applySkinCSS`, which now runs
+>    only once the lazy chunk lands. For a gym with a light palette that is a dark flash —
+>    the exact "whose background do you wear" failure `display.spec.js` exists about, moved
+>    earlier in the load. Fixed with `bootColours()`: `applySkinCSS` caches the last-painted
+>    `bg`/`muted`, and `main.jsx` paints them before React mounts. Measured by holding the
+>    chunk with `page.route` so the boot state stops being a race — **`rgb(10,15,12)` before,
+>    the gym's `rgb(255,247,240)` after.**
+> 2. **Two `display.spec.js` tests read `:root` custom properties before the app mounted** and
+>    computed `NaN`. New `waitForApp()` in `e2e/helpers.js`. ⚠️ **Any future test that reads a
+>    computed style (rather than asserting on an element, which auto-waits) must call it.**
+>
+> ### A behaviour worth knowing about
+> **Changing only the fragment is a same-document navigation** — the browser does not re-run
+> `main.jsx`, so pasting a member link into a tab that already has the app open leaves the app
+> on screen and looks exactly like a broken link. The first person to do that would have been
+> whoever verified the feature. `main.jsx` now reloads on a `hashchange` that carries a token.
+> (Probed directly: `goto('#s=…')` kept the app; `reload()` showed the summary.)
+>
+> ### Files added
+> `src/lib/classToken.js` (+ `.test.js`, `.mirror.test.js`) · `src/lib/summaryContent.js` (+ test)
+> · `src/lib/summaryApi.js` (+ test) · `src/screens/ClassSummary.jsx` · `src/StaffApp.jsx` ·
+> `src/screens/runner/MemberLinkDialog.jsx` · `e2e/memberSummary.spec.js` ·
+> `supabase/functions/summary-token/index.ts` · `supabase/functions/summary-read/index.ts` ·
+> `supabase/migrations/0009_class_summaries.sql` · `scripts/sync-token-core.mjs`
+>
+> ### Still open after this session
+> **PersonasScreen's revealed panels** (never swept) · **a gym class type through the Runner
+> to a check-in** (never driven) · the 147 KB of this file and 9 audit files still at repo root.
+> **N2/N3 remain correctly blocked on attendance volume, which is blocked on the pilot.**
+
+---
+
+## Session 18
+
 _Last updated: 2026-07-28 (session 18, second half)_
 
-> **▶ STARTING A NEW SESSION? READ `SESSION-19-PROMPT.md`.** It supersedes this block and
-> `SESSION-17-PROMPT.md`. Gates at `2058625`: **`lint:crash` 0 · 683 unit · 202 e2e ·
+> Gates at `2058625`: **`lint:crash` 0 · 683 unit · 202 e2e ·
 > build 537.75 KB + 89.97 KB**. App.jsx **3,382 lines**.
 >
 > 🟢 **Dylan answered all nine Part B decisions.** Six shipped in session 18's second half:

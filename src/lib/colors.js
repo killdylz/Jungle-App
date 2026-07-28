@@ -322,4 +322,33 @@ export function applySkinCSS(tokens, meta={}) {
   }
   // Body background keeps in sync with skin
   document.body.style.background = tokens.bg;
+
+  // Remember the two colours the boot screen needs (see paintBootColours). The
+  // skin itself is resolved inside App, which is now a lazily-loaded chunk — so
+  // between the first paint and that chunk arriving there is a window with no
+  // brand at all. On gym Wi-Fi that is a visible flash, and for a studio with a
+  // light palette it is a flash of near-black.
+  try {
+    localStorage.setItem(BOOT_COLOURS_KEY, JSON.stringify({ bg: tokens.bg, muted: tokens.muted }));
+  } catch (_) { /* private mode / quota: the boot screen falls back, nothing else cares */ }
+}
+
+// ── The pre-React boot paint ────────────────────────────────────────────────
+// Deliberately the LAST-PAINTED colours rather than a re-resolved skin: knowing
+// the real answer would mean pulling the preset table (and therefore App) into
+// the entry chunk, which is exactly what the split exists to avoid. A returning
+// user is overwhelmingly likely to still be the same gym, and if they are not,
+// the wrong background shows for the few hundred milliseconds before App
+// corrects it — which is strictly better than no background at all.
+//
+// First-ever visit has no cache and gets the dark default, which is right:
+// there is no gym yet.
+export const BOOT_COLOURS_KEY = "jungle_boot_colours";
+
+export function bootColours(fallback = { bg: "#0A0F0C", muted: "#8AA294" }) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOOT_COLOURS_KEY) || "null");
+    if (raw && typeof raw.bg === "string" && typeof raw.muted === "string") return raw;
+  } catch (_) { /* fall through */ }
+  return fallback;
 }

@@ -1,6 +1,6 @@
 // The Class Runner itself — the surface a coach drives the room from.
 import { useState, useEffect, useRef } from "react";
-import { SkipForward, SkipBack, Monitor, Users, Mic } from "lucide-react";
+import { SkipForward, SkipBack, Monitor, Users, Mic, Share2 } from "lucide-react";
 import { FLAGS } from "../../config/flags.js";
 import { SCFG } from "../../data/stageConfig.js";
 import * as store from "../../lib/store.js";
@@ -10,6 +10,7 @@ import { useWindowWidth } from "../../ui/primitives.jsx";
 import { fmt, fmtSec } from "../../lib/format.js";
 import { prefersReducedMotion } from "./displayKit.js";
 import { CheckInPanel } from "./CheckInPanel.jsx";
+import { MemberLinkDialog } from "./MemberLinkDialog.jsx";
 
 export function LiveScreen({stages, onBack, liveState, onPlayPause, player, deviceId, activeDeviceId, setActiveDeviceId, devices, refreshDevices, nowPlaying, onDisplayMode, onNextStage, onPrevStage, onSkipTimer, onAddTrack, sessionName, classType, coachName, classInstanceId, scheduledAt}) {
   const vw = useWindowWidth();
@@ -41,6 +42,21 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
     setShowCheckIn(false);
     const id = ciId || classInstanceId || store.getClassInstances().slice(-1)[0]?.id;
     setCheckedInCount(id ? store.getAttendance().filter(a => a.classInstanceId === id).length : 0);
+  };
+
+  // N4 member link. The occurrence is resolved HERE rather than taken from the
+  // prop, because a coach can share a class without ever opening the roster —
+  // and `classInstanceId` is only set when they started from the Schedule. This
+  // is the same idempotent find-or-create the check-in panel runs, so both doors
+  // land on one row instead of the link pointing at a class with no check-ins.
+  const [memberLinkCi, setMemberLinkCi] = useState(null);
+  const openMemberLink = () => {
+    const ci = store.ensureClassInstance({
+      name: sessionName || "Class", classType: classType || "",
+      durationMin: Math.round(stages.reduce((a,s)=>a+(s.dur||0),0)/60) || null,
+      coachName: coachName || "", instanceId: classInstanceId,
+    }).instance;
+    setMemberLinkCi(ci.id);
   };
 
   // Feature 7: on-the-fly search overlay
@@ -250,6 +266,10 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
               coachName={coachName || ""} classInstanceId={classInstanceId} scheduledAt={scheduledAt}
               onClose={closeCheckIn}/>
           )}
+          {memberLinkCi && (
+            <MemberLinkDialog classInstanceId={memberLinkCi} stages={stages}
+              sessionName={sessionName || "Class"} onClose={()=>setMemberLinkCi(null)}/>
+          )}
           {/* HEADER */}
           <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -268,6 +288,13 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
               <button onClick={()=>setShowCheckIn(true)} title="Check in members"
                 style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"8px",border:`1px solid ${checkedInCount?"var(--accent)":"var(--border)"}`,background:"transparent",cursor:"pointer",color:checkedInCount?"var(--accent)":"var(--muted)",fontSize:"12px",fontWeight:"700",flexShrink:0}}>
                 <Users size={14}/>{checkedInCount ? ` ${checkedInCount}` : " Check in"}
+              </button>
+              {/* N4 — the only member-facing thing a coach can hand out. Sits
+                  beside check-in because both are "the class, as delivered". */}
+              <button onClick={openMemberLink} title="Create a link to share this class with members"
+                aria-label="Member link"
+                style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"700",flexShrink:0}}>
+                <Share2 size={14}/>{isMobile ? "" : " Link"}
               </button>
               {/* Spotify device picker */}
               {FLAGS.music && <SpotifyDevicePicker

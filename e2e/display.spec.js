@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { freshApp, nav, waitForApp, watchConsole, expectNoConsoleErrors } from "./helpers.js";
 
 // P2 · the 10-foot rule — the regression the Fable spec (§3) demands and the repo
 // did not have.
@@ -214,6 +214,9 @@ async function lightBrandApp(page) {
     localStorage.setItem("jungle_gym_branding", JSON.stringify({ gymName: "Iron Habit" }));
   }, LIGHT_BRAND);
   await page.reload();
+  // The skin is applied by App, which is a lazy chunk since N4 split the root.
+  // Reading :root before it mounts returns "" and every ratio below becomes NaN.
+  await waitForApp(page);
 }
 
 const cssVars = page => page.evaluate(() => {
@@ -247,6 +250,27 @@ test.describe("a light brand survives the trip to the room", () => {
     expect(v.bg).toBe(LIGHT_BRAND.bg);
 
     expectNoConsoleErrors(errors);
+  });
+
+  // N4 made AuthGate + App a lazily-loaded chunk, which bought a member ~570 KB
+  // and cost a window between the first paint and that chunk arriving. For a
+  // studio with a light palette that window was a flash of near-black — the
+  // exact "whose background do you wear" failure this describe block exists
+  // about, just moved earlier in the load.
+  //
+  // The boot screen therefore wears the colours the app painted LAST time
+  // (colors.js: bootColours). Measured by holding the chunk so the boot state
+  // stops being a race.
+  test("the boot screen wears the gym's background, not a dark default", async ({ page }) => {
+    await lightBrandApp(page);            // paints once, so the colours are cached
+
+    await page.route("**/StaffApp.jsx*", route => { /* never fulfilled: hold the app in boot */ });
+    await page.reload();
+
+    await expect(page.getByText("Loading…")).toBeVisible();
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    // The gym's cream. Before the cache this was rgb(10, 15, 12).
+    expect(bg).toBe("rgb(255, 247, 240)");
   });
 
   // The Floor board is the mid-class member-facing surface and it is fully
