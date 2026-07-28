@@ -1,8 +1,69 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-27 (session 16)_
+_Last updated: 2026-07-28 (session 17)_
 
-> **▶ STARTING A NEW SESSION?** `SESSION-16-PROMPT.md` carries the pending list and the
+> **▶ STARTING A NEW SESSION?** Read this block, then spec **§0**'s trust ranking and **§12**.
+> `SESSION-17-PROMPT.md` carries the blocked-on-Dylan list, but **its §4.3 (I10) is wrong** —
+> see below. Read its **§0a** first; `git log` taken at session start goes stale.
+> Gates at `e0f62ac`: **`lint:crash` 0 · 683 unit (no todos) · 189 e2e (no fixme) ·
+> build 535.94 KB + an 89.97 KB PersonasScreen chunk**. App.jsx **3,232 lines** (`wc -l`).
+>
+> 🔴 **THE BIGGEST FIND: six effects pushed the app's DEFAULTS over the gym's real branding.**
+> Six places had the shape `useState(() => store.getX())` + `useEffect(() => store.saveX(x), [x])`.
+> Locally harmless — the mount pass writes back what it just read. Against Supabase it is data
+> loss: `store.connect()` runs during the App root's RENDER, so `_synced()` is already true when
+> effects run, and on a **fresh device** the initialisers return DEFAULTS (skin `"canopy"`,
+> branding `{}`). The mount pass pushed those to `brand_profiles` for the whole gym — the
+> studio's logo, name, colours and skin — while `hydrateAll()` fired its SELECT from a sibling
+> effect. **Which one won was a race.** The I3 guards do not cover it: `_blobStale` re-pushes
+> when the last write FAILED; here the write SUCCEEDS.
+> Fixed by `src/ui/useAfterMount.js`, pinned by `e2e/mountWrites.spec.js`.
+>
+> 🔴 **…and the obvious version of that guard is WRONG.** A "have I mounted yet" ref — which is
+> what CalendarScreen had carried since F5 — is defeated by `<StrictMode>` (src/main.jsx). React
+> remounts in dev to surface non-idempotent effects; the ref survives the cycle, so the second
+> pass performs exactly the write the guard prevents. **Worse than failing: StrictMode is
+> dev-only, so the naive guard works in production and fails in dev** — correctness the tests
+> can never observe. The hook now asks "has this value CHANGED since first render?" instead of
+> counting mounts, and `armed` latches so an A→B→A edit is not silently dropped.
+> This is session 16's "the tool was wrong before the code was", for the fourth session running.
+>
+> 🟢 **Seven modals were never modal.** A live probe of every overlay found the same four
+> failures in each: no `role="dialog"`, no `aria-modal`, focus never entered, Tab walked out the
+> back, Escape did nothing. Opening the profile modal left focus on the trigger BEHIND the
+> overlay, so the first Tab landed on "Resume building" — one of **17 controls hidden behind the
+> backdrop**, all focusable and activatable. The add-class modal had **50**. Fixed by
+> `src/ui/dialog.js`; 24 tests in `e2e/dialogs.spec.js`, including the nested reset-confirm case.
+>
+> ⚠️ **I10 IS DONE and three documents said otherwise.** It landed in `224b074` (session 15),
+> 39 commits before session 17 started, yet the session-17 prompt ranked it the largest remaining
+> engineering item. `persona_plans` routes through `_bgUpsertDelta`; `attendance` was always
+> per-row. 12 unit tests already pinned it. store.js:1409 and both spec §12 entries corrected.
+> **Verify a backlog item against the CODE before spending a session on it.**
+>
+> 📏 **Production bundle re-measured** (was three sessions stale at 787.2 KB): **776.85 KB main +
+> 91.19 KB chunk = 868 KB, 214.43 KB gzip**, built with dummy `VITE_SUPABASE_*` vars so rollup
+> keeps the sync paths. The local gate build under-reports by **~45%**, not ~37%.
+>
+> **Shipped session 17** — `a85120c` → `e0f62ac`, four commits:
+> `fae0ab9` dialog semantics + focus trapping on all seven live overlays ·
+> `a948d0b` interaction-revealed a11y sweep (scanners shared into `e2e/a11yScan.js`); found the
+> profile modal's Gym Branding tab shipping **nameless brand colour swatches and font select** ·
+> `843547d` the mount-write fix, plus **four unnamed Room TV settings gears** found when the
+> sweep was extended past the mode switch onto a board ·
+> `e0f62ac` I10 correction + bundle re-measure.
+>
+> **Still open, in the order I'd take them:** N4 (⛔ Dylan, Edge Function — still the only
+> member-facing surface) · OPS backups (⛔ Dylan) · the live-verification queue (§5, unexercisable
+> locally — and I10's delta blob round-trip is now the interesting one) · I14 hydrate pagination ·
+> I8 media proxy · DEC-16 gym-authored class type · edit-a-scheduled-class (rename/re-slot) ·
+> the 13 session prompts + 143 KB handoff at repo root (`docs/history/`, Dylan's call).
+>
+> ⚠️ **`SESSION-16-PROMPT.md` is superseded.** Its §4.1/§4.2/§4.4/§4.5 were done in session 16;
+> `SESSION-17-PROMPT.md` §4.3's I10 row and §4.5's focus-trapping / revealed-panels /
+> mount-writes rows are done here.
+
+> **▶ SESSION 16 CONTEXT (retained).** `SESSION-16-PROMPT.md` carries the pending list and the
 > blocked-on-Dylan items — but **its §4.1 (I6), §4.2 (I9), §4.4 (dead symbols / unused props /
 > a11y) and §4.5 (Library, PersonasScreen) are now DONE**; see "Shipped session 16" below for
 > what is actually left. Read its **§0a first** — a second session was committing to `main`
