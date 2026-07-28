@@ -7,7 +7,7 @@ import * as store from "./lib/store.js";
 import { uid } from "./lib/ids.js";
 import { TEMPLATES } from "./data/templates.js";
 import { GLOSSARY } from "./data/glossary.js";
-import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES } from "./data/library.js";
+import { WORKOUT_LIBRARY, STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES, DEFAULT_STAGE_TEMPLATE } from "./data/library.js";
 // personas.seed, personaAggregate, movementTaxonomy, blueprints, generationPresets,
 // slidesImport and planParser are no longer imported here AT ALL: the personas
 // cluster was their only consumer and it now owns them (I6 stage 4). Deleting the
@@ -261,8 +261,20 @@ function distributeLibraryExercises(classType, subType, currentStages, lib) {
 // CLASS_STAGE_TEMPLATES moved to src/data/library.js (imported above).
 
 // Build fresh stages from a class template (empty exercises — ready for library distribute)
-function buildStagesFromTemplate(classType, subType) {
-  const tmpl = CLASS_STAGE_TEMPLATES[classType]?.[subType];
+//
+// `lib` is the MERGED catalogue. It is what separates "this class type has no
+// built-in stage template" from "this class type does not exist": the first is
+// every gym-authored type since DEC-16 and must produce a usable skeleton, the
+// second is bad input and must still return null so `applyTemplate` bails.
+//
+// Getting that distinction wrong is what shipped the hour-long regression this
+// guards: a gym type fell into the null branch, `applyTemplate` returned early,
+// and the Builder silently kept the PREVIOUS class type's stages under the new
+// type's name.
+function buildStagesFromTemplate(classType, subType, lib) {
+  const known = !!(lib || {})[classType];
+  const tmpl = CLASS_STAGE_TEMPLATES[classType]?.[subType]
+    || (known ? DEFAULT_STAGE_TEMPLATE : null);
   if (!tmpl) return null;
   return tmpl.map(t => ({ id:uid(), name:t.name, type:t.type, dur:t.dur, exercises:[], tracks:[], groups:[] }));
 }
@@ -2024,7 +2036,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
   // Apply a template + immediately smart-distribute exercises from the library
   const applyTemplate = (classType, subType) => {
-    const newStages = buildStagesFromTemplate(classType, subType);
+    const newStages = buildStagesFromTemplate(classType, subType, LIB);
     if (!newStages) return;
     // Replace entire stage list
     onReorderStages(newStages);

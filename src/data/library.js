@@ -662,6 +662,23 @@ export const STAGE_LIBRARY_MAP = {
   cardio:   "main",
 };
 
+// The stage timeline for a class type that has no entry above — which since
+// DEC-16 (session 18) means any class type the GYM authored. Without it,
+// `buildStagesFromTemplate` returned null for a gym's own type, `applyTemplate`
+// returned early, and selecting "Barre" left the Builder showing whatever the
+// previous class type had produced: the dropdown said Barre and the stages said
+// CrossFit. A silent disagreement between the label and the content is worse
+// than a visible failure, and it shipped for about an hour.
+//
+// Deliberately generic — warm-up, one main block, cool-down, 35 minutes. A gym
+// authoring a class type is telling us we do not know its shape, so guessing a
+// specialised one would be worse than an honest skeleton they can edit.
+export const DEFAULT_STAGE_TEMPLATE = [
+  { name: "Warm-Up",   type: "warmup",   dur: 300  },
+  { name: "Main Set",  type: "circuit",  dur: 1500 },
+  { name: "Cool-Down", type: "cooldown", dur: 300  },
+];
+
 // ─── Class-level stage structure templates ────────────────────────────────────
 // Defines the default stage timeline for each class type + sub-type.
 // Each entry is an array of { name, type, dur } — id/exercises/tracks added at apply-time.

@@ -152,6 +152,73 @@ test.describe("a gym can author its own class type", () => {
     await expect(page.locator("select").first()).toContainText(TYPE);
   });
 
+  // 🔴 REGRESSION, found by regression-testing the feature an hour after
+  // shipping it. Wiring the READS was only half the job: `applyTemplate` builds
+  // its stage skeleton from `CLASS_STAGE_TEMPLATES`, a separate BUILT-IN
+  // constant that can never contain a `gym-` key. So `buildStagesFromTemplate`
+  // returned null, `applyTemplate` returned early, and selecting a gym's own
+  // type did NOTHING — silently, with no toast and no error.
+  //
+  // That is precisely the defect class sessions 15–17 were built around: a
+  // control that renders, invites a press, and does nothing. Making the type
+  // selectable everywhere without this would have been worse than leaving
+  // DEC-16 unbuilt, because the coach would have had a class type that looked
+  // real and could not be used.
+  // ⚠️ THE FIRST VERSION OF THIS TEST PASSED AGAINST THE BUG. It asserted "the
+  // draft has stages, including a warmup and a cooldown" — and a fresh Builder
+  // ALREADY has five default stages from `mkStages()` with exactly those types,
+  // so it was true either way. The discriminator has to be that the stages
+  // CHANGED, which needs a known different starting point. Applying a built-in
+  // type first gives one, and doubles as the control: if the built-in apply
+  // stops working, this test fails on its precondition rather than silently
+  // measuring nothing.
+  const stagesOf = async (page) =>
+    ((await stored(page, "jungle_draft_class"))?.stages || []).map(s => `${s.type}:${s.name}`);
+
+  test("a gym type builds real stages — it is not a dead selection", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    await closeLibrary(page);
+
+    await nav(page, "Class Builder");
+    const dropdown = page.locator("select").first();
+    const gymValue = await dropdown.locator("option").filter({ hasText: TYPE }).getAttribute("value");
+
+    // ── Control: a built-in type rebuilds the stage list. A fresh Builder's
+    //    default exercises carry no `source`, so `anyCustom` is true and the
+    //    change is routed through the "Apply template?" confirm.
+    await dropdown.selectOption("crossfit");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect.poll(() => stagesOf(page),
+      { message: "precondition: a BUILT-IN type must rebuild the stages" })
+      .toContain("circuit:WOD");
+    const builtInStages = await stagesOf(page);
+
+    // ── The gym's own type. Its exercises now all carry source:"library", so
+    //    `anyCustom` is false and applyTemplate is called directly.
+    await dropdown.selectOption(gymValue);
+
+    await expect.poll(async () => (await stored(page, "jungle_draft_class"))?.classChoice?.classType,
+      { message: "selecting the gym's type must take" }).toBe(gymValue);
+
+    await expect.poll(() => stagesOf(page),
+      { message: "the gym's type left the PREVIOUS type's stages in place — the " +
+                 "dropdown says Barre and the Builder is still showing CrossFit" })
+      .not.toEqual(builtInStages);
+
+    // …and what replaced them has to be usable, not merely different.
+    const stages = (await stored(page, "jungle_draft_class")).stages;
+    expect(stages.map(s => s.type), "the default skeleton needs a warmup and a cooldown")
+      .toEqual(expect.arrayContaining(["warmup", "cooldown"]));
+    expect(stages.every(s => s.name && s.dur > 0),
+      "every stage needs a name and a duration").toBe(true);
+
+    expectNoConsoleErrors(errors);
+  });
+
   // Reset means the BUILT-IN catalogue. If `handleReset` read the merged library
   // it would reset to whatever the gym currently has, i.e. to nothing.
   test("Reset to defaults removes the gym's type", async ({ page }) => {
