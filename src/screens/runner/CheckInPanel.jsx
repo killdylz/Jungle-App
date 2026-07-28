@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Check, Plus } from "lucide-react";
 import { Btn } from "../../ui/primitives.jsx";
+import { useDialog } from "../../ui/dialog.js";
 import * as store from "../../lib/store.js";
 import { recordSession as recordCheckinSession } from "../../lib/checkinMetrics.js";
 import { fmtOccurrence } from "../../lib/format.js";
@@ -50,6 +51,10 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
     return () => { recordCheckinSession({ classInstanceId: ci.id, openedAt: opened, stamps: marks }); };
   }, [ci.id]);
 
+  // Escape closes through the same id-carrying path as the backdrop click below,
+  // so a keyboard exit cannot land the runner's badge on the wrong occurrence.
+  const dlg = useDialog(() => onClose(ci.id), "Check in");
+
   const checkedIn = new Set(attendance.filter(a => a.classInstanceId === ci.id).map(a => a.memberId));
   const term  = q.trim().toLowerCase();
   const shown = members.filter(m => !term || (m.name || "").toLowerCase().includes(term));
@@ -83,7 +88,7 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
   // occurrence sits wherever it was published.
   return (
     <div onClick={()=>onClose(ci.id)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg)",border:`1px solid var(--border)`,borderRadius:"14px",width:"100%",maxWidth:"460px",maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div {...dlg} onClick={e=>e.stopPropagation()} style={{background:"var(--bg)",border:`1px solid var(--border)`,borderRadius:"14px",width:"100%",maxWidth:"460px",maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden",outline:"none"}}>
         <div style={{padding:"16px 18px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
             <div>

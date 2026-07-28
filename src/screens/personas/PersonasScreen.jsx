@@ -30,6 +30,7 @@ import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPr
          fetchPresentationText, splitDeckSlides, slideDate, looksLikeClassSlide } from "../../lib/slidesImport.js";
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "../../lib/planParser.js";
 import { useWindowWidth, Btn, Input, Select, Tag } from "../../ui/primitives.jsx";
+import { useDialog } from "../../ui/dialog.js";
 import { ROLE_LABEL, MOVEMENT_CATEGORY_LABEL, CLASS_CATEGORY_LABEL, SOURCE_LABEL,
          KIND_LABEL, schemeTypeLabel, readErrorMessage } from "../../ui/labels.js";
 
@@ -1345,6 +1346,7 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
 // grounds generation. Modal over a deep-copied draft; Save writes back the plan.
 function PersonaPlanEditor({ plan, onSave, onClose }) {
   const vw = useWindowWidth(); const isMobile = vw < 640;
+  const dlg = useDialog(onClose, "Edit plan");
   const [title, setTitle] = useState(plan.title || "");
   const [classType, setClassType] = useState(plan.classType || "");
   const [focus, setFocus] = useState(plan.focus || "");
@@ -1363,10 +1365,10 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
   const lbl = { fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:"3px" };
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:isMobile?"12px":"40px 20px",overflowY:"auto"}}>
-      <div onClick={e=>e.stopPropagation()} style={{...P_CARD,width:"100%",maxWidth:"720px",padding:isMobile?"16px":"24px"}}>
+      <div {...dlg} onClick={e=>e.stopPropagation()} style={{...P_CARD,width:"100%",maxWidth:"720px",padding:isMobile?"16px":"24px",outline:"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
           <h3 style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",margin:0}}>Edit plan</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
+          <button onClick={onClose} aria-label="Close edit plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr 1fr",gap:"8px",marginBottom:"16px"}}>
           <div><label style={lbl}>Title</label><Input value={title} onChange={e=>setTitle(e.target.value)}/></div>

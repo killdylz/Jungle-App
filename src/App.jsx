@@ -39,6 +39,7 @@ import { hexA, wcagContrast, nudgeContrast,
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
 import { ThemeContext, useWindowWidth, Input, Select, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";
+import { useDialog } from "./ui/dialog.js";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
 import { AdminTeamScreen } from "./screens/AdminTeamScreen.jsx";
 import { CalendarScreen } from "./screens/CalendarScreen.jsx";
@@ -311,6 +312,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
   const vwPM = useWindowWidth();
   const isMobilePM = vwPM < 480;
   const [tab, setTab] = useState("profile"); // "profile" | "branding"
+  const dlg = useDialog(onClose, "Your profile and gym branding");
 
   // ── Profile stats ──
   const totalSessions = sessionHistory.length;
@@ -391,7 +393,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
   return (
     <div style={{position:"fixed",inset:"0",background:"rgba(0,0,0,0.65)",display:"flex",alignItems:isMobilePM?"flex-end":"center",justifyContent:"center",zIndex:1000,padding:isMobilePM?"0":"16px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:isMobilePM?"14px 14px 0 0":"14px",width:"100%",maxWidth:"420px",maxHeight:isMobilePM?"96vh":"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid var(--border)`}}>
+      <div {...dlg} onClick={e=>e.stopPropagation()} style={{background:"var(--card)",borderRadius:isMobilePM?"14px 14px 0 0":"14px",width:"100%",maxWidth:"420px",maxHeight:isMobilePM?"96vh":"92vh",display:"flex",flexDirection:"column",overflow:"hidden",border:`1px solid var(--border)`,outline:"none"}}>
 
         {/* Header */}
         <div style={{padding:"18px 20px 12px",borderBottom:`1px solid var(--border)`,flexShrink:0}}>
@@ -1497,6 +1499,25 @@ function glossaryEntry(name) {
   return GLOSSARY_BY_NAME.get(normMovementName(name)) || null;
 }
 
+// The library's "are you sure" — a nested dialog. Split out of the render below
+// only so it can own a `useDialog` of its own; the markup is unchanged.
+function ResetLibraryConfirm({ onCancel, onConfirm }) {
+  const dlg = useDialog(onCancel, "Reset the exercise library to defaults?");
+  return (
+    <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
+      <div {...dlg} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center",outline:"none"}}>
+        <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
+        <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"8px"}}>Reset to Defaults?</p>
+        <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
+        <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
+          <button onClick={onCancel} style={{padding:"8px 20px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>Cancel</button>
+          <button onClick={onConfirm} style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LibraryBrowserModal ──────────────────────────────────────────────────────
 function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const vw = useWindowWidth();
@@ -1576,18 +1597,19 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
 
   const stageLabels = {warmup:"Warm-up",main:"Main set",cooldown:"Cool-down"};
+  const dlg = useDialog(onClose, "Exercise library");
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:600,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?"0":"20px"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
 
-      <div style={{
+      <div {...dlg} style={{
         background:"var(--card)",borderRadius:isMobile?"14px 14px 0 0":"18px",
         border:`1px solid var(--border)`,
         width:"100%",maxWidth:isTablet?"700px":"1200px",
         height:isMobile?"96vh":"88vh",
         display:"flex",flexDirection:"column",overflow:"hidden",position:"relative",
-        boxShadow:"0 30px 80px rgba(0,0,0,.45)"
+        boxShadow:"0 30px 80px rgba(0,0,0,.45)",outline:"none"
       }}>
 
         {/* Toast */}
@@ -1853,20 +1875,45 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
               its width (audit 2.2). The Glossary cues claim this space instead. */}
         </div>
 
-        {/* Reset overlay */}
+        {/* Reset overlay. Its own component so `useDialog` mounts and unmounts
+            WITH the confirm — a hook cannot be called from inside a `&&`. This
+            one nests inside the library dialog above, which is the case the
+            hook's topmost-wins stack exists for: Escape must cancel the confirm
+            and leave the library open. */}
         {resetConfirm && (
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
-            <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center"}}>
-              <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
-              <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"8px"}}>Reset to Defaults?</p>
-              <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
-              <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
-                <button onClick={()=>setResetConfirm(false)} style={{padding:"8px 20px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>Cancel</button>
-                <button onClick={handleReset} style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
-              </div>
-            </div>
-          </div>
+          <ResetLibraryConfirm onCancel={()=>setResetConfirm(false)} onConfirm={handleReset}/>
         )}
+      </div>
+    </div>
+  );
+}
+
+// The Builder's "Build for me" overlay. Extracted for the same single reason as
+// ResetLibraryConfirm — a `useDialog` needs a component to mount with. The
+// markup and behaviour below are unchanged, including the `autoFocus` that the
+// hook deliberately does not override.
+function SmartBuildDialog({ onClose, smartPrompt, setSmartPrompt, runSmartBuild, smartBusy, applyTemplate }) {
+  const dlg = useDialog(onClose, "Build a class");
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+      <div {...dlg} onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"22px",width:"min(480px,100%)",boxSizing:"border-box",outline:"none"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
+          <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Build a class</div>
+          <button onClick={onClose} aria-label="Close build a class" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
+        </div>
+        <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"8px"}}>Describe it and Jungle builds the stages + exercises:</div>
+        <div style={{display:"flex",gap:"8px",marginBottom:"18px"}}>
+          <input autoFocus value={smartPrompt} onChange={e=>setSmartPrompt(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ runSmartBuild(); } }} placeholder="e.g. 45 min HIIT with a strength finisher" style={{flex:1,minWidth:0,padding:"10px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
+          <button onClick={()=>{ runSmartBuild(); }} style={{padding:"10px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap",opacity:smartBusy?0.6:1}} disabled={smartBusy}>{smartBusy?"Building…":"Build"}</button>
+        </div>
+        <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Or insert a template</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",maxHeight:"240px",overflowY:"auto"}}>
+          {Object.entries(WORKOUT_LIBRARY).map(([k,cls])=>(
+            <button key={k} onClick={()=>{ const sub=Object.keys(cls.subTypes||{})[0]||null; applyTemplate(k,sub); onClose(); }} style={{display:"flex",alignItems:"center",gap:"8px",padding:"10px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
+              <span style={{fontSize:"18px"}}>{cls.icon}</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -2577,27 +2624,11 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         </div>
       )}
       {showSmart && (
-        <div onClick={()=>setShowSmart(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px",padding:"22px",width:"min(480px,100%)",boxSizing:"border-box"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"}}>
-              <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",fontFamily:"var(--display)"}}>Build a class</div>
-              <button onClick={()=>setShowSmart(false)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
-            </div>
-            <div style={{fontSize:"12px",color:"var(--muted)",marginBottom:"8px"}}>Describe it and Jungle builds the stages + exercises:</div>
-            <div style={{display:"flex",gap:"8px",marginBottom:"18px"}}>
-              <input autoFocus value={smartPrompt} onChange={e=>setSmartPrompt(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ runSmartBuild(); } }} placeholder="e.g. 45 min HIIT with a strength finisher" style={{flex:1,minWidth:0,padding:"10px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",color:"var(--text)",fontSize:"13px"}}/>
-              <button onClick={()=>{ runSmartBuild(); }} style={{padding:"10px 16px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",whiteSpace:"nowrap",opacity:smartBusy?0.6:1}} disabled={smartBusy}>{smartBusy?"Building\u2026":"Build"}</button>
-            </div>
-            <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"8px"}}>Or insert a template</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",maxHeight:"240px",overflowY:"auto"}}>
-              {Object.entries(WORKOUT_LIBRARY).map(([k,cls])=>(
-                <button key={k} onClick={()=>{ const sub=Object.keys(cls.subTypes||{})[0]||null; applyTemplate(k,sub); setShowSmart(false); }} style={{display:"flex",alignItems:"center",gap:"8px",padding:"10px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",textAlign:"left"}}>
-                  <span style={{fontSize:"18px"}}>{cls.icon}</span><span style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{cls.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <SmartBuildDialog
+          onClose={()=>setShowSmart(false)}
+          smartPrompt={smartPrompt} setSmartPrompt={setSmartPrompt}
+          runSmartBuild={runSmartBuild} smartBusy={smartBusy}
+          applyTemplate={applyTemplate}/>
       )}
       {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
       {FLAGS.music && showDjModal && (
