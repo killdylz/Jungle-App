@@ -76,3 +76,170 @@ test.describe("editing the schedule", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ─── 3. CHANGE a class already on the schedule (session 18) ─────────────────
+//
+// Session 15 added remove and stopped there, so the only way to fix a typo or
+// move a class to a different slot was remove-and-re-add. That mints a NEW `id`,
+// and the id is the rule's identity: `occurrencesForWeek` stamps it onto every
+// occurrence it produces as `ruleId`. Re-founding a class to rename it costs
+// nothing today and costs the link from a dated class back to the rule that
+// scheduled it the moment anything reads `ruleId`.
+//
+// So the load-bearing assertion in every test below is on the STORED id, not on
+// what the grid renders. A rename that looks right and silently re-founds the
+// rule is exactly the defect this feature exists to avoid, and it is invisible
+// from the outside.
+
+const idsOf   = async (page) => ((await stored(page, KEY)) ?? []).map(c => c.id);
+const ruleOf  = async (page, name) =>
+  ((await stored(page, KEY)) ?? []).find(c => c.name === name) ?? null;
+
+// 🔴 THE CLOCK HAS TO MOVE BEFORE AN EDIT, or every id assertion below is
+// VACUOUS. A rule's id is `uc${Date.now()}`, and `page.clock.setFixedTime`
+// FREEZES `Date.now()` — probed directly: two reads 1.5s apart both returned
+// 1784520000000. So a re-founded rule is minted with the *same* id as the one it
+// replaced, and "the id survived" passes whether the code preserves it or not.
+//
+// Found by mutation: making the edit assign a fresh id — the exact defect this
+// feature exists to prevent — left all six tests green. Advancing the clock is
+// what makes the assertion able to tell the two apart, and the fixed start time
+// still has to exist because the grid is a real week (the reason session 15 put
+// it there).
+//
+// The wider point, worth carrying: any id minted from `Date.now()` is
+// non-unique under a fixed clock, so any test that freezes time cannot
+// distinguish two objects created from it.
+const EDIT_TIME = new Date(2026, 6, 20, 12, 5, 0); // same week, 5 min later
+const advanceClock = (page) => page.clock.setFixedTime(EDIT_TIME);
+
+async function addClass(page, { cell, name, repeat }) {
+  await page.getByRole("button", { name: cell }).click();
+  await page.getByPlaceholder(/class name/i).fill(name);
+  if (repeat) await page.getByRole("button", { name: repeat, exact: true }).click();
+  await page.getByRole("button", { name: "Add to schedule" }).click();
+  await expect.poll(async () => (await ruleOf(page, name)) !== null).toBe(true);
+}
+
+test.describe("changing a class already on the schedule", () => {
+  test("renaming keeps the SAME rule — it does not re-found the class", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    await addClass(page, { cell: "Add a class on Tue at 18:00", name: "Strenght Lab" });
+    const [originalId] = await idsOf(page);
+    expect(originalId, "precondition: the rule must have an id to preserve").toBeTruthy();
+
+    await advanceClock(page);
+    await page.getByRole("button", { name: "Edit Strenght Lab on Tue at 18:00" }).click();
+
+    // The form opens on the rule's CURRENT values, not the Mon/06:00 default —
+    // otherwise "edit" silently re-slots every class it touches.
+    await expect(page.getByPlaceholder(/class name/i)).toHaveValue("Strenght Lab");
+    await expect(page.getByLabel("Day")).toHaveValue("Tue");
+    await expect(page.getByLabel("Time slot")).toHaveValue("18:00");
+
+    await page.getByPlaceholder(/class name/i).fill("Strength Lab");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect.poll(async () => (await ruleOf(page, "Strength Lab"))?.id)
+      .toBe(originalId);
+    expect(await idsOf(page), "an edit must not add a second rule").toHaveLength(1);
+    await expect(page.getByRole("button", { name: /^Edit Strength Lab/ })).toHaveCount(1);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("re-slotting moves the class and keeps its id", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    await addClass(page, { cell: "Add a class on Mon at 06:00", name: "Sunrise HIIT" });
+    const [originalId] = await idsOf(page);
+
+    await advanceClock(page);
+    await page.getByRole("button", { name: "Edit Sunrise HIIT on Mon at 06:00" }).click();
+    await page.getByLabel("Day").selectOption("Thu");
+    await page.getByLabel("Time slot").selectOption("19:30");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect.poll(async () => {
+      const r = await ruleOf(page, "Sunrise HIIT");
+      return r ? `${r.day}|${r.slot}|${r.id}` : null;
+    }, { message: "the rule must move to Thu 19:30 and keep its id" })
+      .toBe(`Thu|19:30|${originalId}`);
+
+    // The grid must agree: the old cell is empty and addable again, the new one
+    // holds the class. Asserting only the store would miss a render that kept
+    // painting the class where it used to be.
+    await expect(page.getByRole("button", { name: "Add a class on Mon at 06:00" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Edit Sunrise HIIT on Thu at 19:30" })).toHaveCount(1);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("switching a one-off to weekly drops its weekKey, and back again stamps it", async ({ page }) => {
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    // "This week" is the `once` repeat, which is the only one that carries a
+    // weekKey. A stale weekKey left on a weekly rule is inert today and is
+    // exactly the leftover that reads as a bug later.
+    await addClass(page, { cell: "Add a class on Fri at 12:00", name: "Pop-up Yoga", repeat: "This week" });
+    const oneOff = await ruleOf(page, "Pop-up Yoga");
+    expect(oneOff.repeat).toBe("once");
+    expect(oneOff.weekKey, "a one-off must carry the week it belongs to").toBeTruthy();
+    const stampedWeek = oneOff.weekKey;
+
+    await page.getByRole("button", { name: "Edit Pop-up Yoga on Fri at 12:00" }).click();
+    await page.getByRole("button", { name: "Weekly", exact: true }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect.poll(async () => {
+      const r = await ruleOf(page, "Pop-up Yoga");
+      return r && r.repeat === "weekly" && !("weekKey" in r);
+    }, { message: "weekly rules must not keep a weekKey" }).toBe(true);
+
+    await page.getByRole("button", { name: "Edit Pop-up Yoga on Fri at 12:00" }).click();
+    await page.getByRole("button", { name: "This week", exact: true }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect.poll(async () => (await ruleOf(page, "Pop-up Yoga"))?.weekKey)
+      .toBe(stampedWeek);
+  });
+
+  test("editing a published week makes it publishable again rather than silently diverging", async ({ page }) => {
+    await page.clock.setFixedTime(MONDAY_NOON);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    await addClass(page, { cell: "Add a class on Wed at 09:00", name: "Old Name" });
+
+    const publish = page.getByTestId("publish-week");
+    await expect(publish).toBeEnabled();
+    await publish.click();
+    await expect(publish, "the week is now on the books").toBeDisabled();
+
+    // A rename changes the occurrence's identity (`name@startsAt`), so the
+    // edited rule is unpublished again. The button saying so IS the disclosure —
+    // it is computed from the same diffOccurrences the publish path uses, so it
+    // cannot drift from what publishing would actually do.
+    await page.getByRole("button", { name: "Edit Old Name on Wed at 09:00" }).click();
+    await page.getByPlaceholder(/class name/i).fill("New Name");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(publish,
+      "after a rename the week must read as having something left to publish",
+    ).toBeEnabled();
+
+    // And the already-published occurrence is untouched — a class that ran did
+    // run, which is the same rule removeClass states.
+    const instances = await stored(page, "jungle_class_instances");
+    expect(instances.map(i => i.name)).toContain("Old Name");
+  });
+});

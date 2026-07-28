@@ -15,7 +15,7 @@
 import React from "react";
 // Both icons matter equally and neither is visible to `lint:crash` — it cannot
 // resolve JSX element names, only plain identifiers. See RosterScreen.jsx.
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, X, Pencil } from "lucide-react";
 import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
@@ -30,14 +30,20 @@ import { useAfterMount } from "../ui/useAfterMount.js";
 // 50 focusable controls of the schedule grid behind it.
 // DAYS / SLOTS / CAT_COLOR stay component-local (see the file header) and are
 // passed in, rather than hoisted to module scope to suit this extraction.
-function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, catColor }) {
-  const dlg = useDialog(onClose, "Add class");
+//
+// One dialog for both add and edit. The fields are identical — an edit IS the
+// add form with the rule's current values in it — so a second component would be
+// the same markup twice, and the second copy is where the day dropdown quietly
+// stops matching the first.
+function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, catColor, editing }) {
+  const title = editing ? "Edit class" : "Add class";
+  const dlg = useDialog(onClose, title);
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
       <div {...dlg} onClick={e=>e.stopPropagation()} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"22px",width:"min(420px,100%)",boxSizing:"border-box",outline:"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
-          <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)"}}>Add class</div>
-          <button onClick={onClose} aria-label="Close add class" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
+          <div style={{fontSize:"16px",fontWeight:"800",color:"var(--text)"}}>{title}</div>
+          <button onClick={onClose} aria-label={`Close ${title.toLowerCase()}`} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)"}}><X size={18}/></button>
         </div>
         <input autoFocus value={addForm.name} onChange={e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="Class name" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",marginBottom:"10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"14px"}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
@@ -52,7 +58,7 @@ function AddClassDialog({ onClose, addForm, setAddForm, addClass, days, slots, c
             <button key={val} onClick={()=>setAddForm(f=>({...f,repeat:val}))} style={{flex:1,padding:"9px 0",background:addForm.repeat===val?"var(--accent)":"transparent",color:addForm.repeat===val?"var(--on-accent)":"var(--muted)",border:`1px solid ${addForm.repeat===val?"var(--accent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>{lbl}</button>
           ))}
         </div>
-        <button onClick={addClass} disabled={!addForm.name.trim()} style={{width:"100%",padding:"12px",background:addForm.name.trim()?"var(--accent)":"var(--border)",color:addForm.name.trim()?"var(--on-accent)":"var(--muted)",border:"none",borderRadius:"9px",cursor:addForm.name.trim()?"pointer":"not-allowed",fontSize:"14px",fontWeight:"700"}}>Add to schedule</button>
+        <button onClick={addClass} disabled={!addForm.name.trim()} style={{width:"100%",padding:"12px",background:addForm.name.trim()?"var(--accent)":"var(--border)",color:addForm.name.trim()?"var(--on-accent)":"var(--muted)",border:"none",borderRadius:"9px",cursor:addForm.name.trim()?"pointer":"not-allowed",fontSize:"14px",fontWeight:"700"}}>{editing ? "Save changes" : "Add to schedule"}</button>
       </div>
     </div>
   );
@@ -134,13 +140,70 @@ export function CalendarScreen({onBack, onStartClass}) {
     else if (uc.repeat === "weekly") { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
     else if (uc.weekKey === weekKey) { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
   });
+  // ── Edit a rule in place (session 18) ─────────────────────────────────────
+  // Session 15 gave the grid a remove; there was still no way to RENAME or
+  // RE-SLOT a class. The only path was remove-and-re-add, which mints a new
+  // `id` — and the id is the rule's identity, carried onto every occurrence
+  // `occurrencesForWeek` produces as `ruleId`. Losing it costs nothing today
+  // and costs the link from a dated class back to the rule that scheduled it
+  // the moment anything reads `ruleId`. A coach fixing a typo should not
+  // silently re-found the class.
+  //
+  // WHAT AN EDIT DOES NOT DO, deliberately: it does not rewrite occurrences
+  // already published. Those are dated history and `class_instances` is the
+  // append-only spine attendance hangs off — the same principle `removeClass`
+  // below already states. A rule is a template; publishing stamps a copy.
+  //
+  // So a rename or a re-slot on an ALREADY-PUBLISHED week leaves the old
+  // occurrence on the books and makes the edited rule publishable again —
+  // `occurrenceKey` is `name@startsAt`, so a changed name or time is a new
+  // occurrence by identity. That is visible without inventing a warning for
+  // it: "Publish week · N" lights back up, because it is computed from the
+  // same `diffOccurrences` the publish path uses.
+  const [editingId, setEditingId] = React.useState(null);
+
+  const closeClassDialog = () => {
+    setShowAddClass(false);
+    setEditingId(null);
+    setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+  };
+
+  // The grid renders a DERIVED entry that carries no day/slot/weekKey, so the
+  // form is filled from the rule itself rather than from the cell.
+  const openEdit = (id) => {
+    const rule = userClasses.find(c => c.id === id);
+    if (!rule) return;
+    setAddForm({
+      name: rule.name || "", type: rule.type || "HIIT", coach: rule.coach || "",
+      day: rule.day || "Mon", slot: rule.slot || "06:00",
+      dur: rule.dur || "45m", repeat: rule.repeat || "weekly",
+    });
+    setEditingId(id);
+    setShowAddClass(true);
+  };
+
   const addClass = () => {
     if (!addForm.name.trim()) return;
-    const uc = { id:`uc${Date.now()}`, ...addForm };
-    if (addForm.repeat === "once") uc.weekKey = weekKey;
-    setUserClasses(list => [...list, uc]);
-    setShowAddClass(false);
-    setAddForm({name:"",type:"HIIT",coach:"",day:"Mon",slot:"06:00",dur:"45m",repeat:"weekly"});
+    if (editingId) {
+      setUserClasses(list => list.map(c => {
+        if (c.id !== editingId) return c;
+        // Spread the rule FIRST so `id` survives — that is the whole point of
+        // editing rather than remove-and-re-add.
+        const next = { ...c, ...addForm };
+        // `weekKey` only means anything on a one-off. Stamp it when the rule
+        // becomes one (a one-off is editable only from the week it sits in, so
+        // the viewed week is the right one), and DROP it when the rule stops
+        // being one — a stale weekKey on a weekly rule is inert today and is
+        // exactly the kind of leftover that reads as a bug later.
+        if (addForm.repeat === "once") next.weekKey = weekKey; else delete next.weekKey;
+        return next;
+      }));
+    } else {
+      const uc = { id:`uc${Date.now()}`, ...addForm };
+      if (addForm.repeat === "once") uc.weekKey = weekKey;
+      setUserClasses(list => [...list, uc]);
+    }
+    closeClassDialog();
   };
   // `setUserClasses` was only ever appended to — there was no way to take a
   // class OFF the schedule. A gym setting one up for the first time (the pilot's
@@ -290,8 +353,8 @@ export function CalendarScreen({onBack, onStartClass}) {
 
       {/* F5: Add class modal */}
       {showAddClass && (
-        <AddClassDialog onClose={()=>setShowAddClass(false)} addForm={addForm}
-          setAddForm={setAddForm} addClass={addClass}
+        <AddClassDialog onClose={closeClassDialog} addForm={addForm}
+          setAddForm={setAddForm} addClass={addClass} editing={!!editingId}
           days={DAYS} slots={SLOTS} catColor={CAT_COLOR}/>
       )}
 
@@ -344,13 +407,20 @@ export function CalendarScreen({onBack, onStartClass}) {
                           one cell but a daily one paints seven, and "Remove"
                           alone would be seven identical controls. */}
                       {cls.id && (
+                        <button aria-label={`Edit ${cls.name} on ${day} at ${slot}`}
+                          onClick={()=>openEdit(cls.id)}
+                          style={{position:"absolute",top:"2px",right:"16px",background:"transparent",border:"none",padding:"2px",cursor:"pointer",color:"var(--muted)",lineHeight:0,opacity:0.55}}>
+                          <Pencil size={10}/>
+                        </button>
+                      )}
+                      {cls.id && (
                         <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`}
                           onClick={()=>removeClass(cls.id, cls.name)}
                           style={{position:"absolute",top:"2px",right:"2px",background:"transparent",border:"none",padding:"2px",cursor:"pointer",color:"var(--muted)",lineHeight:0,opacity:0.55}}>
                           <X size={11}/>
                         </button>
                       )}
-                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"14px"}}>{cls.name}</div>
+                      <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"28px"}}>{cls.name}</div>
                       <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
                       {/* The fill bar and its "%" are gone. Nothing in the
                           product ever SETS `fill` — no capacity field, no
