@@ -101,9 +101,48 @@ _Last updated: 2026-07-28 (session 19)_
 > `supabase/functions/summary-token/index.ts` · `supabase/functions/summary-read/index.ts` ·
 > `supabase/migrations/0009_class_summaries.sql` · `scripts/sync-token-core.mjs`
 >
+> ---
+>
+> ## Session 19, part 2 — the PersonasScreen sweep, and it paid immediately
+>
+> **Gates: `lint:crash` 0 · 741 unit · 233 e2e · build clean.** (e2e 219 → 233.)
+>
+> The Coaches screen had never been swept past its first render. It was the worst
+> accessibility surface in the app by a distance:
+>
+> | Surface | unnamed buttons | nameless fields |
+> |---|---|---|
+> | Base, **with a coach loaded** | **13** — Delete persona, Delete movement ×11, Remove plan | 0 |
+> | Change class shape | 18 | **5** role dropdowns |
+> | **Edit plan** (`PersonaPlanEditor`) | **29** | **33** |
+>
+> All now zero, labelled in the house style (`aria-label` naming the item, as
+> `members.spec.js` already expects with `/Edit Ada/`). Seven Coaches panels added to
+> `e2e/revealed.spec.js`; proven by deleting one label and watching 11 findings appear
+> across three panels.
+>
+> ### 🔴 "Revealed" is not only about a CLICK — it can be about there being DATA
+> With no coach loaded the Coaches screen has **two** buttons, which is why
+> `screens.spec.js` passed it for eighteen sessions. Load the shipped sample coach and the
+> *same first render* grows thirteen icon-only destructive controls. **A screen-level sweep
+> against an empty store is a sweep of an empty screen.** Worth re-checking the other eight
+> screens in a data-loaded state.
+>
+> ### 🔴 A scanner false positive, and it nearly made me label two unreachable buttons
+> `a11yScan.js` decided visibility with `offsetParent !== null`. Inside a **collapsed
+> `<details>`** an element reports `offsetParent` non-null *and a real 162×37 box* — but
+> `checkVisibility()` is false and it cannot take focus. Meanwhile the naming rules read
+> `innerText`, which correctly returns `""` for unrendered content. **The two halves of the
+> scan disagreed: invisible enough to have no name, visible enough to be judged for not
+> having one.** Now `offsetParent !== null && checkVisibility()` — an AND, so it can only
+> ever remove a finding the browser itself calls invisible. `namelessFields` was
+> deliberately left alone: it has no `<details>` false positive and adding a filter there
+> could only suppress real findings.
+>
 > ### Still open after this session
-> **PersonasScreen's revealed panels** (never swept) · **a gym class type through the Runner
-> to a check-in** (never driven) · the 147 KB of this file and 9 audit files still at repo root.
+> **A gym class type through the Runner to a check-in** (never driven) · **the other eight
+> screens re-swept with data loaded** (see above — this is now a known gap, not a
+> hypothesis) · the 147 KB of this file and 9 audit files still at repo root.
 > **N2/N3 remain correctly blocked on attendance volume, which is blocked on the pilot.**
 
 ---

@@ -155,7 +155,11 @@ test.describe("Coaches — catalog, shape, draft", () => {
 
     // Draft the coach's actual saved class rather than a generated one — this is
     // the path that works with Supabase off.
-    await page.getByRole("button", { name: "Draft", exact: true }).first().click();
+    // Named per plan since session 19 — one "Draft" per saved plan announced
+    // identically, exactly as members.spec.js already selects `/Edit Ada/`
+    // rather than a bare "Edit". Still the coach's own saved class, not a
+    // generated one: that is the path that works with Supabase off.
+    await page.getByRole("button", { name: /^Draft .* into the Builder$/ }).first().click();
     await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();  // two share this action; see smoke.spec.js
 
     const draft = await stored(page, "jungle_draft_class");

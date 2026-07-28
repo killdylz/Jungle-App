@@ -19,7 +19,27 @@
 
 export const NO_WORDS = /^[^\p{L}\p{N}]*$/u;
 
+// ── Deciding whether a control is on screen ──────────────────────────────────
+//
+// `offsetParent !== null` is NOT enough, and session 19 proved it with a false
+// positive that would have had me labelling two buttons that nobody can reach.
+// Inside a COLLAPSED `<details>` an element reports `offsetParent` non-null and
+// a real 162×37 box — but `checkVisibility()` is false and it cannot take focus.
+// Meanwhile the naming rules read `innerText`, which correctly returns "" for
+// unrendered content. So the two halves of the scan disagreed: invisible enough
+// to have no name, visible enough to be judged for not having one.
+//
+// `checkVisibility()` is the browser's own answer and it is the one that matches
+// what `innerText` did. Kept as an AND with the old test so this can only ever
+// remove a finding the browser says is invisible — never hide a real one.
+//
+// Written out in each page.evaluate rather than shared: these bodies run in the
+// PAGE, so a helper declared here in Node is not in scope there. Three copies of
+// one line beats serialising a function across the boundary.
+
 export const unnamedButtons = (page) => page.evaluate(() => {
+  const visible = (el) => el.offsetParent !== null &&
+    (typeof el.checkVisibility !== "function" || el.checkVisibility());
   const named = (el) => {
     if (el.getAttribute("aria-label")?.trim()) return true;
     const by = el.getAttribute("aria-labelledby");
@@ -29,7 +49,7 @@ export const unnamedButtons = (page) => page.evaluate(() => {
     return !!(el.innerText || "").trim();
   };
   return [...document.querySelectorAll("button")]
-    .filter(b => b.offsetParent !== null)            // rendered, not display:none
+    .filter(visible)                                 // rendered, and the browser agrees
     .filter(b => !named(b))
     .map(b => ({
       title: b.getAttribute("title") || "",
@@ -41,6 +61,8 @@ export const unnamedButtons = (page) => page.evaluate(() => {
 });
 
 export const symbolOnlyButtons = (page) => page.evaluate(() => {
+  const visible = (el) => el.offsetParent !== null &&
+    (typeof el.checkVisibility !== "function" || el.checkVisibility());
   const noWords = /^[^\p{L}\p{N}]*$/u;
   const nameOf = (el) => {
     const al = el.getAttribute("aria-label");
@@ -48,7 +70,7 @@ export const symbolOnlyButtons = (page) => page.evaluate(() => {
     return (el.innerText || "").trim();
   };
   return [...document.querySelectorAll("button")]
-    .filter(b => b.offsetParent !== null)
+    .filter(visible)
     .map(b => ({
       name: nameOf(b),
       near: (b.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 70),
@@ -56,6 +78,10 @@ export const symbolOnlyButtons = (page) => page.evaluate(() => {
     .filter(x => x.name && noWords.test(x.name));
 });
 
+// NOTE: no visibility filter here, deliberately. This rule has never had one, it
+// has no closed-`<details>` false positive to fix, and adding one could only
+// SUPPRESS findings the sweep currently makes. A rule that reports a bit too
+// much is the right failure direction for an accessibility scan.
 export const namelessFields = (page) => page.evaluate(() => {
   const accName = (el) => {
     const aria = el.getAttribute("aria-label");

@@ -782,7 +782,11 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                           {"  ·  "}{countFor(p.id)} class{countFor(p.id)===1?"":"es"}
                         </div>
                       </div>
-                      <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} title="Delete persona"
+                      {/* `aria-label`, not `title`: a title is last-resort in the
+                          name computation and never reaches a touch device, so this
+                          announced as a bare "button" — on a control that deletes a
+                          coach and everything extracted from their decks. */}
+                      <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} aria-label={`Delete coach ${p.name}`} title="Delete persona"
                         style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                     </div>
                   );
@@ -1067,9 +1071,12 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                             {/* "blocks" is our word, not a coach's (UI-UX §4). */}
                             <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>{[pl.focus].filter(Boolean).join(" · ")}{pl.focus?"  ·  ":""}{nBlocks} section{nBlocks===1?"":"s"} · {SOURCE_LABEL[pl.source] || pl.source}</div>
                           </div>
-                          <button onClick={()=>setEditingPlan(pl)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
-                          <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
-                          <button onClick={()=>removePlan(pl.id)} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                          {/* Thirteen buttons on this screen read "Edit" to a screen
+                              reader — one per movement, one per plan, one for the
+                              header. The plan's title is what tells them apart. */}
+                          <button onClick={()=>setEditingPlan(pl)} aria-label={`Edit plan ${pl.title}`} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
+                          <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} aria-label={`Draft ${pl.title} into the Builder`} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
+                          <button onClick={()=>removePlan(pl.id)} aria-label={`Remove plan ${pl.title}`} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                         </div>
                       );
                     })}
@@ -1226,12 +1233,19 @@ function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable, empt
             <div key={i} style={{padding:"10px 12px",background:"var(--navy)",borderRadius:"10px"}}>
               <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"8px"}}>
                 <Input value={r.label||""} onChange={e=>patch(i,"label",e.target.value)} placeholder="What this part is called" style={{flex:1}}/>
-                <button onClick={()=>move(i,-1)} title="Move up" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↑</button>
-                <button onClick={()=>move(i,1)} title="Move down" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↓</button>
-                <button onClick={()=>setRows(rs=>rs.filter((_,x)=>x!==i))} title="Remove" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+                {/* "↑" IS text, so these pass the unnamed-button rule while telling
+                    a screen reader nothing but "up arrow". Reordering the shape of a
+                    class is exactly the operation you need to know the position for. */}
+                <button onClick={()=>move(i,-1)} aria-label={`Move section ${i+1} up`} title="Move up" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↑</button>
+                <button onClick={()=>move(i,1)} aria-label={`Move section ${i+1} down`} title="Move down" style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",padding:"5px 8px",fontSize:"12px"}}>↓</button>
+                <button onClick={()=>setRows(rs=>rs.filter((_,x)=>x!==i))} aria-label={`Remove section ${i+1}`} title="Remove" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px",marginBottom:"8px"}}>
-                <Select value={r.role||"circuit"} onChange={e=>patch(i,"role",e.target.value)}>
+                {/* Five of these render at once, each announcing as a bare
+                    "combobox" — the same defect the Schedule's add-class modal had,
+                    where three indistinguishable dropdowns decided which DAY a
+                    recurring class ran. */}
+                <Select aria-label={`Section ${i+1} role`} value={r.role||"circuit"} onChange={e=>patch(i,"role",e.target.value)}>
                   {SLOT_ROLES.map(x => <option key={x} value={x}>{ROLE_LABEL[x]||x}</option>)}
                 </Select>
                 <Input type="number" value={r.minutes??""} onChange={e=>patch(i,"minutes",Number(e.target.value)||0)} placeholder="Minutes"/>
@@ -1334,8 +1348,11 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
               {m.meta?.notes && <span> · {m.meta.notes}</span>}
             </div>
           </div>
-          <button onClick={()=>start(m)} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"4px 10px"}}>Edit</button>
-          <button onClick={()=>onDelete(m.id)} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+          {/* One pair per catalogued movement — eleven pairs on the sample coach.
+              Without the movement's name these are eleven identical "Edit"s and
+              eleven buttons announcing as "button" that delete one each. */}
+          <button onClick={()=>start(m)} aria-label={`Edit ${m.name}`} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"4px 10px"}}>Edit</button>
+          <button onClick={()=>onDelete(m.id)} aria-label={`Delete ${m.name} from the catalogue`} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
         </div>
       ))}
     </div>
@@ -1371,35 +1388,46 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
           <button onClick={onClose} aria-label="Close edit plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr 1fr",gap:"8px",marginBottom:"16px"}}>
-          <div><label style={lbl}>Title</label><Input value={title} onChange={e=>setTitle(e.target.value)}/></div>
-          <div><label style={lbl}>Class type</label><Input value={classType} onChange={e=>setClassType(e.target.value)}/></div>
-          <div><label style={lbl}>Focus</label><Input value={focus} onChange={e=>setFocus(e.target.value)}/></div>
+          {/* These three carry no placeholder, and their <label>s are unassociated
+              decoration, so all three announced as a bare "textbox". */}
+          <div><label style={lbl}>Title</label><Input aria-label="Plan title" value={title} onChange={e=>setTitle(e.target.value)}/></div>
+          <div><label style={lbl}>Class type</label><Input aria-label="Class type" value={classType} onChange={e=>setClassType(e.target.value)}/></div>
+          <div><label style={lbl}>Focus</label><Input aria-label="Plan focus" value={focus} onChange={e=>setFocus(e.target.value)}/></div>
         </div>
 
         {blocks.map((b,i) => (
           <div key={i} style={{border:"1px solid var(--border)",borderRadius:"10px",padding:"12px",marginBottom:"12px"}}>
             <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"10px"}}>
               <Input value={b.label||""} onChange={e=>upBlock(i,{label:e.target.value})} placeholder="Block label" style={{flex:1}}/>
-              <button onClick={()=>move(i,-1)} title="Move up" style={iconBtn}>↑</button>
-              <button onClick={()=>move(i,1)} title="Move down" style={iconBtn}>↓</button>
-              <button onClick={()=>rmBlock(i)} title="Remove block" style={{...iconBtn,color:"var(--accent)"}}><Trash2 size={13}/></button>
+              {/* This dialog renders one of these rows per section and one field row
+                  per movement, so on the sample coach's plan it is 29 buttons and 33
+                  fields with no accessible name between them. Every label below names
+                  its POSITION, because that is the only thing that distinguishes an
+                  otherwise identical control from the fifteen next to it. */}
+              <button onClick={()=>move(i,-1)} aria-label={`Move section ${i+1} up`} title="Move up" style={iconBtn}>↑</button>
+              <button onClick={()=>move(i,1)} aria-label={`Move section ${i+1} down`} title="Move down" style={iconBtn}>↓</button>
+              <button onClick={()=>rmBlock(i)} aria-label={`Remove section ${i+1}`} title="Remove block" style={{...iconBtn,color:"var(--accent)"}}><Trash2 size={13}/></button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1.2fr 1fr 0.6fr 0.6fr 0.6fr 0.8fr",gap:"6px",marginBottom:"10px"}}>
+              {/* The visible <label>s are not associated with their controls — no
+                  htmlFor, no wrapping — so they are decoration to an assistive
+                  technology. aria-label rather than htmlFor/id because these render
+                  inside a map and every id would have to be made unique by hand. */}
               <div><label style={lbl}>Role</label>
-                <Select value={b.role||"circuit"} onChange={e=>upBlock(i,{role:e.target.value})}>
+                <Select aria-label={`Section ${i+1} role`} value={b.role||"circuit"} onChange={e=>upBlock(i,{role:e.target.value})}>
                   {["warmup","primary_lift","superset","circuit","finisher","recovery","cooldown"].map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                 </Select>
               </div>
               <div><label style={lbl}>Scheme</label>
-                <Select value={b.scheme?.type||""} onChange={e=>upScheme(i,{type:e.target.value||undefined})}>
+                <Select aria-label={`Section ${i+1} scheme`} value={b.scheme?.type||""} onChange={e=>upScheme(i,{type:e.target.value||undefined})}>
                   <option value="">—</option>
                   {["sets_reps","rounds","time","interval","amrap"].map(t=><option key={t} value={t}>{schemeTypeLabel(t)}</option>)}
                 </Select>
               </div>
-              <div><label style={lbl}>Sets</label><Input type="number" value={b.scheme?.sets??""} onChange={e=>upScheme(i,{sets:num(e.target.value)})}/></div>
-              <div><label style={lbl}>RIR</label><Input type="number" value={b.scheme?.rir??""} onChange={e=>upScheme(i,{rir:num(e.target.value)})}/></div>
-              <div><label style={lbl}>RPE</label><Input type="number" step="0.5" value={b.scheme?.rpe??""} onChange={e=>upScheme(i,{rpe:numF(e.target.value)})}/></div>
-              <div><label style={lbl}>Rest (s)</label><Input type="number" value={b.scheme?.rest_sec??""} onChange={e=>upScheme(i,{rest_sec:num(e.target.value)})}/></div>
+              <div><label style={lbl}>Sets</label><Input aria-label={`Section ${i+1} sets`} type="number" value={b.scheme?.sets??""} onChange={e=>upScheme(i,{sets:num(e.target.value)})}/></div>
+              <div><label style={lbl}>RIR</label><Input aria-label={`Section ${i+1} reps in reserve`} type="number" value={b.scheme?.rir??""} onChange={e=>upScheme(i,{rir:num(e.target.value)})}/></div>
+              <div><label style={lbl}>RPE</label><Input aria-label={`Section ${i+1} rate of perceived exertion`} type="number" step="0.5" value={b.scheme?.rpe??""} onChange={e=>upScheme(i,{rpe:numF(e.target.value)})}/></div>
+              <div><label style={lbl}>Rest (s)</label><Input aria-label={`Section ${i+1} rest in seconds`} type="number" value={b.scheme?.rest_sec??""} onChange={e=>upScheme(i,{rest_sec:num(e.target.value)})}/></div>
             </div>
             {(b.exercises||[]).map((ex,k) => (
               <div key={k} style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr auto":"1.6fr 1fr 0.9fr 1.2fr auto",gap:"6px",marginBottom:"6px",alignItems:"center"}}>
@@ -1407,10 +1435,10 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
                 <Input value={ex.equip||""} onChange={e=>upEx(i,k,{equip:e.target.value})} placeholder="Equip"/>
                 <Input value={ex.reps!=null?String(ex.reps):""} onChange={e=>upEx(i,k,{reps:e.target.value})} placeholder="Reps"/>
                 {!isMobile && <Input value={ex.regression||""} onChange={e=>upEx(i,k,{regression:e.target.value})} placeholder="Regression"/>}
-                <button onClick={()=>rmEx(i,k)} title="Remove" style={{...iconBtn,color:"var(--accent)"}}><X size={13}/></button>
+                <button onClick={()=>rmEx(i,k)} aria-label={ex.name ? `Remove ${ex.name} from section ${i+1}` : `Remove movement ${k+1} from section ${i+1}`} title="Remove" style={{...iconBtn,color:"var(--accent)"}}><X size={13}/></button>
               </div>
             ))}
-            <button onClick={()=>addEx(i)} style={{...iconBtn,marginTop:"4px",padding:"5px 10px",fontSize:"12px"}}>+ exercise</button>
+            <button onClick={()=>addEx(i)} aria-label={`Add a movement to section ${i+1}`} style={{...iconBtn,marginTop:"4px",padding:"5px 10px",fontSize:"12px"}}>+ exercise</button>
           </div>
         ))}
 
