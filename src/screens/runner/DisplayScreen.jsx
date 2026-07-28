@@ -7,6 +7,7 @@ import { SCFG } from "../../data/stageConfig.js";
 import { calcIntervalState } from "../../lib/intervalTimer.js";
 import { apiPlay } from "../../music/index.js";
 import { useTheme, BrandLogo, Tag, useWindowWidth } from "../../ui/primitives.jsx";
+import { useAfterMount } from "../../ui/useAfterMount.js";
 import { fmt, fmtSec } from "../../lib/format.js";
 import { brandCopy } from "../../lib/brandCopy.js";
 import { prefersReducedMotion, tvFont, grpColor } from "./displayKit.js";
@@ -86,7 +87,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
   });
   const [fontScale, setFontScale] = useState(() => store.getDisplayPrefs().fontScale);
   const [showSettings, setShowSettings] = useState(false);
-  useEffect(() => {
+  useAfterMount(() => {
     store.saveDisplayPrefs({ preset, fontScale });
   }, [preset, fontScale]);
 
@@ -208,7 +209,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
             <StageJourney compact={true}/>
           </div>
           <div style={{display:"flex",gap:"8px",flexShrink:0}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"8px",background:"color-mix(in srgb, var(--card) 50%, transparent)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
+            <button aria-label="Display settings" onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"8px",background:"color-mix(in srgb, var(--card) 50%, transparent)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
             <button onClick={onBack} style={{padding:"8px 14px",background:"color-mix(in srgb, var(--card) 50%, transparent)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px"}}><ArrowLeft size={13}/> Back</button>
@@ -239,7 +240,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
             <StageJourney compact={true}/>
           </div>
           <div style={{display:"flex",gap:"8px",flexShrink:0}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
+            <button aria-label="Display settings" onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
             <button onClick={onBack} style={{padding:"7px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
@@ -276,7 +277,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
           </div>
           <Tag color={cfg.color}>{stage?.name}</Tag>
           <div style={{display:"flex",gap:"10px"}}>
-            <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
+            <button aria-label="Display settings" onClick={e=>{e.stopPropagation();setShowSettings(s=>!s)}} style={{padding:"7px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",display:"flex"}}>
               <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             </button>
             <button onClick={onBack} style={{padding:"7px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><ArrowLeft size={13}/> Back</button>
@@ -329,7 +330,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
           {/* Settings gear */}
-          <button onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);}} style={{padding:"8px",background:showSettings?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--navy)",border:`1px solid ${showSettings?"color-mix(in srgb, var(--accent) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showSettings?"var(--accent)":"var(--muted)",display:"flex"}}>
+          <button aria-label="Display settings" onClick={e=>{e.stopPropagation();setShowSettings(s=>!s);}} style={{padding:"8px",background:showSettings?"color-mix(in srgb, var(--accent) 13%, transparent)":"var(--navy)",border:`1px solid ${showSettings?"color-mix(in srgb, var(--accent) 25%, transparent)":"var(--border)"}`,borderRadius:"7px",cursor:"pointer",color:showSettings?"var(--accent)":"var(--muted)",display:"flex"}}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </button>
           <button onClick={onBack} style={{display:"flex",alignItems:"center",gap:"6px",padding:"8px 14px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--text)",fontSize:"13px",fontWeight:"700"}}><ArrowLeft size={14}/> Back</button>

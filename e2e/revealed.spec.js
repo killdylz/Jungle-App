@@ -64,6 +64,27 @@ const REVEALED = [
     await page.mouse.move(640, 400);
     await expect(page.getByRole("button", { name: "Coach", exact: true })).toBeVisible();
   }],
+
+  // A board is one click PAST the mode switch, and stopping at the switch is
+  // what hid four unnamed settings gears — one per board — from this very
+  // sweep on its first run.
+  ["Room TV · Coach board", async (page) => {
+    await nav(page, "Class Runner");
+    await page.getByRole("button", { name: /Room TV/ }).click();
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Coach", exact: true }).click();
+  }],
+
+  // …and the board's settings panel is one click past THAT.
+  ["Room TV · Coach board settings", async (page) => {
+    await nav(page, "Class Runner");
+    await page.getByRole("button", { name: /Room TV/ }).click();
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Coach", exact: true }).click();
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Display settings" }).first().click();
+    await expect(page.getByText(/Layout Preset/i)).toBeVisible();
+  }],
 ];
 
 test.describe("panels that only exist after a click announce themselves", () => {

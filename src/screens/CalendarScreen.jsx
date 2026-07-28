@@ -22,6 +22,7 @@ import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
          startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
+import { useAfterMount } from "../ui/useAfterMount.js";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
@@ -75,9 +76,9 @@ export function CalendarScreen({onBack, onStartClass}) {
   }, []);
   // Persist on change (local write + background push). Skip the initial mount so
   // we never push stale/empty local over server data before hydrate reconciles.
-  const _ucInit = React.useRef(false);
-  React.useEffect(() => {
-    if (!_ucInit.current) { _ucInit.current = true; return; }
+  // This was the repo's ONLY guarded persist-effect and the hand-rolled ref it
+  // used is now `useAfterMount`, shared with the six that had no guard at all.
+  useAfterMount(() => {
     store.saveUserClasses(userClasses);
   }, [userClasses]);
   const [showAddClass, setShowAddClass] = React.useState(false);

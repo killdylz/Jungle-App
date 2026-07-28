@@ -40,6 +40,7 @@ import { hexA, wcagContrast, nudgeContrast,
 // is the QR's first honest destination.
 import { ThemeContext, useWindowWidth, Input, Select, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";
 import { useDialog } from "./ui/dialog.js";
+import { useAfterMount } from "./ui/useAfterMount.js";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
 import { AdminTeamScreen } from "./screens/AdminTeamScreen.jsx";
 import { CalendarScreen } from "./screens/CalendarScreen.jsx";
@@ -2862,7 +2863,7 @@ export default function App() {
   const [pinUnlocked, setPinUnlocked] = useState(() => sessionStorage.getItem("jungle_pin_ok") === "1");
   const [showNav, setShowNav] = React.useState(false);
   const [crossfade, setCrossfade] = useState(() => store.getCrossfade());
-  useEffect(() => { store.saveCrossfade(crossfade); }, [crossfade]);
+  useAfterMount(() => { store.saveCrossfade(crossfade); }, [crossfade]);
 
   // ── Skin / Theme ─────────────────────────────────────────────────────────
   const [activeSkinId, setActiveSkinId] = useState(() => store.getSkinId());
@@ -2876,10 +2877,16 @@ export default function App() {
   const activeSkinObj = (activeSkinId === "custom" && customSkinTokens)
     ? { name:"Custom", source:"custom", tokens: customSkinTokens, fonts: _skinF, voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", programs: DEFAULT_PROGRAMS }
     : (PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy);
+  // Split deliberately. Applying the CSS variables and injecting the skin's
+  // fonts MUST happen on mount — that is what makes the app look like itself.
+  // Persisting the skin must NOT, or a fresh device pushes the default "canopy"
+  // over the studio's real skin before hydrate can read it (see useAfterMount).
   useEffect(() => {
     applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
     const skin = PRESET_SKINS[activeSkinId];
     if (skin) injectSkinFonts(skin);
+  }, [activeSkinId, customSkinTokens]);
+  useAfterMount(() => {
     store.saveSkinId(activeSkinId);
     if (customSkinTokens) store.saveCustomSkinTokens(customSkinTokens);
     else store.clearCustomSkinTokens();
@@ -2887,7 +2894,7 @@ export default function App() {
 
   // ── Gym branding ─────────────────────────────────────────────────────────
   const [gymBranding, setGymBranding] = useState(() => store.getGymBranding());
-  useEffect(() => {
+  useAfterMount(() => {
     store.saveGymBranding(gymBranding);
   }, [gymBranding]);
   // (legacy gymBranding accent/green override removed - superseded by the skin system)
@@ -2936,7 +2943,7 @@ export default function App() {
   }, [stages, sessionName, classChoice]);
 
   const [templateTracks, setTemplateTracks] = useState(() => store.getTemplateTracks());
-  useEffect(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
+  useAfterMount(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
   const [sessionHistory, setSessionHistory] = useState(() => store.getHistory());
 
   // Local-first: on login, pull every domain's server state into localStorage
