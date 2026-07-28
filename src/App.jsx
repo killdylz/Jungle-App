@@ -495,7 +495,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
             <div>
               <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Accent Colour</p>
               <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-                <input type="color" value={draft.accentColor} onChange={e=>setDraft(d=>({...d,accentColor:e.target.value}))}
+                <input type="color" aria-label="Accent colour" value={draft.accentColor} onChange={e=>setDraft(d=>({...d,accentColor:e.target.value}))}
                   style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"2px"}}/>
                 <div style={{flex:1,padding:"10px 14px",background:draft.accentColor,borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"white"}}>{draft.accentColor}</span>
@@ -509,7 +509,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
             <div>
               <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px",fontWeight:"700"}}>Secondary Colour</p>
               <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-                <input type="color" value={draft.secondColor} onChange={e=>setDraft(d=>({...d,secondColor:e.target.value}))}
+                <input type="color" aria-label="Secondary colour" value={draft.secondColor} onChange={e=>setDraft(d=>({...d,secondColor:e.target.value}))}
                   style={{width:"48px",height:"40px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"2px"}}/>
                 <div style={{flex:1,padding:"10px 14px",background:draft.secondColor,borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"white"}}>{draft.secondColor}</span>
@@ -521,7 +521,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
             {/* Font */}
             <div>
               <p style={{fontSize:"11px",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"6px",fontWeight:"700"}}>Font</p>
-              <Select value={draft.fontFamily} onChange={e=>setDraft(d=>({...d,fontFamily:e.target.value}))}>
+              <Select aria-label="Gym font" value={draft.fontFamily} onChange={e=>setDraft(d=>({...d,fontFamily:e.target.value}))}>
                 {GYM_FONTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                 <option value="custom">✏️ Custom Google Font…</option>
               </Select>

@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+// The three scanners moved to ./a11yScan.js in session 17 so the same rules
+// could be pointed at interaction-revealed panels (e2e/revealed.spec.js) rather
+// than copied. Their behaviour is unchanged; only their address is.
+import { NO_WORDS, unnamedButtons, symbolOnlyButtons, namelessFields,
+         reportSymbolOnly, reportUnnamed, reportFields } from "./a11yScan.js";
 
 // ── Every navigable screen actually renders ──────────────────────────────────
 //
@@ -77,40 +82,13 @@ test.describe("every screen renders", () => {
 //
 // The nine screens are the same list as above, so a screen added to SCREENS is
 // swept here too without anyone remembering to.
-const unnamedButtons = (page) => page.evaluate(() => {
-  const named = (el) => {
-    if (el.getAttribute("aria-label")?.trim()) return true;
-    const by = el.getAttribute("aria-labelledby");
-    if (by && by.split(/\s+/).some(id => document.getElementById(id)?.textContent.trim())) return true;
-    // `innerText` respects text-transform and hidden content, which is what a
-    // screen reader gets; `textContent` would count a visually-hidden node.
-    return !!(el.innerText || "").trim();
-  };
-  return [...document.querySelectorAll("button")]
-    .filter(b => b.offsetParent !== null)            // rendered, not display:none
-    .filter(b => !named(b))
-    .map(b => ({
-      title: b.getAttribute("title") || "",
-      testid: b.getAttribute("data-testid") || "",
-      // Enough markup to FIND it. These buttons are icon-only and inline-styled,
-      // so the style block is noise and the svg path is the identity — the
-      // failure message has to be actionable without a screenshot.
-      icon: (b.querySelector("svg")?.innerHTML || "").slice(0, 70),
-      // The nearest surrounding text is what actually identifies the control to
-      // a human reading this failure — an icon path does not.
-      near: (b.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 70),
-      html: b.outerHTML.replace(/style="[^"]*"/, "").slice(0, 120),
-    }));
-});
-
 test.describe("every control announces itself", () => {
   for (const [label] of SCREENS) {
     test(`${label} has no unnamed buttons`, async ({ page }) => {
       await freshApp(page);
       await nav(page, label);
       const bad = await unnamedButtons(page);
-      expect(bad, `${label}: ${bad.length} button(s) with no accessible name:\n` +
-        bad.map(b => `  title=${JSON.stringify(b.title)} near=${JSON.stringify(b.near)}\n    icon=${b.icon}`).join("\n")).toEqual([]);
+      expect(bad, reportUnnamed(label, bad)).toEqual([]);
     });
   }
 });
@@ -126,28 +104,6 @@ test.describe("every control announces itself", () => {
 // A name with no letter and no digit in it is not a name. That is the whole
 // rule, and it is deliberately separate from the sweep above so a failure says
 // which of the two problems it is.
-const NO_WORDS = /^[^\p{L}\p{N}]*$/u;
-
-const symbolOnlyButtons = (page) => page.evaluate(() => {
-  const noWords = /^[^\p{L}\p{N}]*$/u;
-  const nameOf = (el) => {
-    const al = el.getAttribute("aria-label");
-    if (al && al.trim()) return al.trim();
-    return (el.innerText || "").trim();
-  };
-  return [...document.querySelectorAll("button")]
-    .filter(b => b.offsetParent !== null)
-    .map(b => ({
-      name: nameOf(b),
-      near: (b.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 70),
-    }))
-    .filter(x => x.name && noWords.test(x.name));
-});
-
-const reportSymbolOnly = (where, bad) =>
-  `${where}: ${bad.length} button(s) named only by symbols — a screen reader gets ` +
-  `no word for them:\n` + bad.map(b => `  name=${JSON.stringify(b.name)} near=${JSON.stringify(b.near)}`).join("\n");
-
 test.describe("every control announces itself in words", () => {
   for (const [label] of SCREENS) {
     test(`${label} has no symbol-only buttons`, async ({ page }) => {
@@ -211,48 +167,13 @@ test.describe("the Exercise Library's edit mode announces itself", () => {
 // same one round 2 set for buttons: a name must EXIST. The stronger
 // "distinguishes" rule is enforced by the colour-swatch assertion below, which
 // is where identical names actually cost something.
-async function namelessFields(page) {
-  return page.evaluate(() => {
-    const accName = (el) => {
-      const aria = el.getAttribute("aria-label");
-      if (aria?.trim()) return aria.trim();
-      const lb = el.getAttribute("aria-labelledby");
-      if (lb) {
-        const t = document.getElementById(lb);
-        if (t?.textContent?.trim()) return t.textContent.trim();
-      }
-      if (el.id) {
-        const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (l?.textContent?.trim()) return l.textContent.trim();
-      }
-      const wrap = el.closest("label");
-      if (wrap?.textContent?.trim()) return wrap.textContent.trim();
-      if (el.getAttribute("placeholder")?.trim()) return el.getAttribute("placeholder").trim();
-      if (el.getAttribute("title")?.trim()) return el.getAttribute("title").trim();
-      return null;
-    };
-    return [...document.querySelectorAll("input, select, textarea")]
-      .filter((el) => el.type !== "hidden" && !accName(el))
-      .map((el) => ({
-        tag: el.tagName.toLowerCase(),
-        type: el.getAttribute("type") || "",
-        // The nearest surrounding text is what identifies the control to a human
-        // reading this failure — an empty <input> tag does not.
-        near: (el.closest("div")?.innerText || "").replace(/\s+/g, " ").slice(0, 60),
-        html: el.outerHTML.replace(/style="[^"]*"/, "").slice(0, 110),
-      }));
-  });
-}
-
 test.describe("every form field announces itself", () => {
   for (const [label] of SCREENS) {
     test(`${label} has no nameless inputs`, async ({ page }) => {
       await freshApp(page);
       await nav(page, label);
       const bad = await namelessFields(page);
-      expect(bad, `${label}: ${bad.length} form field(s) with no accessible name:\n` +
-        bad.map((b) => `  <${b.tag} ${b.type}> near "${b.near}"\n    ${b.html}`).join("\n"),
-      ).toEqual([]);
+      expect(bad, reportFields(label, bad)).toEqual([]);
     });
   }
 
