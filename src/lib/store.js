@@ -1404,12 +1404,21 @@ export async function hydrateAttendance() {
 // (or healed by a normalizer like planSource on read) pushes the corrected row.
 //
 // Every push here is idempotent by construction: list/blob domains upsert on a
-// stable key, and the append logs insert with ignoreDuplicates. Re-pushing a whole
-// list or log is therefore safe if heavier than necessary; scoping to just the
-// failed rows is what I10 (delta writes, deferred) would buy. brand_profiles and
-// user_prefs have no single "save current state" setter — their columns are
-// written by many partial upserts — so their thunks re-assemble the full row the
-// way _hydrate*'s seed path does.
+// stable key, and the append logs insert with ignoreDuplicates.
+//
+// The scoping this comment used to describe as "what I10 (delta writes, deferred)
+// would buy" HAS LANDED — the id-keyed thunks below call the same `save*` they
+// always did, and those now route through `_bgUpsertDelta`, so a retry re-sends
+// only the rows the server never confirmed rather than the whole domain. That is
+// the property I10's header calls accidentally-self-healing, kept deliberately:
+// a failed push marks nothing, so the row stays in the next delta.
+//
+// Two thunks are still whole-payload, for reasons that are not I10's to fix.
+// `attendance` re-pushes the full log because it is an append-only insert with
+// ignoreDuplicates and keeps no per-row sync marks. brand_profiles and user_prefs
+// have no single "save current state" setter — their columns are written by many
+// partial upserts — so their thunks re-assemble the full row the way _hydrate*'s
+// seed path does.
 //
 // consent_records is deliberately absent: recordConsent keeps no local copy, so
 // there is nothing to re-push. A failed consent write is a separate gap (it needs

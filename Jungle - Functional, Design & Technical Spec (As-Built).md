@@ -592,7 +592,7 @@ risk, not by size.
 | I7 | **Music: cut from the sellable product** | Licensing exposure plus zero argued value to any of the three lives (trainer, owner, member). Quarantined behind `FLAGS.music` in `src/music/`; **`MusicProvider` will not be built.** TempoGuide survives as the only rhythm feature. Deleting the quarantine outright is a post-pilot decision. |
 | I8 | **Three client-side third-party accesses** | Spotify tokens in localStorage (`App.jsx:372–403`), user-supplied RapidAPI key (`:433`, UI `:5537`), client-side Deezer BPM (`:525–533`). A stated architectural constraint currently violated. **The Spotify-token item is resolved by feature removal for v1** (see I7); the RapidAPI key and Deezer BPM calls remain real. |
 | I9 | **Code splitting — largely done; what is left is small and must be MEASURED** | Local build is **533.39 KB main + 89.89 KB PersonasScreen chunk** (session 16), from a single 647 KB bundle. The personas cluster is `React.lazy`; the runner deliberately is not. **The wins came from gating, not splitting**: rollup cannot fold a flag that a runtime state variable can reach, so session 14 took 24.15 KB off two keyboard shortcuts and session 16 took 12.7 KB off six ungated call sites into the cut music subsystem. ⚠️ A **~2.5 KB "useSpotify leftover"** carried in earlier backlogs **does not exist** — measured at **0.15 KB**; `spotifyApi.js`, `spotifyAuth.js` and `djOrchestrator.js` were already out, because rollup shakes at **export** granularity, not module granularity. Remaining candidates (`BrandStudioScreen`, `LibraryBrowserModal`, `AdminTeamScreen`) are all weak — and `build-sw` precaches every emitted chunk, so a chunk nothing fetches costs every install. **Measure before splitting.** |
-| I10 | **Delta writes instead of whole-list upserts** | `save*` pushes the ENTIRE domain list on every change. Fine at today's volume; quadratic-feeling as a corpus grows, and it is why one bad row poisoned every plan. |
+| ~~I10~~ ✅ | **Delta writes instead of whole-list upserts — SHIPPED** | Landed in `224b074` (session 15); this row said otherwise for two sessions and was corrected in session 17 after reading the code. `save*` no longer pushes the whole domain: `_bgUpsertDelta` sends only rows whose fingerprint differs from what the server last **confirmed**, so one bad row can no longer stop every other row in its domain from syncing. `attendance` was already per-row. Pinned by 12 unit tests. |
 
 ### Tier 3 — correctness gaps to close before real users
 
@@ -964,11 +964,20 @@ cluster moved to `src/screens/personas/`; **stage 5 open** — Builder/Live/Room
 third-party accesses (Spotify token resolved by removal; RapidAPI key and Deezer BPM still need a
 server-side media proxy) · `I9` code splitting (**544.29 KB / 152.88 KB gzip** local, measured
 2026-07-27; `PersonasScreen` has been lazy since session 12 and is an 89.84 KB chunk. ⚠️ The LOCAL
-build under-reports production by ~37%: with no `VITE_SUPABASE_*` vars `supabaseEnabled` folds to
+build under-reports production by ~45%: with no `VITE_SUPABASE_*` vars `supabaseEnabled` folds to
 `false` and rollup drops every sync path, so a sync-only commit produces a byte-identical bundle.
-Last production measurement was 787.2 KB at `cc4a1b7` and is stale by session 14–15's wins) ·
-`I10` delta writes (AUDIT 3.2 wants this before gym #2, for `persona_plans` + `attendance` — it is
-why one bad row once poisoned every plan) ·
+**Re-measured session 17 at `843547d`: 776.85 KB main + 91.19 KB PersonasScreen (868 KB total),
+214.43 KB gzip**, by building with dummy `VITE_SUPABASE_*` vars set so the sync paths survive —
+down 10.35 KB on main from the 787.2 KB recorded at `cc4a1b7`, three sessions earlier. That is a
+local reproduction of production's SHAPE, not the deployed artifact; the CI-built bundle remains
+the authority, and the dummy URL/key differ from the real ones by a handful of bytes) ·
+~~`I10` delta writes~~ ✅ **shipped** in `224b074` (session 15), verified session 17. Every id-keyed
+`save*` routes through `_bgUpsertDelta`, including `persona_plans`; `attendance` was already
+per-row (`recordAttendance` pushes `[row]`). A row is marked synced only on **server confirmation**,
+so a failed push stays in the next delta and the self-healing survives. 12 unit tests pin
+`_deltaRows` / `_markSynced` / `_unmark`. Two retry thunks are still whole-payload by design —
+`attendance` (append-only insert with `ignoreDuplicates`, no per-row marks) and
+brand_profiles/user_prefs (no single "save current state" setter). ·
 ~~`I13` background retry~~ ✅ **shipped** (retry on reconnect + slow timer; the physical soak still
 owes the proof) · `I14` hydrate pagination · `I15` persona LLM quality ceiling (two secrets switch
 persona reasoning to Opus 4.8 — do it **before** ingesting a large corpus, or re-extraction costs
