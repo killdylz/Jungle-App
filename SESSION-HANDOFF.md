@@ -1,12 +1,157 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-28 (session 21)_
+_Last updated: 2026-07-30 (session 22)_
 
-> 📁 **Sessions 6–18 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–20 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 22 — three screens showed a gym something other than what it had saved
+
+> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **264 e2e**
+> (29 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
+> member path is untouched) + StaffApp **339.94 KB** (+0.77) + PersonasScreen **91.04 KB** +
+> ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,480 lines** (+98).
+>
+> **A12/A13 confirmed still not done** at the top of the session — asked before any work, per
+> the session-22 prompt §10.5 — so N4 remains code nobody has run and nothing below depends on
+> it. **Fourth session running.**
+
+### The method, and what it found
+
+Session 21's rule was *read back the STORED row after every UI write*. Session 22's findings
+all came from the inverse: **read back the SCREEN after every stored write.** Three surfaces
+were showing a gym something other than what it had saved, and in every case storage was
+correct — which is why nothing in the suite could see it.
+
+| # | Where | Stored | Shown |
+|---|---|---|---|
+| 1 | Builder, after **Start** on the Schedule | `class_type: "gym-barre-…"` ✅ | header, dropdown and plan all say **CrossFit** |
+| 2 | Dashboard, "Today's classes" | `type: "gym-barre-ms4pk827"` | `GYM-BARRE-MS4PK827`, and every row the same grey |
+| 3 | Brand Studio, **Apply to all surfaces** | the generated palette ✅ | Canopy, on every screen but Brand Studio |
+
+### 🔴 1. Start carried the class's name and not its type
+
+The door session 21 opened — schedule a gym-authored type, press **Start**, run it, check
+somebody in — was driven end to end for the first time. The empty movement pools behave: the
+skeleton is honest, the toast says "0 exercises loaded", the Live screen runs the timer and
+nothing throws.
+
+What it found instead is that `handleStartScheduled` sets `pinnedClass`, `sessionName` and the
+view, and **never touches `classChoice`**. So a coach who scheduled Barre and pressed Start got
+a Builder whose header read `Barre Flow — 40 min · 5 stages · CrossFit`, whose dropdown said
+CrossFit, and whose plan was Back Squat and Burpee Complex. The pinned banner two rows above
+said, correctly, "Running Barre Flow from the schedule". Press ▶ Start Session without noticing
+and the room gets a CrossFit class.
+
+**Not specific to gym-authored types** — it was true of every class type, and had been since
+§3A. It only became FIXABLE in session 21: before `ce96f91` the Schedule's `"HIIT"` was not a
+catalogue key and could not have been handed to `classChoice` at all.
+
+**Stated, not applied.** Rebuilding the stages on Start would throw away a plan the coach may
+have spent the morning on, at 17:58 with the room filling up — the same confident wrong guess
+`handleStartScheduled` already refuses by landing in the Builder instead of the live timer. So
+the Class row grows `Scheduled as Barre · [Load Barre]`, routed through the existing
+`handleClassChange` so a draft with custom exercises still gets the "replace your stages?"
+confirm. It disappears once acted on, and goes with the pin when the coach unpins.
+
+🔴 **The catalogue guard on it is load-bearing, not cosmetic.** Mutating
+`scheduledType && LIB[scheduledType]` → `scheduledType` does not produce a dead button — it
+produces `TypeError: Cannot read properties of undefined (reading 'label')` and an error
+boundary over the whole Builder, for any gym still holding one pre-session-21 `"Mobility"`
+rule. `toHaveCount(0)` alone would have passed; the console-error assertion is what catches it.
+
+### 🔴 2. `CLASS_COLORS` was `CAT_COLOR`'s twin, one screen over
+
+Session 21 deleted `CAT_COLOR` from `CalendarScreen`. `App.jsx:199` held the same thing under
+another name — eight CAPITALISED display strings to hex — and survived only because nothing in
+the file being edited pointed at it.
+
+It had already stopped working. Once the Schedule stored catalogue KEYS, `CLASS_COLORS[uc.type]`
+matched nothing, so **every class on every gym's dashboard drew the same grey bar** — and the
+type text beside it, added in session 20 precisely so the colour was not the only cue, printed
+the stored value raw. `getDayClasses` now reads `getLibrary()` and heals with `resolveClassType`,
+by the same rule the Schedule heals on read, so one rule cannot be described two ways by two
+screens looking at the same row. A gym-authored type paints its `var(--accent)` neat here —
+this row appends no alpha, unlike the grid.
+
+`CLASS_TYPES` (App.jsx:295) went too: a third hardcoded capitalised list, module-local, with no
+reader anywhere. Neither `no-unused-vars` nor the `dead` script reports an unused UPPERCASE
+declaration.
+
+### 🔴 3. "Apply to all surfaces" applied to none of them
+
+The last of §4.5's named read-back candidates. Two defects stacked, and **both are invisible
+without a reload**:
+
+- **`applyGenerated` writes the generated tokens and keeps the skin id `"canopy"`** — on
+  purpose, as the BASE. But the App root only honoured overrides when the id was literally
+  `"custom"`, while Brand Studio's own swatches merged them over the base. Two answers to one
+  question, in two places. So a studio uploaded its logo, pressed the button the label of which
+  is *Apply to all surfaces*, and got its identity stored, previewed on the Brand Studio, and
+  rendered nowhere. ⚠️ An assertion on the **accent** passes against this — the accent derived
+  from Jungle's own icon happens to be Canopy's green. The derived **background** is the
+  discriminator.
+- **`"custom"` is not a skin.** The Fine-tune panel set the id to it, and
+  `PRESET_SKINS["custom"]` is `undefined`, so `applySkinCSS` received `{}` for its `meta` and
+  never wrote `--display`, `--body`, `--glow` or `--num`. In-session the previous paint's values
+  were still on `:root`, so it looked right — and **a gym on Atelier lost Instrument Serif the
+  next time they opened the app.** Pulse lost its glow and its tabular numerals the same way.
+
+**`src/lib/skins.js`** (new, 86 lines) now holds `PRESET_SKINS`, `baseSkin()` and
+`resolveSkinTokens()`. The question is not "is the id `custom`", it is "are there override
+tokens" — which is the rule the preset highlight (`activeSkinId === p.id && !customSkinTokens`)
+had always used. Overrides are a PALETTE on top of the skin the gym chose; the base keeps its
+id, its fonts, its voice and its programme tints. `summaryApi.js` had already written the
+diagnosis for a different consumer: anything resolving a gym's palette by preset id "silently
+downgrades exactly the gyms that cared most about looking like themselves".
+
+🔴 **And fixing it made a latent bug destructive.** The Fine-tune draft re-synced on
+`[activeSkinId]` only, so "Apply to all surfaces" never fired it. That was inert while the app
+ignored the tokens; the moment the app started wearing them, the screen repainted in the new
+identity while the eight swatches below still showed the old one — and a coach who nudged one
+and pressed Save would have written the stale draft back over the identity they had just
+generated. Dep array fixed, with a test that does **not** reload, because a fresh mount seeds
+the draft correctly and reloading is exactly what hides it.
+
+### Also done
+
+- **a11y sweep over three surfaces no scan had ever reached** (`revealed.spec.js`): the
+  Schedule **with classes on it** — every Edit, Remove and Start control the grid grows from a
+  rule, which `screens.spec.js` cannot see because it sweeps an empty week; the **edit** dialog
+  and its conditional legacy `<option>`; and the Builder as reached **from** the Schedule.
+  All clean — and proven to be scanning, by mutating one `aria-label` away and watching it
+  report all three cells.
+- **`revealed.spec.js`'s nameless-fields test had no positive control of its own.** It lived
+  only in the sibling button test, and two of the openers end without an assertion. Added.
+- **Archive order and title fixed.** Session 21 moved session 19's block here correctly but
+  APPENDED it below everything, and the archive still called itself "sessions 6–18". Session 19
+  now sits under session 20 where the newest-first order says it goes, and the title reads
+  6–20. Nothing was edited on the way — the blocks are verbatim.
+  ⚠️ I nearly filed this as "session 21 DELETED the block": a heading scan capped at 25 results
+  stopped before line 1765 and reported it absent. **A truncated result is not a negative
+  result** — the oldest rule in §0b, and it still cost a wrong conclusion mid-session.
+
+### 🔬 Method notes for next session
+
+1. 🔴 **Read back the SCREEN, not only the stored row.** Session 21's rule caught writes;
+   these three were all correct writes and wrong reads. A field with more than one READER
+   drifts exactly like a column with more than one writer.
+2. 🔴 **A coincidence can mask a defect.** The generated accent equalling Canopy's accent is
+   why "Apply to all surfaces" survived: any reasonable spot-check picks the accent. Pick the
+   field that CANNOT agree by chance.
+3. 🔴 **Fixing a defect can arm the one underneath it.** The stale fine-tune draft was harmless
+   for as long as the app ignored custom tokens. After the fix it overwrites a gym's identity.
+   **After every fix, ask what was inert only because the thing above it was broken.**
+4. **A probe that reads the wrong key looks exactly like a clean result.** The first Brand
+   Studio probe read `jungle_skin_id`; the key is `jungle_skin`. It reported `null` and would
+   have supported a confident wrong finding. Print the key you read.
+5. **Reload before believing a branding assertion.** Both Brand Studio defects pass in-session,
+   because `:root` still carries the previous paint's custom properties.
 
 ---
 
@@ -105,124 +250,3 @@ The grid tints a cell by appending hex alpha (`${c}18`), so a **non-hex** colour
 `var(--accent)18` — not a colour — and the cell lost its background *and* border. Fixed with a
 hex guard, which now matters because gym-authored types (`makeClassType` → `color:
 "var(--accent)"`) can finally be scheduled. Verified by screenshot across all five cases.
-
----
-
-## Session 20 — the sweep came back clean, and the roster did not
-
-> **Gates green** at `e81e793`. `lint:crash` **0** · **745 unit** (27 files, no todos) ·
-> **239 e2e** (28 spec files, no fixmes) · five-chunk build: index **204.50 KB** + StaffApp
-> **338.73 KB** + PersonasScreen **91.04 KB** + ClassSummary **5.81 KB** + summaryApi
-> **0.85 KB**. App.jsx **3,382 lines** — one attribute changed, no lines added.
->
-> **A12/A13 are still not done**, confirmed with Dylan at the top of the session. N4's two
-> Edge Functions and migration 0009 remain **code nobody has run**. Nothing here changes that,
-> and no claim below depends on them.
-
-### 🟩 The highest-yield item in the session-20 prompt returned NOTHING, and that is the finding
-
-§4.5 ranked "sweep the other eight screens WITH DATA LOADED" as the top item, on the strength
-of session 19's Coaches haul (13 unnamed destructive controls on first render, 29 + 33 in its
-worst panel). The expectation was "expect a similar haul".
-
-**There is no haul.** Seeded a populated store — 5 members across all three statuses,
-attendance, schedule rules, class instances, session history, gym branding, retention actions —
-and ran all three `a11yScan.js` rules over **nine top-level screens** and **fifteen
-interaction-revealed panels**. Result: **0 unnamed buttons, 0 symbol-only buttons, 0 nameless
-fields.** Members, Schedule and Brand Studio were verifiably populated (button counts
-15→29, 51→60, 30→31; content markers asserted) and every per-row control was already named,
-and named *distinguishably* — "Edit Regular Rita", "Remove Morning Burn on Mon at 06:00 from…".
-
-Sessions 12, 14 and 16 did that work. **Coaches was the one screen never swept at all**, which
-is why it held everything. It was the outlier, not the first of a pattern.
-
-⚠️ **The reason this is trustworthy rather than a scan that quietly measured nothing:** every
-screen was scanned **twice**, once against an empty store and once against the fixture, and the
-two button counts and a content marker were printed side by side. That is what caught the one
-case where the fixture genuinely did NOT land — the Class Runner, whose surface is driven by the
-Builder's draft and not by `class_instances` at all. Without the empty-store control, seven
-honest zeros and one meaningless zero would have looked identical.
-
-### 🔴 Asking the same question about the ROSTER instead of about names found two real defects
-
-Both on the path a coach walks every single class.
-
-**1. `CheckInPanel` had no view on membership status at all.** Three places in this app model
-it carefully — `retention.js` refuses to flag a paused or cancelled member and explains why for
-each; `RosterScreen` counts only active ones ("including cancelled members makes it a flattering
-[number]") and dims the rest behind a "Left" badge — and then the Runner rendered
-`store.getMembers()` unfiltered. An owner read **`Roster · 1`** on the Members screen, opened the
-Runner, and was offered **three identical full-brightness names**. Tapping the one who left
-wrote a real attendance row, for a member the retention engine then declines to analyse: written
-and never read.
-
-The cost is **P6**, the design law this panel exists to serve — under five seconds per member.
-That budget is spent *scanning*, and the list only grows, so the sweep gets slower exactly as
-the gym gets older and its roster gets more valuable.
-
-🔴 **A filter alone would have been WORSE than the bug, and this is the part worth carrying
-forward.** `canAdd` refuses quick-add for a name that already belongs to somebody, cancelled
-included — so hiding a returning member without a way to reach them strands a real person at the
-door, findable by nothing and addable by nothing. The shape is therefore: **current members by
-default, search sees everyone, and a surfaced row carries its status as a WORD** (not as
-opacity, which announces nothing). `e2e/checkin.spec.js` pins that pairing in its own test, so a
-later change that filters the search results too fails with the sentence explaining why.
-
-**2. `App.jsx` was writing a display string into an analytics column.** It handed the Runner
-`[classType, subType].join(" · ")` — assembled for a header that **does not exist**, since
-`LiveScreen` never renders `classType` and only ever passes it to `ensureClassInstance`. So it
-went straight into `class_instances.class_type`, the column N2's cohort analytics group by.
-
-The Runner recorded `"hiit · amrap"` while the Schedule's publish path recorded `"HIIT"` for the
-same class: **two doors into one column, two vocabularies, and no query that can ever group
-them.** For a gym-authored type it was `"gym-barre-ms4pk827 · general"` — a key with a label
-glued on, matching nothing. This is precisely the defect `CheckInPanel`'s own header comment
-already describes for `duration_min` and `coach_name` ("the same class recorded different
-amounts of itself depending on which door it came through"), in the one field that pass missed.
-
-Found by driving §4.5's other named gap: **a gym's own class type into the Runner and through to
-a check-in**, then reading the STORED occurrence back. The path had never been driven. There was
-no constraint risk to find (`class_type` is plain `text`, verified session 18) — the defect was
-that the value did not survive the journey.
-
-### What shipped
-
-| | |
-|---|---|
-| `src/screens/runner/CheckInPanel.jsx` | Status-aware sweep list, labelled revealed rows, and an empty state that distinguishes "no members" from "no CURRENT members" (it used to answer "No one matches that name" when nothing had been searched). |
-| `src/lib/retention.js` | `isCurrentMember` **exported**. Two definitions of "is this still one of our members" is what let one screen say `Roster · 1` while another listed three names. |
-| `src/lib/store.js` | `MEMBER_STATUS_LABEL` moved here beside `MEMBER_STATUSES` for its second UI consumer. ⚠️ `csvExport.js` keeps its own copy **on purpose** — that module has zero imports by design and must not be "fixed" to import the storage seam. |
-| `src/App.jsx` | `classType={classChoice?.classType || ""}`. One attribute. |
-| `src/screens/runner/LiveScreen.jsx` | The comment saying `classType` is DATA, not a label — the thing whose absence caused the bug. |
-| `e2e/checkin.spec.js` | **New, 6 tests.** |
-| `src/lib/retention.test.js` | 4 tests pinning `isCurrentMember`'s edges now that it is a shared contract. |
-
-### Method notes worth keeping
-
-- **Five value mutations, each failing the right test for the right reason, each reverted with
-  the inverse.** The pairing mutation (filtering the search results as well as the default list)
-  failed exactly the two tests written to catch it, with their own messages.
-- 🔴 **The badge assertion's first draft pinned `/LEFT/` and failed against CORRECT code.**
-  The badge is `text-transform: uppercase`; Playwright's `toContainText` reads `textContent`,
-  which ignores it, so the matcher saw `"Left"`. Pinning the case would have pinned a CSS
-  choice. The repo already carries "innerText respects text-transform; textContent does not" —
-  this is the same trap arriving through an assertion instead of a scan.
-- **A recon spec is worth writing and deleting.** Three throwaway specs (`zz-recon*.spec.js`)
-  printed counts and every button name per screen rather than asserting. The full picture in one
-  run is what made "there is no haul" a finding instead of a guess. All three deleted before
-  commit; suite is 28 spec files.
-- **A phone gets the bottom bar, and `nav()` is desktop-only** — the documented trap, hit once
-  while screenshotting the panel at 390px. The labels are `Run` / `Build` / `Members` / `Brand` /
-  `More`, inside `page.locator("nav").first()`.
-
-### Docs — §4.4's item, done
-
-Root is **19 `.md` → 6** (one of which, `Jungle - Delta & Backlog Breakdown.md`, is gitignored
-and local-only). `SESSION-HANDOFF.md` is **165 KB → 9.5 KB**. Thirteen audit/strategy files moved
-to `docs/`; sessions 6–18 moved verbatim to `docs/history/HANDOFF-ARCHIVE.md`.
-
-⚠️ **Every live cross-reference was repointed** — the As-Built spec (×10), `supabase/SETUP.md`
-(→ `../docs/`), `docs/SPEC-PATCHES.md` (→ `../` for the spec) — and verified with a grep that
-finds no bare filename left. References inside `docs/history/**` were **deliberately left
-alone**: they are records of what was true then, exactly like `FABLE-AUDIT-PROMPT.md`'s stale
-`NEXT-SESSION-PROMPT.md` pointer, which §4.4 of the session-20 prompt already ruled on.
