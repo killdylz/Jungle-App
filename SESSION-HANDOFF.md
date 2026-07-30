@@ -12,8 +12,8 @@ _Last updated: 2026-07-30 (session 22)_
 
 ## Session 22 — three screens showed a gym something other than what it had saved
 
-> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **282 e2e**
-> (30 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
+> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **288 e2e**
+> (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
 > member path is untouched) + StaffApp **339.98 KB** (+0.81) + PersonasScreen **91.04 KB** +
 > ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,493 lines** (+111).
 >
@@ -176,6 +176,27 @@ Two were stale:
   before it went green. It had been unable to fail for two sessions.
 - **`memberSummary.spec.js`** stubbed `classType: "Conditioning"`. Now `"conditioning"`, with a
   note that nothing on that page renders it and `rawValues.spec.js` is what keeps that true.
+
+### 7. The CSV backfill, driven for the first time — and it holds
+
+The THIRD writer of `class_instances.class_type` and the only one whose vocabulary we do not
+control. Session 21 gave `applyAttendanceImport` its `lib` parameter and `RosterScreen` passes
+`getLibrary()`; `store.test.js` pins the function and **nothing had ever driven the screen**.
+`e2e/csvImport.spec.js`, 6 tests.
+
+It holds up completely, and that is the finding: a foreign `"HIIT"` arrives as `hiit`;
+`"Mobility"` keeps its own text because no catalogue type answers to it; **a gym that authored
+"Barre" absorbs a year of imported "Barre" onto its OWN key rather than beside it** — which is
+the entire reason the parameter exists; reading a file writes nothing until the coach presses
+Import; a second import of the same file adds nothing and says so; an imported member is
+`active` with `joinedAt: ""`, because an importer does not know when somebody joined; and a
+file with no date column is refused with the reason and no way to apply it.
+
+Proven by mutation: dropping the `lib` argument — the pre-session-21 behaviour — fails two of
+the six with `Expected: "gym-barre-…" / Received: "Barre"`.
+
+This matters more than six tests suggest. It is how a gym's history arrives, it runs **once**,
+on a corpus nobody will re-key by hand, and it is what makes N2 possible at all.
 
 ### Also done
 
