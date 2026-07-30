@@ -161,6 +161,22 @@ Every test carries `proveScannerLive()`, which plants a probe into the page unde
 and throws unless all four rules fire. A clean page and a scanner that read nothing are the same
 observation, and that caught me once this session already (§ method note 6).
 
+### 6. …then the stale fixtures themselves
+
+Grepped every fixture in the repo for the pre-session-21 class-type vocabulary. Most hits are
+**deliberate** and carry their own positive control — `schedule.spec.js`'s `seedRules` asserts
+`["HIIT","Hyrox","Mobility"]` is what is stored before publishing, and `scheduleEdit.spec.js`
+seeds `"Mobility"` precisely to prove an unmappable type survives an edit. Those are the heal
+being tested, and they stay.
+
+Two were stale:
+
+- **`honesty.spec.js`** seeded `type: "Hyrox"`. Now `"hyrox"`, and **the test it feeds now
+  fails against the defect** — mutating `typeLabel` back reports `element(s) not found`, where
+  before it went green. It had been unable to fail for two sessions.
+- **`memberSummary.spec.js`** stubbed `classType: "Conditioning"`. Now `"conditioning"`, with a
+  note that nothing on that page renders it and `rawValues.spec.js` is what keeps that true.
+
 ### Also done
 
 - **a11y sweep over three surfaces no scan had ever reached** (`revealed.spec.js`): the

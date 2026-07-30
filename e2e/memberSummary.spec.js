@@ -28,7 +28,13 @@ const PAYLOAD = {
   gym: { name: "The Garage" },
   brand: { gymName: "The Garage", bg: "#120A0A", accent: "#FF6B35", text: "#F5EDE9", muted: "#9A8A84" },
   klass: {
-    name: "Thursday Engine", classType: "Conditioning",
+    // The catalogue KEY, because that is what `summary-read` selects out of
+    // `class_instances.class_type` and hands to this page. It read
+    // "Conditioning" — a display string the column has not held since session 21
+    // — which meant this fixture could never have shown a raw key reaching a
+    // member. Nothing here renders `classType` today; `e2e/rawValues.spec.js`
+    // is what keeps that true, with a `gym-` key in the payload.
+    name: "Thursday Engine", classType: "conditioning",
     startsAt: "2026-07-23T18:00:00.000Z", coachName: "Priya", durationMin: 45,
   },
   content: {

@@ -27,11 +27,23 @@ import { freshApp, nav, watchConsole, expectNoConsoleErrors } from "./helpers.js
 // a fixture whose result depends on when it ran, and this suite has already been
 // burned once by exactly that. `repeat: "weekly"` means the rule renders in
 // whichever week is displayed.
+//
+// 🔴 `type: "hyrox"` — the catalogue KEY, which is what the Schedule has stored
+// since session 21. It used to read `"Hyrox"`, and that made the two "says its
+// type in words" tests below UNABLE TO FAIL: the stored value happened to be the
+// human word, so a screen printing the raw value and a screen looking the label
+// up were indistinguishable. Session 22's dashboard defect — `GYM-BARRE-MRKHJ2LC`
+// on a coach's screen — sat under exactly these two green assertions.
+//
+// The assertions were right. The fixture was a vocabulary the app had stopped
+// writing. When a stored vocabulary changes, grep the FIXTURES, not only the
+// assertions. `e2e/rawValues.spec.js` is the rule that does not need a fixture
+// to be kept honest.
 async function seedWeek(page, day) {
   await page.evaluate((forced) => {
     const today = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
     localStorage.setItem("jungle_user_classes", JSON.stringify([
-      { id: "ucT", name: "Saturday Grind", type: "Hyrox", coach: "Dylan",
+      { id: "ucT", name: "Saturday Grind", type: "hyrox", coach: "Dylan",
         day: forced || today, slot: "09:00", dur: "45m", repeat: "weekly" },
     ]));
   }, day);
@@ -83,7 +95,8 @@ test.describe("nothing important is carried by colour alone", () => {
     // The 3px bar on the left carried the type and nothing wrote it.
     await expect(page.getByText("Saturday Grind")).toBeVisible();
     // "Hyrox" in the DOM, uppercased by CSS. Asserting the DOM text is the right
-    // level: it is what a screen reader announces.
+    // level: it is what a screen reader announces — and with the rule stored as
+    // the key `hyrox`, the capital H can only come from the catalogue's label.
     await expect(page.getByText("Hyrox", { exact: true }).first()).toBeVisible();
   });
 });
@@ -126,7 +139,8 @@ test.describe("no number the product cannot know", () => {
     await expect(page.getByText("Saturday Grind")).toBeVisible();
     await expect(page.getByText("Dylan · 45m")).toBeVisible();
     // "Hyrox" in the DOM, uppercased by CSS. Asserting the DOM text is the right
-    // level: it is what a screen reader announces.
+    // level: it is what a screen reader announces — and with the rule stored as
+    // the key `hyrox`, the capital H can only come from the catalogue's label.
     await expect(page.getByText("Hyrox", { exact: true }).first()).toBeVisible();
   });
 });
