@@ -114,6 +114,65 @@ const REVEALED = [
     await expect(page.getByRole("dialog")).toHaveCount(1);
   }],
 
+  // ── The Schedule with classes actually on it ───────────────────────────────
+  // `screens.spec.js` sweeps this screen on a FRESH store, where the grid is
+  // thirty-five empty cells and the only controls are the week arrows, Publish
+  // and Add class. Every control the grid grows from a rule — Edit, Remove and
+  // the Start button §3A added — is markup no sweep has ever reached, and
+  // session 21 relabelled the type chip inside it on top of that.
+  //
+  // The clock is fixed because Start only exists inside the 4h window either
+  // side of a slot: without it this row would sweep the Start button for most of
+  // the day and silently sweep nothing at 02:00.
+  ["Schedule · a week with classes on it", async (page) => {
+    await page.clock.setFixedTime(new Date(2026, 6, 14, 18, 5, 0));   // Tue, 18:05
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "r1", name: "S360",        type: "hiit",     coach: "Dylan", day: "Tue", slot: "18:00", dur: "45m", repeat: "weekly" },
+        { id: "r2", name: "Morning Burn", type: "pilates", coach: "Mara",  day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
+        // Stored before session 21, so the catalogue does not know it.
+        { id: "r3", name: "Evening Mob", type: "Mobility", coach: "",      day: "Wed", slot: "19:30", dur: "30m", repeat: "weekly" },
+      ]));
+    });
+    await page.reload();
+    await nav(page, "Schedule");
+    await expect(page.getByTestId("start-class")).toHaveCount(1);
+  }],
+
+  // The EDIT dialog, which is not the add dialog: it carries the rule's current
+  // values, a different primary button, and — for a rule the catalogue has no
+  // class type for — a conditional extra `<option>` that exists so opening the
+  // dialog to fix a coach's name cannot quietly re-type the class. That option
+  // is reachable from nowhere else in the suite.
+  ["Schedule · Edit a class the catalogue does not know", async (page) => {
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "r3", name: "Evening Mob", type: "Mobility", coach: "", day: "Wed", slot: "19:30", dur: "30m", repeat: "weekly" },
+      ]));
+    });
+    await page.reload();
+    await nav(page, "Schedule");
+    await page.getByLabel("Edit Evening Mob on Wed at 19:30").click();
+    await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  }],
+
+  // The Builder as a coach reaches it from the Schedule — with the pinned-class
+  // banner and, when the Builder is on a different class type from the one the
+  // gym scheduled, the notice that says so. Both are conditional renders that
+  // the plain "Class Builder" sweep cannot produce.
+  ["Class Builder · started from the Schedule", async (page) => {
+    await page.clock.setFixedTime(new Date(2026, 6, 14, 18, 5, 0));   // Tue, 18:05
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "r1", name: "S360", type: "hiit", coach: "Dylan", day: "Tue", slot: "18:00", dur: "45m", repeat: "weekly" },
+      ]));
+    });
+    await page.reload();
+    await nav(page, "Schedule");
+    await page.getByLabel("Start S360 at 18:00").click();
+    await expect(page.getByTestId("scheduled-type-notice")).toBeVisible();
+  }],
+
   ["Class Runner · Check in", async (page) => {
     await nav(page, "Class Runner");
     await page.getByRole("button", { name: /Check in/ }).first().click();
@@ -175,6 +234,15 @@ test.describe("panels that only exist after a click announce themselves", () => 
     test(`${name} has no nameless form fields`, async ({ page }) => {
       await freshApp(page);
       await open(page);
+      // The same control the button sweep above carries, and for the same
+      // reason: an empty page has no nameless fields either, so without it a
+      // panel that failed to open reports PASS. It lived only in the sibling
+      // test, which meant this one's negative result had no positive control in
+      // its own run — and two of the openers below end without an assertion of
+      // their own.
+      const total = await page.locator("button").count();
+      expect(total, `${name}: nothing rendered — the panel did not open`).toBeGreaterThan(2);
+
       const bad = await namelessFields(page);
       expect(bad, reportFields(name, bad)).toEqual([]);
     });

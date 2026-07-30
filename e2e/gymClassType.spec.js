@@ -219,6 +219,131 @@ test.describe("a gym can author its own class type", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // 🔴 THE JOURNEY SESSION 21 MADE POSSIBLE, driven for the first time.
+  //
+  // Before `ce96f91` a gym-authored type could not be put on the Schedule at
+  // all — the dropdown was `CAT_COLOR`'s eight hardcoded display strings. Now it
+  // can, and that opened a path nobody had walked: schedule a gym's own type →
+  // press Start → run a class whose movement pools are EMPTY (`makeClassType`
+  // gives one sub-type with `warmup: [], main: [], cooldown: []`) → check
+  // somebody in.
+  //
+  // What it found is not the empty pools. Those behave: the skeleton is honest,
+  // the toast says "0 exercises loaded", the Live screen runs the timer and
+  // nothing throws. It is that Start carried the class's NAME and not its TYPE,
+  // so the Builder opened on CrossFit under the heading "Barre Flow" — covered
+  // by its own test in `schedule.spec.js`; asserted here because a gym-authored
+  // type is the case where the disagreement is loudest, and because this is the
+  // only test that walks the whole thing to a stored attendance row.
+  test("a gym's own type: scheduled, started, run and checked into", async ({ page }) => {
+    const errors = watchConsole(page);
+    // A Start button exists only inside the 4h window either side of the slot,
+    // so the clock is fixed or this passes most of the day and fails at 02:00.
+    await page.clock.setFixedTime(new Date(2026, 6, 14, 18, 5, 0));   // Tue, 18:05
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+    await closeLibrary(page);
+
+    // ── 1. It can be put on the schedule. This is the whole of §1a.
+    await nav(page, "Schedule");
+    await page.getByRole("button", { name: "+ Add class" }).click();
+    await page.getByPlaceholder("Class name").fill("Barre Flow");
+    await page.getByLabel("Class type").selectOption(gymKey);
+    await page.locator("select").filter({ has: page.locator('option[value="Mon"]') }).selectOption("Tue");
+    await page.locator("select").filter({ has: page.locator('option[value="18:00"]') }).selectOption("18:00");
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+
+    const rule = (await stored(page, "jungle_user_classes")).find(r => r.name === "Barre Flow");
+    expect(rule, "precondition: the rule must have been created").toBeTruthy();
+    expect(rule.type, "the rule stores the gym's KEY, not its label").toBe(gymKey);
+
+    // ── 2. The grid names it by LABEL, not by the key. `toContainText` reads
+    //      textContent and ignores the cell's uppercase transform, so this is
+    //      checked case-insensitively.
+    await expect(page.getByText(/^Barre$/i)).toBeVisible();
+    await expect(page.getByText(gymKey), "the storage key must never reach a coach's screen")
+      .toHaveCount(0);
+
+    // ── 3. Start. The occurrence records the gym's own key — which is what makes
+    //      N2 able to count this gym's own class type at all.
+    await page.getByLabel("Start Barre Flow at 18:00").click();
+    const published = await stored(page, "jungle_class_instances");
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({ name: "Barre Flow", classType: gymKey });
+
+    // ── 4. …and the Builder says so rather than claiming CrossFit.
+    await expect(page.getByTestId("scheduled-type-notice")).toContainText(`Scheduled as ${TYPE}`);
+    await page.getByRole("button", { name: `Load ${TYPE}` }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(page.getByLabel("Class type")).toHaveValue(gymKey);
+
+    // ── 5. The empty pools. A gym-authored type has no movements, so the honest
+    //      outcome is a usable skeleton and a count of zero — not a silent
+    //      failure, and not somebody else's exercises.
+    await expect.poll(async () =>
+      ((await stored(page, "jungle_draft_class"))?.stages || []).map(s => (s.exercises || []).length),
+      { message: "a gym type's stages come up empty, by construction" }).toEqual([0, 0, 0]);
+    const stages = (await stored(page, "jungle_draft_class")).stages;
+    expect(stages.map(s => s.type), "the skeleton still needs a warm-up and a cool-down")
+      .toEqual(expect.arrayContaining(["warmup", "cooldown"]));
+    expect(stages.every(s => s.name && s.dur > 0)).toBe(true);
+
+    // ── 6. Run it and check somebody in. An empty class is still a class that
+    //      happened, and this is the record the gym is actually paying for.
+    await page.getByRole("button", { name: /Start Session/i }).click();
+    await page.getByRole("button", { name: /Check in/ }).first().click();
+    await page.getByPlaceholder(/Search or type/i).fill("Sarah Chen");
+    await page.getByRole("button", { name: /Add .*Sarah Chen/ }).click();
+
+    // THE assertion, on the STORED rows. No second occurrence, the check-in on
+    // the row the Schedule published, and the append-only class_type column
+    // carrying the gym's own key rather than a display string or a stray
+    // "crossfit" picked up on the way through the Builder.
+    const ci = await stored(page, "jungle_class_instances");
+    expect(ci, "one class was run, so there is one occurrence").toHaveLength(1);
+    expect(ci[0].classType).toBe(gymKey);
+    const att = await stored(page, "jungle_attendance");
+    expect(att).toHaveLength(1);
+    expect(att[0].classInstanceId).toBe(published[0].id);
+
+    await expect(page.getByText(/Something broke|stopped responding/i)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  // The dashboard is the fourth surface that had its own copy of the catalogue's
+  // colours (`CLASS_COLORS`, App.jsx) and the only one that printed the stored
+  // value straight onto the screen. A coach read `GYM-BARRE-MRKHJ2LC` there.
+  test("the gym's type reads as its own name on the dashboard, not as a key", async ({ page }) => {
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+    await closeLibrary(page);
+
+    // `daily`, so this does not depend on what day the suite runs.
+    await page.evaluate(k => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "d1", name: "Barre Flow", type: k, coach: "", day: "Mon", slot: "06:00", dur: "45m", repeat: "daily" },
+      ]));
+    }, gymKey);
+    await page.reload();
+
+    await expect(page.getByTestId("today-class")).toHaveCount(1);
+    await expect(page.getByTestId("today-class-type")).toHaveText(TYPE);
+    await expect(page.getByText(gymKey)).toHaveCount(0);
+
+    // A gym-authored type has no hex of its own — `makeClassType` gives it
+    // `var(--accent)`, the gym's colour, which is exactly right here. The
+    // Schedule grid cannot use it because it appends 8-bit alpha; this row
+    // paints it neat.
+    await expect(page.getByTestId("today-class-color"))
+      .toHaveAttribute("style", /var\(--accent\)/);
+  });
+
   // Reset means the BUILT-IN catalogue. If `handleReset` read the merged library
   // it would reset to whatever the gym currently has, i.e. to nothing.
   test("Reset to defaults removes the gym's type", async ({ page }) => {

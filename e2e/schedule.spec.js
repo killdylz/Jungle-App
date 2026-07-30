@@ -361,6 +361,137 @@ test.describe("a class run from the Schedule keeps the occurrence it was publish
     await page.getByRole("button", { name: "Next week", exact: true }).click();
     await expect(page.locator('[data-testid="start-class"]')).toHaveCount(0);
   });
+
+  // 🔴 What §3A left behind, found by driving the door session 21 opened and
+  // reading the SCREEN rather than the row.
+  //
+  // Start pins the occurrence and carries the class's NAME. It never carried the
+  // class TYPE. So a coach who scheduled a Yoga class, pressed Start, and looked
+  // at the Builder was told — by the header, by the dropdown and by the plan
+  // itself — that they were about to teach CrossFit, while the pinned banner two
+  // rows above correctly said "Running Sunrise Flow from the schedule".
+  //
+  // Storage was never wrong: the occurrence keeps its own `class_type` (§1) and
+  // check-ins still land on it. This is the other failure mode, and the one
+  // sessions 19–21 kept meeting from the opposite direction — the STORED value
+  // right and the screen wrong. It ends with a coach in front of a room running
+  // the wrong plan, which is worse than a mis-grouped analytics row.
+  //
+  // The seeded rules are `hiit`, so Yoga is a type the coach chose and the
+  // Builder has no reason to be showing.
+  test("the Builder says which class type the schedule put on this slot", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(NOON_ISH());
+    await freshApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "uc1", name: "Sunrise Flow", type: "yoga", coach: "Dylan",
+          day: "Tue", slot: "18:00", dur: "45m", repeat: "weekly" },
+      ]));
+    });
+    await page.reload();
+    await nav(page, "Schedule");
+
+    // PRECONDITION, not decoration: a fresh Builder opens on the first catalogue
+    // key, which is `crossfit`. If that ever stops being true this test is
+    // measuring nothing, and it should say so on its own line rather than pass.
+    const notice = page.getByTestId("scheduled-type-notice");
+    await nav(page, "Class Builder");
+    await expect(page.getByLabel("Class type")).toHaveValue("crossfit");
+    await expect(notice, "nothing is pinned yet, so there is nothing to disagree with")
+      .toHaveCount(0);
+
+    await nav(page, "Schedule");
+    await page.getByLabel("Start Sunrise Flow at 18:00").click();
+
+    // The Builder now states the fact the coach entered on the Schedule, beside
+    // the control it is about.
+    await expect(notice).toContainText("Scheduled as Yoga");
+    await expect(page.getByLabel("Class type"),
+      "precondition: the Builder is still on the type it was, which is the defect")
+      .toHaveValue("crossfit");
+
+    // One press, through the same confirm any other class-type change gets —
+    // rebuilding silently would throw away a plan the coach may have spent the
+    // morning on, at 17:58 with the room filling up.
+    await page.getByRole("button", { name: "Load Yoga" }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    await expect(page.getByLabel("Class type")).toHaveValue("yoga");
+    await expect.poll(async () => (await stored(page, "jungle_draft_class"))?.classChoice?.classType,
+      { message: "the stored draft must agree with the dropdown" }).toBe("yoga");
+    // Stated, then satisfied, then gone — a notice that stays after the coach
+    // acts on it is a control that lies about the state of the screen.
+    await expect(notice).toHaveCount(0);
+
+    // And the occurrence is untouched by any of it: check-ins still land on the
+    // row the Schedule published, carrying the type the Schedule recorded.
+    await page.getByRole("button", { name: /Start Session/i }).click();
+    await page.getByRole("button", { name: /Check in/ }).first().click();
+    await page.getByPlaceholder(/Search or type/i).fill("Sarah Chen");
+    await page.getByRole("button", { name: /Add .*Sarah Chen/ }).click();
+
+    const ci = await stored(page, "jungle_class_instances");
+    expect(ci).toHaveLength(1);
+    expect(ci[0]).toMatchObject({ name: "Sunrise Flow", classType: "yoga", coachName: "Dylan" });
+    const att = await stored(page, "jungle_attendance");
+    expect(att).toHaveLength(1);
+    expect(att[0].classInstanceId).toBe(ci[0].id);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // Unpinning is the coach saying "I am not running that class". The notice is
+  // about the pinned occurrence, so it has to go with it — a stale one would
+  // offer to rebuild the plan from a class nobody is teaching.
+  test("unpinning takes the scheduled-type notice with it", async ({ page }) => {
+    await seedForStart(page);
+    await page.getByLabel("Start S360 at 18:00").click();
+    // The seeded rules are `hiit` and a fresh Builder is on `crossfit`.
+    await expect(page.getByTestId("scheduled-type-notice")).toContainText("Scheduled as HIIT");
+
+    await page.getByRole("button", { name: "Unpin" }).click();
+    await expect(page.getByTestId("pinned-class")).toHaveCount(0);
+    await expect(page.getByTestId("scheduled-type-notice")).toHaveCount(0);
+  });
+
+  // A rule stored before session 21 can carry "Mobility", which no catalogue
+  // class type answers to — `resolveClassType` leaves it alone rather than
+  // guessing at a near-neighbour. There is therefore no plan to load, and a
+  // button offering to load one would be the dead control this repo keeps
+  // deleting. The honest answer is to say nothing.
+  //
+  // 🔴 And the guard is not cosmetic. Mutating it away
+  // (`scheduledType && LIB[scheduledType]` → `scheduledType`) does not produce a
+  // dead button, it produces `TypeError: Cannot read properties of undefined
+  // (reading 'label')` and an error boundary over the whole Builder — a coach
+  // whose gym still has one pre-session-21 rule loses the screen entirely the
+  // moment they press Start on it. The console-error assertion is what catches
+  // that; `toHaveCount(0)` alone would still have passed, because a crashed
+  // Builder renders no notice either.
+  test("says nothing when the scheduled type is one the catalogue never had", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(NOON_ISH());
+    await freshApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "uc1", name: "Evening Mob", type: "Mobility", coach: "",
+          day: "Tue", slot: "18:00", dur: "45m", repeat: "weekly" },
+      ]));
+    });
+    await page.reload();
+    await nav(page, "Schedule");
+    await page.getByLabel("Start Evening Mob at 18:00").click();
+
+    // POSITIVE CONTROL (§0b#1): the pin DID happen. Without it, "no notice"
+    // and "Start did nothing" are the same observation.
+    await expect(page.getByTestId("pinned-class")).toContainText("Evening Mob");
+    await expect(page.getByTestId("scheduled-type-notice")).toHaveCount(0);
+    // …and the occurrence still records the type verbatim, unguessed.
+    expect((await stored(page, "jungle_class_instances"))[0].classType).toBe("Mobility");
+
+    expectNoConsoleErrors(errors);
+  });
 });
 
 test.describe("publishing ahead does not inflate what the gym has done", () => {

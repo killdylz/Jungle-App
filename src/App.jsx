@@ -31,6 +31,11 @@ import { setupProgress, describeSetup } from "./lib/setupProgress.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { getLibrary, saveLibrary, resetLibrary, BUILT_IN_LIBRARY,
          newClassTypeKey, makeClassType } from "./lib/libraryAccess.js";
+// Pure, zero imports — the one place that decides what a stored class type MEANS.
+// Read directly rather than through libraryAccess so the Dashboard heals a legacy
+// rule by exactly the rule the Schedule heals it by, and not by a second copy.
+import { resolveClassType } from "./lib/libraryStore.js";
+import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
@@ -92,34 +97,12 @@ const VIEW_LABELS = {
 // on gym Wi-Fi with no internet must still render in the gym's type).
 import "./fonts.js";
 
-// ─── Theme — Canopy skin (matches design mockups) ─────────────────────────────
-// ─── Preset Skins ──────────────────────────────────────────────────────────────
-const PRESET_SKINS = {
-  canopy: {
-    name:"Canopy", vibe:"natural",
-    tokens:{ bg:"#0A0F0C", card:"#0F1611", navy:"#141D17", border:"rgba(255,255,255,.07)",
-             accent:"#7BE3A4", green:"#CFF5DE", text:"#E8EFE9", muted:"#8AA294" },
-    fonts:{ display:"Space Grotesk", body:"Hanken Grotesk" },
-    voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
-    programs:[{name:"Strength",tint:"#A78BFA"},{name:"Endurance",tint:"#34D399"},{name:"Mobility",tint:"#22D3EE"}],
-  },
-  pulse: {
-    name:"Pulse", vibe:"energetic",
-    tokens:{ bg:"#08090A", card:"#101113", navy:"#17181B", border:"rgba(255,255,255,.08)",
-             accent:"#D6FF3D", green:"#ECFFA3", text:"#F4F5F2", muted:"#8B8F8A" },
-    fonts:{ display:"Anton", body:"Archivo" },
-    voice:"competitive-measurable", numeralStyle:"tabular", accentBehaviour:"glow", mode:"dark",
-    programs:[{name:"Race",tint:"#FB7185"},{name:"Power",tint:"#FBBF24"},{name:"Engine",tint:"#38BDF8"}],
-  },
-  atelier: {
-    name:"Atelier", vibe:"luxury",
-    tokens:{ bg:"#0C0C0E", card:"#131316", navy:"#1A1A1E", border:"rgba(255,255,255,.06)",
-             accent:"#C8A86A", green:"#E8D6AE", text:"#ECEAE6", muted:"#908C85" },
-    fonts:{ display:"Instrument Serif", body:"Manrope" },
-    voice:"technical-considered", numeralStyle:"proportional", accentBehaviour:"flat", mode:"dark",
-    programs:[{name:"Reformer",tint:"#C8A86A"},{name:"Sculpt",tint:"#D4A5A5"},{name:"Flow",tint:"#9FB4C4"}],
-  },
-};
+// ─── Theme — preset skins moved to src/lib/skins.js ───────────────────────────
+// They went with `resolveSkinTokens`, because the DATA and the rule for reading
+// it belong together: this file answered "what tokens is this gym running?" one
+// way and BrandStudioScreen answered it another, and a gym that pressed "Apply
+// to all surfaces" got the Brand Studio's answer on the Brand Studio and this
+// file's answer everywhere else. See that module's header.
 
 // ─── Theme object (populated from active skin at render — keeps all T.x refs working) ──
 const DARK = PRESET_SKINS.canopy.tokens;   // fallback reference kept for safety
@@ -196,13 +179,41 @@ async function fetchExerciseGif(name){
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 // Shared class schedule store (Calendar + Dashboard read the same data)
-const CLASS_COLORS = {HIIT:"#F59E0B",Strength:"#8B5CF6",Hyrox:"#22D3A6",Circuit:"#F97316",Spin:"#3B82F6",Yoga:"#10B981",Boxing:"#EC4899",Mobility:"#5BD0C0"};
+// `CLASS_COLORS` lived here: a hand-maintained map of eight CAPITALISED display
+// strings to hex, i.e. the Schedule's deleted `CAT_COLOR` under another name, on
+// another screen. Session 21 deleted that one; this one survived only because
+// nothing pointed at it from the file being edited.
+//
+// It had already stopped working. The Schedule now stores catalogue KEYS
+// (`hiit`, `gym-barre-ms4pk827`), so `CLASS_COLORS[uc.type]` matched nothing at
+// all and every class on every gym's dashboard drew the same grey bar — the
+// colour being the only class-type cue the row had until the type text was added
+// beside it. And that text rendered the stored value RAW, which is how a coach
+// came to read `GYM-BARRE-MRKHJ2LC` as the name of their own class type.
+//
+// One catalogue, read the same way everywhere. `#8AA294` stays as the fallback
+// for a type the catalogue does not know — a legacy `"Mobility"` rule, which
+// `resolveClassType` deliberately leaves alone rather than guessing at.
+const UNKNOWN_TYPE_COLOR = "#8AA294";
 function getUserClasses(){ return store.getUserClasses(); }
 function getDayClasses(dayAbbrev){
   // BASE_SCHEDULE (20 invented classes with invented coaches and fill rates) is
   // deleted — the schedule shows the gym's own classes or nothing (audit 2.2).
+  const LIB = getLibrary();
   const out = [];
-  getUserClasses().forEach(uc=>{ const hit = uc.repeat==="daily" || uc.day===dayAbbrev; if(hit) out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type:uc.type,dur:uc.dur||"45m",fill:uc.fill||0,color:CLASS_COLORS[uc.type]||"#8AA294",custom:true}); });
+  getUserClasses().forEach(uc=>{
+    const hit = uc.repeat==="daily" || uc.day===dayAbbrev;
+    if(!hit) return;
+    // Healed on READ, exactly as CalendarScreen heals it, so one rule cannot be
+    // described two ways by two screens looking at the same row.
+    const type = resolveClassType(uc.type, LIB);
+    out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type,
+              typeLabel:LIB[type]?.label||type,dur:uc.dur||"45m",fill:uc.fill||0,
+              // Unlike the Schedule grid this appends no alpha, so a gym-authored
+              // type's `var(--accent)` is a usable value here and is the gym's
+              // own colour — which is what `makeClassType` means by it.
+              color:LIB[type]?.color||UNKNOWN_TYPE_COLOR,custom:true});
+  });
   return out.sort((a,b)=>String(a.time).localeCompare(String(b.time)));
 }
 // Smart class picker: match an NLP prompt (or studio default) to a class type.
@@ -292,7 +303,11 @@ function cloneTemplateStages(tmpl) {
 // GLOSSARY moved to src/data/glossary.js (imported above).
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const CLASS_TYPES = ["HIIT","Strength","Mobility","Circuit","Cardio","Recovery","Open Gym"];
+// `CLASS_TYPES` — a third hardcoded list of capitalised class-type strings, with
+// no reader anywhere in the repo. Module-local and never exported, so nothing
+// outside this file could have used it either. It survived because neither
+// `no-unused-vars` nor the `dead` script reports an unused UPPERCASE declaration.
+// git history keeps it; the catalogue is the list.
 
 // UI primitives (Btn/Input/Select/Tag/SpBadge) moved to src/ui/primitives.jsx (imported above).
 
@@ -838,8 +853,8 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>Today's classes</div><button onClick={()=>onNavigate("calendar")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Calendar →</button></div>
               {todayClasses.length===0 && <div style={{fontSize:"12px",color:"var(--muted)",padding:"8px 0"}}>No classes scheduled today.</div>}
               {todayClasses.map((c,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
-                  <div style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
+                <div key={i} data-testid="today-class" style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
+                  <div data-testid="today-class-color" style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
                   <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",width:"48px",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.time}</div>
                   <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{[c.coach, c.dur].filter(Boolean).join(" · ")}</div></div>
                   {/* Was `{c.fill||0}%`. Nothing in the product ever SETS `fill`
@@ -850,7 +865,12 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
                       which until now existed only as the colour of the 3px bar
                       on the left and so was invisible to anyone who does not
                       separate those hues (§3 accessibility). */}
-                  {c.type && <div style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",flexShrink:0,textTransform:"uppercase",letterSpacing:"0.5px"}}>{c.type}</div>}
+                  {/* The catalogue's LABEL. `c.type` is a KEY, and printing it
+                      raw put `GYM-BARRE-MRKHJ2LC` on the coach's dashboard.
+                      Ellipsised for the same reason the Schedule grid is:
+                      "Boxing / Kickboxing" is a real label and this row is
+                      already carrying a name, a coach and a duration. */}
+                  {c.typeLabel && <div data-testid="today-class-type" style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",flexShrink:0,textTransform:"uppercase",letterSpacing:"0.5px",maxWidth:"120px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.typeLabel}</div>}
                 </div>
               ))}
             </div>
@@ -934,16 +954,29 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
   const fileRef                   = React.useRef(null);
 
   // ── Fine-tune state (draft tokens for the active skin) ───────────────────────
-  const _baseSkin = PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy;
-  const currentTokens = customSkinTokens
-    ? { ..._baseSkin.tokens, ...customSkinTokens }
-    : { ..._baseSkin.tokens };
+  // This screen's answer to "what is in force" was the CORRECT one; the App root
+  // had the other. Both now come from skins.js, so the panel a coach checks
+  // their branding on and the app they check it against cannot disagree again.
+  const _baseSkin = baseSkin(activeSkinId);
+  const currentTokens = resolveSkinTokens(activeSkinId, customSkinTokens);
 
   const [draftTokens, setDraftTokens] = React.useState(currentTokens);
   const [recPrompt, setRecPrompt] = React.useState("");
   const [recNote, setRecNote] = React.useState(null);
   const [recBusy, setRecBusy] = React.useState(false);
-  React.useEffect(() => { setDraftTokens(currentTokens); }, [activeSkinId]);
+  // 🔴 `customSkinTokens` belongs in here, and its absence became DESTRUCTIVE the
+  // moment the app started honouring a generated identity. "Apply to all
+  // surfaces" changes the tokens without changing the base skin id, so this
+  // effect never fired: the app repainted in the gym's new colours while the
+  // eight swatches below still showed the old ones. A coach who then nudged one
+  // and pressed "Save custom tokens" would have written the STALE draft back
+  // over the identity they had just generated.
+  //
+  // Re-syncing on a `customSkinTokens` change cannot fight the coach's own
+  // editing: `setDraftTokens` inside an onChange does not touch
+  // `customSkinTokens`, so the effect stays quiet until something outside this
+  // panel replaces the palette — which is exactly when the draft is stale.
+  React.useEffect(() => { setDraftTokens(currentTokens); }, [activeSkinId, customSkinTokens]);
 
   const analyzeSteps = [
     "Reading the colours in your logo…",
@@ -1301,7 +1334,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>FINE-TUNE TOKENS</div>
             <div style={{fontSize:"9px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Program tints · decorative</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"16px"}}>
-              {((generatedSkin&&generatedSkin.programs)||PRESET_SKINS[activeSkinId]?.programs||DEFAULT_PROGRAMS).map((pg,i)=>(
+              {((generatedSkin&&generatedSkin.programs)||_baseSkin.programs||DEFAULT_PROGRAMS).map((pg,i)=>(
                 <ProgramChip key={i} name={pg.name} tint={pg.tint}/>
               ))}
             </div>
@@ -1330,7 +1363,14 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
               ))}
             </div>
             <div style={{display:"flex",gap:"8px",marginTop:"14px"}}>
-              <button onClick={()=>{onCustomSkinChange(draftTokens);onSkinChange("custom");}}
+              {/* 🔴 This used to also call `onSkinChange("custom")`, and `"custom"`
+                  is not a skin: `PRESET_SKINS["custom"]` is undefined, so from
+                  the next reload the gym had no fonts, no accent glow and no
+                  numeral style — a studio on Atelier lost Instrument Serif for
+                  nudging one colour, and saw it work until they closed the tab.
+                  Overrides are a PALETTE on top of the skin the gym chose, so
+                  the base keeps its id and everything else it carries. */}
+              <button onClick={()=>{onCustomSkinChange(draftTokens);}}
                 style={{flex:1,padding:"10px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",fontFamily:`'${displayFont}',sans-serif`}}>
                 Save custom tokens
               </button>
@@ -1957,7 +1997,7 @@ function SmartBuildDialog({ onClose, smartPrompt, setSmartPrompt, runSmartBuild,
   );
 }
 
-function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, onBack, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass, onShareCard}) {
+function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, onBack, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass, onShareCard, scheduledType}) {
   // Export/import moved here from the retired Templates screen. Without this the
   // feature would have been orphaned by the nav change rather than folded.
   const importFileRef = useRef(null);
@@ -2037,6 +2077,31 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const selectedClass   = classChoice?.classType || classKeys[0];
   const selectedSubKeys = Object.keys(LIB[selectedClass]?.subTypes || {});
   const selectedSub     = classChoice?.subType || selectedSubKeys[0] || null;
+
+  // ── §3A left the class type behind ────────────────────────────────────────
+  // Starting a class from the Schedule pins the occurrence and carries the
+  // NAME. It never carried the class TYPE — so pressing Start on a Barre class
+  // opened this screen reading CrossFit: the header said CrossFit, the dropdown
+  // said CrossFit, and the plan underneath was Back Squat and Burpee Complex,
+  // while the pinned banner two rows up correctly said "Running Barre Flow from
+  // the schedule". Storage was never wrong (the occurrence keeps its own
+  // class_type, §1); the SCREEN was, and the screen is what a coach teaches
+  // from. A coach who does not notice presses ▶ Start Session and runs a
+  // CrossFit plan in a Barre room.
+  //
+  // STATED, NOT APPLIED. Rebuilding the stages on Start would throw away a plan
+  // the coach may have spent the morning on, at 17:58 with the room filling up —
+  // the same confident wrong guess `handleStartScheduled` already refuses when
+  // it lands here instead of in the live timer. Offered as one press, routed
+  // through `handleClassChange` so a draft carrying custom exercises still gets
+  // the existing "replace your stages?" confirm.
+  //
+  // Only when the catalogue KNOWS the type. A rule saved carrying "Mobility"
+  // resolves to no class type at all (deliberately — `resolveClassType` does not
+  // guess), and a button offering to load one would be a control that does
+  // nothing, which is the failure this repo keeps deleting.
+  const schedKey = scheduledType && LIB[scheduledType] ? scheduledType : "";
+  const typeMismatch = !!schedKey && schedKey !== selectedClass;
 
   // Helper: does a stage have any manually-authored exercises?
   const hasCustomExercises = s => (s.exercises||[]).some(e => !e.source || e.source !== "library");
@@ -2249,6 +2314,29 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{LIB[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
+        {/* What the SCHEDULE says this class is, when the Builder disagrees.
+            Placed beside the control it is about rather than in the pinned
+            banner: the banner says where check-ins land, this says what the
+            coach put on the schedule, and the two are different facts.
+            The button's visible text carries the class name, so it needs no
+            aria-label — "Load it" would announce as "Load it" beside four other
+            controls. */}
+        {typeMismatch && (
+          <div data-testid="scheduled-type-notice"
+            style={{display:"flex",alignItems:"center",gap:"7px",padding:"3px 4px 3px 9px",borderRadius:"7px",
+                    background:"color-mix(in srgb, var(--accent) 10%, transparent)",
+                    border:"1px solid color-mix(in srgb, var(--accent) 32%, transparent)",flexShrink:0,minWidth:0}}>
+            <span style={{fontSize:"11px",color:"var(--text)",fontWeight:"600",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              Scheduled as {LIB[schedKey].label}
+            </span>
+            <button onClick={()=>handleClassChange(schedKey)}
+              title={`Rebuild this class from the ${LIB[schedKey].label} template`}
+              style={{padding:"4px 9px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"5px",
+                      cursor:"pointer",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
+              Load {LIB[schedKey].label}
+            </button>
+          </div>
+        )}
         {/* Jungle presets — the six starter classes that used to be their own
             Templates nav destination (audit 2.3). They belong beside Class and
             Style: all three answer "what shape is this class", and a coach with
@@ -2909,23 +2997,32 @@ export default function App() {
   // ── Skin / Theme ─────────────────────────────────────────────────────────
   const [activeSkinId, setActiveSkinId] = useState(() => store.getSkinId());
   const [customSkinTokens, setCustomSkinTokens] = useState(() => store.getCustomSkinTokens());
-  const skinTokens = (activeSkinId === "custom" && customSkinTokens)
-    ? customSkinTokens
-    : (PRESET_SKINS[activeSkinId]?.tokens || PRESET_SKINS.canopy.tokens);
+  // The gym's base skin and the tokens actually in force. One rule, in
+  // skins.js, because this file used to carry a second one — see its header.
+  const _base = baseSkin(activeSkinId);
+  const skinTokens = resolveSkinTokens(activeSkinId, customSkinTokens);
   // FR-A6: no JS mutation of T — set CSS vars synchronously (pre-paint) so var(--x) reads resolve.
-  const _skinF = (PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy).fonts;
-  applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
-  const activeSkinObj = (activeSkinId === "custom" && customSkinTokens)
-    ? { name:"Custom", source:"custom", tokens: customSkinTokens, fonts: _skinF, voice:"credible-community", numeralStyle:"proportional", accentBehaviour:"flat", programs: DEFAULT_PROGRAMS }
-    : (PRESET_SKINS[activeSkinId] || PRESET_SKINS.canopy);
+  const _skinF = _base.fonts;
+  // 🔴 `_base`, never `PRESET_SKINS[activeSkinId] || {}`. That empty object is
+  // what stripped a gym's typography: `applySkinCSS` only writes `--display`,
+  // `--body`, `--glow` and `--num` when `meta` HAS them, so an id with no preset
+  // behind it left the fonts unset on the first paint of a fresh load. A gym on
+  // Atelier who nudged one colour kept Instrument Serif until they next opened
+  // the app.
+  applySkinCSS(skinTokens, _base);
+  // Custom tokens change the PALETTE, not the skin's typography, voice or
+  // programme tints — those still come from the base the gym chose. The old
+  // branch replaced all of them with a canopy-flavoured hardcoded set.
+  const activeSkinObj = customSkinTokens
+    ? { ..._base, name: "Custom", source: "custom", tokens: skinTokens }
+    : _base;
   // Split deliberately. Applying the CSS variables and injecting the skin's
   // fonts MUST happen on mount — that is what makes the app look like itself.
   // Persisting the skin must NOT, or a fresh device pushes the default "canopy"
   // over the studio's real skin before hydrate can read it (see useAfterMount).
   useEffect(() => {
-    applySkinCSS(skinTokens, PRESET_SKINS[activeSkinId] || {});
-    const skin = PRESET_SKINS[activeSkinId];
-    if (skin) injectSkinFonts(skin);
+    applySkinCSS(skinTokens, _base);
+    injectSkinFonts(_base);
   }, [activeSkinId, customSkinTokens]);
   useAfterMount(() => {
     store.saveSkinId(activeSkinId);
@@ -3166,9 +3263,10 @@ export default function App() {
 
   const fontFamily = gymBranding?.fontFamily && gymBranding.fontFamily!=="system"
     ? `'${gymBranding.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-    : (PRESET_SKINS[activeSkinId]?.fonts?.body
-        ? `'${PRESET_SKINS[activeSkinId].fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-        : "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif");
+    // `_base`, not a raw `PRESET_SKINS[activeSkinId]` lookup: an id with no
+    // preset behind it dropped the shell to the system font stack, which is the
+    // same "resolve the gym by preset id" mistake as the `meta` one above.
+    : `'${_base.fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
 
 
   // (`primaryNav` lived here — declared, never rendered, and still listing
@@ -3328,7 +3426,7 @@ export default function App() {
             here without adding plumbing. */}
         <Suspense fallback={<ScreenLoading/>}>
         {view==="dashboard"&&<DashboardScreen onNavigate={setView} onNewSession={handleNewClass} profile={displayProfile} sessionHistory={sessionHistory} stages={stages} sessionName={sessionName} nowPlaying={nowPlaying}/>}
-        {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} onBack={()=>setView("dashboard")} classChoice={classChoice} onClassChoiceChange={setClassChoice} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
+        {view==="builder"&&<BuilderScreen onExportClass={handleExportClass} onImportClass={handleImportTemplate} onShareCard={handleShareCard} stages={stages} onStageChange={handleStageChange} onAddStage={handleAddStage} onRemoveStage={handleRemoveStage} onRemoveTrack={handleRemoveTrack} onAddTrack={handleAddTrack} onReorderTrack={handleReorderTrack} sessionName={sessionName} onSessionNameChange={setSessionName} onStartSession={()=>{setLiveState({playing:false,idx:0,elapsed:0});setView("live");}} onReorderStages={handleReorderStages} onMoveExercise={handleMoveExercise} onOverviewDisplay={()=>{setRoomTvMode("studio");setView("room-tv");}} onBack={()=>setView("dashboard")} classChoice={classChoice} onClassChoiceChange={setClassChoice} scheduledType={pinnedClass?.classType||""} onDjClass={handleDjClass} djProgress={djProgress} crossfade={crossfade} onCrossfadeChange={setCrossfade}/>}
         {view==="personas"&&<PersonasScreen onBack={()=>setView("dashboard")} onDraftToBuilder={handleDraftFromPersona}/>}
         {view==="library"&&<LibraryBrowserModal onClose={()=>setView("dashboard")}/>}
         {view==="live"&&(
