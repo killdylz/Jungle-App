@@ -30,7 +30,7 @@ config are an advisory baseline and are not part of the gate. CI runs the same c
 | Path | What it is |
 |---|---|
 | `SESSION-HANDOFF.md` | What the last **two** sessions shipped, and why. Start here. Older blocks are in `docs/history/HANDOFF-ARCHIVE.md` — keep this file to two. |
-| `SESSION-21-PROMPT.md` | The live build prompt: current state, traps, backlog, suggested order. Supersedes every earlier one. |
+| `SESSION-22-PROMPT.md` | The live build prompt: current state, traps, backlog, suggested order. Supersedes every earlier one. |
 | `DYLAN-QUEUE.md` | Everything blocked on Dylan — exact dashboard clicks, commands, expected output, undo steps. Delete it when it is empty. |
 | `Jungle - Functional, Design & Technical Spec (As-Built).md` | The spec. **§12 is the backlog of record** and supersedes §7c. |
 | `docs/` | Audit, legal, GTM, product and UI direction documents. |
