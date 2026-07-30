@@ -12,10 +12,10 @@ _Last updated: 2026-07-30 (session 22)_
 
 ## Session 22 — three screens showed a gym something other than what it had saved
 
-> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **264 e2e**
+> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **268 e2e**
 > (29 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
-> member path is untouched) + StaffApp **339.94 KB** (+0.77) + PersonasScreen **91.04 KB** +
-> ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,480 lines** (+98).
+> member path is untouched) + StaffApp **339.98 KB** (+0.81) + PersonasScreen **91.04 KB** +
+> ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,493 lines** (+111).
 >
 > **A12/A13 confirmed still not done** at the top of the session — asked before any work, per
 > the session-22 prompt §10.5 — so N4 remains code nobody has run and nothing below depends on
@@ -117,6 +117,24 @@ identity while the eight swatches below still showed the old one — and a coach
 and pressed Save would have written the stale draft back over the identity they had just
 generated. Dep array fixed, with a test that does **not** reload, because a fresh mount seeds
 the draft correctly and reloading is exactly what hides it.
+
+### 4. The Exercise Library under an empty-pool type — mostly right, one thing wrong
+
+§10.2's item, driven. `makeClassType` gives one sub-type with three empty pools, and **no
+built-in class type has an empty pool** (walked the whole catalogue — that is the positive
+control, and it is why this state had never rendered before DEC-16).
+
+Most of it holds up, and it is now pinned rather than rewritten: browsing says *"No exercises
+for this stage yet"*, editing offers the one control that fixes it, and the chip and tab counts
+are honest zeroes. **Not every look finds a defect, and saying so is the finding.**
+
+🔴 The one that was wrong: **"Browse Library" from the Builder opened on `classKeys[0]` —
+CrossFit — whatever class the coach was building.** One press from adding a movement to a Barre
+class, looking at CrossFit's 38. Worst for a gym-authored type, which sorts LAST in a
+horizontally-scrolling chip row: the type the gym wrote is the hardest chip to reach from the
+one screen where it is the point. `initialClass` now follows the Builder; the nav destination
+has no class in hand and still opens on the first, asserted so "follow the Builder" cannot
+quietly become "follow nothing".
 
 ### Also done
 

@@ -313,6 +313,117 @@ test.describe("a gym can author its own class type", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // ── The Exercise Library under a class type with nothing in it ─────────────
+  //
+  // `makeClassType` gives one sub-type with `warmup: [], main: [], cooldown: []`,
+  // and NO built-in class type has an empty pool — verified by walking the whole
+  // catalogue, and it is why this state had never been rendered before DEC-16.
+  //
+  // Most of it turned out to be right, and that is worth pinning rather than
+  // rewriting: browsing says so in words, editing offers the one control that
+  // fixes it, and the counts on the chips and tabs are honest zeroes. The test
+  // exists because nothing had ever LOOKED.
+  test("an empty pool says it is empty, and offers the way out of it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+
+    const dialog = page.getByRole("dialog");
+    // The chip counts what the type actually holds — zero, and it says zero
+    // rather than showing a chip that looks like the others.
+    await expect(dialog.getByRole("button", { name: new RegExp(`^${TYPE}\\s*0$`) })).toBeVisible();
+    for (const stage of ["Warm-up", "Main set", "Cool-down"]) {
+      await expect(dialog.getByRole("button", { name: new RegExp(`^${stage} 0$`) })).toBeVisible();
+    }
+
+    // In EDIT mode the affordance carries the meaning: there is exactly one
+    // thing to do and the button says it.
+    await expect(dialog.getByRole("button", { name: /Add exercise to this set/i })).toBeVisible();
+
+    // Leaving edit mode, a browsing coach is TOLD, rather than shown a blank
+    // panel they have to interpret.
+    await page.getByRole("button", { name: /Done/ }).first().click();
+    await expect(dialog.getByText(/No exercises for this stage yet/i)).toBeVisible();
+
+    // CONTROL (§0b#1): the same panel on a type that HAS movements. Without it,
+    // "the empty state rendered" and "the panel renders nothing either way"
+    // are the same observation.
+    await dialog.getByRole("button", { name: /^CrossFit/ }).click();
+    await expect(dialog.getByText(/No exercises for this stage yet/i)).toHaveCount(0);
+    await expect(dialog.getByText("Thruster")).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // Adding the first movement to a type that has none has to reach STORAGE, not
+  // just the screen — this is the gym writing its own catalogue for the first
+  // time, and `updateExerciseList` rebuilds a nested path four levels deep.
+  test("the first movement added to a gym's type is stored under it", async ({ page }) => {
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+
+    await page.getByRole("dialog").getByRole("button", { name: /Add exercise to this set/i }).click();
+
+    await expect.poll(async () =>
+      (await stored(page, KEY)).classes[gymKey]?.subTypes?.general?.main?.length,
+      { message: "the movement must land under the GYM's type, not a built-in one" }).toBe(1);
+    const sub = (await stored(page, KEY)).classes[gymKey].subTypes.general;
+
+    expect(sub.main, "the default stage tab is Main set, so that is where it goes").toHaveLength(1);
+    expect(sub.warmup, "and it must not be duplicated into the other pools").toHaveLength(0);
+    expect(sub.cooldown).toHaveLength(0);
+    expect(sub.main[0].n).toBeTruthy();
+    // The built-in catalogue is untouched — a gym editing its own type must not
+    // write into CrossFit's pools.
+    expect((await stored(page, KEY)).classes.crossfit).toBeUndefined();
+  });
+
+  // 🔴 "Browse Library" from the Builder opened on `classKeys[0]` — CrossFit —
+  // whatever class the coach was building. So a coach one press from adding a
+  // movement to their Barre class was looking at CrossFit's 38, and the gym's
+  // OWN type sorts last in a horizontally-scrolling chip row: the hardest chip
+  // to reach, from the one screen where it is the point.
+  test("Browse Library opens on the class the coach is building", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+    await closeLibrary(page);
+
+    await nav(page, "Class Builder");
+    await page.getByLabel("Class type").selectOption(gymKey);
+    const confirm = page.getByRole("button", { name: "Apply", exact: true });
+    if (await confirm.count()) await confirm.click();
+    await expect(page.getByLabel("Class type"), "precondition: the Builder is on the gym's type")
+      .toHaveValue(gymKey);
+
+    await page.getByRole("button", { name: /Browse Library/i }).click();
+    const dialog = page.getByRole("dialog");
+    // The gym's type is the one showing, which is only observable through what
+    // the panel holds: an empty pool for Barre, CrossFit's movements otherwise.
+    await expect(dialog.getByText(/No exercises for this stage yet/i)).toBeVisible();
+    await expect(dialog.getByText("Thruster"),
+      "opening on CrossFit is the defect — its movements must not be what is on screen")
+      .toHaveCount(0);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // The nav destination has no class in hand, so it keeps opening on the first
+  // one. Asserted because "follow the Builder" must not become "follow nothing".
+  test("the Exercise Library nav destination still opens on the first class", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Exercise Library");
+    await expect(page.getByRole("dialog").getByText("Thruster")).toBeVisible();
+  });
+
   // The dashboard is the fourth surface that had its own copy of the catalogue's
   // colours (`CLASS_COLORS`, App.jsx) and the only one that printed the stored
   // value straight onto the screen. A coach read `GYM-BARRE-MRKHJ2LC` there.

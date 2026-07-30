@@ -1566,7 +1566,7 @@ function ResetLibraryConfirm({ onCancel, onConfirm }) {
 }
 
 // ─── LibraryBrowserModal ──────────────────────────────────────────────────────
-function LibraryBrowserModal({ onClose, onAddExercise=null }) {
+function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null }) {
   const vw = useWindowWidth();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
@@ -1574,7 +1574,20 @@ function LibraryBrowserModal({ onClose, onAddExercise=null }) {
   const [libData, setLibData] = useState(() => getLibrary());
   const classKeys = Object.keys(libData);
 
-  const [selClass,     setSelClass]     = useState(classKeys[0]);
+  // Opened FROM the Builder, this lands on the class being built. It used to
+  // always open on `classKeys[0]` — CrossFit — so a coach building a Barre class
+  // pressed "Browse Library" and got CrossFit's 38 movements, one press away
+  // from adding a Back Squat to a Barre class. Worst for a gym-authored type,
+  // which sorts LAST in a horizontally-scrolling chip row: the type the gym
+  // wrote is the hardest one to reach from the screen where it gets used.
+  //
+  // Guarded against a key the catalogue no longer has, so a deleted or reset
+  // class type opens on something rather than on an empty panel. Nothing is
+  // hidden — every chip is still there, this only decides which one starts
+  // selected. As a nav destination (no `initialClass`) it still opens on the
+  // first class, because there is no class in hand to prefer.
+  const [selClass,     setSelClass]     = useState(
+    initialClass && libData[initialClass] ? initialClass : classKeys[0]);
   const [selSub,       setSelSub]       = useState(null);
   const [selStage,     setSelStage]     = useState("main");
   const [search,       setSearch]       = useState("");
@@ -2681,7 +2694,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {/* Exercise Library tab */}
             {subTab==="exercises" && (
               <div style={{flex:1,overflowY:"auto"}}>
-                <LibraryBrowserModal onClose={()=>setSubTab(FLAGS.music?"music":"settings")} onAddExercise={handleAddLibraryExercise}/>
+                <LibraryBrowserModal onClose={()=>setSubTab(FLAGS.music?"music":"settings")} onAddExercise={handleAddLibraryExercise} initialClass={selectedClass}/>
               </div>
             )}
 
@@ -2760,7 +2773,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           runSmartBuild={runSmartBuild} smartBusy={smartBusy}
           applyTemplate={applyTemplate}/>
       )}
-      {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise}/>}
+      {showLibraryModal && <LibraryBrowserModal onClose={()=>setShowLibraryModal(false)} onAddExercise={handleAddLibraryExercise} initialClass={selectedClass}/>}
       {FLAGS.music && showDjModal && (
         <DjPlaylistModal
           stages={stages}
