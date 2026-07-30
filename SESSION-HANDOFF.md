@@ -12,8 +12,8 @@ _Last updated: 2026-07-30 (session 22)_
 
 ## Session 22 — three screens showed a gym something other than what it had saved
 
-> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **268 e2e**
-> (29 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
+> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **282 e2e**
+> (30 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
 > member path is untouched) + StaffApp **339.98 KB** (+0.81) + PersonasScreen **91.04 KB** +
 > ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,493 lines** (+111).
 >
@@ -136,6 +136,31 @@ one screen where it is the point. `initialClass` now follows the Builder; the na
 has no class in hand and still opens on the first, asserted so "follow the Builder" cannot
 quietly become "follow nothing".
 
+### 5. …and the defect, generalised into a standing scanner
+
+`e2e/rawValueScan.js` + `e2e/rawValues.spec.js` (14 tests). Four rules over what a human
+actually reads: a **UUID**, a **`gym-` catalogue key**, **`snake_case`**, and a **call-site id**
+(`custom_1785…`). No user-facing English contains an underscore — which is the giveaway
+`labels.js`'s own header names.
+
+It sweeps the nine screens, four revealed panels, **and the member summary page** — with a
+payload carrying `classType: "gym-barre-ms4pk827"`, which is what the column actually holds and
+what `memberSummary.spec.js`'s own fixture (`"Conditioning"`) cannot express. `ClassSummary`
+turns out never to render `classType` at all, so today that page is clean; the test makes it a
+**contract** — put the class type on the one page a non-staff person ever sees and you must put
+its LABEL there.
+
+🔴 **Why a scanner and not a word list.** `honesty.spec.js` already asserted *"a scheduled class
+says its type in words on the Dashboard"* and **passed against this session's defect**: its
+fixture seeded `type: "Hyrox"`, the pre-session-21 vocabulary, so the raw stored value happened
+to be the human word. The assertion was right; the fixture could not exercise it. §0b#2's rule
+about a passing test pinning a defect has a second form — **a passing test whose FIXTURE is
+stale tests nothing, and looks identical to one that works.**
+
+Every test carries `proveScannerLive()`, which plants a probe into the page under test, rescans,
+and throws unless all four rules fire. A clean page and a scanner that read nothing are the same
+observation, and that caught me once this session already (§ method note 6).
+
 ### Also done
 
 - **a11y sweep over three surfaces no scan had ever reached** (`revealed.spec.js`): the
@@ -170,6 +195,15 @@ quietly become "follow nothing".
    have supported a confident wrong finding. Print the key you read.
 5. **Reload before believing a branding assertion.** Both Brand Studio defects pass in-session,
    because `:root` still carries the previous paint's custom properties.
+6. 🔴 **The tool that lied to me this session was the `Select-String` FILTER, not the scanner.**
+   A raw-value sweep reported nine clean screens and its own positive control came back empty —
+   which read as a broken scanner. It was not: my grep pattern matched the control's summary
+   line and dropped the JSON body under it. **A truncated result is not a negative result**
+   applies to your own output filters, not only to tool output. Print one finding per line.
+7. **A stale FIXTURE hides a defect exactly like a wrong assertion does, and looks fine.**
+   Two specs asserted the right thing about the Dashboard and the member page and neither could
+   fail, because both seeded a vocabulary the app stopped writing in session 21. When a stored
+   vocabulary changes, **grep the fixtures, not only the assertions.**
 
 ---
 
