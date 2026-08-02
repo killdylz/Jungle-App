@@ -223,3 +223,98 @@ test.describe("Apply to all surfaces applies to all surfaces", () => {
       .not.toContain(PRESET_SKINS.canopy.tokens.bg.toLowerCase());
   });
 });
+
+// ─── The Smart Recommendation panel ──────────────────────────────────────────
+//
+// §10.3's item: the last surface on this screen with no test at all. Driving it
+// found that the panel kept a promise it had no way to keep.
+//
+// A recommendation is a PALETTE — eight colour tokens out of
+// `generateSkinFromPalette`. The note under it used to read "Applied to the
+// swatches below (based on the Atelier preset)", and the archetype blurbs above
+// it promise things only a SKIN carries: Atelier's "serif display face", Pulse's
+// "tabular numerals and accent glow". `applyRecommendation` never touched the
+// preset, so a pilates studio was told in the app's own words that it was
+// getting a serif display face, pressed Save, reloaded, and had Space Grotesk.
+//
+// Storage was right the whole time. Only the screen was wrong — which is why
+// every test here reloads before believing anything.
+test.describe("Smart Recommendation says what it actually does", () => {
+  test("a recommendation reaches the swatches and survives a reload", async ({ page }) => {
+    const errors = watchConsole(page);
+    await openBrandStudio(page);
+
+    // The panel's own copy: "straight into the swatches below". It does NOT
+    // repaint the app until saved, and asserting that is what keeps the note
+    // honest in the other direction too.
+    await page.getByRole("button", { name: /Boxing \/ Combat/ }).click();
+    await expect(page.getByLabel(/Primary accent colour/i)).toHaveValue("#ef4444");
+    expect((await cssVars(page)).accent, "a recommendation repainted the app before Save")
+      .toBe(PRESET_SKINS.canopy.tokens.accent);
+
+    await page.getByRole("button", { name: "Save custom tokens" }).click();
+    await page.reload();
+    await waitForApp(page);
+
+    // All eight tokens persisted, not just the accent — the recommendation is a
+    // whole palette and a partial write would show up as a mismatched surface.
+    const saved = await stored(page, "jungle_custom_skin");
+    expect(Object.keys(saved).sort()).toEqual(
+      ["accent", "bg", "border", "card", "green", "muted", "navy", "text"]);
+    const v = await cssVars(page);
+    expect(v.accent.toLowerCase()).toBe("#ef4444");
+    expect(v.bg.toLowerCase()).toBe(saved.bg.toLowerCase());
+    // The base skin is untouched: an override is a palette, never a fourth skin.
+    expect(await skinId(page)).not.toBe("custom");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // The two archetypes whose blurbs name a font, a glow and a numeral style —
+  // the fields that cannot agree with a palette by chance (§0b#3).
+  for (const [chip, preset, promises] of [
+    [/Luxury \/ Reformer/, "atelier", "serif display face"],
+    [/HYROX \/ Functional/, "pulse", "tabular numerals and accent glow"],
+  ]) {
+    test(`taking the ${preset} preset delivers what the note promised (${promises})`, async ({ page }) => {
+      await openBrandStudio(page);
+      await page.getByRole("button", { name: chip }).click();
+
+      // The note must not claim the palette is already "based on" the preset.
+      const note = page.locator("text=/The palette is in the swatches below/");
+      await expect(note).toContainText(`${PRESET_SKINS[preset].name} preset`);
+      await expect(note).toContainText("separate choice");
+
+      const recommended = await page.getByLabel(/Primary accent colour/i).inputValue();
+      await page.getByRole("button", { name: /type & finish, keep this palette/ }).click();
+      await page.reload();
+      await waitForApp(page);
+
+      // The skin's own half arrived…
+      const v = await cssVars(page);
+      expect(v.display).toContain(PRESET_SKINS[preset].fonts.display);
+      if (PRESET_SKINS[preset].accentBehaviour === "glow") expect(v.glow).not.toBe("none");
+      if (PRESET_SKINS[preset].numeralStyle === "tabular") expect(v.num).toBe("tabular-nums");
+
+      // …and the recommended palette rode on top of it rather than being
+      // replaced by the preset's own — §1c's rule, and §0b#4's trap: the
+      // fine-tune re-sync fires on this very change.
+      expect(v.accent.toLowerCase()).toBe(recommended.toLowerCase());
+      expect(await skinId(page)).toBe(preset);
+      await nav(page, "Brand Studio");
+      await expect(page.getByLabel(/Primary accent colour/i)).toHaveValue(recommended);
+    });
+  }
+
+  test("the offer is absent when the gym is already on that preset", async ({ page }) => {
+    // Positive control for the assertion above: prove the button can be found at
+    // all on this screen, so its absence here means something.
+    await openBrandStudio(page);
+    await page.getByRole("button", { name: /HYROX \/ Functional/ }).click();
+    await expect(page.getByRole("button", { name: /type & finish, keep this palette/ })).toHaveCount(1);
+
+    await page.getByRole("button", { name: /type & finish, keep this palette/ }).click();
+    await page.getByRole("button", { name: /HYROX \/ Functional/ }).click();
+    await expect(page.getByRole("button", { name: /type & finish, keep this palette/ })).toHaveCount(0);
+  });
+});

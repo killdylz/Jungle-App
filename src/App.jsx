@@ -1322,9 +1322,29 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 </button>
               ))}
             </div>
+            {/* 🔴 This used to read "Applied to the swatches below (based on the
+                Atelier preset)", and a recommendation is a PALETTE — eight colour
+                tokens from `generateSkinFromPalette`. It never touched the preset.
+                So a pilates studio was told, in the app's own words, that it was
+                getting "a serif display face", pressed Save, reloaded, and had
+                Space Grotesk; a HYROX gym was promised "tabular numerals and
+                accent glow" and got neither. Fonts, glow and numeral style live
+                on the SKIN (`applySkinCSS`'s meta), and a palette cannot carry
+                them — that is the same split §1c settled: an override is a
+                palette on top of the skin the gym chose.
+                The note now offers the preset instead of claiming it, and taking
+                it keeps the recommended palette layered on top. Stated, not
+                applied — the Builder's scheduled-type notice for the same reason:
+                silently restyling a gym would throw away typography they picked. */}
             {recNote && (
               <div style={{padding:"10px 12px",background:"color-mix(in srgb, var(--accent) 10%, transparent)",border:"1px solid color-mix(in srgb, var(--accent) 25%, transparent)",borderRadius:"9px",fontSize:"12px",color:"var(--text)",lineHeight:"1.5"}}>
-                <b>{recNote.label}</b> - {recNote.note} <span style={{color:"var(--muted)"}}>Applied to the swatches below (based on the {recNote.preset.charAt(0).toUpperCase()+recNote.preset.slice(1)} preset). Tweak, then Save.</span>
+                <b>{recNote.label}</b> - {recNote.note} <span style={{color:"var(--muted)"}}>The palette is in the swatches below — tweak it, then Save. Its type and finish come from the {baseSkin(recNote.preset).name} preset, which is a separate choice.</span>
+                {recNote.preset !== activeSkinId && (
+                  <button onClick={()=>{ onSkinChange(recNote.preset); onCustomSkinChange(draftTokens); }}
+                    style={{display:"block",marginTop:"9px",padding:"7px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",cursor:"pointer",fontSize:"11px",fontWeight:"700",color:"var(--text)"}}>
+                    Use {baseSkin(recNote.preset).name}’s type &amp; finish, keep this palette
+                  </button>
+                )}
               </div>
             )}
           </div>
