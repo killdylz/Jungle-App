@@ -184,8 +184,9 @@ display strings under another name, and it had already stopped working: once the
 keys, **every class on every gym's dashboard drew the same grey bar**, and the type text beside
 it printed the stored value raw — `GYM-BARRE-MRKHJ2LC` as the name of a coach's own class type.
 `getDayClasses` now reads `getLibrary()` and heals with `resolveClassType`. `CLASS_TYPES` went
-too: a third hardcoded list with no reader, invisible to `no-unused-vars` and the `dead` script
-because it is UPPERCASE.
+too: a third hardcoded list with no reader anywhere, invisible to the linter because
+`eslint.config.js` sets `varsIgnorePattern: '^[A-Z_]'` on `no-unused-vars` — see §8.4, which is
+the whole reason the `dead` script is worth the hour.
 
 ### 1c. 🔴 "Apply to all surfaces" applied to none of them
 
@@ -306,13 +307,14 @@ act, not a side effect.
 | **`deadctl` blind spots** | Cannot evaluate `FLAGS.*` gating, **lacks an inert-ancestor check**, and has **no `<details>` awareness**. Over-reporting is the right direction, but **every hit needs a reachability check**. |
 | **`sync-token-core.mjs`** | Run `node scripts/sync-token-core.mjs` after ANY edit to `src/lib/classToken.js`. `--check` exits 1 if stale. |
 | **Docs** | ✅ Root 6 `.md`; `docs/` 13; `docs/history/` 19. **Keep `SESSION-HANDOFF.md` to two session blocks** — move the third into `HANDOFF-ARCHIVE.md` **in newest-first order**, which session 21 did not (it appended). |
+| **`src/test_probe.txt`** | One line, `test456_EDITED`, **tracked**, committed 2026-07-02 in two `Auto-deploy:` commits — someone testing the deploy pipeline a month before session 1. Nothing imports it, so Vite never emits it and it costs zero bytes; it is simply a stray in the source tree. Delete it in passing. Left alone in session 22 only because it had nothing to do with the commit in hand. |
 
 ### 4.5 Test coverage gaps — where the next defect is
 
 | Area | Gap |
 |---|---|
-| 🔴 **Brand Studio's recommendation path** | **The highest-yield item now.** `runRecommend` → `applyRecommendation` sets `draftTokens` and **does not save** — so a coach who types "luxury pilates studio", gets a scheme, and walks away has changed nothing, and nothing on screen says the difference between previewing and applying. Never driven, and session 22 just changed the module underneath it. See §10.2. |
-| 🔴 **The Personas screen, read back** | 91 KB, the most stored shapes in the product, and `PersonaPlanEditor` is the app's worst surface by control count (29 unnamed buttons when first swept). Only ever swept for names and raw values — **never driven with a read-back of what it STORES**. |
+| 🔴 **The Personas screen, read back** | **The highest-yield item now.** 91 KB, the most stored shapes in the product, and `PersonaPlanEditor` is the app's worst surface by control count (29 unnamed buttons and 33 nameless fields when first swept). Only ever swept for names and raw values — **never driven with a read-back of what it STORES**. See §10.2. |
+| **Brand Studio's recommendation path** | The last Brand Studio surface with no test. `runRecommend` → `applyRecommendation` sets `draftTokens` only. ⚠️ **That is NOT a defect** — the panel says so twice, in its own copy ("straight into the swatches below" and "Applied to the swatches below … Tweak, then Save"), and `generateSkinFromPalette` returns all eight tokens. Both phantoms were drafted into this prompt and removed by reading the code; **do not re-raise either.** §10.3. |
 | **Read back the SCREEN after every stored write** | The new standing method. `rawValues.spec.js` covers one class of it (storage vocabulary reaching a human); the general form is any value with two readers. |
 | **N4's Edge Functions** | ⛔ Not reachable locally, by construction. `DYLAN-QUEUE.md` A12/A13. |
 | **Team admin · Room TV Follow** | ⛔ Not reachable locally (`!supabaseEnabled` / `room.js:16`). `DYLAN-QUEUE.md` A11. |
@@ -475,9 +477,13 @@ line numbers.**
    it leans on, which of those the rest of the file still uses (⇒ shared module, not a move).
    **Run it transitively.**
 3. ~~**`jsx`**~~ — **redundant**; `react/jsx-no-undef` is in the crash gate.
-4. **`dead <file…>`** — imported bindings never used. ⚠️ `no-unused-vars` does **not** report
-   unused UPPERCASE bindings — which is how `CLASS_TYPES` survived until session 22 read it by
-   eye. **End it with a `scanned N/M` line and exit non-zero on zero.**
+4. **`dead <file…>`** — imported bindings never used. 🔴 **This is the script's whole
+   justification, and session 22 measured the hole exactly:** `eslint.config.js:26` sets
+   `'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }]`. That pattern exempts every
+   SCREAMING_CASE constant, **every PascalCase component, and every `_`-prefixed binding** from
+   the unused check. `CLASS_TYPES` — a dead hardcoded class-type list — sat in App.jsx
+   unreported until someone read it by eye. An unused `<Component>` or a stale `_baseSkin`
+   would go the same way. **End it with a `scanned N/M` line and exit non-zero on zero.**
 5. **`deadctl <file…>`** — dead controls, passive-only, fake affordances, unused props. §4.4 for
    blind spots.
 6. **`handlers`** — every `on*` attribute on an **intrinsic (lowercase)** element, bucketed by
@@ -509,19 +515,39 @@ the Playwright-in-CI question was settled in session 6 — **do not re-investiga
 1. **Ask Dylan about A12/A13 and A1 first.** Four sessions. If A12 is done, verifying N4 against
    the real functions displaces everything below — it is the only part of the product untested
    *by construction*, and session 22 made A13 more informative than it has ever been (§1c).
-2. 🔴 **Drive Brand Studio's recommendation path.** `runRecommend` → `applyRecommendation` sets
-   `draftTokens` and **never saves**. A coach types "luxury pilates studio", gets a scheme,
-   likes it, navigates away — and nothing happened. Nothing on that panel distinguishes
-   *previewing* from *applying*, and session 22 changed the module underneath it, so this is
-   both the least-driven Brand Studio surface and the one most likely to have moved. Drive it,
-   read back `jungle_custom_skin`, **and reload before believing anything** (§0b, twice).
-3. 🔴 **The Personas screen, driven with a read-back.** 91 KB, the most stored shapes in the
-   product, `PersonaPlanEditor` the worst surface by control count — and it has only ever been
-   swept for accessible names and raw values. Nothing has driven an edit and read back what it
-   STORED. Apply §2.3 **and** §2.4.
+2. 🔴 **The Personas screen, driven with a read-back.** 91 KB — the largest lazy chunk after
+   StaffApp — the most stored shapes in the product (`jungle_personas`, `jungle_persona_plans`,
+   `jungle_persona_movements`, `jungle_persona_generations`), and `PersonaPlanEditor` is the
+   app's worst surface by control count (29 unnamed buttons and 33 nameless fields when first
+   swept). It has **only ever been swept for accessible names and raw values**. Nothing has
+   driven an edit and read back what it STORED. Apply §2.3 *and* §2.4 — this is the biggest
+   surface in the product where neither has been done.
+
+   It is also the surface behind the wedge: `A7` puts a real deck through Slides import, and
+   what it lands in is this.
+
+3. **Drive Brand Studio's recommendation path** — the last surface on that screen with no test.
+   Smaller than it looks, and the write-up is a worked example of §0's rule.
+
+   ⚠️ **Two phantoms I drafted into this item and then removed by reading the code.** Do not
+   re-raise either:
+   - *"`applyRecommendation` sets `draftTokens` and never saves, and nothing tells the coach."*
+     **False.** The panel says it twice in its own copy — *"straight into the swatches below"*,
+     and after a recommendation lands, *"Applied to the swatches below (based on the Canopy
+     preset). Tweak, then Save."* I had asserted a defect from reading a handler without
+     reading the markup thirty lines below it.
+   - *"`setDraftTokens({ ...skin.tokens })` is a replace, so a generator that omits `border`
+     would write a partial blob."* **False.** `generateSkinFromPalette` returns
+     `tokens: { bg, card, navy, border, accent, green, text, muted }` — all eight, in both the
+     light and dark branches.
+
+   What is left is honest and modest: **the panel has no test at all.** Drive it, confirm the
+   recommendation reaches the swatches and that Save persists the whole set, and reload before
+   believing it (§0b#3). Note that the LLM branch is unreachable locally (`supabaseEnabled` is
+   false), so only the curated matcher runs — say that rather than claiming both.
 4. **Rebuild the AST scripts (§8) and run `dead` + `deadctl`** with a reachability check on
    every hit. Two sessions overdue and genuinely cheap. `CLASS_TYPES` is proof the `dead` script
-   would have earned its keep.
+   would have earned its keep — and §8.4 now records the exact size of the hole it fills.
 5. **Do not re-run the eight-screen a11y sweep, the empty-pool Library check, or the CSV
    backfill** as headline items. Done, clean, and now covered by tests that fail when reverted.
 6. **Do not start N2/N3.** They wait on attendance volume → the pilot → `DYLAN-QUEUE.md` Part A.

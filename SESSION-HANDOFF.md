@@ -80,8 +80,10 @@ screens looking at the same row. A gym-authored type paints its `var(--accent)` 
 this row appends no alpha, unlike the grid.
 
 `CLASS_TYPES` (App.jsx:295) went too: a third hardcoded capitalised list, module-local, with no
-reader anywhere. Neither `no-unused-vars` nor the `dead` script reports an unused UPPERCASE
-declaration.
+reader anywhere. 🔴 The linter cannot see it — `eslint.config.js:26` sets
+`'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }]`, which exempts every
+SCREAMING_CASE constant, **every PascalCase component and every `_`-prefixed binding**. That is
+the measured size of the hole the `dead` AST script exists to fill.
 
 ### 🔴 3. "Apply to all surfaces" applied to none of them
 
