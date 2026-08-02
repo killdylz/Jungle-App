@@ -145,6 +145,96 @@ test.describe("Coaches — catalog, shape, draft", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // ── Session 23 · read back the SCREEN after a stored write ────────────────
+  // A class type has no id — its NAME is its key, in three places at once: the
+  // plan's `classType`, the shape the coach saved, and what extraction learned
+  // about how they coach it. Retyping the name in the plan editor moved only the
+  // plan, and every write stayed correct — which is exactly why nothing caught
+  // it. What a coach SAW was a ghost tab holding their own saved shape, their
+  // conventions and vocabulary gone, and the shape demoted back to "suggested".
+  //
+  // Correcting a name the importer guessed is the ordinary case, so this is the
+  // ordinary path — and those conventions cost an LLM pass over a real deck.
+  test("renaming a class type carries the coach's shape and profile with it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    // The coach saves their shape, so it is theirs and not a suggestion.
+    await page.getByRole("button", { name: "Change", exact: true }).click();
+    await page.getByRole("button", { name: /Save shape/ }).click();
+    await expect(page.getByText(/Your shape — saved/)).toBeVisible();
+
+    // Then corrects the class type's name.
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByLabel("Class type").fill("S360 Strength");
+    await page.getByRole("button", { name: /Save plan/ }).click();
+    await expect(page.getByRole("heading", { name: "Edit plan" })).toHaveCount(0);
+
+    // Reload before believing any of it: both halves of session 22's Brand Studio
+    // defect passed in-session, and this one survived a reload too.
+    await page.reload();
+    await nav(page, "Coaches");
+    await expect(page.getByText("S360 STRENGTH — CLASS SHAPE")).toBeVisible();
+
+    // ONE tab. The old name must not survive as a ghost holding the saved shape.
+    const tabs = page.locator("button").filter({ hasText: /·\s*\d+$/ });
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs.first()).toHaveText(/^S360 Strength\b/);
+
+    // The shape is still the coach's, not demoted back to a suggestion.
+    await expect(page.getByText(/Your shape — saved/)).toBeVisible();
+
+    // And the extracted profile — the expensive half — followed the rename.
+    await expect(page.getByText("antagonist supersets (A1+A2, B1+B2)")).toBeVisible();
+    await expect(page.getByText("primer", { exact: true }).first()).toBeVisible();
+
+    // The stored keys agree with the screen, on all three writers.
+    const [personas, plans] = await Promise.all([
+      stored(page, "jungle_personas"),
+      stored(page, "jungle_persona_plans"),
+    ]);
+    expect(Object.keys(personas[0].styleProfile.blueprints)).toEqual(["S360 Strength"]);
+    expect(Object.keys(personas[0].styleProfile.byClassType)).toEqual(["S360 Strength"]);
+    expect(plans[0].classType).toBe("S360 Strength");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // Moving ONE plan out of a class type that still has others is not a rename,
+  // and the profile must NOT chase it — both types keep their own identity.
+  test("re-filing one plan out of a class type leaves that type's shape alone", async ({ page }) => {
+    await loadSampleCoach(page);
+
+    // Give the coach a second S360 plan, so S360 survives the edit below.
+    await page.evaluate(() => {
+      const key = "jungle_persona_plans";
+      const list = JSON.parse(localStorage.getItem(key) || "[]");
+      list.push({ ...list[0], id: "second-plan", title: "S360 — week 2" });
+      localStorage.setItem(key, JSON.stringify(list));
+    });
+    await page.reload();
+    await nav(page, "Coaches");
+
+    await page.getByRole("button", { name: "Change", exact: true }).click();
+    await page.getByRole("button", { name: /Save shape/ }).click();
+    await expect(page.getByText(/Your shape — saved/)).toBeVisible();
+
+    // Re-file the second plan under a different class type.
+    await page.getByRole("button", { name: "Edit plan S360 — week 2" }).click();
+    await page.getByLabel("Class type").fill("GC");
+    await page.getByRole("button", { name: /Save plan/ }).click();
+
+    await page.reload();
+    await nav(page, "Coaches");
+
+    // Two class types now, and S360 kept the shape the coach saved for it.
+    const tabs = page.locator("button").filter({ hasText: /·\s*\d+$/ });
+    await expect(tabs).toHaveCount(2);
+    const personas = await stored(page, "jungle_personas");
+    expect(Object.keys(personas[0].styleProfile.blueprints)).toEqual(["S360"]);
+    expect(Object.keys(personas[0].styleProfile.byClassType)).toEqual(["S360"]);
+  });
+
   // ── REGRESSION §1.5 · draft → Builder ─────────────────────────────────────
   test("a drafted class arrives in the Builder intact and correctly typed", async ({ page }) => {
     // "Item 9": a persona pushed to the Builder used to land as "untyped",

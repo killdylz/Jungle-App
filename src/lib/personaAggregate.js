@@ -13,7 +13,10 @@ import { classifyMovement } from "./movementTaxonomy.js";
 
 const ROLE_ORDER = ["warmup", "primary_lift", "superset", "circuit", "finisher", "recovery", "cooldown"];
 const norm = s => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-const classTypeOf = pl => ((pl.classType || "").trim() || "Uncategorized");
+// Exported because the SCREEN needs the same answer. It kept a byte-identical
+// private copy called `ctOf`, which is the shape of drift this whole module
+// exists to prevent — one question, one function.
+export const classTypeOf = pl => ((pl.classType || "").trim() || "Uncategorized");
 
 // Exported for blueprints.js, whose slot aggregation needs exactly these — the
 // modal role across plans, the median movement count. Same statistics, so they
@@ -40,6 +43,41 @@ function rpeOf(scheme) {
   const m = (scheme?.note || "").match(/\bRPE\s*:?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?/i);
   if (!m) return null;
   return m[2] ? (Number(m[1]) + Number(m[2])) / 2 : Number(m[1]);
+}
+
+// A class type has no id — its NAME is its key, in three places at once: every
+// plan's `classType`, `styleProfile.blueprints[ct]` (the shape the coach saved)
+// and `styleProfile.byClassType[ct]` (what extraction learned about how they
+// coach it). The plan editor lets a coach retype that name, and it used to
+// rewrite only the first: the other two stayed keyed under a name nothing
+// pointed at any more. Every write was correct; the READERS disagreed. On screen
+// that was a ghost tab holding the coach's own saved shape, their conventions
+// and vocabulary gone from the profile, and the shape reverting to "suggested"
+// — surviving a reload, because storage was never wrong.
+//
+// Carry the profile across ONLY when the rename empties the old name out. If
+// other plans still sit under it, the coach MOVED one plan between class types
+// and both names keep their own identity — which is what they meant. Correcting
+// a name the importer guessed is the common case and the one that has to be
+// safe: those conventions cost an LLM pass over a real deck, and a typo-fix used
+// to drop them on the floor.
+export function renameClassType(styleProfile, oldCT, newCT, plansAfter) {
+  const sp = styleProfile || {};
+  if (!oldCT || !newCT || oldCT === newCT) return sp;
+  if ((plansAfter || []).some(pl => classTypeOf(pl) === oldCT)) return sp;  // a move, not a rename
+  let changed = false;
+  const out = { ...sp };
+  ["blueprints", "byClassType"].forEach(key => {
+    const map = sp[key];
+    if (!map || !(oldCT in map)) return;
+    const { [oldCT]: carried, ...rest } = map;
+    // Never clobber a destination that already has its own: a coach folding a
+    // mis-extracted name into a type they already coach keeps the real one. The
+    // orphan goes either way — nothing points at it once the plans have moved.
+    out[key] = (newCT in rest) ? rest : { ...rest, [newCT]: carried };
+    changed = true;
+  });
+  return changed ? out : sp;
 }
 
 // Distinct class types present in a persona's plans, first-seen order.

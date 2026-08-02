@@ -21,7 +21,8 @@ import * as store from "../../lib/store.js";
 import { uid } from "../../lib/ids.js";
 import { SEED_PERSONAS } from "../../data/personas.seed.js";
 import { getLibrary } from "../../lib/libraryAccess.js";
-import { classTypesOf, aggregateClassType, aggregateMovements, classCategory } from "../../lib/personaAggregate.js";
+import { classTypeOf, classTypesOf, aggregateClassType, aggregateMovements, classCategory,
+         renameClassType } from "../../lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "../../lib/movementTaxonomy.js";
 import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "../../lib/blueprints.js";
 import { GENERATION_PRESETS, applyPreset, presetDraftOpts, describePresetEffect,
@@ -90,7 +91,10 @@ const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--na
 // Label maps live in src/ui/labels.js so the "no jargon reaches a coach" rule
 // can be unit-tested rather than eyeballed (see labels.test.js).
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
-const ctOf = pl => ((pl.classType || "").trim() || "Uncategorized");
+// (`ctOf` was a byte-identical copy of personaAggregate's `classTypeOf`. Two
+//  readers of one question is exactly what §2.4 warns about, and the class-type
+//  key is the value that proved it — so the copy is gone and both sides call the
+//  same function.)
 const fmtRest = s => s == null ? "" : (s >= 60 ? `${Math.floor(s/60)}m${s%60?` ${s%60}s`:""}` : `${s}s`);
 const fmtScheme = sc => [schemeTypeLabel(sc?.type), sc?.sets!=null?`${sc.sets} sets`:"", sc?.rir!=null?`RIR ${sc.rir}`:"", sc?.rpe!=null?`RPE ${sc.rpe}`:"", sc?.rest_sec!=null?`rest ${fmtRest(sc.rest_sec)}`:""].filter(Boolean).join(" · ");
 // Distinct exercise names across a plan's blocks — the novelty signature stored in
@@ -359,7 +363,27 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
       setPlanErr(readErrorMessage(e));
     } finally { setPlanBusy(false); }
   };
-  const savePlanEdit = updated => { commitPlans(plans.map(pl => pl.id === updated.id ? updated : pl)); setEditingPlan(null); };
+  // Renaming a plan's class type moves the ONLY thing that identifies it, so the
+  // shape and extracted profile keyed under the old name have to travel with it
+  // — see renameClassType, which decides rename-vs-move. Personas commit first:
+  // both writes are independent, and a coach who reloads between them should
+  // find the profile already under the new name rather than orphaned.
+  const savePlanEdit = updated => {
+    const before = plans.find(pl => pl.id === updated.id);
+    const next   = plans.map(pl => pl.id === updated.id ? updated : pl);
+    const oldCT  = classTypeOf(before || {}), newCT = classTypeOf(updated);
+    if (oldCT !== newCT && selected) {
+      const sp = renameClassType(selected.styleProfile, oldCT, newCT,
+                                 next.filter(pl => pl.personaId === selectedId));
+      if (sp !== selected.styleProfile) commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: sp } : p));
+      // Follow the rename. Without this the coach is dropped on whichever tab
+      // happens to be first, which on a multi-type coach is not the one they
+      // were just editing.
+      if (activeCT === oldCT) setActiveCT(newCT);
+    }
+    commitPlans(next);
+    setEditingPlan(null);
+  };
   const removePlan = id => commitPlans(store.deletePersonaPlan(id));
 
   const changeMovement = updated => {
@@ -380,7 +404,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     ...Object.keys(selected?.styleProfile?.blueprints || {}),
   ])];
   const curCT = (activeCT && classTypes.includes(activeCT)) ? activeCT : (classTypes[0] || null);
-  const ctPlans = selPlans.filter(pl => ctOf(pl) === curCT);
+  const ctPlans = selPlans.filter(pl => classTypeOf(pl) === curCT);
   const prof = curCT ? aggregateClassType(selPlans, curCT) : null;
   const category = curCT ? classCategory(selPlans, curCT) : "mixed";
   const builderClass = CATEGORY_TO_BUILDER[category] || "bootcamp";
@@ -942,7 +966,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                   <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
                     {classTypes.map(ct => {
                       const on = ct === curCT;
-                      const n = selPlans.filter(pl => ctOf(pl) === ct).length;
+                      const n = selPlans.filter(pl => classTypeOf(pl) === ct).length;
                       return (
                         <button key={ct} onClick={()=>setActiveCT(ct)} style={{
                           padding:"7px 14px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:on?"700":"600",

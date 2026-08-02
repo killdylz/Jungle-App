@@ -3,7 +3,8 @@
 // splits one movement into two catalog rows, a dropped commonScheme gets clobbered
 // to {} on the next sync. All three have actually happened in this codebase.
 import { describe, it, expect } from "vitest";
-import { classTypesOf, aggregateClassType, classCategory, aggregateMovements } from "./personaAggregate.js";
+import { classTypesOf, aggregateClassType, classCategory, aggregateMovements,
+         renameClassType } from "./personaAggregate.js";
 import { categoryOf } from "./movementTaxonomy.js";
 
 // Shapes mirror the real Garage corpus: S360 = strength, GC = conditioning,
@@ -219,5 +220,59 @@ describe("aggregateMovements", () => {
     const kept = aggregateMovements([s360], edited).find(m => m.name === "Retired Move");
     expect(kept).toBeDefined();
     expect(categoryOf(kept)).toBe("core");
+  });
+});
+
+// ── renameClassType ──────────────────────────────────────────────────────────
+// A class type is keyed by its NAME in three places at once. Renaming a plan's
+// class type used to move only the plan, leaving the coach's saved shape and
+// their extracted conventions keyed under a name nothing pointed at — a ghost
+// tab on screen and the profile silently blank, with storage correct throughout.
+describe("renameClassType", () => {
+  const sp = () => ({
+    blueprints:  { S360: { source: "edited", slots: [{ key: "M1" }] }, GC: { source: "preset", slots: [] } },
+    byClassType: { S360: { focus: "strength", conventions: ["RIR 2 on primary work"] } },
+  });
+
+  it("carries the shape and the extracted profile to the new name", () => {
+    const out = renameClassType(sp(), "S360", "S360 Strength", [{ classType: "S360 Strength" }]);
+    expect(Object.keys(out.blueprints).sort()).toEqual(["GC", "S360 Strength"]);
+    expect(out.blueprints["S360 Strength"].source).toBe("edited");
+    expect(out.byClassType["S360 Strength"].conventions).toEqual(["RIR 2 on primary work"]);
+    expect(out.byClassType.S360).toBeUndefined();
+    expect(out.blueprints.GC).toBeDefined();          // an untouched type is untouched
+  });
+
+  it("leaves both alone when the old name still has plans — that is a MOVE", () => {
+    // The coach re-filed ONE plan out of several. Both class types still exist
+    // and each keeps its own identity; carrying the profile would steal it.
+    const before = sp();
+    const out = renameClassType(before, "S360", "GC", [{ classType: "S360" }, { classType: "GC" }]);
+    expect(out).toBe(before);                          // same object: nothing to do
+  });
+
+  it("never clobbers a destination that already has its own", () => {
+    // Folding a mis-extracted name into a type the coach already coaches keeps
+    // the real one. The orphan still goes — nothing points at it any more.
+    const out = renameClassType(sp(), "S360", "GC", [{ classType: "GC" }]);
+    expect(out.blueprints.GC.source).toBe("preset");   // GC's own shape survives
+    expect(out.blueprints.S360).toBeUndefined();
+    expect(Object.keys(out.blueprints)).toEqual(["GC"]);
+  });
+
+  it("is a no-op for a blank, unchanged or absent class type", () => {
+    const before = sp();
+    expect(renameClassType(before, "S360", "S360", [])).toBe(before);
+    expect(renameClassType(before, "", "S360 Strength", [])).toBe(before);
+    expect(renameClassType(before, "Enduro", "Enduro 2", [])).toBe(before);  // no keys under it
+    expect(renameClassType(undefined, "S360", "GC", [])).toEqual({});
+  });
+
+  it("treats a cleared class type as the Uncategorized bucket, like every other reader", () => {
+    // classTypeOf maps "" → "Uncategorized"; the caller normalises through it, so
+    // a coach who empties the field lands where the tab and the catalog counts
+    // already say they are, rather than under a key nothing reads.
+    const out = renameClassType(sp(), "S360", "Uncategorized", [{ classType: "" }]);
+    expect(out.byClassType.Uncategorized.focus).toBe("strength");
   });
 });
