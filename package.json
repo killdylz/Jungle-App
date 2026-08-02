@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "lint:crash": "eslint . --config eslint.crash.config.js",
     "icons": "node scripts/make-icons.mjs",
+    "ast": "node scripts/ast.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
