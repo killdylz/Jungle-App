@@ -1,4 +1,4 @@
-# Jungle — Session Handoff ARCHIVE (sessions 6–20)
+# Jungle — Session Handoff ARCHIVE (sessions 6–21)
 
 _Split out of `SESSION-HANDOFF.md` in session 20, at commit `e81e793`._
 
@@ -22,6 +22,104 @@ without checking it still exists. The same caveat the trust ranking puts on
 
 **Where to look instead:** `SESSION-HANDOFF.md` (the last two sessions) · the current
 `SESSION-*-PROMPT.md` at repo root · spec §12, which is the backlog of record.
+
+---
+
+## Session 21 — the column session 20 called fixed still had two vocabularies
+
+> **Gates green.** `lint:crash` **0** · **759 unit** (27 files, no todos) · **245 e2e**
+> (28 spec files, no fixmes) · five-chunk build: index **204.50 KB** (unchanged — the member
+> path is untouched) + StaffApp **339.17 KB** + PersonasScreen **91.04 KB** + ClassSummary
+> **5.81 KB** + summaryApi **0.85 KB**. App.jsx **not touched**.
+>
+> **A12/A13 confirmed still not done** at the top of the session, so N4 remains code nobody
+> has run and nothing below depends on it.
+
+### 🔴 The finding: `class_instances.class_type` had THREE writers and TWO taxonomies
+
+Session 20 fixed the Runner's half of this column (it was writing `"hiit · amrap"`, a display
+string) and recorded that **"both doors now write the same vocabulary."** They did not. The
+separator went away; the mismatch did not. Driving both doors in one run and reading the
+stored row back:
+
+| Door | Offered a coach | Wrote |
+|---|---|---|
+| Builder → Runner | `crossfit, spin, circuit, strength, hiit, yoga, boxing, pilates, bootcamp, hyrox` | `"hiit"`, `"gym-barre-…"` |
+| Schedule publish | `HIIT, Strength, Hyrox, Circuit, Spin, Yoga, Boxing, Mobility` | `"HIIT"`, `"Mobility"` |
+| CSV backfill | — | the old system's own column, verbatim |
+
+So one gym running one class type through two doors wrote `"hiit"` and `"HIIT"`, which no
+`group by` reunites, in an append-only table nothing recovers afterwards. **N2's cohort
+grouping was still permanently broken.**
+
+🔴 **`e2e/schedule.spec.js` was PINNING the defect** — `expect(burn).toMatchObject({classType:
+"HIIT"})` — while `e2e/checkin.spec.js` pinned the lowercase key. Two specs, one column,
+contradictory contracts, both green.
+
+### It cost more than analytics, and this is the half a coach actually feels
+
+The Schedule's eight capitalised strings came from `CAT_COLOR`, a hand-maintained map that was
+**also the only class types a gym could schedule**. So:
+
+- A gym running **CrossFit, Pilates or Bootcamp could not put one on the schedule at all.**
+- A **gym-authored type (DEC-16) was invisible here** — the exact "appears in one modal and
+  nowhere else" failure DEC-16 was decided to prevent.
+- `CAT_COLOR` was a duplicate of colour data the catalogue already holds, and **had already
+  drifted**: Hyrox was `#22D3A6` there and `#F59E0B` in `library.js`.
+
+### What shipped
+
+| | |
+|---|---|
+| `src/lib/libraryStore.js` | **`resolveClassType(raw, lib)`** — key → key, legacy display string → key (by key then by label), **unrecognised → verbatim**. 12 unit tests. |
+| `src/screens/CalendarScreen.jsx` | `CAT_COLOR` **deleted**. Dropdown, colours and grid labels all read `getLibrary()`. Legacy rule types healed **on read** (not migrated on mount — `mountWrites.spec.js`). |
+| `src/lib/store.js` | `applyAttendanceImport(analysis, lib)` — the third door. `lib` optional, so no existing caller changes meaning. |
+| `src/screens/RosterScreen.jsx` | Passes `getLibrary()` into the import. |
+| `e2e/schedule.spec.js` | The `"HIIT"` assertion corrected + 3 new tests. |
+| `e2e/scheduleEdit.spec.js` | 3 new tests on the legacy-type pairing below. |
+
+### The decisions worth not re-litigating
+
+- **`"Mobility"` is NOT mapped.** The old dropdown offered it and no catalogue type answers to
+  it. Mapping it to a near-neighbour would invent programming the gym never chose, invisibly.
+  It keeps its own text — the same reasoning `retention.js` gives for `INACTIVE_STATUSES`.
+- 🔴 **An unrecognised type stays SELECTABLE in the edit dialog.** This is session 20's §0b#2
+  trap arriving from the other side: a `<select>` whose value matches no option renders on its
+  **first** option, so a coach opening the dialog to fix a *coach's name* would have saved the
+  class as CrossFit with nothing on screen saying so. Proven by mutation — `Received:
+  "crossfit"`. Before you narrow a set of options, check what the edit path does with a value
+  that is no longer in it.
+- **Healed on READ, not migrated on load.** The stored rule keeps its old text until the coach
+  next edits it; both the grid and the publish path see the key regardless.
+- **Rules stay in `resolveClassType`'s "raw" fallback rather than being dropped.** A silently
+  dropped class type is invisible wrongness.
+
+### Method notes
+
+- 🔴 **The read-back caught my own half-fix.** I normalised the grid's copy of the rules and
+  left `occurrencesForWeek(userClasses, …)` reading the raw ones. The grid showed the healed
+  value while the stored occurrence still said `"HIIT"` — **visually correct, wrong in
+  storage**, which is exactly the shape of both session-20 defects.
+- **A mutation that changes nothing proves nothing.** `k.toLowerCase() === want` → `k === want`
+  left all 757 tests green, because `want` is already lowercased and every catalogue key is
+  lowercase by construction. That is redundant defensive code, not a test gap — but for a
+  moment it looked like a hole in the suite. Re-mutated on the value that actually carries the
+  behaviour (`want = s.toLowerCase()` → `want = s`) and **9 tests failed for the right reason.**
+- **The e2e suite could not have found this**, because a spec was asserting the wrong value.
+  A green suite is evidence the code matches the tests, not that the tests match the product.
+- 🔴 **`Grep`'s output on Windows path-normalises `//` into `\`.** Comment lines came back as
+  `\ Local persona shape:` and `{\* Schedule grid`, which read as syntax errors that could not
+  possibly build. `Read` shows the real text. **Do not diagnose source from Grep's rendering.**
+- **A recon spec, written and deleted** (`zz-recon-classtype.spec.js`), printed what each door
+  wrote plus a positive control. Suite is back to **28 spec files**.
+- Five value mutations, each reverted with the inverse, never `git checkout`.
+
+### Still open
+
+The grid tints a cell by appending hex alpha (`${c}18`), so a **non-hex** colour produced
+`var(--accent)18` — not a colour — and the cell lost its background *and* border. Fixed with a
+hex guard, which now matters because gym-authored types (`makeClassType` → `color:
+"var(--accent)"`) can finally be scheduled. Verified by screenshot across all five cases.
 
 ---
 

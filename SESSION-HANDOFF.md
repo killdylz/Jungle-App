@@ -1,12 +1,132 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-07-30 (session 22)_
+_Last updated: 2026-08-02 (session 23)_
 
-> 📁 **Sessions 6–20 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–21 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 23 — a value with two readers drifts, and the class type had three
+
+> **Gates green.** `lint:crash` **0** · **772 unit** (28 files, no todos) · **297 e2e**
+> (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
+> member path is untouched) + StaffApp **340.35 KB** (+0.37) + PersonasScreen **91.44 KB**
+> (+0.40) + ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (+20).
+>
+> **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
+> nobody has run: **fifth session running**, and nothing below depends on it.
+
+### The method
+
+Session 22's rule — *read back the SCREEN after every stored write* — carried forward and paid
+twice. Both findings were correct writes and wrong reads, both survived a reload, and neither
+was reachable by any test that only checks storage.
+
+The generalisation is worth keeping: **a key with more than one READER drifts exactly like a
+column with more than one writer, and it is harder to notice because nothing is corrupted.**
+The class type turned out to have three readers.
+
+### 🔴 1. A renamed class type left its shape and profile behind — `3faa22f`
+
+§10.2's item: the Personas screen, 91 KB and the most stored shapes in the product, had only
+ever been swept for accessible names and raw values. Nothing had driven an edit and read back
+what it stored.
+
+Driving `PersonaPlanEditor` found that storage was flawless — every nested field round-tripped
+(`scheme.reps`, `plan.note`, block `rotation`, `per_side`). The screen was not.
+
+**A class type has no id. Its NAME is its key, in three places at once:**
+
+| Reader | Key |
+|---|---|
+| every plan | `plan.classType` |
+| the shape the coach saved | `styleProfile.blueprints[ct]` |
+| what extraction learned | `styleProfile.byClassType[ct]` |
+
+The plan editor lets a coach retype that name and rewrote only the first. After correcting
+"S360" to "S360 Strength", a coach saw a ghost tab `S360 · 0` holding their own saved shape,
+their conventions and vocabulary gone from the profile, and the shape demoted from *"Your shape
+— saved"* back to *"suggested from corpus"*. All three storage keys were individually correct
+the whole time.
+
+This is the ordinary path, not a corner: the class type on an imported plan is the importer's
+guess, and correcting it is what the field is for. Those conventions cost an LLM pass over a
+real deck — **the wedge feature** — and a typo-fix dropped them on the floor.
+
+`renameClassType` in `personaAggregate.js` now owns it, and distinguishes a **rename** from a
+**move**: the profile travels only when the rename empties the old name out. If other plans
+still sit under it the coach re-filed one plan between two class types, and both keep their own
+identity. A destination that already has its own shape is never clobbered.
+
+`ctOf` in PersonasScreen was a byte-identical copy of `classTypeOf` — two readers of the very
+question this defect is about. Deleted.
+
+### 🔴 2. Smart Recommendation promised what a palette cannot carry — `1887295`
+
+§10.3's item, and it was not the phantom the prompt warned about. A recommendation is a
+**palette**: eight colour tokens. The note read *"Applied to the swatches below (based on the
+Atelier preset)"*, and the archetype blurbs promise things only a **skin** carries.
+
+| Archetype | Its note promises | What arrived, after a reload |
+|---|---|---|
+| Luxury / Reformer | "a serif display face" | `--display: Space Grotesk` |
+| HYROX / Functional | "tabular numerals and accent glow" | `--num: normal`, `--glow: none` |
+
+The accent arrived correctly in both cases — which is why a spot-check would have passed.
+§0b#3's rule about picking the field that cannot agree by chance, applied to the font.
+
+Fonts, glow and numeral style live on the skin, in `applySkinCSS`'s meta. That is the split
+§1c settled: **an override is a palette on top of the skin the gym chose.** So the note now
+OFFERS the preset instead of claiming it, and taking it layers the recommended palette over the
+preset's own — what `resolveSkinTokens` was built for. Stated, not applied, for §1a's reason:
+silently restyling a gym would throw away typography they picked.
+
+### 3. The AST scripts, rebuilt — `e5b3bbb`
+
+§8/§10.4, two sessions overdue. `scripts/ast.mjs`, five subcommands (`outline`, `scan`,
+`dead`, `deadctl`, `handlers`), babel resolved through the repo's own `package.json`.
+
+`dead` uses babel's **binding resolution** rather than a name sweep, which buys the two things
+`varsIgnorePattern: '^[A-Z_]'` gives up: a JSX element name counts as a reference, and
+shadowing resolves for free.
+
+**Every result carries a positive control in the same run.**
+
+| Report | Result |
+|---|---|
+| `dead` | 101/101 files, **0 findings in real source**. Control caught an unused import *and* a shadowed one, ignored the used one. |
+| `deadctl` | 100/100 files, 5 hits, **0 real**. Four `FLAGS.mockAnalytics`-gated; the fifth was Brand Studio's preview inside `<div inert>`. |
+| `handlers` | 351 across 100 files — onClick 263, onChange 52, onKeyDown 10. |
+
+§4.4 listed deadctl's inert-ancestor and `<details>` holes and the first run fired one of each,
+so both are closed: an `inert` or `<form>` ancestor suppresses the hit. **`FLAGS` gating is
+still beyond it** and every hit says so.
+
+`scan`'s answer for `BrandStudioScreen` (3 same-file deps — `GYM_ARCHETYPES`, `ProgramChip`,
+`recommendArchetype`; **0 shared** with the rest of the file, so it moves as a unit with no
+shared module) was verified independently by grep before being believed.
+
+### What did NOT find anything — saying so is a result
+
+- **The plan editor's storage.** Every field round-tripped, including the nested ones the
+  editor never shows. Only the readers were wrong.
+- **A recommendation does not repaint before Save**, exactly as its copy says. Asserted, so it
+  stays true.
+- **Zero dead imports across 101 files**, with a control proving the scanner was live.
+
+### Carried into the next session
+
+1. 🔴 **A12/A13 — five sessions.** Still the only part of the product untested by construction.
+2. **`deadctl` cannot evaluate `FLAGS.*`.** Four of its five hits were that. Worth teaching it
+   the flag constants, since they are literals in one module.
+3. **The remaining I9 items now have a real answer**: `BrandStudioScreen` moves cleanly out of
+   App.jsx as a unit of four declarations. Measure before doing it — `build-sw` precaches every
+   emitted chunk.
+4. **`src/test_probe.txt` is gone**, swept in passing as §4.4 asked.
 
 ---
 
@@ -272,101 +392,3 @@ doing exactly the job it was put there for.
    Two specs asserted the right thing about the Dashboard and the member page and neither could
    fail, because both seeded a vocabulary the app stopped writing in session 21. When a stored
    vocabulary changes, **grep the fixtures, not only the assertions.**
-
----
-
-## Session 21 — the column session 20 called fixed still had two vocabularies
-
-> **Gates green.** `lint:crash` **0** · **759 unit** (27 files, no todos) · **245 e2e**
-> (28 spec files, no fixmes) · five-chunk build: index **204.50 KB** (unchanged — the member
-> path is untouched) + StaffApp **339.17 KB** + PersonasScreen **91.04 KB** + ClassSummary
-> **5.81 KB** + summaryApi **0.85 KB**. App.jsx **not touched**.
->
-> **A12/A13 confirmed still not done** at the top of the session, so N4 remains code nobody
-> has run and nothing below depends on it.
-
-### 🔴 The finding: `class_instances.class_type` had THREE writers and TWO taxonomies
-
-Session 20 fixed the Runner's half of this column (it was writing `"hiit · amrap"`, a display
-string) and recorded that **"both doors now write the same vocabulary."** They did not. The
-separator went away; the mismatch did not. Driving both doors in one run and reading the
-stored row back:
-
-| Door | Offered a coach | Wrote |
-|---|---|---|
-| Builder → Runner | `crossfit, spin, circuit, strength, hiit, yoga, boxing, pilates, bootcamp, hyrox` | `"hiit"`, `"gym-barre-…"` |
-| Schedule publish | `HIIT, Strength, Hyrox, Circuit, Spin, Yoga, Boxing, Mobility` | `"HIIT"`, `"Mobility"` |
-| CSV backfill | — | the old system's own column, verbatim |
-
-So one gym running one class type through two doors wrote `"hiit"` and `"HIIT"`, which no
-`group by` reunites, in an append-only table nothing recovers afterwards. **N2's cohort
-grouping was still permanently broken.**
-
-🔴 **`e2e/schedule.spec.js` was PINNING the defect** — `expect(burn).toMatchObject({classType:
-"HIIT"})` — while `e2e/checkin.spec.js` pinned the lowercase key. Two specs, one column,
-contradictory contracts, both green.
-
-### It cost more than analytics, and this is the half a coach actually feels
-
-The Schedule's eight capitalised strings came from `CAT_COLOR`, a hand-maintained map that was
-**also the only class types a gym could schedule**. So:
-
-- A gym running **CrossFit, Pilates or Bootcamp could not put one on the schedule at all.**
-- A **gym-authored type (DEC-16) was invisible here** — the exact "appears in one modal and
-  nowhere else" failure DEC-16 was decided to prevent.
-- `CAT_COLOR` was a duplicate of colour data the catalogue already holds, and **had already
-  drifted**: Hyrox was `#22D3A6` there and `#F59E0B` in `library.js`.
-
-### What shipped
-
-| | |
-|---|---|
-| `src/lib/libraryStore.js` | **`resolveClassType(raw, lib)`** — key → key, legacy display string → key (by key then by label), **unrecognised → verbatim**. 12 unit tests. |
-| `src/screens/CalendarScreen.jsx` | `CAT_COLOR` **deleted**. Dropdown, colours and grid labels all read `getLibrary()`. Legacy rule types healed **on read** (not migrated on mount — `mountWrites.spec.js`). |
-| `src/lib/store.js` | `applyAttendanceImport(analysis, lib)` — the third door. `lib` optional, so no existing caller changes meaning. |
-| `src/screens/RosterScreen.jsx` | Passes `getLibrary()` into the import. |
-| `e2e/schedule.spec.js` | The `"HIIT"` assertion corrected + 3 new tests. |
-| `e2e/scheduleEdit.spec.js` | 3 new tests on the legacy-type pairing below. |
-
-### The decisions worth not re-litigating
-
-- **`"Mobility"` is NOT mapped.** The old dropdown offered it and no catalogue type answers to
-  it. Mapping it to a near-neighbour would invent programming the gym never chose, invisibly.
-  It keeps its own text — the same reasoning `retention.js` gives for `INACTIVE_STATUSES`.
-- 🔴 **An unrecognised type stays SELECTABLE in the edit dialog.** This is session 20's §0b#2
-  trap arriving from the other side: a `<select>` whose value matches no option renders on its
-  **first** option, so a coach opening the dialog to fix a *coach's name* would have saved the
-  class as CrossFit with nothing on screen saying so. Proven by mutation — `Received:
-  "crossfit"`. Before you narrow a set of options, check what the edit path does with a value
-  that is no longer in it.
-- **Healed on READ, not migrated on load.** The stored rule keeps its old text until the coach
-  next edits it; both the grid and the publish path see the key regardless.
-- **Rules stay in `resolveClassType`'s "raw" fallback rather than being dropped.** A silently
-  dropped class type is invisible wrongness.
-
-### Method notes
-
-- 🔴 **The read-back caught my own half-fix.** I normalised the grid's copy of the rules and
-  left `occurrencesForWeek(userClasses, …)` reading the raw ones. The grid showed the healed
-  value while the stored occurrence still said `"HIIT"` — **visually correct, wrong in
-  storage**, which is exactly the shape of both session-20 defects.
-- **A mutation that changes nothing proves nothing.** `k.toLowerCase() === want` → `k === want`
-  left all 757 tests green, because `want` is already lowercased and every catalogue key is
-  lowercase by construction. That is redundant defensive code, not a test gap — but for a
-  moment it looked like a hole in the suite. Re-mutated on the value that actually carries the
-  behaviour (`want = s.toLowerCase()` → `want = s`) and **9 tests failed for the right reason.**
-- **The e2e suite could not have found this**, because a spec was asserting the wrong value.
-  A green suite is evidence the code matches the tests, not that the tests match the product.
-- 🔴 **`Grep`'s output on Windows path-normalises `//` into `\`.** Comment lines came back as
-  `\ Local persona shape:` and `{\* Schedule grid`, which read as syntax errors that could not
-  possibly build. `Read` shows the real text. **Do not diagnose source from Grep's rendering.**
-- **A recon spec, written and deleted** (`zz-recon-classtype.spec.js`), printed what each door
-  wrote plus a positive control. Suite is back to **28 spec files**.
-- Five value mutations, each reverted with the inverse, never `git checkout`.
-
-### Still open
-
-The grid tints a cell by appending hex alpha (`${c}18`), so a **non-hex** colour produced
-`var(--accent)18` — not a colour — and the cell lost its background *and* border. Fixed with a
-hex guard, which now matters because gym-authored types (`makeClassType` → `color:
-"var(--accent)"`) can finally be scheduled. Verified by screenshot across all five cases.
