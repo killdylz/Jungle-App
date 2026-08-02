@@ -33,3 +33,9 @@ dist-ssr
 # Planning docs (kept local, not shipped)
 Jungle - Delta & Backlog Breakdown.md
 Jungle - Work Item Tracker.xlsx
+
+# Office lock files. Word writes `~$name.docx` beside a document while it is
+# open, so one appeared at `src/~$ngle_tech_spec.docx` mid-session — inside the
+# SOURCE tree, untracked, and two characters away from being swept into a
+# `git add -A`. It is 162 bytes of the author's username and nothing else.
+~$*

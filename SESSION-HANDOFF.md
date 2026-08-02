@@ -12,7 +12,7 @@ _Last updated: 2026-07-30 (session 22)_
 
 ## Session 22 — three screens showed a gym something other than what it had saved
 
-> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **288 e2e**
+> **Gates green.** `lint:crash` **0** · **767 unit** (28 files, no todos) · **291 e2e**
 > (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
 > member path is untouched) + StaffApp **339.98 KB** (+0.81) + PersonasScreen **91.04 KB** +
 > ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,493 lines** (+111).
@@ -197,6 +197,35 @@ the six with `Expected: "gym-barre-…" / Received: "Barre"`.
 
 This matters more than six tests suggest. It is how a gym's history arrives, it runs **once**,
 on a corpus nobody will re-key by hand, and it is what makes N2 possible at all.
+
+### 8. …and the join nobody had made: imported history → who's slipping away
+
+The commercial claim in one journey — *"quietly building the attendance record that shows
+who's about to quit."* Both halves were tested and the JOIN was not: `winback.spec.js` seeds
+`jungle_attendance` directly, and the import tests stopped at storage. So "does a real gym's
+imported history light up the at-risk list" had never been asked, and it is the first thing
+that happens at a pilot. Three more tests in `csvImport.spec.js`.
+
+It holds, in all three states a pilot gym meets on day one:
+
+- **A lapse in the imported history is flagged, with its arithmetic.** Import a regular who
+  stopped 45 days ago and one still coming: *"1 member needs attention · Larry Tan · Last
+  attended 45 days ago, after 3 visits — more than 14 days away"*, and the member who came on
+  Tuesday is not on the list.
+- 🔴 **Stale history pauses the alerts and says why.** Import a year that ends 40 days ago and
+  check nobody in: every member is technically absent, and flagging them all would be the
+  confident wrong answer — *the studio stopped recording, the members did not stop coming.*
+  The screen says *"absence alerts are paused… they resume once classes are being recorded
+  again (last check-in was 40 days ago)"*. An empty panel with no explanation reads as "nobody
+  is at risk", which is the opposite of the truth.
+- **The new-member rule stays silent on unknown tenure.** An imported member has
+  `joinedAt: ""`, so rule 1 can never fire for them. That is correct — inferring a join date
+  from the first imported check-in would call a five-year regular a new member — but a pilot
+  gym meets it immediately and it looks like a missing feature, so it is now written down.
+
+Proven by mutation: `ABSENCE_DAYS` 14 → 90 fails all three, and the third fails on **its own
+control** (`"control: the at-risk panel is working in this very run"`), which is the control
+doing exactly the job it was put there for.
 
 ### Also done
 

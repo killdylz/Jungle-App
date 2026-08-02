@@ -188,3 +188,133 @@ test.describe("a gym brings its history across", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ─── …and the history becomes the thing the gym is paying for ────────────────
+//
+// The commercial claim, in one journey: "quietly building the attendance record
+// that shows who's about to quit." Both halves were tested and the JOIN was not
+// — `winback.spec.js` seeds `jungle_attendance` directly, and the tests above
+// stop at storage. So "does a real gym's imported history light up the at-risk
+// list" had never been asked, and it is the first thing that happens at a pilot.
+//
+// Everything below passes. That is the finding: this path holds, including the
+// two states a pilot gym will actually hit on day one.
+
+const DAY = 86_400_000;
+const daysAgo = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+
+const importCsv = async (page, lines) => {
+  await paste(page, lines.join("\n"));
+  await page.getByRole("button", { name: /^Import \d+ check-ins?$/ }).click();
+  await expect(page.getByText(/^Imported \d+ check-in/)).toBeVisible();
+};
+
+test.describe("history becomes the thing the gym is paying for", () => {
+  test("an imported lapse is flagged, with the numbers behind it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Members");
+
+    await importCsv(page, [
+      HEADER,
+      // Still coming — must NOT be flagged.
+      `Rita Chua,rita@example.com,${daysAgo(2)},Tuesday Burn,HIIT,Dylan`,
+      `Rita Chua,rita@example.com,${daysAgo(9)},Tuesday Burn,HIIT,Dylan`,
+      `Rita Chua,rita@example.com,${daysAgo(16)},Tuesday Burn,HIIT,Dylan`,
+      // Was a regular, stopped 45 days ago — the whole point of the product.
+      `Larry Tan,larry@example.com,${daysAgo(45)},Tuesday Burn,HIIT,Dylan`,
+      `Larry Tan,larry@example.com,${daysAgo(52)},Tuesday Burn,HIIT,Dylan`,
+      `Larry Tan,larry@example.com,${daysAgo(59)},Tuesday Burn,HIIT,Dylan`,
+    ]);
+
+    await expect(page.getByText(/1 member needs attention/)).toBeVisible();
+
+    // The flag CARRIES ITS ARITHMETIC, which is the design: an owner has to be
+    // able to argue with it rather than merely believe it.
+    await expect(page.getByText(/Last attended 45 days ago, after 3 visits/)).toBeVisible();
+    await expect(page.getByText(/more than 14 days away/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Draft a WhatsApp" })).toHaveCount(1);
+
+    // And the member who is still turning up is not on the list. The count above
+    // is the control for this: "nobody is flagged" and "the panel is broken"
+    // would otherwise look the same.
+    const panel = await page.evaluate(() => {
+      const t = document.body.innerText;
+      const i = t.indexOf("Who’s slipping away");
+      return i < 0 ? "" : t.slice(i, i + 400);
+    });
+    expect(panel, "precondition: the at-risk panel rendered").toContain("Larry Tan");
+    expect(panel, "a member who came 2 days ago is not slipping away").not.toContain("Rita Chua");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // 🔴 The state a pilot gym hits on day one: import a year of history, check
+  // nobody in yet. Every member is technically "absent", and flagging all of
+  // them would be the confident wrong answer — the studio stopped recording, the
+  // members did not stop coming.
+  //
+  // `studioActivity.recording` is the guard, and what matters here is that the
+  // screen SAYS SO. An empty at-risk panel with no explanation reads as "nobody
+  // is at risk", which is the opposite of the truth.
+  test("stale history pauses the alerts and says why, rather than going quiet", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Members");
+
+    await importCsv(page, [
+      HEADER,
+      `Rita Chua,rita@example.com,${daysAgo(40)},Tuesday Burn,HIIT,Dylan`,
+      `Larry Tan,larry@example.com,${daysAgo(95)},Tuesday Burn,HIIT,Dylan`,
+      `Larry Tan,larry@example.com,${daysAgo(102)},Tuesday Burn,HIIT,Dylan`,
+    ]);
+
+    // POSITIVE CONTROL: the import landed, so the panel has data to reason over.
+    await expect(page.getByText("2", { exact: true }).first()).toBeVisible();
+    expect(await stored(page, "jungle_attendance")).toHaveLength(3);
+
+    await expect(page.getByText(/absence alerts are paused/i)).toBeVisible();
+    await expect(page.getByText(/resume once classes are being recorded again/i)).toBeVisible();
+    // Naming the number is what turns "paused" from a shrug into an instruction.
+    await expect(page.getByText(/last check-in was 40 days ago/i)).toBeVisible();
+    // …and nobody is accused in the meantime.
+    await expect(page.getByRole("button", { name: "Draft a WhatsApp" })).toHaveCount(0);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // A consequence of `joinedAt: ""` worth recording, because a pilot gym meets it
+  // immediately and it looks like a missing feature: the NEW-MEMBER rule
+  // ("fewer than 4 visits in month one") can never fire for an imported member.
+  // Rule 1 is a claim about TENURE and may only run on a join date we actually
+  // hold — an importer does not have one, and inferring it from the first
+  // imported check-in would call a five-year regular a new member.
+  //
+  // The lapsed member in the same run is the control: the panel IS working.
+  test("the new-member rule stays silent on a member whose tenure is unknown", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Members");
+
+    await importCsv(page, [
+      HEADER,
+      // Two visits, most recent 2 days ago: inside the absence window, and few
+      // enough visits that rule 1 would fire IF a join date were known.
+      `Nia Ong,nia@example.com,${daysAgo(2)},Tuesday Burn,HIIT,Dylan`,
+      `Nia Ong,nia@example.com,${daysAgo(6)},Tuesday Burn,HIIT,Dylan`,
+      // The control.
+      `Larry Tan,larry@example.com,${daysAgo(45)},Tuesday Burn,HIIT,Dylan`,
+    ]);
+
+    expect((await stored(page, "jungle_members")).every(m => m.joinedAt === ""),
+      "precondition: an imported member has no join date").toBe(true);
+
+    const panel = await page.evaluate(() => {
+      const t = document.body.innerText;
+      const i = t.indexOf("Who’s slipping away");
+      return i < 0 ? "" : t.slice(i, i + 400);
+    });
+    expect(panel, "control: the at-risk panel is working in this very run").toContain("Larry Tan");
+    expect(panel, "a member of unknown tenure must not be called a lapsing newcomer")
+      .not.toContain("Nia Ong");
+  });
+});
