@@ -283,3 +283,110 @@ test.describe("Reopen puts a past generation back in the Builder", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── Repeat-avoidance, driven ─────────────────────────────────────────────────
+// `blueprints.test.js` pins the arithmetic and the test above drives two
+// generations in a row — but with DIFFERENT presets, which would differ whether
+// or not the ledger fed anything back. This is the path that actually exercises
+// it: the SAME preset twice, where the second is steered away from the first.
+//
+// Two things had to be true before it could be asserted at all, and finding them
+// is most of the value here:
+//
+// 1. The shipped sample coach has ELEVEN catalogued movements and its shape
+//    consumes exactly eleven (4+1+2+2+2). With zero slack every draft is forced,
+//    so two drafts are identical no matter what the ledger says. A test on that
+//    fixture would have passed against a completely broken implementation.
+//    Hence the second plan below — the ordinary case for a coach with a corpus.
+//
+// 2. Avoidance is PER PRESET. Only "Something different" declares
+//    `avoidRecent: 8`; every other preset is 0 and repeats on purpose. Asserting
+//    that a preset avoids repeats would have failed on four of the five and been
+//    "fixed" in the wrong direction.
+test.describe("the same preset twice", () => {
+  const genOnce = async (page, preset) => {
+    await page.getByRole("button", { name: /Generate draft/ }).click();
+    await expect(page.locator('[data-testid="gen-presets"]')).toBeVisible();
+    await card(page, preset).click();
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();
+    await nav(page, "Coaches");
+  };
+  const movesIn = (gen, label) =>
+    ((gen.plan?.blocks || []).find(b => (b.label || "").startsWith(label))?.exercises || []).map(e => e.name);
+
+  // Give the finisher slot more candidates than it needs. Writing the plan to
+  // localStorage is not enough on its own — the catalogue is re-derived only on
+  // a plan COMMIT, so the save below is what makes the fixture real. Without it
+  // the catalogue stays at 11 and the whole test measures nothing.
+  const loadCoachWithSlack = async (page) => {
+    await freshApp(page);
+    await nav(page, "Coaches");
+    await page.getByRole("button", { name: /Load sample coach/ }).click();
+    await expect(page.getByText("S360 — CLASS SHAPE")).toBeVisible();
+    await page.evaluate(() => {
+      const plans = JSON.parse(localStorage.getItem("jungle_persona_plans") || "[]");
+      plans.push({
+        ...JSON.parse(JSON.stringify(plans[0])), id: "plan-slack", title: "S360 — week 2",
+        plan: { blocks: [{ label: "C1 — Finisher", role: "finisher", scheme: { type: "amrap" }, exercises: [
+          { name: "Sled Push", equip: "sled", reps: "20 m" },
+          { name: "Burpee", equip: "bodyweight", reps: "10" },
+          { name: "Wall Ball", equip: "medball", reps: "15" },
+          { name: "Box Jump", equip: "box", reps: "12" },
+        ] }] },
+      });
+      localStorage.setItem("jungle_persona_plans", JSON.stringify(plans));
+    });
+    await page.reload();
+    await nav(page, "Coaches");
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByRole("button", { name: /Save plan/ }).click();
+    // Precondition, asserted rather than assumed — see note 1 above.
+    expect((await stored(page, "jungle_persona_movements")).length,
+      "the fixture did not grow the catalogue, so there is no slack to observe").toBe(15);
+  };
+
+  test("'Something different' is steered away from the draft before it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadCoachWithSlack(page);
+
+    await genOnce(page, "Something different");
+    await genOnce(page, "Something different");
+
+    const gens = await stored(page, "jungle_persona_generations");
+    expect(gens).toHaveLength(2);
+    const [second, first] = gens;               // newest-first
+
+    // The finisher is where the slack is: six conditioning candidates for two
+    // places. The second draft must not hand back either of the first's.
+    const c1a = movesIn(first, "C1"), c1b = movesIn(second, "C1");
+    expect(c1a).toHaveLength(2);
+    expect(c1b).toHaveLength(2);
+    expect(c1b.filter(n => c1a.includes(n)), `C1 repeated: ${c1a} then ${c1b}`).toEqual([]);
+
+    // And a slot with NO slack still repeats. This is the half that stops the
+    // assertion above from being read as "every movement changes": avoidance is
+    // a preference inside the pool, not a filter, and a slot the catalogue can
+    // only fill one way must still be filled.
+    expect(movesIn(second, "A1 + A2")).toEqual(movesIn(first, "A1 + A2"));
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("'The usual' repeats on purpose — avoidance is per preset, not global", async ({ page }) => {
+    // The discriminating control. Only `fresh` sets `avoidRecent`; the other four
+    // presets are 0, and "the usual" repeating IS the feature — a coach asking
+    // for their usual class is not asking for a different one. A fix that wired
+    // the ledger in globally would pass the test above and fail this.
+    const errors = watchConsole(page);
+    await loadCoachWithSlack(page);
+
+    await genOnce(page, "The usual");
+    await genOnce(page, "The usual");
+
+    const gens = await stored(page, "jungle_persona_generations");
+    const [second, first] = gens;
+    expect(second.movements, "'the usual' stopped being the usual").toEqual(first.movements);
+
+    expectNoConsoleErrors(errors);
+  });
+});
