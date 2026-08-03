@@ -178,6 +178,34 @@ gain zero (not on their path); installed staff gain zero and pay an extra reques
 `build-sw` precaches every chunk; only a staff first visit gains, 5.89 KB of ~783 KB. The repo
 split `PersonasScreen` at **93.35 KB** — 3.8× larger. **Not every look ends in a change.**
 
+### 8. A size guard, and two pieces of repo hygiene — `76b800c`
+
+Nothing failed on bundle growth before this, and re-measuring found it had already happened:
+the **member path was 206.69 kB at session 19 and is 213.13 kB now.** `npm run size` fails the
+build past a ceiling, and CI runs it `--prod` after the build.
+
+🔴 **The trap it had to survive is one §4.2 states in prose and prose cannot enforce.** A
+credential-less build and a prod-shaped one are DIFFERENT builds — StaffApp is **340.43 kB**
+local and **581.02 kB** in CI, because without `VITE_SUPABASE_*` rollup drops the whole
+`@supabase` client. So there are two budget sets and the mode is **asserted, not assumed**:
+`GoTrueClient` only survives when the client is really bundled, so passing the wrong flag exits
+2 instead of passing against numbers that do not describe the build. It also exits 2 on an empty
+`dist/assets` — a guard that measured nothing looks exactly like one that passed.
+
+Sizes use **kB = 1000**, matching vite and therefore every figure in these docs. The first
+version used KiB and disagreed with the handoff by 2.4%, which is how someone eventually
+corrects the wrong number.
+
+Also: `.gitignore` only ignored `*.local`, so `.env` or `.env.production` would have sailed past
+it **on a public repo**; and `.github/dependabot.yml` now runs weekly, grouped, React majors
+excluded. ⚠️ **Dependabot opened 6 PRs immediately and none are merged** — `actions/setup-node
+4 → 7` is a major bump that could break CI, and the React ones touch the toolchain.
+
+**Checked and deliberately NOT changed:** the token-core drift guard is sound. A one-character
+edit to a mirrored Edge Function copy fails `classToken.mirror.test.js`, and importing
+`sync-token-core.mjs` does not repair what it inspects — `main()` runs only as a command.
+Verified by introducing real drift and confirming the file was still mutated afterwards.
+
 ### Design decisions worth not re-litigating
 
 - **The catalogue states membership, it does not offer deletion** — except on the one list where
@@ -201,9 +229,21 @@ empty for nine sessions, `deadctl` and `dead` both report 0, and there are no TO
 tests in the tree.
 
 What remains is not code: **`DYLAN-QUEUE.md` Part A**, and A7 above all — the Slides import is
-the feature the whole pitch rests on and has never met a real deck. §4.5 still lists two
-undriven surfaces (the movement editor's equipment/kind/alias save, and cold start → rename
-against a preset-sourced shape) if a session needs somewhere to look.
+the feature the whole pitch rests on and has never met a real deck.
+
+**Two undriven surfaces remain, both re-verified against `e2e/` at the end of this session** —
+grep them again before believing this, but they were real when written:
+
+1. **The movement editor's equipment / category / alias save.** `changeMovement` is now driven
+   for `notes` and for the rename-merge path; the equipment chips, the category chips and the
+   alias field are typed into by nothing. Four `e2e` matches for "Equipment"/"Aliases" are all
+   comments or assertions about the DERIVED value.
+2. **Cold start → rename.** `coldstart.spec.js` fills a class-type name twice and never renames
+   one, so §1c's rename has never run against a **preset-sourced** blueprint — the one shape
+   where `blueprints[ct]` was written by `startClassTypeFromPreset` rather than by the coach.
+
+⚠️ **And 6 unmerged Dependabot PRs**, opened by this session's own change. They are the only
+open items with a clock on them.
 
 ---
 
