@@ -19,3 +19,31 @@ export const fmtOccurrence = iso => {
   const sameDay = d >= midnight && d < new Date(midnight.getTime() + 864e5);
   return `${sameDay ? "today" : ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]} ${t}`;
 };
+
+// "just now" / "2 min ago" / "3 h ago" / "5 days ago" — how long since an epoch
+// millisecond timestamp. Written for the sync banner's "last tried", whose whole
+// job is to let a coach tell a blip apart from a fortnight of divergence.
+//
+// Coarse on purpose. The retry timer ticks every 30 seconds, so a figure in
+// seconds would imply a precision the mechanism behind it does not have.
+//
+// Returns "" for a missing or unparseable timestamp rather than "just now": an
+// absent `at` is the one case where the honest answer is to say nothing, and a
+// caller that renders "" simply omits the phrase. Guessing "just now" would turn
+// a ledger entry with no timestamp — which is what an older build wrote — into a
+// confident claim that the retry is healthy.
+export const fmtAgo = (at, now = Date.now()) => {
+  // `t <= 0` and not just `!Number.isFinite(t)`: Number(null) is 0, not NaN, so a
+  // null timestamp would otherwise sail through and render as the epoch — "19000
+  // days ago" — which is exactly the confident wrong answer this returns "" for.
+  const t = Number(at);
+  if (!Number.isFinite(t) || t <= 0) return "";
+  const ms = now - t;
+  if (ms < 60_000) return "just now";        // includes small negative clock skew
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+};

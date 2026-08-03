@@ -20,6 +20,7 @@ import {
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
   _deltaRows, _markSynced, _unmark, publishOccurrences, startScheduledClass,
   appendPersonaGeneration, getPersonaGenerations,
+  _clearLedgerIfSettled, syncErrorSignature,
 } from "./store.js";
 import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
 import { atRiskMembers } from "./retention.js";
@@ -377,6 +378,95 @@ describe("syncErrors", () => {
     }));
     expect(syncErrors().map(e => e.table).sort()).toEqual(["persona_plans", "user_prefs"]);
     expect(syncErrors().find(e => e.table === "persona_plans").msg).toBe("check violation");
+  });
+});
+
+// ── The ledger entry nothing could clear ─────────────────────────────────────
+// Found while diagnosing why the sync banner never goes away. _bgUpsertDelta
+// makes NO request when there is no delta, and _clearSyncError only runs on a
+// successful request — so once a table's rows were confirmed (or deleted) after
+// a failure, the ledger entry became immortal. The banner named a domain with
+// nothing left to send, forever, and no action available to a coach could clear
+// it. These pin the settle step that closes it.
+describe("_clearLedgerIfSettled", () => {
+  beforeEach(() => localStorage.clear());
+  const setSyncError = (table, msg = "boom") =>
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({ [table]: { msg, at: Date.now() } }));
+
+  it("clears the entry when every local row is already server-confirmed", () => {
+    const rows = [{ id: "p1", name: "Mike" }];
+    _markSynced("coach_personas", rows, rows);      // the server said yes to these
+    setSyncError("coach_personas");
+    expect(_clearLedgerIfSettled("coach_personas", _deltaRows("coach_personas", rows))).toBe(true);
+    expect(syncErrors()).toEqual([]);
+  });
+
+  it("clears when the local list has gone EMPTY — the case with nothing to re-push", () => {
+    // The retry thunk calls save*(get*()); with an empty list the delta is empty
+    // and no request is ever made, so this was the state that stuck hardest.
+    setSyncError("coach_personas");
+    expect(_clearLedgerIfSettled("coach_personas", _deltaRows("coach_personas", []))).toBe(true);
+    expect(syncErrors()).toEqual([]);
+  });
+
+  it("does NOT clear while a row is still unconfirmed — the banner must stay up", () => {
+    // The whole point of the ledger. A row the server never acknowledged is
+    // exactly the data the banner exists to warn about.
+    setSyncError("coach_personas");
+    const rows = [{ id: "p1", name: "Mike" }];      // never marked
+    expect(_clearLedgerIfSettled("coach_personas", _deltaRows("coach_personas", rows))).toBe(false);
+    expect(syncErrors().map(e => e.table)).toEqual(["coach_personas"]);
+  });
+
+  it("is scoped per table — one domain settling must not silence another", () => {
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({
+      coach_personas: { msg: "boom", at: 1 }, persona_plans: { msg: "boom", at: 1 },
+    }));
+    _clearLedgerIfSettled("coach_personas", []);
+    expect(syncErrors().map(e => e.table)).toEqual(["persona_plans"]);
+  });
+});
+
+// ── What the banner's dismiss is keyed on ────────────────────────────────────
+describe("syncErrorSignature", () => {
+  it("ignores `at` and `attempts`, so a dismissal survives the next failed retry", () => {
+    // Retries fire every 30s and each failure rewrites both. If either were in
+    // the signature, dismissing the banner would hide it for under half a minute
+    // — a button that does nothing, which is worse than no button.
+    const a = [{ table: "coach_personas", msg: "relation does not exist", at: 1, attempts: 0 }];
+    const b = [{ table: "coach_personas", msg: "relation does not exist", at: 99, attempts: 14 }];
+    expect(syncErrorSignature(a)).toBe(syncErrorSignature(b));
+  });
+
+  it("changes when a NEW table starts failing", () => {
+    const a = [{ table: "coach_personas", msg: "x" }];
+    const b = [{ table: "coach_personas", msg: "x" }, { table: "members", msg: "x" }];
+    expect(syncErrorSignature(a)).not.toBe(syncErrorSignature(b));
+  });
+
+  it("changes when the same table fails for a NEW reason", () => {
+    const a = [{ table: "coach_personas", msg: "relation does not exist" }];
+    const b = [{ table: "coach_personas", msg: "violates row-level security policy" }];
+    expect(syncErrorSignature(a)).not.toBe(syncErrorSignature(b));
+  });
+
+  it("is order-independent — syncErrors() returns object-key order, which is not stable", () => {
+    const a = [{ table: "members", msg: "x" }, { table: "coach_personas", msg: "y" }];
+    const b = [{ table: "coach_personas", msg: "y" }, { table: "members", msg: "x" }];
+    expect(syncErrorSignature(a)).toBe(syncErrorSignature(b));
+  });
+
+  it("cannot flatten two different ledgers onto one signature", () => {
+    // Delimiters are control characters for exactly this reason: a collision
+    // would hide a CHANGED error behind an old dismissal.
+    const a = [{ table: "a", msg: "b c" }];
+    const b = [{ table: "a b", msg: "c" }];
+    expect(syncErrorSignature(a)).not.toBe(syncErrorSignature(b));
+  });
+
+  it("is empty for an empty or missing ledger", () => {
+    expect(syncErrorSignature([])).toBe("");
+    expect(syncErrorSignature(undefined)).toBe("");
   });
 });
 

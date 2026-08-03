@@ -132,6 +132,26 @@ export function syncErrors() {
   return Object.keys(all).map(table => ({ table, ...all[table] }));
 }
 
+// A stable identity for WHAT is currently failing: the set of tables and the
+// reason each gave, and deliberately NOT `at` or `attempts`.
+//
+// The sync banner's dismiss is keyed on this. Every retry that fails rewrites
+// `at` and increments `attempts`, so a signature covering either would change
+// within 30 seconds and bring a dismissed banner straight back — dismissal would
+// be a button that does nothing for half a minute. Keyed on table+message, the
+// same failure staying the same failure stays dismissed, while a NEW table
+// failing, or the same table failing for a NEW reason, is a different problem and
+// reappears. That is the property that lets dismissal exist at all: it can hide
+// what the coach has already read, and cannot hide anything new.
+//
+// The two delimiters are control characters, not punctuation: a table name
+// cannot contain them and a Postgres message will not either, so two different
+// ledgers cannot flatten onto the same signature. A collision here would hide a
+// CHANGED error behind an old dismissal — the one thing this must never do.
+export function syncErrorSignature(errs) {
+  return (errs || []).map(e => `${e.table}\u0000${e.msg || ""}`).sort().join("\u0001");
+}
+
 // ── I13: background retry of failed writes ───────────────────────────────────
 // Until now a failed background write sat in the ledger above until the NEXT
 // hydrate re-pushed it (via _guardList / _blobStale / _mergeAppendLog). Hydrate
@@ -282,8 +302,29 @@ export function _unmark(table, id) {
 // No delta => no request at all, which is the common case on a re-save.
 function _bgUpsertDelta(table, allRows, onConflict = "id") {
   const delta = _deltaRows(table, allRows);
-  if (!delta.length) return;
+  if (_clearLedgerIfSettled(table, delta)) return;
   _bgUpsert(table, delta, onConflict, () => _markSynced(table, delta, allRows));
+}
+
+// An empty delta means every local row carries a fingerprint the SERVER
+// confirmed — marks are only ever written from _bgUpsert's success path — so
+// there is provably nothing outstanding for this table. That includes the case
+// where the local list has since gone empty and there is literally nothing left
+// to send.
+//
+// A ledger entry surviving that state is stale, and nothing else would ever
+// clear it: _clearSyncError runs only after a successful request, and the
+// no-delta path makes no request at all. The result was a banner stuck on
+// forever, naming a domain with nothing to sync, that no coach action could
+// clear — a warning that cannot be resolved stops being read as a warning.
+//
+// Exported for the same reason as _deltaRows, _guardList and _dueRetries: the
+// call site needs a live Supabase, this decision does not. Returns true when it
+// settled the ledger and the caller should not push.
+export function _clearLedgerIfSettled(table, delta) {
+  if ((delta || []).length) return false;
+  _clearSyncError(table);
+  return true;
 }
 
 // Fire-and-forget writes — never block or throw into the caller.

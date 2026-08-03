@@ -39,7 +39,7 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo } from "./lib/format.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
 // their ~45 call sites was inside a function that moved, so App.jsx no longer
 // converts colour spaces itself. That is the shape a good extraction leaves
@@ -71,8 +71,12 @@ const PersonasScreen = React.lazy(() =>
 // 13 KB chunk into the SW precache that nothing ever fetches. The header of
 // AnalyticsScreen.jsx carries the measurements.
 import AnalyticsScreen from "./screens/AnalyticsScreen.jsx";
-// ui/labels.js likewise went with the personas cluster — every one of its label
-// maps was read by that screen and nothing else.
+// ui/labels.js went with the personas cluster — every one of its label MAPS is
+// read by that screen and nothing else. Session 25 added coach-facing copy that
+// is not a map: the sync banner's sentence, which lives there for the reason
+// that module exists — it is the only place in the app where wording is under
+// test. That is the one import back, and it is strings, not maps.
+import { syncBannerMessage, SYNC_STUCK_AFTER } from "./ui/labels.js";
 import { SCFG } from "./data/stageConfig.js";
 // The music subsystem — decomposition stage 3. Everything Spotify-shaped now
 // lives behind src/music/, so "is this music?" is a question a path answers.
@@ -2850,22 +2854,101 @@ const SYNC_DOMAIN_LABELS = {
   persona_generations: "generated classes", members: "members",
   class_instances: "classes", attendance: "attendance", session_history: "session history",
 };
+// Session-scoped dismissal. sessionStorage rather than component state so a
+// remount cannot resurrect it, and rather than localStorage so it cannot outlive
+// the tab — "hide this for now" is a statement about this sitting, not a
+// preference. There is deliberately NO "never show again": the ledger is the
+// only warning that data exists on one device only.
+const SYNC_DISMISS_KEY = "jungle_sync_banner_dismissed";
+
 function SyncBanner() {
   const [errs, setErrs] = useState(() => store.syncErrors());
+  const [dismissedSig, setDismissedSig] = useState(() => {
+    try { return sessionStorage.getItem(SYNC_DISMISS_KEY) || ""; } catch (_) { return ""; }
+  });
+  const [retrying, setRetrying] = useState(false);
+  const settle = useRef(null);
   useEffect(() => {
     // Poll rather than subscribe: writes are fire-and-forget from ~30 call sites,
     // and a localStorage read every 15s is far cheaper than threading a callback
     // through all of them.
     const t = setInterval(() => setErrs(store.syncErrors()), 15000);
-    return () => clearInterval(t);
+    return () => { clearInterval(t); if (settle.current) clearTimeout(settle.current); };
   }, []);
+
+  const sig = store.syncErrorSignature(errs);
   if (!errs.length) return null;
+  if (sig && sig === dismissedSig) return null;
+
   const names = [...new Set(errs.map(e => SYNC_DOMAIN_LABELS[e.table] || e.table))];
+  // Newest failure across the ledger, and the worst attempt count — "how long has
+  // this been going on" is one question, not one per table. `attempts` counts
+  // failures AFTER the first (it starts at 0), so the honest number of tries is
+  // one more than it.
+  // A ledger entry written by an older build may have no `at` at all. Filtering
+  // those out rather than defaulting them to 0 keeps the "last tried" line honest
+  // — 0 would render as "19000 days ago", which is worse than saying nothing.
+  const ats = errs.map(e => Number(e.at)).filter(n => Number.isFinite(n) && n > 0);
+  const tries = Math.max(...errs.map(e => (Number(e.attempts) || 0))) + 1;
+  const ago = ats.length ? fmtAgo(Math.max(...ats)) : "";
+  const when = [ago && `last tried ${ago}`, `${tries} failed ${tries === 1 ? "attempt" : "attempts"}`]
+    .filter(Boolean).join(" · ");
+  // A blip and a fortnight of divergence must not look the same. Past the
+  // threshold the sentence stops promising it will sort itself out, and the
+  // colour stops being the app's ordinary "heads up" amber.
+  const stuck = tries >= SYNC_STUCK_AFTER;
+  const hue = stuck ? "#EF4444" : "#F59E0B";
+
+  const tryNow = () => {
+    setRetrying(true);
+    store._retryNow({ force: true });
+    // The push is fire-and-forget, so there is nothing to await. Re-read the
+    // ledger after a beat: a success clears the entry and the banner removes
+    // itself, which is the outcome this button exists to produce.
+    settle.current = setTimeout(() => { setErrs(store.syncErrors()); setRetrying(false); }, 1500);
+  };
+  const dismiss = () => {
+    try { sessionStorage.setItem(SYNC_DISMISS_KEY, sig); } catch (_) { /* private mode */ }
+    setDismissedSig(sig);
+  };
+
+  const btn = {padding:"0 12px",minHeight:"32px",borderRadius:"6px",cursor:"pointer",
+               fontSize:"11px",fontWeight:"700",flexShrink:0};
   return (
-    <div style={{padding:"9px 24px",background:"#F59E0B14",borderBottom:"1px solid #F59E0B55",fontSize:"12px",color:"var(--text)",lineHeight:1.5}}>
-      <strong>Some changes haven’t synced yet</strong> ({names.join(", ")}). They’re saved on this
-      device and Jungle keeps retrying, so nothing is lost — but they won’t appear on another
-      device until the sync succeeds.
+    <div data-testid="sync-banner" data-stuck={stuck ? "1" : "0"} role="status" aria-live="polite"
+         style={{padding:"9px 24px",background:`${hue}14`,borderBottom:`1px solid ${hue}55`,fontSize:"12px",color:"var(--text)",lineHeight:1.5}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:"12px",flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 240px",minWidth:0}}>
+          <strong>Some changes haven’t synced yet</strong> ({names.join(", ")}). {syncBannerMessage(tries)}
+          {when && <div data-testid="sync-banner-when" style={{color:"var(--muted)",marginTop:"2px"}}>{when}</div>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",flexShrink:0}}>
+          <button onClick={tryNow} disabled={retrying} data-testid="sync-banner-retry"
+                  style={{...btn,background:"var(--accent)",color:"var(--bg)",border:"none",
+                          opacity:retrying?0.6:1,cursor:retrying?"default":"pointer"}}>
+            {retrying ? "Trying…" : "Try now"}
+          </button>
+          <button onClick={dismiss} data-testid="sync-banner-dismiss" aria-label="Hide this warning for now"
+                  title="Hide until something new fails"
+                  style={{...btn,minWidth:"32px",padding:"0 9px",background:"transparent",
+                          border:"1px solid var(--border)",color:"var(--muted)"}}>
+            ✕
+          </button>
+        </div>
+      </div>
+      {/* The reason, available without shouting it. A coach does not need
+          "violates row-level security policy" on screen mid-class; whoever they
+          forward it to needs nothing else. */}
+      <details data-testid="sync-banner-details" style={{marginTop:"6px"}}>
+        <summary style={{cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>What went wrong</summary>
+        <ul style={{margin:"6px 0 0",paddingLeft:"18px",color:"var(--muted)",fontSize:"11px"}}>
+          {errs.map(e => (
+            <li key={e.table} style={{wordBreak:"break-word"}}>
+              <strong>{SYNC_DOMAIN_LABELS[e.table] || e.table}</strong> — {e.msg || "unknown error"}
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

@@ -78,3 +78,27 @@ export function readErrorMessage(e) {
   if (raw) console.warn("[read] unmapped failure:", raw);
   return GENERIC_READ_ERROR;
 }
+
+// ── The unsynced-data banner's sentence ──────────────────────────────────────
+// Two states, because one was the defect. "Jungle keeps retrying, so nothing is
+// lost" is reassuring on attempt one and misleading on attempt forty: a blip and
+// a fortnight of divergence read identically, so a coach could not tell "wait a
+// moment" from "this is never going to fix itself" — and the second case is the
+// one where their whole corpus exists on a single device.
+//
+// The threshold is ATTEMPTS rather than elapsed time. Retries back off toward a
+// five-minute cap, so five failures already means several minutes of trying, and
+// attempts is the number the banner shows — a coach can reconcile the sentence
+// with the count beside it instead of taking it on faith.
+export const SYNC_STUCK_AFTER = 5;
+
+export function syncBannerMessage(tries) {
+  if (tries >= SYNC_STUCK_AFTER) {
+    // No invented support desk and no mechanism: it says what is true, what the
+    // risk actually is, and where the reason is.
+    return `Jungle has retried ${tries} times without success, so this is not a passing connection problem. ` +
+           `The changes are safe on this device but exist nowhere else — open “What went wrong” below for the reason.`;
+  }
+  return "They’re saved on this device and Jungle keeps retrying, so nothing is lost — but they won’t " +
+         "appear on another device until the sync succeeds.";
+}

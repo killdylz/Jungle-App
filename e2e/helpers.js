@@ -79,6 +79,17 @@ export async function waitForApp(page) {
   await expect(page.getByRole("button", { name: "Class Runner", exact: true })).toBeVisible();
 }
 
+// Ready at ANY width. `waitForApp` keys on the 238px sidebar, which does not
+// exist below 900px — a phone-width test using it waits 5s and then fails on a
+// perfectly healthy page. Below that breakpoint the bottom bar's "Run" is the
+// equivalent landmark, so this accepts either and lets a responsive sweep use
+// one readiness check across every viewport it visits.
+export async function waitForAppAnyWidth(page) {
+  const desktop = page.getByRole("button", { name: "Class Runner", exact: true });
+  const phone = page.locator("nav").first().getByRole("button", { name: "Run", exact: true });
+  await expect(desktop.or(phone).first()).toBeVisible();
+}
+
 // Read a domain object back out of localStorage. The repo rule is to assert on
 // what was STORED, not only what was rendered: session 4's defects were mostly
 // cases where those two disagreed.

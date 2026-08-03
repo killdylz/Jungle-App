@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fmt, fmtSec, fmtOccurrence } from "./format.js";
+import { fmt, fmtSec, fmtOccurrence, fmtAgo } from "./format.js";
 
 // These three became a SHARED module in I6 stage 5. Before that they were
 // module-scope consts in App.jsx, read by the Builder and the Runner alike, and
@@ -85,5 +85,49 @@ describe("fmtOccurrence — when a scheduled class starts", () => {
     expect(fmtOccurrence("not-a-date")).toBe("");
     expect(fmtOccurrence("")).toBe("");
     expect(fmtOccurrence(undefined)).toBe("");
+  });
+});
+
+// ── fmtAgo — "how long has this been failing" ────────────────────────────────
+// Exists for the sync banner. The banner's defect was that a blip and a
+// fortnight of divergence read identically; this is the function that lets them
+// differ, so the boundaries are pinned rather than eyeballed.
+describe("fmtAgo", () => {
+  const NOW = 1_700_000_000_000;
+  const agoBy = ms => fmtAgo(NOW - ms, NOW);
+
+  it("says 'just now' below a minute, because the retry timer ticks every 30s", () => {
+    // A figure in seconds would imply a precision the mechanism does not have.
+    expect(agoBy(0)).toBe("just now");
+    expect(agoBy(59_000)).toBe("just now");
+  });
+
+  it("counts minutes, then hours, then days", () => {
+    expect(agoBy(60_000)).toBe("1 min ago");
+    expect(agoBy(59 * 60_000)).toBe("59 min ago");
+    expect(agoBy(60 * 60_000)).toBe("1 h ago");
+    expect(agoBy(23 * 3600_000)).toBe("23 h ago");
+    expect(agoBy(24 * 3600_000)).toBe("1 day ago");
+    expect(agoBy(14 * 24 * 3600_000)).toBe("14 days ago");
+  });
+
+  it("singularises one day and only one day", () => {
+    expect(agoBy(24 * 3600_000)).toBe("1 day ago");
+    expect(agoBy(2 * 24 * 3600_000)).toBe("2 days ago");
+  });
+
+  it("absorbs a clock that has gone backwards rather than saying '-3 min ago'", () => {
+    // Two devices, two clocks; a timestamp from the future is not worth a
+    // nonsense string on screen.
+    expect(fmtAgo(NOW + 30_000, NOW)).toBe("just now");
+  });
+
+  it("returns '' — not 'just now' — for a missing timestamp", () => {
+    // The caller omits the phrase entirely. An older build wrote ledger entries
+    // with no `at`, and "just now" would be a confident claim that the retry is
+    // healthy when we simply do not know.
+    expect(fmtAgo(undefined, NOW)).toBe("");
+    expect(fmtAgo(null, NOW)).toBe("");
+    expect(fmtAgo("nonsense", NOW)).toBe("");
   });
 });

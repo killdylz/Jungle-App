@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   ROLE_LABEL, MOVEMENT_CATEGORY_LABEL, CLASS_CATEGORY_LABEL, SOURCE_LABEL, KIND_LABEL,
   SCHEME_LABEL, schemeTypeLabel, READ_ERRORS, GENERIC_READ_ERROR, readErrorMessage,
+  syncBannerMessage, SYNC_STUCK_AFTER,
 } from "./labels.js";
 import { CATEGORIES } from "../lib/movementTaxonomy.js";
 
@@ -112,5 +113,50 @@ describe("errors say what to do, not what broke", () => {
     expect(readErrorMessage("boom")).toBe(GENERIC_READ_ERROR);
     expect(readErrorMessage({ nope: 1 })).toBe(GENERIC_READ_ERROR);
     warn.mockRestore();
+  });
+});
+
+// ── The sync banner escalates ────────────────────────────────────────────────
+// The banner's fourth defect: it was the same weight forever, so a two-second
+// Wi-Fi blip and a fortnight of divergence read identically — and both claimed
+// "nothing is lost". The count beside it now says how many tries; these pin that
+// the SENTENCE changes with it, which is the half a coach actually reads.
+describe("syncBannerMessage", () => {
+  it("stays calm for a blip — a coach mid-class must not be alarmed by one failure", () => {
+    const msg = syncBannerMessage(1);
+    expect(msg).toContain("keeps retrying");
+    expect(msg).toContain("nothing is lost");
+  });
+
+  it("stops promising it will sort itself out once the retries are clearly not working", () => {
+    const msg = syncBannerMessage(SYNC_STUCK_AFTER);
+    expect(msg).not.toContain("nothing is lost");
+    expect(msg).toContain("exist nowhere else");
+    expect(msg).toContain(`retried ${SYNC_STUCK_AFTER} times`);
+  });
+
+  it("switches exactly at the threshold, not near it", () => {
+    expect(syncBannerMessage(SYNC_STUCK_AFTER - 1)).toContain("nothing is lost");
+    expect(syncBannerMessage(SYNC_STUCK_AFTER)).not.toContain("nothing is lost");
+  });
+
+  it("names the real attempt count rather than a vague 'several'", () => {
+    // The whole point is that the coach can reconcile the sentence with the
+    // number rendered beside it.
+    expect(syncBannerMessage(41)).toContain("retried 41 times");
+  });
+
+  it("points at the reason without inventing a support desk we do not have", () => {
+    const msg = syncBannerMessage(20);
+    expect(msg).toContain("What went wrong");
+    expect(msg).not.toMatch(/support|contact us|email us|help ?desk/i);
+  });
+
+  it("leaks none of the banned vocabulary in either state", () => {
+    // The raw Postgres string is deliberately available behind the disclosure;
+    // the SENTENCE is not allowed to name a mechanism.
+    [syncBannerMessage(1), syncBannerMessage(50)].forEach((msg) => {
+      expect(leaks(msg), `"${msg}" leaks ${leaks(msg).join(", ")}`).toEqual([]);
+    });
   });
 });
