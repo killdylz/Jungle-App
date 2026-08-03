@@ -21,9 +21,17 @@
 //
 // ⚠️ A dead named import costs ZERO bytes — rollup shakes at export granularity.
 // Removing them buys an accurate reading of what a file depends on, not size.
-// ⚠️ `deadctl` cannot evaluate `FLAGS.*` gating, has no inert-ancestor check and
-// no `<details>` awareness. It over-reports on purpose; every hit needs a
-// reachability check by hand before you believe it.
+// ⚠️ `deadctl` over-reports on purpose EXCEPT where a literal `FLAGS` value
+// makes the answer decidable. It resolves three gating shapes — a lexical
+// branch, a list a flag empties, and a component whose every render site is in
+// a dead branch — and reports everything else. If `src/config/flags.js` stops
+// being readable literals it says so and reports WITHOUT gating, because a
+// suppressor that fails silently is worse than a noisy report.
+//
+// ⚠️ The component-reachability check needs the RENDER SITE in the scanned set:
+// `deadctl src` sees App.jsx and so knows AnalyticsScreen is unreachable, but
+// `deadctl src/screens/AnalyticsScreen.jsx` alone cannot and will report its
+// three buttons. Scan the tree, not the file, when you want the gated answer.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -229,13 +237,147 @@ function cmdDead(files) {
   return { findings: hits, label: "dead imports" };
 }
 
+// ── FLAGS resolution ─────────────────────────────────────────────────────────
+// `src/config/flags.js` is a module-level const of LITERAL booleans, so a branch
+// keyed on one is decidable here rather than by hand. Returns null if the file
+// cannot be read or stops being literals — the tool then degrades to
+// over-reporting, which is the safe direction. Silently suppressing on a failed
+// read would turn this from a report into a lie.
+function readFlags() {
+  try {
+    const { ast } = parseFile(path.join(root, "src/config/flags.js"));
+    const flags = {};
+    let found = false;
+    traverse(ast, {
+      VariableDeclarator(p) {
+        if (p.node.id.type !== "Identifier" || p.node.id.name !== "FLAGS") return;
+        if (p.node.init?.type !== "ObjectExpression") return;
+        found = true;
+        for (const prop of p.node.init.properties) {
+          if (prop.type !== "ObjectProperty") continue;
+          const key = prop.key.name ?? prop.key.value;
+          if (prop.value.type === "BooleanLiteral") flags[key] = prop.value.value;
+        }
+      },
+    });
+    return found ? flags : null;
+  } catch { return null; }
+}
+
+// `FLAGS.x` → its literal · `!FLAGS.x` → the negation · anything else →
+// undefined, meaning "not decidable, keep reporting".
+function flagValue(node, flags) {
+  if (!node) return undefined;
+  if (node.type === "UnaryExpression" && node.operator === "!") {
+    const v = flagValue(node.argument, flags);
+    return v === undefined ? undefined : !v;
+  }
+  if (node.type === "MemberExpression" && !node.computed
+      && node.object.type === "Identifier" && node.object.name === "FLAGS"
+      && node.property.type === "Identifier") {
+    return Object.prototype.hasOwnProperty.call(flags, node.property.name)
+      ? flags[node.property.name] : undefined;
+  }
+  return undefined;
+}
+
+// (C) Lexical: is this path inside the branch a literal flag makes unreachable?
+// Covers `FLAGS.x ? A : B`, `FLAGS.x && A` and `FLAGS.x || A`.
+function inDeadBranch(p, flags) {
+  if (!flags) return false;
+  for (let cur = p; cur?.parentPath; cur = cur.parentPath) {
+    const n = cur.parentPath.node;
+    if (n.type === "ConditionalExpression") {
+      const v = flagValue(n.test, flags);
+      if (v === false && cur.node === n.consequent) return true;
+      if (v === true && cur.node === n.alternate) return true;
+    }
+    if (n.type === "LogicalExpression" && cur.node === n.right) {
+      const v = flagValue(n.left, flags);
+      if (n.operator === "&&" && v === false) return true;
+      if (n.operator === "||" && v === true) return true;
+    }
+  }
+  return false;
+}
+
+// (B) Data flow: a control rendered by iterating a list that a dead flag branch
+// makes EMPTY. `const aiTips = FLAGS.mockAnalytics ? [ … ] : []` then
+// `aiTips.filter(…).map(tip => <button/>)` — the button is nowhere near the
+// ternary lexically, so (C) cannot see it, and the map simply never runs.
+function emptyByFlag(name, scopePath, flags) {
+  const binding = scopePath.scope.getBinding(name);
+  const init = binding?.path?.node?.init;
+  if (!init || init.type !== "ConditionalExpression") return false;
+  const v = flagValue(init.test, flags);
+  if (v === undefined) return false;
+  const taken = v ? init.consequent : init.alternate;
+  return taken.type === "ArrayExpression" && taken.elements.length === 0;
+}
+
+function inEmptyIteration(p, flags) {
+  if (!flags) return false;
+  for (let cur = p; cur?.parentPath; cur = cur.parentPath) {
+    const call = cur.parentPath.node;
+    if (call.type !== "CallExpression" || call.callee.type !== "MemberExpression") continue;
+    if (!call.arguments.includes(cur.node)) continue;          // we are the callback
+    // Walk `a.filter(…).map(…)` back to the root identifier `a`.
+    let obj = call.callee.object;
+    while (obj.type === "CallExpression" && obj.callee.type === "MemberExpression") obj = obj.callee.object;
+    if (obj.type === "Identifier" && emptyByFlag(obj.name, cur, flags)) return true;
+  }
+  return false;
+}
+
+// (A) Reachability: a component whose EVERY render site sits in a dead branch is
+// unreachable, and so is every control inside it. AnalyticsScreen is the live
+// case — App.jsx renders it as `FLAGS.mockAnalytics ? <AnalyticsScreen/> : …`,
+// so its three handler-less buttons are correct and unreachable, and nothing
+// inside that file says so. This is the mechanism a hand-check kept re-deriving.
+function unreachableComponents(files, flags) {
+  if (!flags) return new Set();
+  const used = new Map();   // component name → was it rendered anywhere LIVE?
+  for (const file of files) {
+    let ast; try { ({ ast } = parseFile(file)); } catch { continue; }
+    traverse(ast, {
+      JSXOpeningElement(p) {
+        const n = p.node.name;
+        if (n.type !== "JSXIdentifier" || !/^[A-Z]/.test(n.name)) return;
+        used.set(n.name, (used.get(n.name) || false) || !inDeadBranch(p, flags));
+      },
+    });
+  }
+  // Only names that were rendered at least once, and never outside a dead branch.
+  return new Set([...used].filter(([, live]) => !live).map(([name]) => name));
+}
+
+// Which component does this file define? Its default export, by name.
+function defaultExportName(ast) {
+  let name = null;
+  traverse(ast, {
+    ExportDefaultDeclaration(p) {
+      const d = p.node.declaration;
+      if (d.type === "Identifier") name = d.name;
+      else if ((d.type === "FunctionDeclaration" || d.type === "ClassDeclaration") && d.id) name = d.id.name;
+    },
+  });
+  return name;
+}
+
 // ── deadctl ──────────────────────────────────────────────────────────────────
 // Intrinsic <button>/<a> with no handler and no href, and JSX attributes that
-// pass a handler prop nothing declares. Over-reports by construction.
+// pass a handler prop nothing declares. Over-reports by construction — EXCEPT
+// where a literal FLAGS value makes the answer decidable; see the three
+// mechanisms above.
 function cmdDeadCtl(files) {
   let hits = 0;
+  const flags = readFlags();
+  const unreachable = unreachableComponents(files, flags);
+  if (!flags) console.log("⚠️  src/config/flags.js unreadable — reporting WITHOUT flag gating\n");
   for (const file of files) {
     const { ast } = parseFile(file);
+    const exported = defaultExportName(ast);
+    if (exported && unreachable.has(exported)) continue;   // (A)
     traverse(ast, {
       JSXOpeningElement(p) {
         const nameNode = p.node.name;
@@ -264,12 +406,12 @@ function cmdDeadCtl(files) {
         if (enclosing(o => o.attributes.some(at => at.type === "JSXAttribute" && at.name?.name === "inert"))) return;
         if (enclosing(o => o.name.type === "JSXIdentifier" && o.name.name === "form")) return;
 
-        // Still cannot evaluate `FLAGS.*` gating — a control inside a branch
-        // that folds to `[]` reports here and is not real. Check every hit.
+        if (inDeadBranch(p, flags)) return;        // (C)
+        if (inEmptyIteration(p, flags)) return;    // (B)
+
         const inDetails = enclosing(o => o.name.type === "JSXIdentifier" && o.name.name === "details");
         console.log(`${rel(file)}:${p.node.loc.start.line}  <${tag}> with no handler, href or spread`
-          + (inDetails ? "  — inside <details>, may be decorative" : "")
-          + `  — confirm it is not FLAGS-gated before believing it`);
+          + (inDetails ? "  — inside <details>, may be decorative" : ""));
         hits++;
       },
     });
