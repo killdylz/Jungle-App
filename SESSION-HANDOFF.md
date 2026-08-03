@@ -12,10 +12,12 @@ _Last updated: 2026-08-03 (session 24)_
 
 ## Session 24 — a delete that never worked, a day that was not a day, and a fourth reader
 
-> **Gates green.** `lint:crash` **0** · **784 unit** (28 files, no todos) · **305 e2e**
+> **Gates green.** `lint:crash` **0** · **784 unit** (28 files, no todos) · **307 e2e**
 > (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
 > member path is untouched) + StaffApp **340.43 KB** + PersonasScreen **93.35 KB** +
 > ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (unchanged).
+>
+> **The local backlog is empty at the end of this session** — see "What is left, honestly".
 >
 > **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
 > nobody has run: **sixth session running**, and nothing below depended on it.
@@ -146,6 +148,36 @@ explainer built a possessive out of the persona name (*"No plan of Example Coach
 uses them now"*), and the per-row line restated the card's own heading instead of naming what
 deleting would cost. **Look at the screen, not only at the assertions about it.**
 
+### 5. `deadctl` decides the FLAGS question instead of asking you to — `4112f8c`
+
+🔴 **The premise was wrong, which the work found immediately.** The recorded item said all four
+suspects "sit inside `FLAGS.mockAnalytics ? [...] : []`". **Only one does.** AnalyticsScreen has
+no FLAGS reference outside its header comment — its three buttons are gated CROSS-FILE by
+App.jsx. A lexical check would have suppressed one, left three, and looked like it worked.
+
+Three mechanisms: lexical branches, a list a flag empties and then `.map`s, and a component
+whose every render site is dead. Everything else still over-reports, and an unreadable
+`flags.js` makes it say so and report all four — a suppressor that fails silently is worse than
+a noisy report. Flipping `mockAnalytics` moves **seven** findings in **both** directions, which
+is the control a blanket suppressor cannot pass.
+
+### 6. Repeat-avoidance is driven at last, and it works — `8704985`
+
+Not broken; uncovered. 🔴 **The sample coach has eleven movements and its shape consumes exactly
+eleven**, so with zero slack two drafts are byte-identical whatever the ledger says — a test on
+that fixture passes against a completely broken implementation. ⚠️ And seeding a second plan
+into `localStorage` was not enough: the catalogue re-derives only on a plan COMMIT, so the probe
+measured nothing and passed. The fixture now forces the recompute and asserts the catalogue grew
+first. 🔴 Avoidance is **per preset** — only "Something different" avoids; "the usual" repeating
+IS the feature.
+
+### 7. `BrandStudioScreen` measured, and declined — no commit
+
+Stubbing its body gives StaffApp 340.43 → 315.70 KB: **24.73 KB raw, 5.89 KB gzip**. Members
+gain zero (not on their path); installed staff gain zero and pay an extra request, because
+`build-sw` precaches every chunk; only a staff first visit gains, 5.89 KB of ~783 KB. The repo
+split `PersonasScreen` at **93.35 KB** — 3.8× larger. **Not every look ends in a change.**
+
 ### Design decisions worth not re-litigating
 
 - **The catalogue states membership, it does not offer deletion** — except on the one list where
@@ -157,17 +189,21 @@ deleting would cost. **Look at the screen, not only at the assertions about it.*
 - **Reopen is a read.** It must never append to the ledger.
 - **A zero-occurrence row is kept, not purged.** The coach's edits outlive the plan that used
   the movement; letting go of them is their call, not a cleanup's.
+- **`deadctl` over-reports by default** and suppresses only what a literal flag decides. If it
+  cannot read the flags it says so and reports everything.
+- **Repeat-avoidance is a per-preset preference, not a global filter.**
+- **`BrandStudioScreen` stays in App.jsx**, on measured numbers rather than taste.
 
 ### What is left, honestly
 
-- **Teach `deadctl` the `FLAGS` literals. NOT DONE.** Still the one blind spot, still cheap:
-  `src/config/flags.js` is a module-level const of literal booleans, and all four current
-  suspects sit inside `FLAGS.mockAnalytics ? [...] : []`.
-- **`BrandStudioScreen` out of App.jsx (I9). NOT STARTED.** §4.2 still has the concrete answer:
-  four declarations, nothing shared back. **Measure before splitting.**
-- **Repeat-avoidance with the SAME preset.** `presets.spec.js:96` drives two generations in a
-  row but with DIFFERENT presets, which would differ regardless of the ledger. The same-preset
-  path is the uncovered one.
+**Locally: nothing.** Every item this session opened with is closed, structural debt has been
+empty for nine sessions, `deadctl` and `dead` both report 0, and there are no TODOs or skipped
+tests in the tree.
+
+What remains is not code: **`DYLAN-QUEUE.md` Part A**, and A7 above all — the Slides import is
+the feature the whole pitch rests on and has never met a real deck. §4.5 still lists two
+undriven surfaces (the movement editor's equipment/kind/alias save, and cold start → rename
+against a preset-sourced shape) if a session needs somewhere to look.
 
 ---
 

@@ -16,15 +16,20 @@ The same question applied to a number. Not *"is this 44 or 45 today"* but *"what
 this arithmetic answering."* It was answering **how many whole 24-hour periods have elapsed**,
 which nobody was asking.
 
-**Last commit is `b03dd45`**, tree clean, **pushed**, **CI green**. Gates:
-**`lint:crash` 0 · 784 unit (28 files, no todos) · 305 e2e (31 spec files, no fixme) ·
+**Last commit is `8704985`**, tree clean, **pushed**, **CI green**. Gates:
+**`lint:crash` 0 · 784 unit (28 files, no todos) · 307 e2e (31 spec files, no fixme) ·
 build 204.50 KB index + 340.43 KB StaffApp + 93.35 KB PersonasScreen + 5.81 KB ClassSummary +
 0.85 KB summaryApi.** App.jsx **3,513 lines** (unchanged).
 
-⚠️ **Session 24 ran on after this file was first written and closed its own §10.3** — the
-orphaned catalogue rows. That section, §4.5's row for it, and §0a's note about
-`deletePersonaMovement` have all been corrected below rather than left to rot. **This is the
-document's own failure mode, caught once; check the rest of it the same way.**
+🔴 **Session 24 ran on after this file was written and closed EVERY local item it listed** —
+the orphaned rows (§1e), `deadctl`'s FLAGS blind spot (§1f), same-preset repeat avoidance (§1g),
+and `BrandStudioScreen`, which was **measured and declined** (§4.2). Those sections, their rows
+in §4.4 and §4.5, §10's ordering, and §0a's note about `deletePersonaMovement` have all been
+corrected rather than left to rot.
+
+**So §10 opens by saying the local backlog is empty, and means it.** Two of this file's own
+claims were also found wrong while executing them — one about a gating mechanism, one about what
+was untested. **Check the rest the same way.**
 
 This file supersedes `SESSION-24-PROMPT.md`, now in `docs/history/`.
 
@@ -36,8 +41,9 @@ custom-skin application, Browse Library's initial class, the Library's empty-poo
 CSV backfill, the import→retention join, the class-type rename, Smart Recommendation's preset
 promise, the AST scripts, `ctOf`'s duplication, `src/test_probe.txt`, the archive ordering, the
 catalogue RENAME path (correct), **and everything in §1 below** — the catalogue delete, the
-retention day count, the ledger's fourth reader, `Reopen`, `GEN_CAP`, and the **orphaned
-catalogue rows** (built, §1e).
+retention day count, the ledger's fourth reader, `Reopen`, `GEN_CAP`, the **orphaned catalogue
+rows** (built, §1e), **`deadctl`'s FLAGS gating** (built, §1f), **same-preset repeat avoidance**
+(covered, §1g), and **`BrandStudioScreen`** (measured and declined, §4.2).
 
 ---
 
@@ -264,10 +270,56 @@ explainer built a possessive out of the persona name (*"No plan of Example Coach
 uses them now"*), and the per-row line restated the card's own heading instead of naming what
 deleting would cost. **Look at the screen, not only at the assertions about it.**
 
+### 1f. 🔴 `deadctl` decides the FLAGS question instead of asking you to — `4112f8c`
+
+Its four suspects were all false, all flag-gated, and every session re-derived that by hand.
+
+🔴 **The premise recorded for this item was wrong.** This file said all four "sit inside
+`FLAGS.mockAnalytics ? [...] : []`". **Only one does.** AnalyticsScreen has no FLAGS reference
+outside its header comment — its three buttons are gated CROSS-FILE, by App.jsx rendering
+`FLAGS.mockAnalytics ? <AnalyticsScreen/> : <MockDisabledScreen/>`. A lexical check would have
+suppressed one, left three, and looked like it worked.
+
+So three mechanisms: **(C)** lexical branches including negation · **(B)** a list a flag empties,
+consumed via `.map` — the control is nowhere near the ternary · **(A)** a component whose every
+render site is in a dead branch. Everything else still over-reports. If `flags.js` stops being
+readable literals it prints *"reporting WITHOUT flag gating"* and reports all four again — a
+suppressor that fails silently is worse than a noisy report.
+
+The control is what earns trust: flipping `mockAnalytics` moves **seven** findings in **both**
+directions, each individually explicable, including `FLAGS.x ? null : <button/>` flipping from
+reported to suppressed because the ALTERNATE becomes the dead branch.
+
+⚠️ **(A) needs the render site in the scanned set.** `deadctl src` knows; `deadctl
+src/screens/AnalyticsScreen.jsx` alone cannot and reports its three buttons.
+
+### 1g. Repeat-avoidance is driven at last, and it works — `8704985`
+
+Not broken; uncovered. Two discoveries made it assertable, and they are the value:
+
+🔴 **The sample coach has eleven movements and its shape consumes exactly eleven.** With zero
+slack every draft is forced and two drafts are byte-identical whatever the ledger says — a test
+on that fixture passes against a completely broken implementation. The fixture adds a second
+S360 plan. ⚠️ **Seeding it into `localStorage` was not enough**: the catalogue re-derives only on
+a plan COMMIT, so the probe measured nothing and passed. The fixture now saves a plan to force
+the recompute and **asserts the catalogue reached 15** before asserting anything else.
+
+🔴 **Avoidance is PER PRESET.** Only "Something different" sets `avoidRecent: 8`; the other four
+are 0 and repeat on purpose — a coach asking for their usual class is not asking for a different
+one. Asserting "a preset avoids repeats" would have failed four of five and been fixed the wrong
+way. The control test pins that, and the mutation that makes avoidance global — the plausible
+wrong fix — fails it.
+
 ### Design decisions worth not re-litigating
 
 - **The catalogue states membership, it does not offer deletion** — except on the one list where
   deleting is true.
+- **`deadctl` over-reports by default and suppresses only what a literal flag decides.** If it
+  cannot read the flags it says so and reports everything.
+- **Repeat-avoidance is a per-preset preference, not a global filter.** "The usual" repeating is
+  the feature.
+- **`BrandStudioScreen` stays in App.jsx.** Measured: 5.89 KB gzip, negated by the SW precache,
+  zero member benefit. §4.2.
 - **A zero-occurrence row is kept, not purged.** The coach's edits outlive the plan that used
   the movement; letting go of them is their call, not a cleanup's.
 - **"Days ago" is a calendar count.** The datum is a date; the reader is a human with a calendar.
@@ -320,15 +372,34 @@ Discover · Integrations · attendee b64 share · **Music / Auto-DJ** (cut, quar
 **Empty.** Eighth session running. App.jsx is 3,513 lines, unchanged this session.
 
 ### 4.2 Bundle / performance
-`I9` leftovers. **`BrandStudioScreen` has a concrete answer, still unexecuted** —
-`npm run ast scan src/App.jsx BrandStudioScreen` reports 6 import sources and exactly **three**
-same-file declarations (`GYM_ARCHETYPES`, `ProgramChip`, `recommendArchetype`), of which **zero**
-are used by the rest of the file. It moves as a self-contained unit of four declarations with
-**no shared module required** — verified by grep, not taken on the tool's word.
-`LibraryBrowserModal` (its 58 KB of data STAYS — only the JSX leaves) and `AdminTeamScreen`
-remain. **Measure before splitting**; `build-sw` precaches every emitted chunk, so a chunk
-nothing fetches costs every install. Fixed costs: `react-dom` 177 KB · `@supabase/*` ~198 KB
-(`storage-js` 22 KB unused — **Dylan said leave it**) · `src/data/library.js` 58 KB.
+🔴 **`BrandStudioScreen` was MEASURED and the answer is DON'T. Do not re-raise it.**
+
+Stubbing its body and rebuilding gives the exact weight of what would move:
+
+| StaffApp | raw | gzip |
+|---|---|---|
+| baseline | 340.43 KB | 88.70 KB |
+| BrandStudioScreen stubbed | 315.70 KB | 82.81 KB |
+| **delta** | **24.73 KB** | **5.89 KB** |
+
+**5.89 KB gzipped**, and it buys almost nothing:
+
+- **Members gain zero** — BrandStudio is in StaffApp and members never load it. The 206.69 KB
+  member figure does not move.
+- **Installed staff gain zero, and pay.** `scripts/build-sw.mjs` precaches every `.js`/`.css` in
+  `dist/assets`, so a separate chunk is downloaded on install regardless — now as an extra
+  request and an extra cache entry.
+- **Only a staff first visit gains**, and only 5.89 KB of an ~783 KB download.
+- Against that: moving 631 lines out of a 3,513-line file is real regression risk.
+
+**The repo's own precedent settles it.** The one screen split out of App.jsx is `PersonasScreen`
+at **93.35 KB / 28.21 KB gzip** — 3.8× larger. BrandStudio is a quarter of the size that
+justified the last split. `LibraryBrowserModal` (409 lines; its 58 KB of DATA stays either way —
+only the JSX would leave) and `AdminTeamScreen` are unmeasured and would need the same test
+before anyone moves them.
+
+Fixed costs: `react-dom` 177 KB · `@supabase/*` ~198 KB (`storage-js` 22 KB unused — **Dylan
+said leave it**) · `src/data/library.js` 58 KB.
 
 📏 Production shape last measured session 19 at `777492d`: a **member** downloads **206.69 KB**,
 staff 782.71 KB. Quote absolutes, never percentages. ⚠️ The credential-less local build and the
@@ -343,7 +414,7 @@ deliberately** — publishing is an act, not a side effect.
 ### 4.4 Tooling and hygiene
 | # | Item |
 |---|---|
-| 🔴 **`deadctl` cannot evaluate `FLAGS.*`** | **The one remaining blind spot, and still the cheap one — §10.2.** Verified this session: it reports **4** suspects (`AnalyticsScreen` ×3, `CalendarScreen:581`), and **all four are `FLAGS.mockAnalytics`-gated** — each sits inside `FLAGS.mockAnalytics ? [...] : []`, which folds to `[]`. `src/config/flags.js` is a module-level const of **literal booleans**, so the script can read it and resolve them for real. |
+| ~~`deadctl` cannot evaluate `FLAGS.*`~~ | ✅ **BUILT — `4112f8c`, §1f.** Three mechanisms, a six-case control, and a documented limitation. `deadctl src` is **0 findings across 100 files**. **Do not re-raise.** |
 | **`sync-token-core.mjs`** | Run `node scripts/sync-token-core.mjs` after ANY edit to `src/lib/classToken.js`. `--check` exits 1 if stale. |
 | **Docs** | ✅ Root 6 `.md`; `docs/` 13; `docs/history/` 21. **Keep `SESSION-HANDOFF.md` to two session blocks** — move the third into `HANDOFF-ARCHIVE.md` **newest-first**, with a guarded one-shot (§7). |
 
@@ -352,7 +423,7 @@ deliberately** — publishing is an act, not a side effect.
 | Area | Gap |
 |---|---|
 | ~~The orphaned catalogue row~~ | ✅ **BUILT — `b03dd45`, §1e.** The "Not in any plan" card. Two tests, mutated in opposite directions. **Do not re-raise.** |
-| 🔴 **Repeat-avoidance across generations, SAME preset** | ⚠️ **Half of this is already covered and the prompt that said otherwise was wrong.** `presets.spec.js:96` DOES drive two generations in a row and reads both back — but with **different presets** (heavier vs engine), which would differ whether or not the ledger fed back. **The uncovered case is two generations with the SAME preset**, where the second must avoid the first's movements. The arithmetic is unit-tested in `blueprints.test.js`; that specific UI path is not. |
+| ~~Repeat-avoidance, SAME preset~~ | ✅ **COVERED — `8704985`, §1g.** Works. Two tests, mutated in opposite directions, on a fixture with real slack. **Do not re-raise.** |
 | **Movement editor's remaining save fields** | `changeMovement` is now driven for notes and for the rename-merge path, and delete is gone. The **equipment / category / alias** save is still unchecked end to end. |
 | **Cold start (D3) → rename** | `coldstart.spec.js` covers the path and asserts `source: "preset"`. What is untested is that a coach who names a class type at cold start and later retypes it exercises §1c's rename against a **preset-sourced** shape. |
 | **Slides import** | Unreachable locally (`slidesEnabled` false). Say so. `DYLAN-QUEUE.md` A7. |
@@ -495,8 +566,9 @@ zero findings is a pass, zero files is a broken invocation.
 2. **`scan <file> <Decl,…>`** — the answer to "move it, or make it a shared module?".
 3. ~~**`jsx`**~~ — **redundant**; `react/jsx-no-undef` is in the crash gate.
 4. **`dead`** — imported bindings never used, via babel's binding resolution. **0 findings.**
-5. **`deadctl`** — `<button>`/`<a>` with no handler, href or spread. 🔴 **Still cannot evaluate
-   `FLAGS.*`** — §10.2. Currently 4 suspects, **0 real**.
+5. **`deadctl`** — `<button>`/`<a>` with no handler, href or spread. **Resolves `FLAGS` gating in
+   three shapes** (§1f) and over-reports on everything else. Currently **0 findings**. Scan the
+   TREE, not a single file: the component-reachability check needs the render site in scope.
 6. **`handlers`** — every `on*` attribute on an intrinsic element, bucketed.
 
 ⚠️ **A dead named import costs ZERO bytes** — rollup tree-shakes it.
@@ -509,7 +581,7 @@ zero findings is a pass, zero files is a broken invocation.
 npm run lint:crash && npm test && npm run test:e2e && npm run build
 ```
 
-Expect **0 crash findings · 784 unit (28 files, no todos) · 305 e2e (31 spec files, no fixme) ·
+Expect **0 crash findings · 784 unit (28 files, no todos) · 307 e2e (31 spec files, no fixme) ·
 a five-chunk build** (index ~204.50 KB · StaffApp ~340.43 KB · PersonasScreen ~93.35 KB ·
 ClassSummary ~5.81 KB · summaryApi ~0.85 KB, credential-less).
 
@@ -522,35 +594,36 @@ ClassSummary ~5.81 KB · summaryApi ~0.85 KB, credential-less).
 
 ## 10. Suggested order for session 25
 
-1. **Ask Dylan about A12/A13 and A1 first.** Six sessions. If A12 is done, verifying N4 against
-   the real functions displaces everything below — it is the only part of the product untested
-   *by construction*.
+🔴 **Read this first: the local engineering backlog is EMPTY.** Session 24 ran on and closed
+every item this section originally listed — the orphaned rows (§1e), `deadctl`'s FLAGS blind
+spot (§1f), same-preset repeat avoidance (§1g), and `BrandStudioScreen`, which was **measured
+and declined** with numbers in §4.2. Structural debt has been empty for nine sessions.
 
-2. **Teach `deadctl` the `FLAGS` literals.** Cheap, and verified feasible this session:
-   `src/config/flags.js` is a module-level const of literal booleans, and **all four** current
-   suspects sit inside `FLAGS.mockAnalytics ? [...] : []`. Parse the flags once and resolve that
-   ternary. Keep the tool over-reporting everywhere else. **Give it a control that proves the new
-   gating logic can still report a live control** — a flag-gated fixture AND an ungated one in
-   the same run, or you have built something that reports nothing and looks clean.
+**That means the honest answer to "what should I build" is: nothing, until Dylan unblocks
+something.** Do not go looking for work to justify the session — this repo deletes theatre, and
+inventing a refactor is theatre. The two legitimate uses of a session from here:
 
-3. **Repeat-avoidance with the SAME preset.** ⚠️ Read §4.5 first: two-generations-in-a-row IS
-   driven by `presets.spec.js:96`, but with *different* presets, which proves nothing about the
-   ledger. Drive **the same preset twice** and assert the second avoids the first's movements.
-   The ledger feeds `movements: blockMovementNames(blocks)` back as "what has already been
-   recommended", and session 24 showed a broken ledger degrades this **silently**.
+1. 🔴 **Ask Dylan about A12/A13 and A1 first, and stop if the answer is "nothing moved".**
+   Six sessions and counting. If A12 is done, verifying N4 against the real Edge Functions is
+   the whole session — it is the only part of the product untested *by construction*, and it is
+   the first thing a non-staff person will ever see.
 
-4. **Consider `BrandStudioScreen` out of App.jsx (I9).** §4.2 has the concrete answer: four
-   declarations, nothing shared back. **Measure first** — `build-sw` precaches every emitted
-   chunk, and this screen is not on the member path.
+2. **Otherwise, drive a surface nobody has driven and read back both the store and the screen.**
+   That is what found every defect in sessions 21–24, and §4.5 lists what is left: the movement
+   editor's equipment/kind/alias save, and cold-start → rename against a preset-sourced shape.
+   **Read §0 before believing any gap named there** — this document has now been wrong in both
+   directions, about a claim AND about a suggested control.
 
-5. **Do not re-run** the eight-screen a11y sweep, the empty-pool Library check, the CSV backfill,
+3. **Do not re-run** the eight-screen a11y sweep, the empty-pool Library check, the CSV backfill,
    the class-type rename, the recommendation panel, the catalogue delete, the orphaned-row card,
    or `Reopen`/`GEN_CAP` as headline items. Done, clean, covered by tests that fail when reverted.
+   **Add to that list: `deadctl`'s FLAGS gating and `BrandStudioScreen`** — the first is built
+   with a control, the second is measured and declined.
 
-6. **Do not start N2/N3.** They wait on attendance volume → the pilot → `DYLAN-QUEUE.md` Part A.
+4. **Do not start N2/N3.** They wait on attendance volume → the pilot → `DYLAN-QUEUE.md` Part A.
 
-7. **Do not start P2 (Capacitor)** until A13 proves a real member opened a real link.
+5. **Do not start P2 (Capacitor)** until A13 proves a real member opened a real link.
 
-8. **Keep `SESSION-HANDOFF.md` to two session blocks.** Move session 23's into
+6. **Keep `SESSION-HANDOFF.md` to two session blocks.** Move session 23's into
    `docs/history/HANDOFF-ARCHIVE.md` **above session 22** — newest first, with a guarded
    one-shot.
