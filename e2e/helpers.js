@@ -90,6 +90,54 @@ export async function waitForAppAnyWidth(page) {
   await expect(desktop.or(phone).first()).toBeVisible();
 }
 
+// ── The screen inventory, and reaching a screen at any width ─────────────────
+//
+// The three navigations use DIFFERENT words for the same screen: the sidebar
+// says "Class Builder", the More sheet says "Builder", the bottom bar says
+// "Build". Below 900px (COMPACT_NAV_PX) there is no sidebar at all, so a sweep
+// that visits every screen at every width cannot hardcode one vocabulary — and
+// the alternative, a per-width copy of the list, is three lists to forget to
+// update.
+//
+// `side` is the sidebar label and doubles as the screen's name in test titles.
+// `sheet` is the More sheet's label, absent for screens that live only on the
+// bottom bar. `bar` is the bottom bar's four-item shortlist.
+//
+// ⚠️ This list is CHECKED against the running app by responsive.spec.js rather
+// than trusted: a screen added to the sidebar, or a flag flipped in
+// config/flags.js, must not be able to fall out of the sweep silently.
+export const ALL_SCREENS = [
+  { key: "dashboard",    side: "Dashboard",        sheet: "Dashboard" },
+  { key: "builder",      side: "Class Builder",    sheet: "Builder",      bar: "Build" },
+  { key: "personas",     side: "Coaches",          sheet: "Coaches" },
+  { key: "library",      side: "Exercise Library", sheet: "Library" },
+  { key: "live",         side: "Class Runner",     bar: "Run" },
+  { key: "calendar",     side: "Schedule",         sheet: "Schedule" },
+  { key: "member",       side: "Members",          sheet: "Members",      bar: "Members" },
+  { key: "team",         side: "Team",             sheet: "Team" },
+  { key: "brand-studio", side: "Brand Studio",     sheet: "Brand Studio", bar: "Brand" },
+];
+
+// Navigate to a screen whatever the viewport is doing.
+//
+// ⚠️ The More sheet's labels carry an emoji in a sibling <span>, so the
+// accessible name is "🏋️ Builder" — matched with a regex, never `exact: true`.
+export async function navAnyWidth(page, screen) {
+  const sidebar = page.locator("aside");
+  if (await sidebar.count()) {
+    await page.getByRole("button", { name: screen.side, exact: true }).click();
+  } else {
+    const bar = page.locator("nav").first();
+    if (screen.bar) {
+      await bar.getByRole("button", { name: screen.bar, exact: true }).click();
+    } else {
+      await bar.getByRole("button", { name: "More", exact: true }).click();
+      await page.getByRole("button", { name: new RegExp(`${screen.sheet}$`) }).first().click();
+    }
+  }
+  await expect(page.getByTestId("screen-loading")).toHaveCount(0);
+}
+
 // Read a domain object back out of localStorage. The repo rule is to assert on
 // what was STORED, not only what was rendered: session 4's defects were mostly
 // cases where those two disagreed.
