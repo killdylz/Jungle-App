@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Secrets. `*.local` above already catches `.env.local`, which is the one this
+# repo actually uses — but ONLY that one. A file named `.env`, `.env.production`
+# or `.env.staging` would sail straight past it, and this repository is PUBLIC.
+# Anything committed here is public the moment it is pushed and stays in the
+# history afterwards, so the rule is written to cover the shapes nobody has
+# created yet rather than the one that exists.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

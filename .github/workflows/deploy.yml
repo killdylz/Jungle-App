@@ -63,6 +63,18 @@ jobs:
           # bundle by design). Dedicated Slides-import Cloud project, consent
           # screen in Testing mode; scopes are read-only Slides + Drive.
           VITE_GOOGLE_SLIDES_CLIENT_ID: 752012094269-2egmufghtkmoiem8r923edublm4i4n3o.apps.googleusercontent.com
+      # Size guard, AFTER the build and against that build's own output. `--prod`
+      # because the step above ran with VITE_SUPABASE_* set: rollup keeps the
+      # whole @supabase client, so StaffApp is ~581 kB here and ~340 kB from a
+      # bare local build. Those are two real builds and their numbers are not
+      # comparable — the script asserts which one it is looking at rather than
+      # trusting the flag, so a credential-less build cannot pass by accident.
+      #
+      # This runs after the artifact is already built, so it fails a REGRESSION
+      # rather than blocking a deploy on a slow check. If it goes red, either the
+      # growth was intended — raise the ceiling in the same commit and say what
+      # bought the bytes — or it was not, which is the case this exists for.
+      - run: npm run size -- --prod
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

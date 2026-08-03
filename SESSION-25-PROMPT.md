@@ -401,10 +401,17 @@ before anyone moves them.
 Fixed costs: `react-dom` 177 KB · `@supabase/*` ~198 KB (`storage-js` 22 KB unused — **Dylan
 said leave it**) · `src/data/library.js` 58 KB.
 
-📏 Production shape last measured session 19 at `777492d`: a **member** downloads **206.69 KB**,
-staff 782.71 KB. Quote absolutes, never percentages. ⚠️ The credential-less local build and the
-prod-shaped build disagree on `index` (204.50 vs 198.29 KB) — both real, never compare across.
-**Session 24 left `index` byte-identical across all four commits**; the member path was untouched.
+📏 **Re-measured session 24, prod-shaped** (`VITE_SUPABASE_*` set, as CI builds): a **member**
+downloads **213.13 kB** · staff **791.07 kB** eager, + PersonasScreen 94.57 kB lazily. Chunks:
+index 204.59 · StaffApp 581.02 · PersonasScreen 94.57 · ClassSummary 5.49 · summaryApi 2.93.
+The member path was **206.69 kB at session 19** — it has grown ~6.4 kB since, which is precisely
+the drift `npm run size` now catches.
+
+⚠️ **The credential-less local build and the prod-shaped build are different builds**, and it is
+StaffApp where they diverge most: **340.43 kB local vs 581.02 kB prod-shaped**, because without
+credentials rollup drops the whole `@supabase` client. Quote absolutes, never percentages, and
+**never compare a number from one against a budget from the other** — the size guard refuses to,
+by detecting which build it is looking at.
 
 ### 4.3 Sync / data plumbing
 **I14** hydrate pagination (do at first paying gym) · **I8** server-side media proxy · 
@@ -415,7 +422,8 @@ deliberately** — publishing is an act, not a side effect.
 | # | Item |
 |---|---|
 | ~~`deadctl` cannot evaluate `FLAGS.*`~~ | ✅ **BUILT — `4112f8c`, §1f.** Three mechanisms, a six-case control, and a documented limitation. `deadctl src` is **0 findings across 100 files**. **Do not re-raise.** |
-| **`sync-token-core.mjs`** | Run `node scripts/sync-token-core.mjs` after ANY edit to `src/lib/classToken.js`. `--check` exits 1 if stale. |
+| **`sync-token-core.mjs`** | Run `node scripts/sync-token-core.mjs` after ANY edit to `src/lib/classToken.js`. `--check` exits 1 if stale. ✅ **Drift is already guarded in CI** by `classToken.mirror.test.js`, and that guard was verified empirically this session: a one-character change to a mirrored copy fails it, and importing the script does **not** repair what it inspects (`main()` runs only when invoked as a command). |
+| 🔴 **`npm run size`** | **New.** `scripts/check-size.mjs` fails the build when a chunk passes its ceiling. **Two budget sets, and the mode is ASSERTED not assumed** — a credential-less build has no `@supabase` client, so StaffApp is 340 kB local and 581 kB prod-shaped, and passing the wrong flag exits 2 rather than passing against numbers that do not describe the build. CI runs `--prod` after `npm run build`. Ceilings are ~4–5% over measured; **if a deliberate feature pushes one over, raise it in the SAME commit and say what bought the bytes.** |
 | **Docs** | ✅ Root 6 `.md`; `docs/` 13; `docs/history/` 21. **Keep `SESSION-HANDOFF.md` to two session blocks** — move the third into `HANDOFF-ARCHIVE.md` **newest-first**, with a guarded one-shot (§7). |
 
 ### 4.5 Test coverage gaps — where the next defect is
@@ -578,7 +586,7 @@ zero findings is a pass, zero files is a broken invocation.
 ## 9. Gates
 
 ```bash
-npm run lint:crash && npm test && npm run test:e2e && npm run build
+npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
 Expect **0 crash findings · 784 unit (28 files, no todos) · 307 e2e (31 spec files, no fixme) ·

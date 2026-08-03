@@ -1,0 +1,42 @@
+# Dependency updates. This repo is PUBLIC and ships a static bundle to GitHub
+# Pages, so the realistic supply-chain risk is a compromised or vulnerable
+# package reaching the browser — not a server being exploited.
+#
+# Weekly, not daily: a flood of PRs on a repo with one maintainer gets ignored,
+# and an ignored security signal is worse than none. Grouped by kind for the
+# same reason — one PR to review beats eleven.
+#
+# ⚠️ Every PR must go through the same gates as anything else (lint:crash, unit,
+# e2e, build, size). Do NOT merge a dependency bump on the strength of a green
+# tick alone if it touches vite, rollup or @babel: this repo has chunk-splitting
+# and tree-shaking behaviour it depends on, and the size guard added alongside
+# this file is what will notice.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Build toolchain moves together or not at all — a vite bump with a stale
+      # plugin is how a chunk quietly stops being emitted.
+      build-toolchain:
+        patterns: ["vite", "@vitejs/*", "rollup", "@babel/*"]
+      testing:
+        patterns: ["vitest", "@vitest/*", "@playwright/*", "playwright", "jsdom"]
+      linting:
+        patterns: ["eslint", "eslint-*", "@eslint/*", "globals"]
+    ignore:
+      # React major upgrades are a deliberate migration, not a dependency bump.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+
+  # The workflow's own actions pin to major tags; this keeps them current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
