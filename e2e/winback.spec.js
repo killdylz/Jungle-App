@@ -202,7 +202,14 @@ test.describe("SWEEP — an actioned flag comes back when the member lapses agai
     // The flag is back, and it is ACTIVE. If July's phone call still suppressed
     // it, the operator would never learn that the member they saved has gone
     // quiet a second time — the single case this feature exists to catch.
-    await expect(page.getByText(/Last attended 19 days ago/)).toBeVisible();
+    //
+    // TWENTY, matching the step above that advances the clock by twenty days.
+    // This read 19 until "days ago" became a calendar count: Larry checked in at
+    // 6pm and the roster is read at 9am, so the elapsed span was 19 days and 15
+    // hours and the old floor dropped it to 19. The prose here said "Twenty days
+    // pass" and the assertion said 19 — the test had written the off-by-one down
+    // next to the right answer without either being questioned.
+    await expect(page.getByText(/Last attended 20 days ago/)).toBeVisible();
     await expect(page.getByRole("button", { name: /I.ve reached out/ })).toHaveCount(1);
 
     // Append-only: the ledger still holds July's action, unmutated. A "current

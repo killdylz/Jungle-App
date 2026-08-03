@@ -29,6 +29,55 @@ describe("attendanceIndex", () => {
   });
 });
 
+// ── "days ago" counts CALENDAR days ──────────────────────────────────────────
+// These fixtures are built with LOCAL-time constructors, not ISO strings, so
+// they assert the same thing in every timezone the suite might run in — the
+// defect they pin was itself a timezone-shaped one, and an ISO fixture would
+// have reproduced it only between certain hours.
+//
+// The old implementation floored the raw millisecond gap, which answers "how
+// many whole 24-hour periods have elapsed" — a different question, and one no
+// coach or owner is asking.
+describe("days ago is a calendar count, not an elapsed-time one", () => {
+  const at = (y, mo, d, h) => new Date(y, mo, d, h, 0, 0).getTime();   // local
+
+  it("counts an imported check-in by the calendar, whatever time of day it is read", () => {
+    // The real case: a date-only import anchored at noon UTC (evening local),
+    // read the next morning. Jun 19 → Aug 3 is 45 days on any calendar; the
+    // elapsed span is 44 days and 13 hours, which floored to 44.
+    const lastIn = at(2026, 5, 19, 20);
+    const now = at(2026, 7, 3, 9);
+    const a = studioActivity([{ memberId: "m1", checkedInAt: new Date(lastIn).toISOString() }], now);
+    expect(a.daysSince).toBe(45);
+  });
+
+  it("says a member who trained yesterday evening was in 1 day ago, not 0", () => {
+    const now = at(2026, 5, 2, 7);
+    const a = studioActivity([{ memberId: "m1", checkedInAt: new Date(at(2026, 5, 1, 21)).toISOString() }], now);
+    expect(a.daysSince).toBe(1);
+  });
+
+  it("still says 0 for someone who trained earlier the same day", () => {
+    // The control: calendar counting must not round every visit up to a day.
+    const now = at(2026, 5, 2, 19);
+    const a = studioActivity([{ memberId: "m1", checkedInAt: new Date(at(2026, 5, 2, 6)).toISOString() }], now);
+    expect(a.daysSince).toBe(0);
+  });
+
+  it("puts the absence threshold on the day the calendar crosses it", () => {
+    // The consequence worth stating: the rule fires on calendar day 14, which is
+    // up to a day earlier than the elapsed-time reading used to allow.
+    const now = at(2026, 5, 15, 9);
+    const roster = [{ id: "m1", name: "Ada", joinedAt: "" }];
+    const visits = [{ memberId: "m1", checkedInAt: new Date(at(2026, 5, 1, 20)).toISOString(), classInstanceId: "c1" },
+                    { memberId: "m1", checkedInAt: new Date(at(2026, 4, 25, 20)).toISOString(), classInstanceId: "c2" }];
+    const f = atRiskMembers(roster, visits, { now });
+    expect(f).toHaveLength(1);
+    expect(f[0].daysSince).toBe(14);
+    expect(f[0].reason).toContain("Last attended 14 days ago, after 2 visits");
+  });
+});
+
 describe("Rule 1 — new member not building a habit", () => {
   it("flags a member 20 days in with fewer than 4 visits", () => {
     const f = atRiskMembers([member("m1", "Ada", daysAgo(20))], [visit("m1", 18), visit("m1", 15)], { now: NOW });

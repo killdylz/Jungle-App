@@ -70,7 +70,23 @@ export const NEW_MEMBER_GRACE_DAYS = 14; // don't judge someone who joined this 
 const DAY_MS = 86_400_000;
 const dayOf = iso => (iso ? String(iso).slice(0, 10) : "");
 const msOf = iso => { const t = Date.parse(iso); return Number.isNaN(t) ? null : t; };
-const daysBetween = (a, b) => Math.floor((a - b) / DAY_MS);
+// "Days ago" is a CALENDAR question, not an elapsed-time one. Everything this
+// reasons over is a day: an imported check-in carries a date-only value the
+// importer anchors at noon UTC, and a coach saying "she was last in three days
+// ago" is counting dates off a wall calendar, not 72-hour intervals.
+//
+// Flooring the raw millisecond difference answered a different question and got
+// it wrong twice over. An imported gap of Jun 19 → Aug 3 — 45 days on any
+// calendar — read as 44 for every run before 20:00 SGT, because noon UTC is
+// 20:00 local and the span was still 44.6 days wide. And a member who trained
+// yesterday evening read as "0 days ago". Both are numbers the at-risk panel
+// explicitly invites an owner to argue with, so both had to be the number the
+// owner would arrive at themselves.
+//
+// Round, not floor: a DST transition inside the span leaves it 23 or 25 hours
+// short of a whole multiple, and a floor would quietly drop a day.
+const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const daysBetween = (a, b) => Math.round((startOfDay(a) - startOfDay(b)) / DAY_MS);
 
 /**
  * Per-member attendance facts. Pure; no assumptions about ordering.
