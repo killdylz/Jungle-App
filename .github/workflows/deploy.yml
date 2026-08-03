@@ -48,7 +48,7 @@ jobs:
       # The traces/screenshots from a failed run are the difference between
       # "e2e went red in CI" and knowing why, so they outlive the job.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
