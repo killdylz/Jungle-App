@@ -45,26 +45,33 @@ function rpeOf(scheme) {
   return m[2] ? (Number(m[1]) + Number(m[2])) / 2 : Number(m[1]);
 }
 
-// A class type has no id — its NAME is its key, in three places at once: every
-// plan's `classType`, `styleProfile.blueprints[ct]` (the shape the coach saved)
-// and `styleProfile.byClassType[ct]` (what extraction learned about how they
-// coach it). The plan editor lets a coach retype that name, and it used to
-// rewrite only the first: the other two stayed keyed under a name nothing
-// pointed at any more. Every write was correct; the READERS disagreed. On screen
-// that was a ghost tab holding the coach's own saved shape, their conventions
-// and vocabulary gone from the profile, and the shape reverting to "suggested"
-// — surviving a reload, because storage was never wrong.
+// A class type has no id — its NAME is its key, in FOUR places at once: every
+// plan's `classType`, `styleProfile.blueprints[ct]` (the shape the coach saved),
+// `styleProfile.byClassType[ct]` (what extraction learned about how they coach
+// it), and every row of the generation ledger. The plan editor lets a coach
+// retype that name, and it used to rewrite only the first: the others stayed
+// keyed under a name nothing pointed at any more. Every write was correct; the
+// READERS disagreed. On screen that was a ghost tab holding the coach's own
+// saved shape, their conventions and vocabulary gone from the profile, and the
+// shape reverting to "suggested" — surviving a reload, because storage was never
+// wrong.
 //
-// Carry the profile across ONLY when the rename empties the old name out. If
-// other plans still sit under it, the coach MOVED one plan between class types
-// and both names keep their own identity — which is what they meant. Correcting
-// a name the importer guessed is the common case and the one that has to be
-// safe: those conventions cost an LLM pass over a real deck, and a typo-fix used
-// to drop them on the floor.
+// Carry them across ONLY when the rename empties the old name out. If other
+// plans still sit under it, the coach MOVED one plan between class types and
+// both names keep their own identity — which is what they meant. Correcting a
+// name the importer guessed is the common case and the one that has to be safe:
+// those conventions cost an LLM pass over a real deck, and a typo-fix used to
+// drop them on the floor.
+//
+// The rename-vs-move test lives here rather than in each function because it is
+// the ONE rule the two must never disagree about — and a second copy of a shared
+// rule is how the fourth reader came to be missed in the first place.
+const isMove = (plansAfter, oldCT) => (plansAfter || []).some(pl => classTypeOf(pl) === oldCT);
+
 export function renameClassType(styleProfile, oldCT, newCT, plansAfter) {
   const sp = styleProfile || {};
   if (!oldCT || !newCT || oldCT === newCT) return sp;
-  if ((plansAfter || []).some(pl => classTypeOf(pl) === oldCT)) return sp;  // a move, not a rename
+  if (isMove(plansAfter, oldCT)) return sp;
   let changed = false;
   const out = { ...sp };
   ["blueprints", "byClassType"].forEach(key => {
@@ -78,6 +85,29 @@ export function renameClassType(styleProfile, oldCT, newCT, plansAfter) {
     changed = true;
   });
   return changed ? out : sp;
+}
+
+// The fourth reader. `recentGens` selects the ledger by `g.classType === curCT`,
+// so a rename that leaves the rows behind does two things at once: the coach's
+// "Recently generated" list and its Reopen buttons vanish, and — the quiet half
+// — that same list is what the next draft is steered AWAY from. An empty
+// repeat-avoidance list does not fail; it just lets the generator hand back the
+// class it produced last time, degrading every later draft with nothing on
+// screen to say why.
+//
+// Scoped to one persona: the rename is a decision about THIS coach's vocabulary,
+// and two coaches may legitimately use the same class-type name for their own
+// different classes.
+export function renameClassTypeInGenerations(generations, oldCT, newCT, plansAfter, personaId) {
+  if (!oldCT || !newCT || oldCT === newCT) return generations;
+  if (isMove(plansAfter, oldCT)) return generations;
+  let changed = false;
+  const out = (generations || []).map(g => {
+    if (g.personaId !== personaId || g.classType !== oldCT) return g;
+    changed = true;
+    return { ...g, classType: newCT };
+  });
+  return changed ? out : generations;
 }
 
 // Distinct class types present in a persona's plans, first-seen order.

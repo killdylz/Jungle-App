@@ -4,7 +4,7 @@
 // to {} on the next sync. All three have actually happened in this codebase.
 import { describe, it, expect } from "vitest";
 import { classTypesOf, aggregateClassType, classCategory, aggregateMovements,
-         renameClassType } from "./personaAggregate.js";
+         renameClassType, renameClassTypeInGenerations } from "./personaAggregate.js";
 import { categoryOf } from "./movementTaxonomy.js";
 
 // Shapes mirror the real Garage corpus: S360 = strength, GC = conditioning,
@@ -274,5 +274,49 @@ describe("renameClassType", () => {
     // already say they are, rather than under a key nothing reads.
     const out = renameClassType(sp(), "S360", "Uncategorized", [{ classType: "" }]);
     expect(out.byClassType.Uncategorized.focus).toBe("strength");
+  });
+});
+
+// ── renameClassTypeInGenerations ─────────────────────────────────────────────
+// The FOURTH reader of the class type's name, and the one session 23 missed
+// while fixing the other three. `recentGens` selects the ledger by
+// `g.classType === curCT`, so rows left under the old name disappear from the
+// coach's "Recently generated" list — and from the repeat-avoidance that list
+// feeds the next draft, which fails silently by handing back a class the coach
+// has already been given.
+describe("renameClassTypeInGenerations", () => {
+  const gens = () => ([
+    { id: "g1", personaId: "p1", classType: "S360", title: "S360 — heavier day", movements: ["Back Squat"] },
+    { id: "g2", personaId: "p1", classType: "GC",   title: "GC — engine day",    movements: ["Assault Bike"] },
+    { id: "g3", personaId: "p2", classType: "S360", title: "another coach's S360", movements: [] },
+  ]);
+
+  it("carries this persona's rows to the new name", () => {
+    const out = renameClassTypeInGenerations(gens(), "S360", "S360 Strength", [{ classType: "S360 Strength" }], "p1");
+    expect(out.find(g => g.id === "g1").classType).toBe("S360 Strength");
+    expect(out.find(g => g.id === "g2").classType).toBe("GC");        // another type, untouched
+    expect(out.find(g => g.id === "g1").title).toBe("S360 — heavier day");  // the TITLE is history, not a key
+  });
+
+  it("leaves another coach's identically-named class type alone", () => {
+    // Two coaches may both run something they call S360. The rename is a
+    // decision about ONE coach's vocabulary and must not reach across.
+    const out = renameClassTypeInGenerations(gens(), "S360", "S360 Strength", [{ classType: "S360 Strength" }], "p1");
+    expect(out.find(g => g.id === "g3").classType).toBe("S360");
+  });
+
+  it("leaves the ledger alone when the old name still has plans — that is a MOVE", () => {
+    // Same rule as renameClassType, and it has to be the same rule: re-filing
+    // one plan must not drag the other type's history along with it.
+    const before = gens();
+    expect(renameClassTypeInGenerations(before, "S360", "GC", [{ classType: "S360" }, { classType: "GC" }], "p1")).toBe(before);
+  });
+
+  it("is a no-op for a blank, unchanged or absent class type", () => {
+    const before = gens();
+    expect(renameClassTypeInGenerations(before, "S360", "S360", [], "p1")).toBe(before);
+    expect(renameClassTypeInGenerations(before, "", "S360 Strength", [], "p1")).toBe(before);
+    expect(renameClassTypeInGenerations(before, "Enduro", "Enduro 2", [], "p1")).toBe(before);
+    expect(renameClassTypeInGenerations(undefined, "S360", "GC", [], "p1")).toEqual(undefined);
   });
 });

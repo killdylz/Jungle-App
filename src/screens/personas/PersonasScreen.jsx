@@ -22,7 +22,7 @@ import { uid } from "../../lib/ids.js";
 import { SEED_PERSONAS } from "../../data/personas.seed.js";
 import { getLibrary } from "../../lib/libraryAccess.js";
 import { classTypeOf, classTypesOf, aggregateClassType, aggregateMovements, classCategory,
-         renameClassType } from "../../lib/personaAggregate.js";
+         renameClassType, renameClassTypeInGenerations } from "../../lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "../../lib/movementTaxonomy.js";
 import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "../../lib/blueprints.js";
 import { GENERATION_PRESETS, applyPreset, presetDraftOpts, describePresetEffect,
@@ -373,9 +373,14 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     const next   = plans.map(pl => pl.id === updated.id ? updated : pl);
     const oldCT  = classTypeOf(before || {}), newCT = classTypeOf(updated);
     if (oldCT !== newCT && selected) {
-      const sp = renameClassType(selected.styleProfile, oldCT, newCT,
-                                 next.filter(pl => pl.personaId === selectedId));
+      const after = next.filter(pl => pl.personaId === selectedId);
+      const sp = renameClassType(selected.styleProfile, oldCT, newCT, after);
       if (sp !== selected.styleProfile) commitPersonas(personas.map(p => p.id === selectedId ? { ...p, styleProfile: sp } : p));
+      // The ledger is keyed by the class type's NAME too, and `recentGens`
+      // selects on it — so leaving these behind emptied the coach's "Recently
+      // generated" list AND the repeat-avoidance it feeds the next draft.
+      const gens = renameClassTypeInGenerations(generations, oldCT, newCT, after, selectedId);
+      if (gens !== generations) { setGenerations(gens); store.savePersonaGenerations(gens); }
       // Follow the rename. Without this the coach is dropped on whichever tab
       // happens to be first, which on a multi-type coach is not the one they
       // were just editing.

@@ -144,3 +144,142 @@ test.describe("a coach picks a class instead of describing one", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── The ledger is keyed by the class type's NAME — the FOURTH reader ─────────
+// Session 23 found three readers of that name and moved all three. This is the
+// fourth. `recentGens` selects the ledger with `g.classType === curCT`, so rows
+// left under the old name are not merely mis-filed — they are unreachable.
+//
+// Two things break at once, and only one of them is visible. The coach loses
+// their "Recently generated" list and its Reopen buttons; and that same list is
+// what `presetDraftOpts` is handed as `recent`, so the next draft is steered
+// away from nothing and can hand back the class it produced last time. The
+// second failure has no symptom on screen at all.
+test.describe("the generation ledger follows a class type that gets renamed", () => {
+  const renameTo = async (page, name) => {
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByLabel("Class type").fill(name);
+    await page.getByRole("button", { name: /Save plan/ }).click();
+  };
+
+  test("a rename carries the ledger, on screen and in storage", async ({ page }) => {
+    const errors = watchConsole(page);
+    await openPresets(page);
+    await card(page, "Heavier day").click();
+    await nav(page, "Coaches");
+
+    // Precondition, stated rather than assumed: the ledger row exists and is
+    // reachable. Without this the assertions below would pass on a coach who had
+    // never generated anything.
+    await expect(page.getByText(/Recently generated · 1/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reopen" })).toHaveCount(1);
+    expect((await stored(page, "jungle_persona_generations"))[0].classType).toBe("S360");
+
+    await renameTo(page, "S360 Strength");
+    await expect(page.getByText("S360 STRENGTH — CLASS SHAPE")).toBeVisible();
+
+    // Still reachable under the new name — this is what used to vanish.
+    await expect(page.getByText(/Recently generated · 1/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reopen" })).toHaveCount(1);
+
+    // And the STORED row moved, not just the view. The title is history and is
+    // deliberately NOT rewritten — it records what the coach was handed.
+    const gens = await stored(page, "jungle_persona_generations");
+    expect(gens[0].classType).toBe("S360 Strength");
+    expect(gens[0].title).toBe("S360 — heavier day");
+
+    // §2.5 — through a reload, because storage being right and the screen being
+    // right are separate questions and this defect had storage right throughout.
+    await page.reload();
+    await nav(page, "Coaches");
+    await expect(page.getByText(/Recently generated · 1/)).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("re-filing one plan among several is a MOVE and leaves the ledger alone", async ({ page }) => {
+    // The discriminating case, mirroring the pair session 23 built for the style
+    // profile: if the old name still has plans under it, its history belongs to
+    // it. A fix that carried the ledger unconditionally would pass the test
+    // above and steal another class type's history here.
+    const errors = watchConsole(page);
+    await openPresets(page);
+    await card(page, "Heavier day").click();
+    await nav(page, "Coaches");
+
+    // Add a SECOND plan under S360 so the name survives the edit below.
+    await page.evaluate(() => {
+      const plans = JSON.parse(localStorage.getItem("jungle_persona_plans") || "[]");
+      plans.push({ ...JSON.parse(JSON.stringify(plans[0])), id: "plan-two", title: "S360 — second plan" });
+      localStorage.setItem("jungle_persona_plans", JSON.stringify(plans));
+    });
+    await page.reload();
+    await nav(page, "Coaches");
+
+    await renameTo(page, "GC");
+
+    // S360 still exists, so its generation stays with it.
+    const gens = await stored(page, "jungle_persona_generations");
+    expect(gens[0].classType, "a move must not drag the old type's history along").toBe("S360");
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── Reopen ───────────────────────────────────────────────────────────────────
+// Had zero coverage — no spec mentioned it. It is the only way back to a class
+// the coach has already been given, and it hands the Builder a class type
+// derived from the CURRENT tab rather than from the generation's own record.
+test.describe("Reopen puts a past generation back in the Builder", () => {
+  test("re-opens the recorded plan under the right Builder class", async ({ page }) => {
+    const errors = watchConsole(page);
+    await openPresets(page);
+    await card(page, "Heavier day").click();
+    await nav(page, "Coaches");
+
+    const gens = await stored(page, "jungle_persona_generations");
+    const recorded = gens[0];
+
+    await page.getByRole("button", { name: "Reopen" }).click();
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();
+
+    const draft = await stored(page, "jungle_draft_class");
+    // S360 is a strength format, so it must land on the Builder's strength type
+    // — the same assertion the first-generation path makes, now for the way back.
+    expect(draft.classChoice?.classType).toBe("strength");
+    // What came back is what was RECORDED, not a fresh draft wearing its name.
+    expect(draft.stages.flatMap(s => (s.exercises || []).map(e => e.n)).length).toBeGreaterThan(0);
+    expect(recorded.plan?.blocks?.length).toBeGreaterThan(0);
+    expect(draft.stages).toHaveLength(recorded.plan.blocks.length);
+
+    // Reopening is a READ. It must not append a second ledger row, or the
+    // repeat-avoidance list would fill up with classes the coach never re-ran.
+    expect(await stored(page, "jungle_persona_generations")).toHaveLength(1);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("still reaches the Builder after the class type has been renamed", async ({ page }) => {
+    // The concern that opened this: `builderClass` is derived from the CURRENT
+    // class type, not from the one the generation was created under. Now that a
+    // rename re-keys the ledger the two agree — this pins that they do, because
+    // the failure mode is a silently wrong Builder class rather than an error.
+    const errors = watchConsole(page);
+    await openPresets(page);
+    await card(page, "Heavier day").click();
+    await nav(page, "Coaches");
+
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByLabel("Class type").fill("S360 Strength");
+    await page.getByRole("button", { name: /Save plan/ }).click();
+    await expect(page.getByText("S360 STRENGTH — CLASS SHAPE")).toBeVisible();
+
+    await page.getByRole("button", { name: "Reopen" }).click();
+    await expect(page.getByRole("button", { name: "Preview on TV" }).first()).toBeVisible();
+
+    const draft = await stored(page, "jungle_draft_class");
+    expect(draft.classChoice?.classType, "the renamed type is still a strength format").toBe("strength");
+
+    expectNoConsoleErrors(errors);
+  });
+});

@@ -19,6 +19,7 @@ import {
   getDraftClass, saveDraftClass,
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
   _deltaRows, _markSynced, _unmark, publishOccurrences, startScheduledClass,
+  appendPersonaGeneration, getPersonaGenerations,
 } from "./store.js";
 import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
 import { atRiskMembers } from "./retention.js";
@@ -1073,5 +1074,57 @@ describe("SWEEP — a real attendance export, end to end", () => {
     // recording, and rule 1 because an import knows nobody's join date. Every
     // name on that screen would have been an artefact of the backfill.
     expect(flags).toHaveLength(0);
+  });
+});
+
+// ── the generation ledger's cap ──────────────────────────────────────────────
+// `appendPersonaGeneration` keeps the most recent GEN_CAP (50) rows PER PERSONA
+// so the local blob stays bounded. Nothing had ever driven it past the cap, and
+// the counter it filters with is easy to get subtly wrong: a single running
+// count rather than a per-persona one would trim a busy coach's history the
+// moment a second coach existed.
+describe("appendPersonaGeneration — the per-persona cap", () => {
+  // The reset above is scoped to another describe, and without one here the
+  // ledger carries over between these tests — the first run reported 51 rows for
+  // a two-row expectation. A probe's own setup is part of the measurement.
+  beforeEach(() => localStorage.clear());
+
+  const gen = (personaId, n) => ({ id: `g-${personaId}-${n}`, personaId, classType: "S360",
+                                   category: "strength", title: `class ${n}`, movements: [], plan: {} });
+
+  it("keeps the 50 most recent for a persona and drops the oldest", () => {
+    for (let n = 1; n <= 55; n++) appendPersonaGeneration(gen("p1", n));
+    const all = getPersonaGenerations();
+    expect(all).toHaveLength(50);
+    // Newest-first, so the survivors are 55 down to 6 and the first five are gone.
+    expect(all[0].id).toBe("g-p1-55");
+    expect(all[49].id).toBe("g-p1-6");
+    expect(all.some(g => g.id === "g-p1-5")).toBe(false);
+  });
+
+  it("counts per persona, so one busy coach does not evict another's history", () => {
+    // The failure this exists to catch: a single running counter would let p1's
+    // 50 rows consume the whole cap and silently delete p2's.
+    appendPersonaGeneration(gen("p2", 0));
+    for (let n = 1; n <= 55; n++) appendPersonaGeneration(gen("p1", n));
+
+    const all = getPersonaGenerations();
+    expect(all.filter(g => g.personaId === "p1")).toHaveLength(50);
+    expect(all.filter(g => g.personaId === "p2"), "the quiet coach's history was evicted").toHaveLength(1);
+  });
+
+  it("re-appending the same id moves it to the front rather than duplicating it", () => {
+    appendPersonaGeneration(gen("p1", 1));
+    appendPersonaGeneration(gen("p1", 2));
+    appendPersonaGeneration(gen("p1", 1));
+    const all = getPersonaGenerations();
+    expect(all.map(g => g.id)).toEqual(["g-p1-1", "g-p1-2"]);
+  });
+
+  it("mints an id and a createdAt when the caller supplies neither", () => {
+    appendPersonaGeneration({ personaId: "p1", classType: "S360", title: "unnamed" });
+    const [row] = getPersonaGenerations();
+    expect(row.id).toBeTruthy();
+    expect(Number.isNaN(Date.parse(row.createdAt))).toBe(false);
   });
 });
