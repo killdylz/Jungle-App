@@ -275,3 +275,84 @@ test.describe("Coaches — catalog, shape, draft", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── §10.2 · the delete that stuck, and then did not ──────────────────────────
+// The catalogue had a trash icon per row. It worked, in the only sense a check
+// would notice: the row left the screen, left localStorage, and was still gone
+// after a reload. Then editing ANY other movement re-derived the catalogue from
+// the plans and brought it straight back.
+//
+// It could never have worked. `ctMoves` filters to rows with at least one
+// occurrence in the current class type, so every row the button appeared on was
+// guaranteed to be re-derived. A zero-occurrence row — where deleting DOES hold,
+// because nothing re-derives it — is never rendered at all.
+//
+// So the button is gone and the list states where membership comes from. These
+// two tests hold both halves: the affordance is absent, and the sentence that
+// replaced it is true.
+test.describe("Coaches — the movement catalogue's membership is derived, and says so", () => {
+  test("offers no delete on a movement the plans still contain", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    // Positive control FIRST: without it, "no delete button" and "no catalogue
+    // at all" are the same observation. Session 23's rule — a negative result
+    // needs a positive control in the same run.
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit Kettlebell Swing" })).toBeVisible();
+
+    // No row offers a delete. Checked across every catalogued movement rather
+    // than one, so re-adding the button anywhere in the row fails this.
+    await expect(page.getByRole("button", { name: /from the catalogue$/ })).toHaveCount(0);
+
+    // And the list says what replaced it. `toContainText` is used deliberately —
+    // the paragraph is not uppercased, but §0b#1's rule stands: never locate
+    // with the text engine and assert with textContent.
+    await expect(page.getByText(/membership: a movement leaves this list/)).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a movement leaves the list when it leaves the plan — the promise the copy makes", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toBeVisible();
+
+    // The lever the explainer points at: remove it from the plan that uses it.
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByRole("button", { name: /^Remove Farmer Carry from section \d+$/ }).click();
+    await page.getByRole("button", { name: /Save plan/ }).click();
+
+    // Gone from the list, and it STAYS gone — this is the assertion the old
+    // delete would have passed too, so it is not the interesting one on its own.
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toHaveCount(0);
+
+    // §2.5 — do something else and look again. Editing an unrelated movement is
+    // exactly what used to resurrect a deleted row. Here the row must NOT come
+    // back, because the plan no longer contains it.
+    await page.getByRole("button", { name: "Edit Kettlebell Swing" }).click();
+    await page.getByPlaceholder("Notes / cue").fill("hinge, don't squat");
+    await page.getByRole("button", { name: /Save/ }).first().click();
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toHaveCount(0);
+
+    // And through a reload.
+    await page.reload();
+    await nav(page, "Coaches");
+    await expect(page.getByRole("button", { name: "Edit Kettlebell Swing" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toHaveCount(0);
+
+    // The STORED row is a different question from the rendered list, and the
+    // copy is careful about which it promises. A row carrying a manual edit —
+    // and a DERIVED equip counts as one — is retained with its counts zeroed so
+    // the coach's edits are never lost. It is invisible because `ctMoves` shows
+    // only rows with occurrences. That is the retention rule working, not a
+    // leak, and asserting it here stops a future "cleanup" from deleting the
+    // coach's edits on the way past.
+    const moves = await stored(page, "jungle_persona_movements");
+    const fc = (moves || []).find((m) => m.name === "Farmer Carry");
+    expect(fc, "the edited row is kept, counts zeroed — not purged").toBeTruthy();
+    expect(fc.classTypes || {}).toEqual({});
+
+    expectNoConsoleErrors(errors);
+  });
+});

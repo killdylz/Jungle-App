@@ -733,12 +733,10 @@ export function savePersonaMovements(moves) {
   }
   return withIds;
 }
-export function deletePersonaMovement(id) {
-  const moves = getPersonaMovements().filter(m => m.id !== id);
-  writeJSON(KEYS.personaMoves, moves);
-  if (_synced()) _bgDelete("persona_movements", "id", id);
-  return moves;
-}
+// NOTE: there is no deletePersonaMovement. A catalogue row is DERIVED from the
+// coach's plans and re-derived on every recompute, so deleting one only held
+// until the next plan or movement edit — it looked correct through a reload and
+// then undid itself. Membership follows the plans; the screen says so.
 
 // Generation ledger (persona_generations) — every class the generate flow produced
 // for a coach, so future generations avoid repeating (items 6–8). Local shape:

@@ -390,7 +390,6 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     const list = movements.map(m => m.id === updated.id ? updated : m);
     recompute(plans, list, selectedId); // re-fold occurrences under any new alias/name
   };
-  const deleteMovement = id => setMovements(store.deletePersonaMovement(id));
 
   const selected = personas.find(p => p.id === selectedId) || null;
   const selPlans = plans.filter(pl => pl.personaId === selectedId);
@@ -1079,8 +1078,8 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                   {/* Movement catalog */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Movements <span style={{color:"var(--text)"}}>· {ctMoves.length}</span>{(() => { const n = ctMoves.filter(m=>!(m.equip&&m.equip.trim())).length; return n>0 ? <span style={{color:"#E0B85B"}}> · {n} need equipment</span> : null; })()}</p>
-                    <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"12px"}}>Aggregated from this coach's {curCT} plans. Editable — rename to merge variants, set equipment. Counts &amp; scheme are derived.</p>
-                    <MovementCatalog movements={ctMoves} classType={curCT} onChange={changeMovement} onDelete={deleteMovement}/>
+                    <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"12px"}}>Aggregated from this coach's {curCT} plans. Editable — rename to merge variants, set equipment. Counts &amp; scheme are derived, and so is membership: a movement leaves this list by leaving the plans that use it.</p>
+                    <MovementCatalog movements={ctMoves} classType={curCT} onChange={changeMovement}/>
                   </div>
 
                   {/* Plans for this class type */}
@@ -1303,7 +1302,7 @@ const CATALOG_EQUIP = ["barbell","dumbbell","kettlebell","bodyweight","band","ma
 // free; the per-class-type count and typical scheme are derived (read-only).
 // A filter box appears past a handful of rows; missing equipment is flagged
 // because it grounds generation.
-function MovementCatalog({ movements, classType, onChange, onDelete }) {
+function MovementCatalog({ movements, classType, onChange }) {
   const [editId, setEditId] = useState(null);
   const [draft, setDraft] = useState({ name:"", equip:"", aliases:"", notes:"", category:"" });
   const [q, setQ] = useState("");
@@ -1372,11 +1371,20 @@ function MovementCatalog({ movements, classType, onChange, onDelete }) {
               {m.meta?.notes && <span> · {m.meta.notes}</span>}
             </div>
           </div>
-          {/* One pair per catalogued movement — eleven pairs on the sample coach.
-              Without the movement's name these are eleven identical "Edit"s and
-              eleven buttons announcing as "button" that delete one each. */}
+          {/* One Edit per catalogued movement — eleven on the sample coach.
+              Without the movement's name these are eleven identical "Edit"s. */}
           <button onClick={()=>start(m)} aria-label={`Edit ${m.name}`} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"4px 10px"}}>Edit</button>
-          <button onClick={()=>onDelete(m.id)} aria-label={`Delete ${m.name} from the catalogue`} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+          {/* There is deliberately no delete here. The catalogue is RE-DERIVED
+              from the plans on every recompute — which any other movement's save,
+              or any plan edit, triggers — so deleting a row removed it from the
+              screen AND from storage, survived a reload, and then came back the
+              moment the coach edited something else. It could never work: this
+              list is filtered to rows with at least one occurrence, so every row
+              the button appeared on was guaranteed to be re-derived. A tombstone
+              would make the button honest but the LIST dishonest — the catalogue
+              would stop saying what the corpus contains, which is its entire
+              promise, while the movement stayed visible in the plan editor. So
+              membership follows the plans, and the explainer above says so. */}
         </div>
       ))}
     </div>
