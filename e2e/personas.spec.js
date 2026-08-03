@@ -344,14 +344,90 @@ test.describe("Coaches — the movement catalogue's membership is derived, and s
     // The STORED row is a different question from the rendered list, and the
     // copy is careful about which it promises. A row carrying a manual edit —
     // and a DERIVED equip counts as one — is retained with its counts zeroed so
-    // the coach's edits are never lost. It is invisible because `ctMoves` shows
-    // only rows with occurrences. That is the retention rule working, not a
-    // leak, and asserting it here stops a future "cleanup" from deleting the
-    // coach's edits on the way past.
+    // the coach's edits are never lost. It leaves THIS list and reappears under
+    // "Not in any plan", which is its own describe below. Asserting retention
+    // here stops a future "cleanup" from deleting the coach's edits on the way
+    // past.
     const moves = await stored(page, "jungle_persona_movements");
     const fc = (moves || []).find((m) => m.name === "Farmer Carry");
     expect(fc, "the edited row is kept, counts zeroed — not purged").toBeTruthy();
     expect(fc.classTypes || {}).toEqual({});
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── "Not in any plan" — where a delete finally means something ────────────────
+// The other half of the delete story. `aggregateMovements` keeps a row with no
+// occurrences when it carries a manual edit — and a DERIVED equip counts, so
+// most do — so a coach who drops a movement from a plan does not lose the
+// equipment, kind, aliases or cue they set on it. That retention is correct.
+//
+// What was wrong is that `ctMoves` renders only rows WITH occurrences, so those
+// kept rows were invisible and unreachable: they accumulated locally and synced
+// to Postgres with no way to see or remove them. They are also the ONLY rows
+// where deleting holds, because nothing re-derives them.
+test.describe("Coaches — movements kept only by their edits", () => {
+  const orphanFarmerCarry = async (page) => {
+    await page.getByRole("button", { name: /^Edit plan / }).first().click();
+    await page.getByRole("button", { name: /^Remove Farmer Carry from section \d+$/ }).click();
+    await page.getByRole("button", { name: /Save plan/ }).click();
+  };
+
+  test("a movement dropped from every plan surfaces here instead of vanishing", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+
+    // Control in the same run: a fresh sample coach has orphaned nothing, so the
+    // section is absent. Without this, "the section renders" and "the section
+    // always renders" look identical.
+    await expect(page.getByText(/Not in any plan/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toBeVisible();
+
+    await orphanFarmerCarry(page);
+
+    await expect(page.getByText(/Not in any plan · 1/)).toBeVisible();
+    // It names what is being kept, so "delete" is an informed choice rather than
+    // a guess about what would be lost. Farmer Carry carries only its derived
+    // equipment, so the row says the line above is all there is.
+    await expect(page.getByText(/nothing else saved on it/)).toBeVisible();
+    // Gone from the class-type catalogue — the two lists must not both claim it.
+    await expect(page.getByRole("button", { name: "Edit Farmer Carry" })).toHaveCount(0);
+
+    await page.reload();
+    await nav(page, "Coaches");
+    await expect(page.getByText(/Not in any plan · 1/)).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("deleting one holds — including after the edit that used to resurrect it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+    await orphanFarmerCarry(page);
+    await expect(page.getByText(/Not in any plan · 1/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Delete Farmer Carry from the catalogue" }).click();
+    await expect(page.getByText(/Not in any plan/)).toHaveCount(0);
+
+    // §2.5, and the whole point. Editing an unrelated movement is exactly what
+    // brought a deleted row back when delete lived on the main catalogue. Here
+    // there is nothing to re-derive it from, so it must stay gone.
+    await page.getByRole("button", { name: "Edit Kettlebell Swing" }).click();
+    await page.getByPlaceholder("Notes / cue").fill("hinge, don't squat");
+    await page.getByRole("button", { name: /Save/ }).first().click();
+    await expect(page.getByText(/Not in any plan/)).toHaveCount(0);
+
+    await page.reload();
+    await nav(page, "Coaches");
+    await expect(page.getByText(/Not in any plan/)).toHaveCount(0);
+
+    const moves = await stored(page, "jungle_persona_movements");
+    expect((moves || []).some(m => m.name === "Farmer Carry"), "the deleted row came back").toBe(false);
+    // The rest of the catalogue is untouched — a delete that quietly took
+    // neighbours with it would satisfy every assertion above.
+    expect(moves).toHaveLength(10);
+    expect((moves || []).some(m => m.name === "Kettlebell Swing")).toBe(true);
 
     expectNoConsoleErrors(errors);
   });

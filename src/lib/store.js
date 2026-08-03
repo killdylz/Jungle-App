@@ -733,10 +733,25 @@ export function savePersonaMovements(moves) {
   }
   return withIds;
 }
-// NOTE: there is no deletePersonaMovement. A catalogue row is DERIVED from the
-// coach's plans and re-derived on every recompute, so deleting one only held
-// until the next plan or movement edit — it looked correct through a reload and
-// then undid itself. Membership follows the plans; the screen says so.
+// Delete a catalogue row. ⚠️ Only ever call this for a row with NO occurrences.
+//
+// A row that still appears in a plan is RE-DERIVED by `aggregateMovements` on
+// the next recompute — which any movement save or plan edit triggers — so
+// deleting one looked correct through a reload and then undid itself. There is
+// no tombstone, deliberately: the catalogue's promise is that it says what the
+// corpus contains. That is why the main list offers no delete at all.
+//
+// A zero-occurrence row is the opposite case. It is in none of the coach's
+// plans, so nothing re-derives it; it survives only because it carries a manual
+// edit, and the retention rule in `aggregateMovements` keeps it so those edits
+// are never lost. Deleting one is the coach saying they no longer want it kept,
+// and it holds.
+export function deletePersonaMovement(id) {
+  const moves = getPersonaMovements().filter(m => m.id !== id);
+  writeJSON(KEYS.personaMoves, moves);
+  if (_synced()) _bgDelete("persona_movements", "id", id);
+  return moves;
+}
 
 // Generation ledger (persona_generations) — every class the generate flow produced
 // for a coach, so future generations avoid repeating (items 6–8). Local shape:

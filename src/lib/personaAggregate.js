@@ -32,7 +32,11 @@ export function median(arr) {
   const mid = Math.floor(a.length / 2);
   return a.length % 2 ? a[mid] : Math.round((a[mid - 1] + a[mid]) / 2);
 }
-function totalCount(ct) { return Object.values(ct || {}).reduce((a, b) => a + b, 0); }
+// Exported because the catalogue screen asks the same question: a row's total
+// occurrences across every class type is what separates a movement the coach
+// still programs from one that survives only on its edits. A second copy of
+// this reduce is the `ctOf` drift all over again.
+export function totalCount(ct) { return Object.values(ct || {}).reduce((a, b) => a + b, 0); }
 
 // RPE for a scheme. First-class scheme.rpe (increment 3) with a fallback parse
 // from scheme.note, where earlier extractions put it ("RPE 7", "@ RPE 7-8" —

@@ -22,7 +22,7 @@ import { uid } from "../../lib/ids.js";
 import { SEED_PERSONAS } from "../../data/personas.seed.js";
 import { getLibrary } from "../../lib/libraryAccess.js";
 import { classTypeOf, classTypesOf, aggregateClassType, aggregateMovements, classCategory,
-         renameClassType, renameClassTypeInGenerations } from "../../lib/personaAggregate.js";
+         renameClassType, renameClassTypeInGenerations, totalCount } from "../../lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "../../lib/movementTaxonomy.js";
 import { deriveBlueprint, reconcileBlueprint, draftFromBlueprint, BLUEPRINT_PRESETS } from "../../lib/blueprints.js";
 import { GENERATION_PRESETS, applyPreset, presetDraftOpts, describePresetEffect,
@@ -395,6 +395,10 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     const list = movements.map(m => m.id === updated.id ? updated : m);
     recompute(plans, list, selectedId); // re-fold occurrences under any new alias/name
   };
+  // ⚠️ Only ever reachable from the "not in any plan" list. A row with
+  // occurrences is re-derived on the next recompute, which is why the main
+  // catalogue offers no delete — see MovementCatalog and store.deletePersonaMovement.
+  const deleteMovement = id => setMovements(store.deletePersonaMovement(id));
 
   const selected = personas.find(p => p.id === selectedId) || null;
   const selPlans = plans.filter(pl => pl.personaId === selectedId);
@@ -414,6 +418,17 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
   const builderClass = CATEGORY_TO_BUILDER[category] || "bootcamp";
   const recentGens = generations.filter(g => g.personaId === selectedId && g.classType === curCT);
   const ctMoves = movements.filter(m => m.personaId === selectedId && (m.classTypes?.[curCT] || 0) > 0);
+  // Rows that survive only on their edits. `aggregateMovements` keeps a row with
+  // no occurrences when it looks manually edited — and a DERIVED equip counts,
+  // so most do — precisely so a coach who drops a movement from a plan does not
+  // lose the equipment, category, aliases or cue they set on it. But `ctMoves`
+  // renders only rows WITH occurrences, so until this list existed they were
+  // invisible and unreachable, accumulating locally and syncing to Postgres with
+  // no way to see or remove them.
+  //
+  // Persona-scoped, not class-type-scoped: a row with zero occurrences belongs
+  // to no class type, so filing it under the current tab would be a fiction.
+  const orphanMoves = movements.filter(m => m.personaId === selectedId && totalCount(m.classTypes) === 0);
   const extracted = selected?.styleProfile?.byClassType?.[curCT] || {};
   const countFor = id => plans.filter(pl => pl.personaId === id).length;
 
@@ -1087,6 +1102,17 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                     <MovementCatalog movements={ctMoves} classType={curCT} onChange={changeMovement}/>
                   </div>
 
+                  {/* Movements kept only by their edits. Its own card, not a
+                      section of the one above: that card is scoped to a class
+                      type and these rows belong to none. */}
+                  {orphanMoves.length > 0 && (
+                    <div style={{...P_CARD,padding:"18px 20px"}}>
+                      <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"6px"}}>Not in any plan <span style={{color:"var(--text)"}}>· {orphanMoves.length}</span></p>
+                      <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"12px"}}>Kept because they carry your edits — equipment, a kind, an alias or a cue. Nothing in this coach's plans uses them now, so nothing will bring them back and Jungle won't draft them. Delete one if you don't want it kept.</p>
+                      <OrphanedMovements movements={orphanMoves} onDelete={deleteMovement}/>
+                    </div>
+                  )}
+
                   {/* Plans for this class type */}
                   <div style={{...P_CARD,padding:"18px 20px"}}>
                     <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>{curCT} classes <span style={{color:"var(--text)"}}>· {ctPlans.length}</span></p>
@@ -1390,6 +1416,43 @@ function MovementCatalog({ movements, classType, onChange }) {
               would stop saying what the corpus contains, which is its entire
               promise, while the movement stayed visible in the plan editor. So
               membership follows the plans, and the explainer above says so. */}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The movements a coach edited and then stopped programming. The ONLY surface in
+// the product where deleting a catalogue row does what it says: these have no
+// occurrences, so `aggregateMovements` has nothing to re-derive them from and
+// the delete holds. Every other row is rebuilt from the plans on the next
+// recompute, which is why the main catalogue offers no delete at all.
+//
+// Deliberately read-only apart from that. Editing a row nothing uses would only
+// deepen the reason it is being kept; the two honest actions are to leave it or
+// to let it go.
+function OrphanedMovements({ movements, onDelete }) {
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+      {movements.map(m => (
+        <div key={m.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderTop:"1px solid var(--border)"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{m.name}
+              {m.equip && <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{m.equip}</span>}
+              {categoryOf(m) && <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"8px"}}>{MOVEMENT_CATEGORY_LABEL[categoryOf(m)]}</span>}
+            </div>
+            {/* Name what is actually being kept, so "delete" is an informed
+                choice rather than a guess about what would be lost. The fallback
+                says the equipment and kind above are ALL there is, rather than
+                restating the card's own heading. */}
+            <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
+              {[(m.aliases||[]).length ? `also called ${(m.aliases||[]).join(", ")}` : "", m.meta?.notes || ""]
+                .filter(Boolean).join(" · ") || "nothing else saved on it"}
+            </div>
+          </div>
+          {/* Named, like the catalogue's Edit buttons — without the movement's
+              name these announce as identical "button"s that delete one each. */}
+          <button onClick={()=>onDelete(m.id)} aria-label={`Delete ${m.name} from the catalogue`} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
         </div>
       ))}
     </div>
