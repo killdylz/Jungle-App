@@ -75,7 +75,7 @@ jobs:
       # growth was intended — raise the ceiling in the same commit and say what
       # bought the bytes — or it was not, which is the case this exists for.
       - run: npm run size -- --prod
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
