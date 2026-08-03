@@ -16,10 +16,15 @@ The same question applied to a number. Not *"is this 44 or 45 today"* but *"what
 this arithmetic answering."* It was answering **how many whole 24-hour periods have elapsed**,
 which nobody was asking.
 
-**Last commit is `e7c0613`**, tree clean, **pushed**, **CI green**. Gates:
-**`lint:crash` 0 · 784 unit (28 files, no todos) · 303 e2e (31 spec files, no fixme) ·
-build 204.50 KB index + 340.34 KB StaffApp + 91.46 KB PersonasScreen + 5.81 KB ClassSummary +
+**Last commit is `b03dd45`**, tree clean, **pushed**, **CI green**. Gates:
+**`lint:crash` 0 · 784 unit (28 files, no todos) · 305 e2e (31 spec files, no fixme) ·
+build 204.50 KB index + 340.43 KB StaffApp + 93.35 KB PersonasScreen + 5.81 KB ClassSummary +
 0.85 KB summaryApi.** App.jsx **3,513 lines** (unchanged).
+
+⚠️ **Session 24 ran on after this file was first written and closed its own §10.3** — the
+orphaned catalogue rows. That section, §4.5's row for it, and §0a's note about
+`deletePersonaMovement` have all been corrected below rather than left to rot. **This is the
+document's own failure mode, caught once; check the rest of it the same way.**
 
 This file supersedes `SESSION-24-PROMPT.md`, now in `docs/history/`.
 
@@ -31,7 +36,8 @@ custom-skin application, Browse Library's initial class, the Library's empty-poo
 CSV backfill, the import→retention join, the class-type rename, Smart Recommendation's preset
 promise, the AST scripts, `ctOf`'s duplication, `src/test_probe.txt`, the archive ordering, the
 catalogue RENAME path (correct), **and everything in §1 below** — the catalogue delete, the
-retention day count, the ledger's fourth reader, `Reopen`, and `GEN_CAP`.
+retention day count, the ledger's fourth reader, `Reopen`, `GEN_CAP`, and the **orphaned
+catalogue rows** (built, §1e).
 
 ---
 
@@ -49,8 +55,12 @@ Unchanged and still structural. `origin/main` was untouched through sessions 14�
     third copy of that rule.
   - **`src/lib/retention.js`'s `daysBetween` counts LOCAL CALENDAR DAYS**, not elapsed
     milliseconds. Anything comparing it against a hand-computed ms difference will be wrong.
-  - **`store.deletePersonaMovement` is DELETED**, and a comment stands where it was explaining
-    why. Do not reintroduce it without reading §1a.
+  - 🔴 **`store.deletePersonaMovement` exists again, and is CONDITIONAL.** It is safe **only**
+    for a row with zero occurrences; calling it on any other row reintroduces the exact bug
+    §1a removed, and the bug looks fixed until you touch something else. Its only caller is the
+    "Not in any plan" card. Read the comment above it before adding a second.
+  - **`personaAggregate.js` now exports `totalCount`** — the single answer to "does this row
+    still appear anywhere". Do not write a second copy of that reduce.
 - **`.gitignore` ignores `~$*`. Check `git status --short` before every `git add -A` anyway.**
 - Root is **6 `.md`**; `docs/` holds 13; `docs/history/` holds **21**. Sessions 6–**22** of the
   handoff are in `docs/history/HANDOFF-ARCHIVE.md`, **newest-first**. Keep it that way.
@@ -229,9 +239,37 @@ Handoff back to two blocks (24, 23); session 22 moved into the archive **above**
 Done with a guarded one-shot that refuses to run twice (verified), prints its result, and counts
 U+FFFD via `String.fromCharCode` — both files 0.
 
+### 1e. 🔴 The movements a coach edited and stopped using — `b03dd45`
+
+The other half of §1a, and the reason its delete could be removed without loss. A row with no
+occurrences is retained by `aggregateMovements` when it carries a manual edit — **and a DERIVED
+equip counts, so most rows qualify** — so a coach who drops a movement from a plan keeps the
+equipment, kind, aliases and cue they set on it. Correct. But `ctMoves` renders only rows WITH
+occurrences, so those kept rows were **invisible and unreachable**, accumulating locally and
+syncing to Postgres with no way to see or remove them.
+
+They are also the **only** rows where deleting means anything — nothing re-derives them. So
+`deletePersonaMovement` returns, conditional (§0a), behind a new persona-scoped **"Not in any
+plan"** card. It sits outside the Movements card and is read-only apart from delete: a
+zero-occurrence row belongs to no class type, so filing it under the current tab would be a
+fiction, and editing a row nothing uses only deepens the reason it is kept.
+
+**The state is reachable by ordinary use** — remove a movement from the plan that uses it — so
+no synthetic fixture was needed. ⚠️ **This retired the warning this file first carried** ("the
+sample coach has zero such rows, build the fixture before the UI"): the fixture already existed
+as a test from `b018f6d`. Checking beat believing, in the cheaper direction for once.
+
+**Rendering it at 1280px and 390px caught two copy defects no assertion would have:** the
+explainer built a possessive out of the persona name (*"No plan of Example Coach — The Garage's
+uses them now"*), and the per-row line restated the card's own heading instead of naming what
+deleting would cost. **Look at the screen, not only at the assertions about it.**
+
 ### Design decisions worth not re-litigating
 
-- **The catalogue states membership, it does not offer deletion.**
+- **The catalogue states membership, it does not offer deletion** — except on the one list where
+  deleting is true.
+- **A zero-occurrence row is kept, not purged.** The coach's edits outlive the plan that used
+  the movement; letting go of them is their call, not a cleanup's.
 - **"Days ago" is a calendar count.** The datum is a date; the reader is a human with a calendar.
 - **A rename carries the ledger; a MOVE does not** — literally the same `isMove` call.
 - **Reopen is a read.** It must never append to the ledger.
@@ -313,7 +351,7 @@ deliberately** — publishing is an act, not a side effect.
 
 | Area | Gap |
 |---|---|
-| 🔴 **The orphaned catalogue row** | **The most product-shaped item left.** A movement the coach EDITED and then removed from every plan is retained in storage with counts zeroed — correct, so their edits are never lost — but `ctMoves` renders only rows with occurrences, so **it is invisible and unreachable forever**, and it syncs to Postgres. Pinned by a test so a cleanup cannot silently delete it. §10.3. |
+| ~~The orphaned catalogue row~~ | ✅ **BUILT — `b03dd45`, §1e.** The "Not in any plan" card. Two tests, mutated in opposite directions. **Do not re-raise.** |
 | 🔴 **Repeat-avoidance across generations, SAME preset** | ⚠️ **Half of this is already covered and the prompt that said otherwise was wrong.** `presets.spec.js:96` DOES drive two generations in a row and reads both back — but with **different presets** (heavier vs engine), which would differ whether or not the ledger fed back. **The uncovered case is two generations with the SAME preset**, where the second must avoid the first's movements. The arithmetic is unit-tested in `blueprints.test.js`; that specific UI path is not. |
 | **Movement editor's remaining save fields** | `changeMovement` is now driven for notes and for the rename-merge path, and delete is gone. The **equipment / category / alias** save is still unchecked end to end. |
 | **Cold start (D3) → rename** | `coldstart.spec.js` covers the path and asserts `source: "preset"`. What is untested is that a coach who names a class type at cold start and later retypes it exercises §1c's rename against a **preset-sourced** shape. |
@@ -366,8 +404,9 @@ Same for a comment between `return (` and the root element; put it above the `re
   difference, round. Do not "simplify" it back to an elapsed-ms floor.
 - 🔴 **A date-only import is anchored at NOON UTC.** Any arithmetic against it must be
   calendar-based or it is timezone- and time-of-day-dependent.
-- 🔴 **`ctMoves` renders only rows with `> 0` occurrences in the current class type.** A
-  zero-count row exists in storage and is invisible. Anything you add to that list inherits this.
+- 🔴 **`ctMoves` renders only rows with `> 0` occurrences in the current class type**, and
+  `orphanMoves` renders the rest. Anything you add to either list inherits that split, and the
+  two must stay disjoint — a row claimed by both is the drift this pair exists to prevent.
 - **The rename-vs-move rule is `isMove` in `personaAggregate.js`.** Call it; do not re-express it.
 - **`beforeEach` is per-`describe`.** `store.test.js` has several; a new block needs its own.
 
@@ -470,8 +509,8 @@ zero findings is a pass, zero files is a broken invocation.
 npm run lint:crash && npm test && npm run test:e2e && npm run build
 ```
 
-Expect **0 crash findings · 784 unit (28 files, no todos) · 303 e2e (31 spec files, no fixme) ·
-a five-chunk build** (index ~204.50 KB · StaffApp ~340.34 KB · PersonasScreen ~91.46 KB ·
+Expect **0 crash findings · 784 unit (28 files, no todos) · 305 e2e (31 spec files, no fixme) ·
+a five-chunk build** (index ~204.50 KB · StaffApp ~340.43 KB · PersonasScreen ~93.35 KB ·
 ClassSummary ~5.81 KB · summaryApi ~0.85 KB, credential-less).
 
 ⚠️ **CI runs the same chain on Linux and it can be RED while this file says green — check it
@@ -494,32 +533,24 @@ ClassSummary ~5.81 KB · summaryApi ~0.85 KB, credential-less).
    gating logic can still report a live control** — a flag-gated fixture AND an ungated one in
    the same run, or you have built something that reports nothing and looks clean.
 
-3. 🔴 **The orphaned catalogue row.** Session 24 proved it exists: seed a manual row with
-   `classTypes: {}` and it persists through every recompute while rendering nowhere. A movement
-   the coach edited and then removed from every plan is in that state permanently, and it syncs.
-   **This is the one change that would give a delete button a real home** — surface those rows
-   ("no longer in any plan · N") and delete works there, because nothing re-derives them.
-   Check the count first: on the sample coach it is zero, so **build the fixture before you
-   build the UI**, or you will ship a section nobody can see (§0b, twice over).
-
-4. **Repeat-avoidance with the SAME preset.** ⚠️ Read §4.5 first: two-generations-in-a-row IS
+3. **Repeat-avoidance with the SAME preset.** ⚠️ Read §4.5 first: two-generations-in-a-row IS
    driven by `presets.spec.js:96`, but with *different* presets, which proves nothing about the
    ledger. Drive **the same preset twice** and assert the second avoids the first's movements.
    The ledger feeds `movements: blockMovementNames(blocks)` back as "what has already been
    recommended", and session 24 showed a broken ledger degrades this **silently**.
 
-5. **Consider `BrandStudioScreen` out of App.jsx (I9).** §4.2 has the concrete answer: four
+4. **Consider `BrandStudioScreen` out of App.jsx (I9).** §4.2 has the concrete answer: four
    declarations, nothing shared back. **Measure first** — `build-sw` precaches every emitted
    chunk, and this screen is not on the member path.
 
-6. **Do not re-run** the eight-screen a11y sweep, the empty-pool Library check, the CSV backfill,
-   the class-type rename, the recommendation panel, the catalogue delete, or `Reopen`/`GEN_CAP`
-   as headline items. Done, clean, covered by tests that fail when reverted.
+5. **Do not re-run** the eight-screen a11y sweep, the empty-pool Library check, the CSV backfill,
+   the class-type rename, the recommendation panel, the catalogue delete, the orphaned-row card,
+   or `Reopen`/`GEN_CAP` as headline items. Done, clean, covered by tests that fail when reverted.
 
-7. **Do not start N2/N3.** They wait on attendance volume → the pilot → `DYLAN-QUEUE.md` Part A.
+6. **Do not start N2/N3.** They wait on attendance volume → the pilot → `DYLAN-QUEUE.md` Part A.
 
-8. **Do not start P2 (Capacitor)** until A13 proves a real member opened a real link.
+7. **Do not start P2 (Capacitor)** until A13 proves a real member opened a real link.
 
-9. **Keep `SESSION-HANDOFF.md` to two session blocks.** Move session 23's into
+8. **Keep `SESSION-HANDOFF.md` to two session blocks.** Move session 23's into
    `docs/history/HANDOFF-ARCHIVE.md` **above session 22** — newest first, with a guarded
    one-shot.

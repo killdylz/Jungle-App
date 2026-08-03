@@ -12,9 +12,9 @@ _Last updated: 2026-08-03 (session 24)_
 
 ## Session 24 — a delete that never worked, a day that was not a day, and a fourth reader
 
-> **Gates green.** `lint:crash` **0** · **784 unit** (28 files, no todos) · **303 e2e**
+> **Gates green.** `lint:crash` **0** · **784 unit** (28 files, no todos) · **305 e2e**
 > (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
-> member path is untouched) + StaffApp **340.34 KB** + PersonasScreen **91.46 KB** +
+> member path is untouched) + StaffApp **340.43 KB** + PersonasScreen **93.35 KB** +
 > ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (unchanged).
 >
 > **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
@@ -119,26 +119,55 @@ with classes the coach never re-ran), and it survives a rename. `GEN_CAP` had no
 generations now go in, and the assertion that earns its keep is that the cap counts **per
 persona**, so a busy coach cannot evict a quiet one's history.
 
+### 🔴 4. The movements a coach edited and stopped using — `b03dd45`
+
+The other half of §1, and what made removing that delete a clean trade rather than a loss.
+
+`aggregateMovements` keeps a zero-occurrence row when it carries a manual edit — **and a
+DERIVED equip counts, so most rows qualify** — so a coach who drops a movement from a plan
+keeps the equipment, kind, aliases and cue they set on it. Correct. But `ctMoves` renders only
+rows WITH occurrences, so those kept rows were **invisible and unreachable**: they accumulated
+locally and synced to Postgres with no way to see or remove them, and the coach's own edits
+became cruft they could not reach.
+
+They are also the **only** rows where deleting means anything, because nothing re-derives them.
+So `store.deletePersonaMovement` returns — **conditional**, with the condition written above it,
+since calling it on a row with occurrences reintroduces the original bug and it looks fixed
+until you touch something else. Its one caller is a new persona-scoped **"Not in any plan"**
+card, outside the Movements card and read-only apart from delete: a zero-occurrence row belongs
+to no class type, so filing it under the current tab would be a fiction.
+
+The state is reachable by ordinary use, so no synthetic fixture was needed — **which retired
+the warning drafted for it** ("build the fixture first, the sample coach has none"); the fixture
+already existed as a test from `b018f6d`.
+
+🔴 **Rendering it at 1280px and 390px caught two copy defects no assertion would have:** the
+explainer built a possessive out of the persona name (*"No plan of Example Coach — The Garage's
+uses them now"*), and the per-row line restated the card's own heading instead of naming what
+deleting would cost. **Look at the screen, not only at the assertions about it.**
+
 ### Design decisions worth not re-litigating
 
-- **The catalogue states membership, it does not offer deletion.** Same reason as the Smart
-  Recommendation and the Builder's scheduled-type notice: stating beats silently applying.
+- **The catalogue states membership, it does not offer deletion** — except on the one list where
+  deleting is true. Same reason as the Smart Recommendation and the Builder's scheduled-type
+  notice: stating beats silently applying.
 - **"Days ago" is a calendar count.** The datum is a date; the reader is a human with a calendar.
 - **A rename carries the ledger; a MOVE does not.** Identical rule to the style profile, and it
   is now literally the same function call.
 - **Reopen is a read.** It must never append to the ledger.
+- **A zero-occurrence row is kept, not purged.** The coach's edits outlive the plan that used
+  the movement; letting go of them is their call, not a cleanup's.
 
 ### What is left, honestly
 
-- **§10.4 — teach `deadctl` the `FLAGS` literals. NOT DONE.** Still the one blind spot, still
-  cheap: `src/config/flags.js` is a module-level const of literal booleans.
-- **§10.5 — `BrandStudioScreen` out of App.jsx (I9). NOT STARTED.** §4.2 still has the concrete
-  answer: four declarations, nothing shared back. **Measure before splitting.**
-- **The orphaned catalogue row.** A movement the coach EDITED and then removed from every plan
-  is retained in storage with its counts zeroed — correct, so their edits are never lost — but
-  `ctMoves` renders only rows with occurrences, so it is invisible and unreachable forever.
-  Pinned by a test so a future cleanup cannot delete it silently. Surfacing those rows is the
-  one thing that would give a delete button a real home.
+- **Teach `deadctl` the `FLAGS` literals. NOT DONE.** Still the one blind spot, still cheap:
+  `src/config/flags.js` is a module-level const of literal booleans, and all four current
+  suspects sit inside `FLAGS.mockAnalytics ? [...] : []`.
+- **`BrandStudioScreen` out of App.jsx (I9). NOT STARTED.** §4.2 still has the concrete answer:
+  four declarations, nothing shared back. **Measure before splitting.**
+- **Repeat-avoidance with the SAME preset.** `presets.spec.js:96` drives two generations in a
+  row but with DIFFERENT presets, which would differ regardless of the ledger. The same-preset
+  path is the uncovered one.
 
 ---
 
