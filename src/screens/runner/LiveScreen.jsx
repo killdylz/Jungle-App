@@ -7,6 +7,7 @@ import * as store from "../../lib/store.js";
 import { calcIntervalState } from "../../lib/intervalTimer.js";
 import { apiPlay, TrackSearch, SpotifyDevicePicker } from "../../music/index.js";
 import { useWindowWidth } from "../../ui/primitives.jsx";
+import { isDialogOpen } from "../../ui/dialog.js";
 import { fmt, fmtSec } from "../../lib/format.js";
 import { prefersReducedMotion } from "./displayKit.js";
 import { CheckInPanel } from "./CheckInPanel.jsx";
@@ -139,9 +140,27 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
   useEffect(() => {
     const onKey = (e) => {
       // Ignore if user is typing in an input/textarea/select
-      if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+      if (["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName) || e.target.isContentEditable) return;
+      // 🔴 And ignore every transport key while a DIALOG is open. `useDialog`
+      // stops propagation for Escape only, so until this guard existed the
+      // check-in panel — the one dialog a coach opens mid-class, with the room
+      // watching — passed the rest straight through to the transport. Focusing
+      // its "Done" button and pressing Space, which is simply how you activate a
+      // focused button, STARTED THE CLASS; pressing "n" advanced the room a
+      // stage. Neither is recoverable in the moment, because the coach is
+      // looking at the dialog, not at the timer behind it.
+      //
+      // Escape stays outside the guard on purpose: it is the key that CLOSES a
+      // dialog, and the hook has already stopped it at capture phase, so it
+      // never reaches here while one is open.
+      if (e.key !== "Escape" && isDialogOpen()) return;
       if (e.key === " " || e.code === "Space") { e.preventDefault(); handlePlayPause(); }
       else if (e.key === "n" || e.key === "N") { onNextStage(); }
+      // "p" for the way back. `n` shipped without a partner, so a coach who
+      // advanced a stage too early had a button to undo it and no key — on the
+      // one screen whose whole point is that the coach's hands are busy. The
+      // arrows are already spoken for by the timer, below.
+      else if (e.key === "p" || e.key === "P") { onPrevStage(); }
       else if (e.key === "ArrowRight") { e.preventDefault(); onSkipTimer(10); }
       else if (e.key === "ArrowLeft")  { e.preventDefault(); onSkipTimer(-10); }
       else if (FLAGS.music && (e.key === "s" || e.key === "S")) { setLiveSearchStageIdx(liveState.idx); setShowLiveSearch(true); }
@@ -430,6 +449,32 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                   </button>
                 )}
               </div>
+
+              {/* ── The shortcut legend ────────────────────────────────────────
+                  These keys have worked since session 12 and were written down
+                  nowhere in the product, which makes them equivalent to not
+                  existing: the coach they are FOR is mid-class with their hands
+                  busy and is not going to discover them by experiment in front
+                  of a room.
+
+                  Desktop only. There is no keyboard at 390px, and the phone
+                  layout is the one with no vertical room to spare — a legend for
+                  keys that cannot be pressed is the same kind of dishonest
+                  furniture as a panel that can never fill.
+
+                  `aria-hidden`: every key here duplicates a button that already
+                  carries an accessible name, so to a screen reader this row is
+                  six more things to read past on the way to the transport. */}
+              {!isMobile && (
+                <div aria-hidden="true" style={{display:"flex",flexWrap:"wrap",gap:"6px 14px",justifyContent:"center",marginTop:"14px",fontSize:"10px",color:"var(--muted)",letterSpacing:"0.3px"}}>
+                  {[["Space","play / pause"],["N","next stage"],["P","previous"],["← →","±10 seconds"]].map(([k,what])=>(
+                    <span key={k} style={{display:"inline-flex",alignItems:"center",gap:"5px"}}>
+                      <kbd style={{fontFamily:"inherit",fontWeight:"700",color:"var(--text)",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"4px",padding:"1px 5px",fontSize:"10px"}}>{k}</kbd>
+                      {what}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Progress bar */}
               <div style={{height:"4px",background:"var(--navy)",flexShrink:0,position:"relative"}}>

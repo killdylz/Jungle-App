@@ -66,6 +66,23 @@ function focusablesIn(root) {
 // after its parent, so the last entry is the one the user is looking at.
 const _open = [];
 
+// Is ANY dialog currently open?
+//
+// For screens that bind their own `window` keydown shortcuts. The hook stops
+// propagation for Escape only, at capture phase, so the Class Runner's Escape
+// cannot fight a dialog's — but every OTHER key still reaches the window while a
+// dialog is open, and that was a live defect rather than a theoretical one:
+// focusing "Done" in the check-in panel and pressing Space (the ordinary way to
+// activate a focused button) ALSO started the class, and pressing "n" advanced
+// the room a stage. A coach checking a member in could start the class in front
+// of the room without touching the Runner.
+//
+// Deliberately a function over the live array rather than a boolean or a hook.
+// The value has to be read at the moment the key is pressed: a listener bound
+// once on mount would close over whatever was true then, which is exactly the
+// bug it exists to prevent.
+export function isDialogOpen() { return _open.length > 0; }
+
 export function useDialog(onClose, label) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
