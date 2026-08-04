@@ -1,12 +1,119 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-03 (session 24)_
+_Last updated: 2026-08-04 (session 25)_
 
-> 📁 **Sessions 6–22 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–23 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 25 — the banner that could not be cleared, two sweeps, and the first undo
+
+> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **367 e2e**
+> (35 spec files, no fixmes) · `deadctl` **0 suspect / 73 files** · five-chunk build:
+> member path **211.28 KB**, staff **556.64 KB** (StaffApp **346.67/360 KB**, the tightest
+> budget in the repo). App.jsx **3,602 lines** (was 3,513).
+
+**The brief had four parts in order: regression depth, remove what is awkward, UI polish with no
+new surfaces, then keep going.** Depth and the awkward parts landed. Polish is where 26 starts.
+
+### The banner Dylan asked to delete was telling the truth — and was still bad UI
+
+The four domains it names are **exactly** the tables created by migrations `0005` and `0006`,
+and no others. That pattern rules out both cheaper explanations. It is not RLS: `0003`'s
+`library_overrides` and `brand_profiles` carry the *identical* write predicate
+(`is_platform_admin() or is_gym_admin(gym_id)`) and are not in the ledger, so `is_gym_admin()`
+returns true for this user — and `0006`'s `persona_generations` uses a **looser** member-level
+policy and still fails. It is not a CHECK constraint: that is per-column and per-table, and this
+is four tables at once. What is left is that **the tables are not there**; `0005`'s header still
+reads "DRAFT — not yet applied". **Running 0005 and 0006 is Dylan's five-minute action, and the
+banner clearing itself is the proof.**
+
+All four of its actual defects are fixed: **Try now** (wired to the `_retryNow({force:true})`
+that already existed and had no button), the exact Postgres string in a `<details>`,
+"last tried 2 min ago · 14 failed attempts" from the `at`/`attempts` the ledger already stored,
+copy and colour that **escalate** past five attempts, and a dismiss keyed on a signature of
+table+message.
+
+🔴 **The signature deliberately excludes `at` and `attempts`.** Every failed retry rewrites
+both, so a signature including either would resurrect a dismissed banner within 30 seconds and
+make the button a lie. A new table, or the same table with a new message, always returns. There
+is no "never show again".
+
+### Two defects found while diagnosing, both invisible locally
+
+🔴 **A ledger entry nothing could clear.** `_bgUpsertDelta` makes no request when there is no
+delta, and `_clearSyncError` only runs after a *successful* request — so once a table's rows
+were confirmed or deleted following a failure, the entry became immortal. The banner named a
+domain with nothing left to send, forever, and no coach action could clear it. A warning that
+cannot be resolved stops being read as a warning. `_clearLedgerIfSettled` closes it: an empty
+delta means every local row carries a server-confirmed fingerprint, so a ledger entry claiming
+otherwise is provably stale.
+
+🔴 **`restorePersonaCascade`.** Undoing a coach delete cannot just re-save the four lists.
+`deletePersona` removes only the `coach_personas` row server-side; plans, movements and
+generations go via **ON DELETE CASCADE** — no client call, so no `_unmark`, so their delta marks
+survive, so a re-save computes an **empty delta and pushes nothing**. The coach sees their whole
+corpus restored on this device while the server stays empty, and the next server-wins hydrate
+takes it away for good. Every local assertion passes through all of that; the only way to see it
+is to ask what the next push would send, which is what the unit test does.
+
+### Two sweeps, each with a positive control and each proven able to fail
+
+**§1.1 responsive** — 9 screens × 390/768/1280, fresh render at each width. Two rules kept
+separate: the page must not scroll sideways, and no leaf element may cut text off without an
+ellipsis. The per-element spill list is a *diagnostic* on the first rule, not a rule — an element
+wider than the viewport is legitimate inside a container built to scroll, and failing those would
+make the sweep noisy enough to be switched off.
+
+**§1.2 keyboard** — every visible control reachable by Tab, focus never lost to `<body>` before
+the screen is walked. Where a dialog is open the expected set scopes to inside it, turning
+"everything is reachable" into an assertion that the trap works.
+
+`ALL_SCREENS` + `navAnyWidth` in `helpers.js` hold all three nav vocabularies (sidebar "Class
+Builder" / sheet "Builder" / bar "Build"), and `responsive.spec.js` **checks that list against
+the running app's sidebar in both directions** — a hand-written list of screens is exactly the
+thing that silently stops matching.
+
+### One toast primitive, and the first undo in the product
+
+§2.1 was accurate: deleting a coach took their corpus, catalogue and generation ledger on one
+unguarded click, while deleting a **single exercise** asked "are you sure?". The protection was
+inverted, and the thing it failed to protect is the most expensive data in the product.
+
+`src/ui/toast.jsx` — one provider at the staff root, `role="status"` + `aria-live="polite"`,
+region **always mounted** (a live region inserted at the same moment as its text is frequently
+not announced), 9s for undoable toasts vs 2.5s for plain, and `pointerEvents:none` on the empty
+region so it cannot eat taps meant for the bottom bar. The coach delete gets **both** a confirm
+and an undo; removing a plan gets undo only.
+
+### Traps this session paid for
+
+- 🔴 **`blur()` does not reset the tab order.** Chromium keeps a *sequential focus navigation
+  starting point* that survives a blur. `document.body.setAttribute("tabindex","-1");
+  document.body.focus();` is what resets it. The first keyboard sweep failed on six screens for
+  this reason **and the app was correct every time**.
+- 🔴 **`nav()` leaves focus on the button it clicked**, so any tab-order test starts halfway down.
+- ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing a
+  literal escape into source needs a guarded one-shot `.mjs`.
+- ⚠️ **Screenshots fail unless the Browser pane is displayed.** Geometry reads via
+  `javascript_tool` caught the toast's 15px clearance over the bottom bar and the
+  "1 class plan, 11 movements" copy defect that all 367 tests passed.
+- ⚠️ **`_bgDelete` records no sync error** — a failed DELETE reaches only `console.warn`, never
+  the ledger, so it is never retried and never shown. Same class of bug the ledger exists for, in
+  the one path never wired to it. **Not fixed**; it needs a decision about what retrying a delete
+  means with no local tombstone.
+
+### Eight mutation proofs, all reverted with the inverse edit
+
+The settle step, the signature's blindness to `at`, the null-timestamp guard, the dismissal key,
+a 1400px min-width (1010px of sideways scroll), a 12px nowrap container ("53px of text in 20px —
+HOME"), `tabIndex={-1}` on the nav (9 of 17 unreachable), an `onFocus` that blurs (0 of 17), the
+cascade unmarking, and the coach-delete confirm. One of them caught a real bug before it shipped:
+`fmtAgo(null)` rendered **"19675 days ago"**, because `Number(null)` is 0, not NaN.
 
 ---
 
@@ -244,125 +351,5 @@ grep them again before believing this, but they were real when written:
 
 ⚠️ **And 6 unmerged Dependabot PRs**, opened by this session's own change. They are the only
 open items with a clock on them.
-
----
-
-## Session 23 — a value with two readers drifts, and the class type had three
-
-> **Gates green.** `lint:crash` **0** · **772 unit** (28 files, no todos) · **297 e2e**
-> (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
-> member path is untouched) + StaffApp **340.35 KB** (+0.37) + PersonasScreen **91.44 KB**
-> (+0.40) + ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (+20).
->
-> **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
-> nobody has run: **fifth session running**, and nothing below depends on it.
-
-### The method
-
-Session 22's rule — *read back the SCREEN after every stored write* — carried forward and paid
-twice. Both findings were correct writes and wrong reads, both survived a reload, and neither
-was reachable by any test that only checks storage.
-
-The generalisation is worth keeping: **a key with more than one READER drifts exactly like a
-column with more than one writer, and it is harder to notice because nothing is corrupted.**
-The class type turned out to have three readers.
-
-### 🔴 1. A renamed class type left its shape and profile behind — `3faa22f`
-
-§10.2's item: the Personas screen, 91 KB and the most stored shapes in the product, had only
-ever been swept for accessible names and raw values. Nothing had driven an edit and read back
-what it stored.
-
-Driving `PersonaPlanEditor` found that storage was flawless — every nested field round-tripped
-(`scheme.reps`, `plan.note`, block `rotation`, `per_side`). The screen was not.
-
-**A class type has no id. Its NAME is its key, in three places at once:**
-
-| Reader | Key |
-|---|---|
-| every plan | `plan.classType` |
-| the shape the coach saved | `styleProfile.blueprints[ct]` |
-| what extraction learned | `styleProfile.byClassType[ct]` |
-
-The plan editor lets a coach retype that name and rewrote only the first. After correcting
-"S360" to "S360 Strength", a coach saw a ghost tab `S360 · 0` holding their own saved shape,
-their conventions and vocabulary gone from the profile, and the shape demoted from *"Your shape
-— saved"* back to *"suggested from corpus"*. All three storage keys were individually correct
-the whole time.
-
-This is the ordinary path, not a corner: the class type on an imported plan is the importer's
-guess, and correcting it is what the field is for. Those conventions cost an LLM pass over a
-real deck — **the wedge feature** — and a typo-fix dropped them on the floor.
-
-`renameClassType` in `personaAggregate.js` now owns it, and distinguishes a **rename** from a
-**move**: the profile travels only when the rename empties the old name out. If other plans
-still sit under it the coach re-filed one plan between two class types, and both keep their own
-identity. A destination that already has its own shape is never clobbered.
-
-`ctOf` in PersonasScreen was a byte-identical copy of `classTypeOf` — two readers of the very
-question this defect is about. Deleted.
-
-### 🔴 2. Smart Recommendation promised what a palette cannot carry — `1887295`
-
-§10.3's item, and it was not the phantom the prompt warned about. A recommendation is a
-**palette**: eight colour tokens. The note read *"Applied to the swatches below (based on the
-Atelier preset)"*, and the archetype blurbs promise things only a **skin** carries.
-
-| Archetype | Its note promises | What arrived, after a reload |
-|---|---|---|
-| Luxury / Reformer | "a serif display face" | `--display: Space Grotesk` |
-| HYROX / Functional | "tabular numerals and accent glow" | `--num: normal`, `--glow: none` |
-
-The accent arrived correctly in both cases — which is why a spot-check would have passed.
-§0b#3's rule about picking the field that cannot agree by chance, applied to the font.
-
-Fonts, glow and numeral style live on the skin, in `applySkinCSS`'s meta. That is the split
-§1c settled: **an override is a palette on top of the skin the gym chose.** So the note now
-OFFERS the preset instead of claiming it, and taking it layers the recommended palette over the
-preset's own — what `resolveSkinTokens` was built for. Stated, not applied, for §1a's reason:
-silently restyling a gym would throw away typography they picked.
-
-### 3. The AST scripts, rebuilt — `e5b3bbb`
-
-§8/§10.4, two sessions overdue. `scripts/ast.mjs`, five subcommands (`outline`, `scan`,
-`dead`, `deadctl`, `handlers`), babel resolved through the repo's own `package.json`.
-
-`dead` uses babel's **binding resolution** rather than a name sweep, which buys the two things
-`varsIgnorePattern: '^[A-Z_]'` gives up: a JSX element name counts as a reference, and
-shadowing resolves for free.
-
-**Every result carries a positive control in the same run.**
-
-| Report | Result |
-|---|---|
-| `dead` | 101/101 files, **0 findings in real source**. Control caught an unused import *and* a shadowed one, ignored the used one. |
-| `deadctl` | 100/100 files, 5 hits, **0 real**. Four `FLAGS.mockAnalytics`-gated; the fifth was Brand Studio's preview inside `<div inert>`. |
-| `handlers` | 351 across 100 files — onClick 263, onChange 52, onKeyDown 10. |
-
-§4.4 listed deadctl's inert-ancestor and `<details>` holes and the first run fired one of each,
-so both are closed: an `inert` or `<form>` ancestor suppresses the hit. **`FLAGS` gating is
-still beyond it** and every hit says so.
-
-`scan`'s answer for `BrandStudioScreen` (3 same-file deps — `GYM_ARCHETYPES`, `ProgramChip`,
-`recommendArchetype`; **0 shared** with the rest of the file, so it moves as a unit with no
-shared module) was verified independently by grep before being believed.
-
-### What did NOT find anything — saying so is a result
-
-- **The plan editor's storage.** Every field round-tripped, including the nested ones the
-  editor never shows. Only the readers were wrong.
-- **A recommendation does not repaint before Save**, exactly as its copy says. Asserted, so it
-  stays true.
-- **Zero dead imports across 101 files**, with a control proving the scanner was live.
-
-### Carried into the next session
-
-1. 🔴 **A12/A13 — five sessions.** Still the only part of the product untested by construction.
-2. **`deadctl` cannot evaluate `FLAGS.*`.** Four of its five hits were that. Worth teaching it
-   the flag constants, since they are literals in one module.
-3. **The remaining I9 items now have a real answer**: `BrandStudioScreen` moves cleanly out of
-   App.jsx as a unit of four declarations. Measure before doing it — `build-sw` precaches every
-   emitted chunk.
-4. **`src/test_probe.txt` is gone**, swept in passing as §4.4 asked.
 
 ---

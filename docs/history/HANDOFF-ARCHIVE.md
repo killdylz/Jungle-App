@@ -1,4 +1,4 @@
-# Jungle — Session Handoff ARCHIVE (sessions 6–22)
+# Jungle — Session Handoff ARCHIVE (sessions 6–23)
 
 _Split out of `SESSION-HANDOFF.md` in session 20, at commit `e81e793`._
 
@@ -22,6 +22,126 @@ without checking it still exists. The same caveat the trust ranking puts on
 
 **Where to look instead:** `SESSION-HANDOFF.md` (the last two sessions) · the current
 `SESSION-*-PROMPT.md` at repo root · spec §12, which is the backlog of record.
+
+---
+
+## Session 23 — a value with two readers drifts, and the class type had three
+
+> **Gates green.** `lint:crash` **0** · **772 unit** (28 files, no todos) · **297 e2e**
+> (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
+> member path is untouched) + StaffApp **340.35 KB** (+0.37) + PersonasScreen **91.44 KB**
+> (+0.40) + ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (+20).
+>
+> **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
+> nobody has run: **fifth session running**, and nothing below depends on it.
+
+### The method
+
+Session 22's rule — *read back the SCREEN after every stored write* — carried forward and paid
+twice. Both findings were correct writes and wrong reads, both survived a reload, and neither
+was reachable by any test that only checks storage.
+
+The generalisation is worth keeping: **a key with more than one READER drifts exactly like a
+column with more than one writer, and it is harder to notice because nothing is corrupted.**
+The class type turned out to have three readers.
+
+### 🔴 1. A renamed class type left its shape and profile behind — `3faa22f`
+
+§10.2's item: the Personas screen, 91 KB and the most stored shapes in the product, had only
+ever been swept for accessible names and raw values. Nothing had driven an edit and read back
+what it stored.
+
+Driving `PersonaPlanEditor` found that storage was flawless — every nested field round-tripped
+(`scheme.reps`, `plan.note`, block `rotation`, `per_side`). The screen was not.
+
+**A class type has no id. Its NAME is its key, in three places at once:**
+
+| Reader | Key |
+|---|---|
+| every plan | `plan.classType` |
+| the shape the coach saved | `styleProfile.blueprints[ct]` |
+| what extraction learned | `styleProfile.byClassType[ct]` |
+
+The plan editor lets a coach retype that name and rewrote only the first. After correcting
+"S360" to "S360 Strength", a coach saw a ghost tab `S360 · 0` holding their own saved shape,
+their conventions and vocabulary gone from the profile, and the shape demoted from *"Your shape
+— saved"* back to *"suggested from corpus"*. All three storage keys were individually correct
+the whole time.
+
+This is the ordinary path, not a corner: the class type on an imported plan is the importer's
+guess, and correcting it is what the field is for. Those conventions cost an LLM pass over a
+real deck — **the wedge feature** — and a typo-fix dropped them on the floor.
+
+`renameClassType` in `personaAggregate.js` now owns it, and distinguishes a **rename** from a
+**move**: the profile travels only when the rename empties the old name out. If other plans
+still sit under it the coach re-filed one plan between two class types, and both keep their own
+identity. A destination that already has its own shape is never clobbered.
+
+`ctOf` in PersonasScreen was a byte-identical copy of `classTypeOf` — two readers of the very
+question this defect is about. Deleted.
+
+### 🔴 2. Smart Recommendation promised what a palette cannot carry — `1887295`
+
+§10.3's item, and it was not the phantom the prompt warned about. A recommendation is a
+**palette**: eight colour tokens. The note read *"Applied to the swatches below (based on the
+Atelier preset)"*, and the archetype blurbs promise things only a **skin** carries.
+
+| Archetype | Its note promises | What arrived, after a reload |
+|---|---|---|
+| Luxury / Reformer | "a serif display face" | `--display: Space Grotesk` |
+| HYROX / Functional | "tabular numerals and accent glow" | `--num: normal`, `--glow: none` |
+
+The accent arrived correctly in both cases — which is why a spot-check would have passed.
+§0b#3's rule about picking the field that cannot agree by chance, applied to the font.
+
+Fonts, glow and numeral style live on the skin, in `applySkinCSS`'s meta. That is the split
+§1c settled: **an override is a palette on top of the skin the gym chose.** So the note now
+OFFERS the preset instead of claiming it, and taking it layers the recommended palette over the
+preset's own — what `resolveSkinTokens` was built for. Stated, not applied, for §1a's reason:
+silently restyling a gym would throw away typography they picked.
+
+### 3. The AST scripts, rebuilt — `e5b3bbb`
+
+§8/§10.4, two sessions overdue. `scripts/ast.mjs`, five subcommands (`outline`, `scan`,
+`dead`, `deadctl`, `handlers`), babel resolved through the repo's own `package.json`.
+
+`dead` uses babel's **binding resolution** rather than a name sweep, which buys the two things
+`varsIgnorePattern: '^[A-Z_]'` gives up: a JSX element name counts as a reference, and
+shadowing resolves for free.
+
+**Every result carries a positive control in the same run.**
+
+| Report | Result |
+|---|---|
+| `dead` | 101/101 files, **0 findings in real source**. Control caught an unused import *and* a shadowed one, ignored the used one. |
+| `deadctl` | 100/100 files, 5 hits, **0 real**. Four `FLAGS.mockAnalytics`-gated; the fifth was Brand Studio's preview inside `<div inert>`. |
+| `handlers` | 351 across 100 files — onClick 263, onChange 52, onKeyDown 10. |
+
+§4.4 listed deadctl's inert-ancestor and `<details>` holes and the first run fired one of each,
+so both are closed: an `inert` or `<form>` ancestor suppresses the hit. **`FLAGS` gating is
+still beyond it** and every hit says so.
+
+`scan`'s answer for `BrandStudioScreen` (3 same-file deps — `GYM_ARCHETYPES`, `ProgramChip`,
+`recommendArchetype`; **0 shared** with the rest of the file, so it moves as a unit with no
+shared module) was verified independently by grep before being believed.
+
+### What did NOT find anything — saying so is a result
+
+- **The plan editor's storage.** Every field round-tripped, including the nested ones the
+  editor never shows. Only the readers were wrong.
+- **A recommendation does not repaint before Save**, exactly as its copy says. Asserted, so it
+  stays true.
+- **Zero dead imports across 101 files**, with a control proving the scanner was live.
+
+### Carried into the next session
+
+1. 🔴 **A12/A13 — five sessions.** Still the only part of the product untested by construction.
+2. **`deadctl` cannot evaluate `FLAGS.*`.** Four of its five hits were that. Worth teaching it
+   the flag constants, since they are literals in one module.
+3. **The remaining I9 items now have a real answer**: `BrandStudioScreen` moves cleanly out of
+   App.jsx as a unit of four declarations. Measure before doing it — `build-sw` precaches every
+   emitted chunk.
+4. **`src/test_probe.txt` is gone**, swept in passing as §4.4 asked.
 
 ---
 
