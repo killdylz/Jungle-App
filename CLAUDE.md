@@ -44,6 +44,10 @@ share a filesystem view.
   `node -e` fails with `ENOENT`. Use one tool for both halves, or write into the repo and delete.
 - ⚠️ **`playwright test -g "a|b"` exits 255** in this shell. Filter by file path instead.
 - **Write commit messages to a file and use `git commit -F`.** Multi-line `-m` is painful here.
+  ⚠️ Write that file with the **Write tool**, not `printf`/`echo` in Bash. Backticks inside
+  double quotes run as command substitution, so a message mentioning a `cancelled` run silently
+  loses the word and prints `cancelled: command not found`. A single-quoted heredoc is the other
+  safe option; anything double-quoted is not.
 - ⚠️ **`git add -A` before `rm`ing your message file commits the message file.** Prefer
   `git commit -F msg.txt --only <paths>`.
 - ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing
