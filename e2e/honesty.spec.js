@@ -144,3 +144,38 @@ test.describe("no number the product cannot know", () => {
     await expect(page.getByText("Hyrox", { exact: true }).first()).toBeVisible();
   });
 });
+
+// ── §3.5 · a panel that can never fill must not advertise itself ─────────────
+//
+// The Schedule carried two branded cards — "Jungle Intelligence" with its own
+// icon, and "Trainer load · this week" — whose contents are
+// `FLAGS.mockAnalytics ? [...] : []`. The flag is false, so both rendered their
+// EMPTY state permanently and told a paying gym owner that suggestions "appear
+// here once Jungle has live attendance & demand data".
+//
+// That is the same judgement that deleted BASE_SCHEDULE and flagged off the mock
+// KPIs, applied one level up: a confident wrong number is worse than no number,
+// and a promise with nothing behind it is worse than no panel. "Empty for now"
+// and "empty forever" look identical to the person reading it, and only one of
+// them is honest.
+test("the Schedule does not advertise analytics that cannot arrive", async ({ page }) => {
+  const errors = watchConsole(page);
+  await freshApp(page);
+  await nav(page, "Schedule");
+
+  // POSITIVE CONTROL: the screen has to have actually rendered before "the panel
+  // is absent" means anything. An error boundary would satisfy every assertion
+  // below.
+  await expect(page.getByRole("button", { name: /Add class/ })).toBeVisible();
+
+  await expect(page.getByText("Jungle Intelligence")).toHaveCount(0);
+  await expect(page.getByText(/Scheduling suggestions appear here/)).toHaveCount(0);
+  await expect(page.getByText(/Trainer load/)).toHaveCount(0);
+  await expect(page.getByText(/Trainer load balances here/)).toHaveCount(0);
+
+  // And the hard-coded name that was sitting inside the trainer-load warning —
+  // a real gym has no coach called Mara, and it must never reach a screen.
+  await expect(page.getByText(/Mara/)).toHaveCount(0);
+
+  expectNoConsoleErrors(errors);
+});

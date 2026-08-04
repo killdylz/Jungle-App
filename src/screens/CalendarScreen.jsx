@@ -580,6 +580,23 @@ export function CalendarScreen({onBack, onStartClass}) {
       </div>
 
       {/* Bottom: AI tips + Trainer load */}
+      {/* ─── UI-POLISH §3.5 · two panels that could never fill ────────────────
+          `aiTips` and `trainers` are both `FLAGS.mockAnalytics ? [...] : []` and
+          the flag is false, so BOTH cards rendered their empty state
+          permanently — a branded panel with an icon telling a paying gym owner
+          that "scheduling suggestions appear here once Jungle has live
+          attendance & demand data", for a feature with no implementation behind
+          it. Not "empty for now": empty forever, on the screen a gym looks at
+          most.
+
+          §3.5's rule is that an empty state names the ONE action that fills it
+          and is a button. Neither of these has an action that fills it, so the
+          rule's other branch applies and they are not rendered at all. The
+          markup stays inside the same flag the data already uses, so turning
+          `mockAnalytics` on brings the panels back with it — one switch, not
+          two, which is the mistake that let the data and its packaging drift
+          apart in the first place. */}
+      {FLAGS.mockAnalytics && (
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1.4fr 1fr",gap:"14px"}}>
         {/* Jungle Intelligence */}
         <div style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"14px",padding:"18px"}}>
@@ -634,6 +651,7 @@ export function CalendarScreen({onBack, onStartClass}) {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
