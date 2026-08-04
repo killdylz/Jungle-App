@@ -140,10 +140,22 @@ its neighbour). Pretending otherwise costs the neighbour.
 ### Still open
 
 §3.2 save toasts (partial), §3.5's Members "Check-in speed" panel, §3.7 skeletons, sweep §1.5, and
-§1.3's `removeClass` / `handleReset` / `handleNewClass`. **Everything is pushed** —
-`main` is at `93fefb4`. ⚠️ `gh` is **not installed in this shell**, so the `Deploy to GitHub Pages`
-run could not be checked from here; verify it before assuming green. §0 is unchanged: migrations
-`0005` and `0006` still need running, and until then the coach corpus exists on exactly one laptop.
+§1.3's `removeClass` / `handleReset` / `handleNewClass`. **Everything is pushed and the deploy is
+green** — `main` at `68ac39a`, `Deploy to GitHub Pages` **success**.
+
+⚠️ **Cancelled deploy runs in this repo are usually NOT failures.** Four pushes inside sixteen
+minutes produced one `success` and three `cancelled`: GitHub Pages uses a concurrency group that
+cancels an in-flight deploy the moment a newer push arrives, so only the last one needs to finish.
+Reading one of those as a red build is the mirror image of session 24's mistake. Judge the run
+whose SHA is `HEAD`, by workflow **name**, and ignore superseded ones.
+
+`gh` **is now installed and authenticated** (2.97.0, as `killdylz`) — the earlier note that it was
+missing is obsolete. ⚠️ It resolves on `PATH` only in a shell started *after* the install; an
+older session must call `"C:\Program Files\GitHub CLI\gh.exe"` by full path, and `gh` outside the
+repo needs `--repo killdylz/Jungle-App` or it cannot infer the base repo.
+
+§0 is unchanged: migrations `0005` and `0006` still need running, and until then the coach corpus
+exists on exactly one laptop.
 
 ---
 
