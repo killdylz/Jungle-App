@@ -484,8 +484,19 @@ export function CalendarScreen({onBack, onStartClass}) {
                           <Pencil size={10}/>
                         </button>
                       )}
+                      {/* ⚠️ The ✕ below is deliberately NOT `data-tap`. It was,
+                          briefly, and it made the Pencil above UNCLICKABLE — the
+                          two sit 14px apart (right:16px and right:2px) inside a
+                          grid cell, so a 44px overlay on this one covers that one
+                          completely. Nine e2e tests went red on the EDIT flow and
+                          not one of them mentions tap targets, which is the
+                          point: an overlay that eats a neighbour shows up as the
+                          neighbour being broken, three files away. `orphanScan`
+                          in tapScan.js now fails on exactly this, so the next
+                          attempt is caught by the sweep rather than by the
+                          schedule suite. */}
                       {cls.id && (
-                        <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`} data-tap
+                        <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`}
                           onClick={()=>removeClass(cls.id, cls.name)}
                           style={{position:"absolute",top:"2px",right:"2px",background:"transparent",border:"none",padding:"2px",cursor:"pointer",color:"var(--muted)",lineHeight:0,opacity:0.55}}>
                           <X size={11}/>

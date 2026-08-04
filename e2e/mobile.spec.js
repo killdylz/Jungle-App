@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { freshApp, watchConsole, expectNoConsoleErrors, ALL_SCREENS, navAnyWidth, waitForAppAnyWidth } from "./helpers.js";
-import { tapScan, reportTaps } from "./tapScan.js";
+import { tapScan, reportTaps, orphanScan, reportOrphans } from "./tapScan.js";
 
 // The phone layout (audit 1.1). "Most of this will be used on a phone in a loud
 // room", so the navigation a coach uses mid-class gets its own tests.
@@ -126,6 +126,12 @@ test.describe("tap targets at phone width", () => {
 
       const scan = await tapScan(page);
       expect(scan.misses, reportTaps(`${screen.side} at 390px`, scan)).toEqual([]);
+
+      // ...and no overlay may have swallowed the control NEXT to it. This is the
+      // direction that actually shipped a bug, and it surfaces three files away
+      // from the change, so it belongs in the same sweep as the change.
+      const orphans = await orphanScan(page);
+      expect(orphans.orphans, reportOrphans(`${screen.side} at 390px`, orphans)).toEqual([]);
     });
   }
 
@@ -166,4 +172,42 @@ test.describe("tap targets at phone width", () => {
     await page.mouse.click(box.x + box.width + 4, box.y + box.height / 2);
     await expect(page.getByRole("dialog", { name: /profile/i })).toBeVisible();
   });
+});
+
+// ── The gap the empty-fixture sweep leaves ───────────────────────────────────
+//
+// The nine screen sweeps above run on a FRESH app, and a fresh app has an empty
+// schedule — no class cards, so neither the Edit pencil nor the Remove ✕ exists
+// to be scanned. That is how a `data-tap` overlay that covered the pencil got
+// past the sweep and was caught instead by nine tests in scheduleEdit.spec.js,
+// under the symptom "the edit dialog never opens".
+//
+// An empty screen passes every scan trivially. So this one seeds a real class
+// first, and it is the schedule grid specifically because that cell is the
+// tightest cluster of controls in the product: two icon buttons 14px apart.
+test("the schedule grid's icon buttons stay clickable once there IS a class", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(2026, 6, 20, 12, 0, 0));   // Mon 20 July 2026
+  await page.setViewportSize({ width: 390, height: 844 });
+  await freshApp(page);
+  await waitForAppAnyWidth(page);
+  await navAnyWidth(page, ALL_SCREENS.find(s => s.key === "calendar"));
+
+  await page.getByRole("button", { name: "Add a class on Wed at 18:00" }).click();
+  await page.getByPlaceholder(/class name/i).fill("Wednesday Hyrox");
+  await page.getByRole("button", { name: "Add to schedule" }).click();
+
+  // POSITIVE CONTROL — both controls must actually be on the page, or the scan
+  // below is measuring the same empty grid that missed this the first time.
+  const pencil = page.getByRole("button", { name: /^Edit Wednesday Hyrox on Wed/ });
+  const cross  = page.getByRole("button", { name: /^Remove Wednesday Hyrox on Wed/ });
+  await expect(pencil).toHaveCount(1);
+  await expect(cross).toHaveCount(1);
+
+  const orphans = await orphanScan(page);
+  expect(orphans.orphans, reportOrphans("Schedule (populated) at 390px", orphans)).toEqual([]);
+
+  // And the behavioural proof, which is what the coach actually cares about:
+  // the pencil still opens the edit dialog rather than deleting the class.
+  await pencil.click();
+  await expect(page.getByRole("dialog", { name: "Edit class" })).toBeVisible();
 });

@@ -85,3 +85,57 @@ export const reportTaps = (where, scan, minPx = 44) =>
   scan.misses.map(m =>
     `  ${JSON.stringify(m.name)} (box ${m.box}) — dead at ${m.dead.map(d => `${d.dir} → ${d.stolenBy}`).join(", ")}`
   ).join("\n");
+
+// ── The other direction: an overlay that eats its NEIGHBOUR ──────────────────
+//
+// `tapScan` asks whether a marked control's own 44px square belongs to it. It
+// cannot see the more dangerous failure, because that one happens to a DIFFERENT
+// element: an overlay big enough to cover the control next to it.
+//
+// This shipped. The schedule grid's Edit pencil (right:16px) and Remove ✕
+// (right:2px) sit 14px apart in a cell; marking the ✕ laid a 44px square over
+// the pencil and made it completely unclickable. Nine tests in scheduleEdit.spec
+// and revealed.spec went red and not one of them mentions tap targets — the
+// symptom was "the edit dialog never opens", three files away from the change.
+//
+// So: every visible interactive control on the page must own its own centre. If
+// something else is there, it cannot be clicked at all, whatever its size.
+//
+// Scoped to thefts by a `[data-tap]` element on purpose. A control covered by a
+// modal backdrop, a sticky header or a dropdown is legitimately unclickable at
+// that moment and is a different question; narrowing to the one mechanism this
+// file introduces keeps the rule sharp enough that a failure is always a real
+// defect rather than a judgement call.
+export const orphanScan = (page) => page.evaluate(() => {
+  const SEL = "button,a[href],input:not([type=hidden]),select,textarea,[role=button]";
+  const out = { scanned: 0, orphans: [] };
+
+  for (const el of document.querySelectorAll(SEL)) {
+    if (typeof el.checkVisibility === "function" && !el.checkVisibility()) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) continue;
+    out.scanned++;
+
+    const hit = document.elementFromPoint(cx, cy);
+    if (!hit || hit === el || el.contains(hit) || hit.contains(el)) continue;
+
+    const thief = hit.closest("[data-tap]");
+    if (!thief || thief === el || el.contains(thief)) continue;
+
+    out.orphans.push({
+      name: el.getAttribute("aria-label") || (el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 34) || "(unnamed)",
+      box: `${Math.round(r.width)}x${Math.round(r.height)}`,
+      stolenBy: thief.getAttribute("aria-label")
+        || (thief.innerText || "").replace(/\s+/g, " ").trim().slice(0, 34) || "(unnamed [data-tap])",
+    });
+  }
+  return out;
+});
+
+export const reportOrphans = (where, scan) =>
+  `${where}: ${scan.orphans.length} of ${scan.scanned} controls cannot be clicked — a [data-tap] overlay covers their centre.\n` +
+  scan.orphans.map(o =>
+    `  ${JSON.stringify(o.name)} (box ${o.box}) is covered by ${JSON.stringify(o.stolenBy)}`
+  ).join("\n");
