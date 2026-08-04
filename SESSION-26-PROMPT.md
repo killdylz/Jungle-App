@@ -144,9 +144,9 @@ a different test red.
 The claim — "it holds a whole class in local React state and navigating away loses it silently",
 with a guard proposed on `navTo` — was **driven in the running app and is false in both halves**:
 
-- `stages`, `sessionName` and `classChoice` live at the **App root** (`App.jsx:3192-3194`), not in
-  `BuilderScreen`. `navTo` only changes `view`, which swaps which screen renders. The state is
-  never unmounted, so a navigation round trip cannot lose it.
+- `stages`, `sessionName` and `classChoice` live at the **App root** (`App.jsx:3184`, `:3193`,
+  `:3194`), not in `BuilderScreen`. `navTo` only changes `view`, which swaps which screen renders.
+  The state is never unmounted, so a navigation round trip cannot lose it.
 - A `useEffect` on all three calls `store.saveDraftClass` on **every change**, so the draft is on
   disk before the coach can navigate at all. A rename survives a full `page.reload()`.
 

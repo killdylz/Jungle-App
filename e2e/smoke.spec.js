@@ -153,3 +153,58 @@ test.describe("smoke: the path a coach walks every class", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── The spinners actually spin ───────────────────────────────────────────────
+//
+// `@keyframes spin` lived in src/App.css — Vite scaffolding that NOTHING
+// IMPORTS. main.jsx imports src/index.css and only that, and no file in the repo
+// referenced App.css at all. So the six inline `animation: spin 1s linear
+// infinite` Loader icons resolved to nothing and sat perfectly still. Four are on
+// live paths (listing Slides decks, importing them, reading a pasted class,
+// generating in a coach's style) and every one is slow and network-bound, where
+// the turning icon is the ONLY signal the app is working. "Working" and "hung"
+// looked identical.
+//
+// This is exactly the class of defect that rots silently: nothing throws, nothing
+// renders wrong, and a screenshot of a spinner looks the same whether or not it
+// is moving. The fix moved the keyframes into the stylesheet that is loaded, and
+// the fix arrived without a test — so here it is.
+//
+// It asserts BEHAVIOUR, not the presence of a rule. Checking that a CSSKeyframes
+// rule named "spin" exists would pass on a stylesheet that is parsed but never
+// applied; sampling the real transform over time is the thing a coach sees.
+test.describe("loading spinners", () => {
+  test("the spin keyframes are in a stylesheet the app actually loads", async ({ page }) => {
+    await freshApp(page);
+
+    const probe = await page.evaluate(async () => {
+      const mk = (animation) => {
+        const el = document.createElement("div");
+        el.style.cssText = `position:fixed;left:-9999px;width:10px;height:10px;animation:${animation}`;
+        document.body.appendChild(el);
+        return el;
+      };
+      // The exact declaration the app's six Loader icons use.
+      const real = mk("spin 1s linear infinite");
+      // NEGATIVE CONTROL, in the same run: an animation whose keyframes do not
+      // exist. Without it, "the transform changed" could be true of any element
+      // and the assertion below would prove nothing about `spin` specifically.
+      const bogus = mk("definitely-not-a-real-keyframe-name 1s linear infinite");
+
+      await new Promise((r) => setTimeout(r, 300));
+      const read = (el) => getComputedStyle(el).transform;
+      const out = { real: read(real), bogus: read(bogus) };
+      real.remove(); bogus.remove();
+      return out;
+    });
+
+    // A live rotation resolves to a matrix. A missing keyframe leaves the
+    // element untransformed — which is precisely what all six spinners were.
+    expect(probe.bogus, "negative control: an undefined keyframe must not transform anything")
+      .toBe("none");
+    expect(probe.real,
+      "`animation: spin` resolved to nothing — the keyframes are not in a loaded stylesheet, " +
+      "so every Loader icon in the app is frozen and a slow path is indistinguishable from a hung one")
+      .toMatch(/^matrix\(/);
+  });
+});
