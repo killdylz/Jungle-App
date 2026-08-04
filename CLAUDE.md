@@ -1,0 +1,163 @@
+# Jungle — working notes for Claude
+
+The class operating system for boutique fitness studios. React 19 + Vite, local-first
+(localStorage is the source of truth, Supabase syncs behind it), deployed to GitHub Pages.
+
+**This file is the stuff that is expensive to rediscover.** It is deliberately short so it
+actually gets read. The full reasoning behind every decision lives in commit messages and
+`SESSION-HANDOFF.md`; this is the operational layer.
+
+---
+
+## Gates
+
+```bash
+npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
+```
+
+Green as of `e03cae0`: **`lint:crash` 0 · 809 unit (28 files) · 393 e2e (38 spec files) ·
+5-chunk build · 0 over budget.** App.jsx is **3,420 lines**.
+
+- `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
+  advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
+  it resolves identifiers, not JSX element names.
+- ⚠️ **e2e can fail broadly on a stale dev server holding port 5191.** Symptoms are
+  `ERR_CONNECTION_REFUSED` or `Failed to fetch dynamically imported module` across many specs.
+  **Re-run once before investigating.**
+- Raise a size ceiling **only** in the commit that needs it, and say what bought the bytes.
+- **No infra changes without asking Dylan.**
+
+---
+
+## Shell (Windows)
+
+PowerShell 5.1 is primary; a Bash tool exists too. Each has its own syntax and they do not
+share a filesystem view.
+
+- **`npm.cmd` / `npx.cmd`**, not `npm` / `npx`.
+- **PS 5.1 wraps native stderr as `NativeCommandError`.** A `git push` that reports this and
+  prints `abc123..def456 main -> main` **succeeded**. Read the last line, not the error class.
+- ⚠️ **PowerShell mangles `node -e` containing `--`.** `var(--muted)` parses as a unary
+  operator and the command dies with `Missing expression after unary operator '--'`. Use a Bash
+  heredoc writing a `.mjs`, or just use the Edit tool.
+- ⚠️ **Git Bash `/tmp` is not Node's `C:\tmp`.** A heredoc written in Bash and read by
+  `node -e` fails with `ENOENT`. Use one tool for both halves, or write into the repo and delete.
+- ⚠️ **`playwright test -g "a|b"` exits 255** in this shell. Filter by file path instead.
+- **Write commit messages to a file and use `git commit -F`.** Multi-line `-m` is painful here.
+- ⚠️ **`git add -A` before `rm`ing your message file commits the message file.** Prefer
+  `git commit -F msg.txt --only <paths>`.
+- ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing
+  a literal escape sequence into source needs a one-shot `.mjs`.
+
+### More than one session may share this working tree
+
+It has happened, and it is not obvious while it is happening: another session can commit your
+uncommitted work, delete a scratch file you are using, and leave a `MUTATION` marker in a source
+file that makes your gate run lie.
+
+- `git status` before every commit, and stage **only your own paths**. Never `git commit -a`.
+- `grep -rn MUTATION src/` before trusting any green gate.
+- Prefer new, uniquely-named files over edits to shared ones.
+
+---
+
+## CI
+
+```bash
+gh run list --repo killdylz/Jungle-App --workflow "Deploy to GitHub Pages" --limit 5
+```
+
+- **Filter by workflow NAME.** `Deploy to GitHub Pages` is the run that gates this repo. The
+  `npm_and_yarn` Dependabot run has been **red since `76b800c`** and is not a build failure.
+- ⚠️ **`cancelled` is usually not a failure.** GitHub Pages uses a concurrency group that kills
+  an in-flight deploy when a newer push arrives, so several pushes in a row leave one `success`
+  and a trail of `cancelled`. **Judge the run whose SHA is `HEAD`.**
+- `gh` resolves on `PATH` only in a shell started *after* it was installed; otherwise call
+  `"C:\Program Files\GitHub CLI\gh.exe"`. Outside the repo it needs `--repo killdylz/Jungle-App`.
+
+---
+
+## How work is done here
+
+**Before starting any named backlog item, verify it against the code.** Session 26 found three
+items on its own prompt that were false — a data-loss guard for a loss that could not happen, a
+"three offenders" list that was a hundred, and a requested assertion that would have pinned a
+product decision backwards. Prose in a handoff is where stale claims survive and get more
+confident with each rewrite.
+
+**Every change lands with a test that fails when the change is reverted.** Mutate the source,
+confirm red, revert with the **inverse edit**, and `git diff` before stopping. Polish is exactly
+the category that rots silently, because nothing breaks when it regresses.
+
+**Every sweep carries a positive control in the same run.** A scan that matched nothing and a
+scan that found nothing are indistinguishable from the assertion's side, and this repo has been
+fooled by exactly that. If a sweep cannot be made to fail, delete it.
+
+🔴 **An empty screen passes every scan trivially.** This has now bitten twice in one session, in
+two different files: a tap sweep and an interaction sweep both went green on screens that had
+nothing on them. Seed the fixture, and assert the thing you are about to measure exists first.
+
+**Drive the UI, and then LOOK at it** — at 1280px and 390px. Mutation-checked tests have still
+missed real defects; reading the rendered screen caught copy defects that 367 passing tests did
+not. **Assert the STORED object, not only what was rendered.**
+
+**A passing test can pin a defect.** Green means the code matches the tests, not the product.
+
+---
+
+## Testing traps
+
+- ⚠️ **Playwright AUTO-DISMISSES dialogs.** A test that clicks a delete and asserts the row is
+  gone is exercising **cancel**. Use `page.once("dialog", d => d.accept())` and drive both paths.
+- ⚠️ **`nav()` leaves focus on the button it clicked.** Any test pressing a key, or walking the
+  tab order, starts halfway down. `blur()` does **not** reset it — Chromium keeps a sequential
+  focus navigation starting point. Use
+  `document.body.setAttribute("tabindex","-1"); document.body.focus();`.
+- ⚠️ **Three nav vocabularies**: sidebar "Class Builder" / More sheet "Builder" / bottom bar
+  "Build", and below **900px** there is no sidebar. `ALL_SCREENS` and `navAnyWidth` in
+  `e2e/helpers.js` hold all three — use them rather than a fourth list.
+- ⚠️ **Resizing without reloading shows a stale render.** Every responsive assertion must be on
+  a fresh load at the stated width.
+- ⚠️ **A fixed clock freezes `Date.now()`**, so ids derived from it collide across a re-mint.
+- ⚠️ **Do not report a defect your own fixture manufactured.** If you had to guess a row's
+  shape, a crash on it is not evidence.
+- ⚠️ **Screenshots fail unless the Browser pane is displayed.** Use `read_page`, `get_page_text`
+  and `javascript_tool` geometry reads.
+
+---
+
+## Domain rules that are easy to get wrong
+
+- **`daysBetween` counts LOCAL CALENDAR DAYS**, not 24-hour periods. The datum is a date and the
+  reader is a human with a calendar.
+- **A class type's NAME is its key in FOUR places**, including the generation ledger. A rename
+  must carry them; a MOVE must not.
+- **`aggregateMovements` re-derives the catalogue from the plans on every recompute** and has no
+  tombstone. A zero-occurrence row is KEPT when it carries a manual edit.
+- **`deletePersonaMovement` is CONDITIONAL** — safe only for a zero-occurrence row. Read the
+  comment above it.
+- **`restorePersonaCascade` and `_clearLedgerIfSettled`** (`store.js`) look redundant and are
+  not. Both have unit tests saying so. Do not "simplify" them.
+- **`--danger` is deliberately not skin-derived.** A gym whose accent is red must not get a
+  delete button matching its primary action.
+- **`isViewEnabled` is the single choke-point** for what appears in a nav — there are four nav
+  arrays in `App.jsx`, and a second rule bolted onto one of them is how a screen survives in
+  exactly one menu.
+- **Destructive actions are CONFIRMED or UNDOABLE**, and the guard scales with what is destroyed.
+  An undo holds the **prior list**, not the deleted row — position is part of what was lost.
+- **A confident wrong number is worse than no number**, and a panel promising a feature that
+  cannot arrive is worse than no panel.
+
+---
+
+## Where the rest lives
+
+- `SESSION-HANDOFF.md` — the two most recent sessions in full. Read the top block first.
+- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–23.
+- `DYLAN-QUEUE.md` — what needs Dylan rather than code.
+- Commit messages carry the reasoning. `git log` is the real design record here.
+
+🔴 **Outstanding and not code:** migrations `0005_coach_personas.sql` and
+`0006_persona_generations.sql` have never been applied. Until they are, a gym's personas, plans
+and movement catalogue exist on **one device with no server copy**. Also **10 unmerged Dependabot
+PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**
