@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm run lint:crash)",
+      "PowerShell(npm test)",
+      "PowerShell(npm run test:e2e)",
+      "PowerShell(npm run size)",
+      "PowerShell(npx eslint .)",
+      "PowerShell(npx playwright test *)",
+      "PowerShell(npx vitest run *)",
+      "PowerShell(git status *)",
+      "PowerShell(git log *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git show *)",
+      "PowerShell(git fetch *)",
+      "PowerShell(git rev-parse *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Write-Output *)",
+      "PowerShell(Test-Path *)",
+      "Bash(npm run lint:crash)",
+      "Bash(npm test)",
+      "Bash(npm run size)",
+      "Bash(npx playwright test *)",
+      "Bash(npx vitest run *)",
+      "Bash(npx eslint .)"
+    ]
+  }
+}

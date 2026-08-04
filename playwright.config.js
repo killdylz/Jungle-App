@@ -13,13 +13,25 @@ import { defineConfig, devices } from "@playwright/test";
 //
 // Port 5191 is its own: a second chat often holds 5173, and the dev/preview
 // servers used while working sit on 5180/5190.
-const PORT = 5191;
+//
+// ⚠️ OVERRIDABLE, because 5191 being fixed is what makes two concurrent sessions
+// fight. When a second session runs the suite it takes over (or kills) the first
+// one's server, and the symptom is a cascade of ERR_CONNECTION_REFUSED and
+// "Failed to fetch dynamically imported module" across dozens of unrelated
+// specs — which reads exactly like a broken build and is not one.
+//
+//   $env:JUNGLE_E2E_PORT = "5291"; npm run test:e2e      # second session
+//
+// The DEFAULTS ARE UNCHANGED, deliberately: CI sets nothing, so it resolves to
+// 5191/5192 exactly as before. An env var that alters the default would be a
+// change to the thing that gates this repo, dressed up as a convenience.
+const PORT = Number(process.env.JUNGLE_E2E_PORT) || 5191;
 const BASE = `http://localhost:${PORT}/Jungle-App/`;
 
 // The offline suite needs the PRODUCTION artifact: the service worker registers
 // only in a prod build (in dev it would fight HMR), so an offline test against
 // the dev server proves nothing. It gets its own preview server and port.
-const PREVIEW_PORT = 5192;
+const PREVIEW_PORT = Number(process.env.JUNGLE_PREVIEW_PORT) || PORT + 1;
 const PREVIEW_BASE = `http://localhost:${PREVIEW_PORT}/Jungle-App/`;
 
 export default defineConfig({

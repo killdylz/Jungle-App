@@ -59,9 +59,37 @@ It has happened, and it is not obvious while it is happening: another session ca
 uncommitted work, delete a scratch file you are using, and leave a `MUTATION` marker in a source
 file that makes your gate run lie.
 
+**If you are sharing a tree** (check `git worktree list` — one entry means everyone is in the
+same checkout):
+
 - `git status` before every commit, and stage **only your own paths**. Never `git commit -a`.
 - `grep -rn MUTATION src/` before trusting any green gate.
 - Prefer new, uniquely-named files over edits to shared ones.
+
+**Better: give each session its own worktree.** Same repo, same history, separate files, so the
+collision is structurally impossible rather than something you have to keep noticing:
+
+```bash
+git worktree add ../jungle-s27 -b session-27
+cd ../jungle-s27 && npm install        # node_modules is not shared
+```
+
+Merge back with a normal `git merge session-27`, then `git worktree remove ../jungle-s27`.
+
+### Two sessions cannot share a dev server either
+
+Ports are fixed by default and that is what makes concurrent runs fight. Both are overridable,
+and **the defaults are unchanged** so CI is unaffected:
+
+```bash
+$env:JUNGLE_E2E_PORT = "5291"; npm run test:e2e
+```
+
+`JUNGLE_E2E_PORT` moves the e2e dev server (default 5191); the preview server follows at
+`PORT + 1` unless `JUNGLE_PREVIEW_PORT` says otherwise. `.claude/launch.json` carries `dev`
+(5173), `dev-alt` (5180) and `dev-alt2` (5181) for the same reason — pick an unused one rather
+than fighting for 5173. All three pass `--strictPort`, so a taken port **fails loudly** instead
+of Vite silently picking another one that the preview pane then cannot reach.
 
 ---
 
