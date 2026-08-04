@@ -4,11 +4,16 @@
 regression depth → remove what is awkward → UI polish, no new surfaces → keep going. Depth and
 the awkward parts are done. **Polish is where 26 starts, and there is a real list.**
 
-**Last commit `7277d8f`**, tree clean. Gates:
-**`lint:crash` 0 · 809 unit (28 files, no todos) · 367 e2e (35 spec files, no fixme) ·
-`deadctl` 0 suspect / 73 files · build: member path 211.28 kB, staff 556.64 kB
-(StaffApp 346.67/360 kB — 3.2% headroom, the tightest budget in the repo).**
-App.jsx **3,602 lines** (was 3,513).
+**Last commit `b74cfe3`**, tree clean, pushed. Gates:
+**`lint:crash` 0 · 809 unit (28 files, no todos) · 381 e2e (35 spec files, no fixme) ·
+`deadctl` 0 suspect / 73 files · build: member path 211.49 kB, staff 557.10 kB
+(StaffApp 346.92/360 kB — 3.6% headroom, the tightest budget in the repo).**
+App.jsx **3,608 lines** (was 3,513).
+
+> 📌 **Session 25 ran on past this document being written.** Two of the eight polish items below
+> — §3.1 (half) and §3.4 — shipped after it, in `5525f2e` and `b74cfe3`, and the entries are
+> struck through and annotated rather than deleted so the reasoning stays readable. **Read the
+> annotations: §3.1 is only half done, and §3.4 opened a follow-up question.**
 
 ⚠️ **Still 10 unmerged Dependabot PRs** (#1–#10), unchanged since session 24. Five are MAJOR
 GitHub-Actions bumps (#1–#5), one is `@vitejs/plugin-react 5→6` (#6) which can change chunking,
@@ -123,18 +128,29 @@ should be either confirmed or undoable by the rule the session established:
 ## 🟦 3. UI polish — THE MAIN EVENT, and the list is concrete
 
 **Scope decision stands: POLISH ONLY, NO NEW SURFACES.** No new screens, no nav entries, no
-product concepts. Two of the ten are done. Here are the eight, re-verified against the code at
-`7277d8f`, highest value first.
+product concepts. Four of the ten are now done or half-done. Here are the eight as written,
+re-verified against the code, highest value first — with §3.1 and §3.4 annotated where session 25
+overtook them.
 
-### 3.1 🔴 Unsaved-changes guard — the only one that can still lose work
+### 3.1 🔴 Unsaved-changes guard — HALF DONE. The Builder is still unguarded.
 
-The Builder holds a whole class in local React state. Navigating away loses it silently. Same for
-the plan editor in `PersonasScreen`. **This is the last remaining silent data-loss path in the
-product now that the coach delete is guarded**, and it is the one a coach hits by accident rather
-than by a misclick on a delete button.
+✅ **The plan editor is done** (`5525f2e`). It had four ways out — backdrop, Escape, ✕, Cancel —
+and all four silently discarded 35 buttons and 82 fields of local state. It now hands the draft
+back through the undo toast, guarded on `dirty` so an untouched open stays instant and silent.
+Mutation-checked in both directions: forcing a silent discard and forcing always-dirty each turn
+a different test red.
 
-`navTo` in `App.jsx` is the single choke-point for every navigation — sidebar, bottom bar, More
-sheet and the dashboard rail all route through it. That is where the guard goes.
+🔴 **The Builder is NOT done and it is the bigger of the two.** It holds a whole class in local
+React state and navigating away still loses it without a word. `navTo` in `App.jsx` is the single
+choke-point for every navigation — sidebar, bottom bar, More sheet and the dashboard rail all
+route through it — so that is where the guard goes, and it is a different shape from the plan
+editor's: the editor could return a draft to its parent because it unmounts into a component that
+is still there, whereas leaving the Builder means the destination has already rendered.
+
+**Reuse the plan editor's structure, not its code:** capture `pristine` once in a ref, derive
+`dirty`, and let the toast hold the draft. The three tests in `destructive.spec.js` under
+"discarding an unsaved plan edit" are the template — including the one asserting the guard is
+**free on the untouched path**, which is the property that quietly rots into a confirm.
 
 ### 3.2 Save confirmation — the primitive now exists, wire it up
 
@@ -152,21 +168,26 @@ pressure with the coach's hands busy. ⚠️ `useDialog` already binds Escape at
 stops propagation specifically so the Runner's shortcuts do not fight a dialog — read that
 comment before adding a `keydown` listener.
 
-### 3.4 🔴 Touch-target audit at 390px — with three known offenders already
+### 3.4 ✅ Touch-target audit at 390px — DONE (`b74cfe3`), with one question left open
 
-Session 25 **measured** these, so this one starts with evidence rather than a hunt:
+The full measurement was **100 of 186 visible controls under 44px** at 390px. The mechanism is
+`data-tap`: a transparent 44px pseudo-element over the control's centre, so the hit area grows
+and the rendering does not. `e2e/tapScan.js` + the sweep in `mobile.spec.js` enforce it by
+**hit-testing the running page**, because the two ways this silently fails (`overflow:hidden`
+clipping the overlay, a neighbour's overlay painting over it) both leave the measured rectangle
+untouched — a rect-based sweep would report a false pass on a target that is dead to a thumb.
 
-| Control | Size | Guidance |
-|---|---|---|
-| Sync banner "Try now" | 66 × **32** | 44 |
-| Sync banner dismiss ✕ | 32 × **32** | 44 |
-| Toast "Undo" | 62 × **36** | 44 |
+It also turned up a real defect: **`@keyframes spin` lived in `src/App.css`, which nothing
+imports.** Six Loader spinners were frozen, four of them on the app's slowest network paths,
+where a still icon and a hung app look identical.
 
-The bottom nav is already correct at 52px and `mobile.spec.js` asserts it. **The honest fix is a
-shared rule, not three inline tweaks** — and once there is one, the sweep that enforces it is
-three lines in `layoutScan.js`. ⚠️ A 44px-tall ✕ inside a 9px-padded banner is genuinely ugly;
-the answer is probably padding that expands the hit area without the visible box, so decide the
-approach before editing.
+🔴 **THE OPEN QUESTION, and it is a judgement call rather than a task.** Only the controls
+someone judged thumb-critical carry `data-tap`. The sweep therefore proves *the marked ones work*
+— it says nothing about the other ~90. **Do not reflexively mark all of them**: `data-tap` on
+adjacent controls closer than 44px apart makes their overlays overlap and steal from each other,
+which the sweep will catch but which has no good fix beyond spacing them. The honest next step is
+to re-run the measurement, look at what is still small, and decide per control — not to chase the
+number to zero.
 
 ### 3.5 Empty states rewritten as actions (§2.2, re-verify each — the list is from session 24)
 
@@ -194,6 +215,10 @@ and timer**, and the **at-risk count** on Members.
 Lazy chunks show a bare `screen-loading` fallback; hydration shows nothing. ⚠️ `nav()` in
 `helpers.js` already waits on `screen-loading` — if the testid moves, every navigation in the
 suite silently stops waiting.
+
+⚠️ **The spinners themselves are now fixed** (`b74cfe3` — the keyframes were in an unimported
+stylesheet and every Loader was frozen). So a "the app looks hung" report from here on is a
+missing state, not a dead animation.
 
 ### 3.8 Consistent destructive styling
 
@@ -249,6 +274,18 @@ Everything in `SESSION-HANDOFF.md` still holds, plus:
   `read_page`, `get_page_text` and `javascript_tool` geometry reads instead — they caught the
   toast/bottom-bar clearance (15px) and the `"1 class plan, 11 movements"` copy defect that every
   assertion passed.
+- 🔴 **NEVER put `git status` and `git add -A` in the same shell command.** Session 25 did, so
+  the status scrolled past unread and `-A` swept up a second, concurrent body of work plus a
+  throwaway probe spec — committed under a message describing neither. It was caught and split
+  into `5525f2e` + `b74cfe3` before pushing, but only because the file list was checked
+  afterwards. **Read the status, then stage explicit paths.**
+- ⚠️ **A `*.spec.js` scratch file in `e2e/` runs in CI.** There is no `testMatch` narrowing —
+  `playwright.config.js` takes the whole directory. A probe left behind is a live test.
+- ⚠️ **`overflow: hidden` clips a `::after` hit-area overlay** back to the visible box, and the
+  element's measured rectangle does not change — so it looks exactly like the fix working.
+- ⚠️ **The e2e ports (5191/5192) can still be held by the previous run's server shutting down.**
+  The failure reads as `Port 5192 is already in use` plus a wall of `ERR_CONNECTION_REFUSED`.
+  Check `Get-NetTCPConnection -LocalPort 5191,5192 -State Listen`; if both are free, just re-run.
 - **`git fetch` before you commit**, and check CI by **workflow name** — filter for
   `Deploy to GitHub Pages`, not whatever ran last.
 - **Write commit messages to a file and use `git commit -F`.** PowerShell: `npm.cmd`/`npx.cmd`;
@@ -267,9 +304,9 @@ Everything in `SESSION-HANDOFF.md` still holds, plus:
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-**0 crash · 809 unit · 367 e2e · 5-chunk build · 0 over budget.** CI runs the same chain plus
-`size --prod`. ⚠️ e2e can fail broadly on a stale server holding port 5191 — **re-run once
-before investigating.**
+**0 crash · 809 unit · 381 e2e · 5-chunk build · 0 over budget.** CI runs the same chain plus
+`size --prod`. ⚠️ e2e can fail broadly on a stale server holding port 5191 or 5192 — **re-run
+once before investigating.**
 
 ---
 
@@ -301,6 +338,10 @@ before investigating.**
 - **Do not merge the Dependabot PRs** without asking.
 - **Do not "simplify"** `_clearLedgerIfSettled`'s empty-delta branch or `restorePersonaCascade`'s
   unmarking. Both look redundant and are not; both have a unit test that says so.
+- **Do not replace the tap sweep's hit-testing with a `boundingClientRect` check.** It is the
+  obvious simplification and it is wrong in both directions — see `e2e/tapScan.js`'s header.
+- **Do not "fix" a tap-target failure by growing the visible box.** A test asserts the avatar
+  stays 32px precisely so that change has to be argued for rather than slipped in.
 - **Do not re-raise:** N4, the a11y sweep, the crash gate's JSX blind spot, I10, DEC-12/13, I6,
   the `class_type` vocabulary, the CSV backfill, the class-type rename, the recommendation panel,
   the catalogue delete, the orphaned-row card, `Reopen`, `GEN_CAP`, `deadctl`'s FLAGS gating,

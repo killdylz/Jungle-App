@@ -12,10 +12,10 @@ _Last updated: 2026-08-04 (session 25)_
 
 ## Session 25 — the banner that could not be cleared, two sweeps, and the first undo
 
-> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **367 e2e**
+> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **381 e2e**
 > (35 spec files, no fixmes) · `deadctl` **0 suspect / 73 files** · five-chunk build:
-> member path **211.28 KB**, staff **556.64 KB** (StaffApp **346.67/360 KB**, the tightest
-> budget in the repo). App.jsx **3,602 lines** (was 3,513).
+> member path **211.49 KB**, staff **557.10 KB** (StaffApp **346.92/360 KB**, the tightest
+> budget in the repo). App.jsx **3,608 lines** (was 3,513). Last commit **`b74cfe3`**.
 
 **The brief had four parts in order: regression depth, remove what is awkward, UI polish with no
 new surfaces, then keep going.** Depth and the awkward parts landed. Polish is where 26 starts.
@@ -90,6 +90,27 @@ not announced), 9s for undoable toasts vs 2.5s for plain, and `pointerEvents:non
 region so it cannot eat taps meant for the bottom bar. The coach delete gets **both** a confirm
 and an undo; removing a plan gets undo only.
 
+### Then it kept going: the plan editor, and a hit area a thumb can find
+
+**§3.1 (half).** The plan editor held 35 buttons and 82 fields of local state and had four ways
+out — backdrop, Escape, ✕, Cancel — all of which discarded it in silence. It now hands the draft
+back through the undo toast, guarded on `dirty` so an untouched open stays instant. **The Builder
+is still unguarded and is the bigger of the two.**
+
+**§3.4, plus a real defect underneath it.** `@keyframes spin` lived in `src/App.css`, which
+**nothing imports** — `main.jsx` imports `index.css` and only that. Six Loader spinners were
+frozen, four of them on the app's slowest network paths, where a still icon and a hung app look
+identical. Tap targets: 100 of 186 visible controls were under 44px at 390px; `data-tap` lays a
+transparent 44px pseudo-element over the thumb-critical ones so the hit area grows and the
+rendering does not.
+
+🔴 **The tap sweep hit-tests the running page rather than measuring rectangles**, because the two
+ways the overlay silently dies — an `overflow:hidden` ancestor clipping it, a neighbour's overlay
+painting over it — both leave the measured box exactly as it was. A rect-based sweep reports a
+false pass on a target that is dead to a thumb. Only the marked controls are proven; **the ~90
+unmarked ones are a judgement call, not a backlog item** — marking adjacent controls closer than
+44px apart just makes them steal from each other.
+
 ### Traps this session paid for
 
 - 🔴 **`blur()` does not reset the tab order.** Chromium keeps a *sequential focus navigation
@@ -106,6 +127,14 @@ and an undo; removing a plan gets undo only.
   the ledger, so it is never retried and never shown. Same class of bug the ledger exists for, in
   the one path never wired to it. **Not fixed**; it needs a decision about what retrying a delete
   means with no local tombstone.
+- 🔴 **Never put `git status` and `git add -A` in one shell command.** The status scrolls past
+  unread and `-A` sweeps up whatever else is in the tree. It happened here: a commit about the
+  plan editor swallowed the entire tap-target body of work plus a throwaway probe spec. Caught
+  before pushing and split into `5525f2e` + `b74cfe3`, but only because the file list was checked
+  afterwards. **Read the status, then stage explicit paths.**
+- ⚠️ **A `*.spec.js` scratch file in `e2e/` runs in CI** — there is no `testMatch` narrowing.
+- ⚠️ **`overflow:hidden` clips a `::after` hit-area overlay** back to the visible box, with no
+  change to the measured rectangle — it looks exactly like the fix working.
 
 ### Eight mutation proofs, all reverted with the inverse edit
 
