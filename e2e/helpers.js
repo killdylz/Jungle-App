@@ -114,7 +114,6 @@ export const ALL_SCREENS = [
   { key: "live",         side: "Class Runner",     bar: "Run" },
   { key: "calendar",     side: "Schedule",         sheet: "Schedule" },
   { key: "member",       side: "Members",          sheet: "Members",      bar: "Members" },
-  { key: "team",         side: "Team",             sheet: "Team" },
   { key: "brand-studio", side: "Brand Studio",     sheet: "Brand Studio", bar: "Brand" },
 ];
 

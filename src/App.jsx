@@ -755,7 +755,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
-  ].map(g => ({ ...g, items: g.items.filter(it => isViewEnabled(it.k)) })).filter(g => g.items.length);
+  ].map(g => ({ ...g, items: g.items.filter(it => isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
 
   const card = {background:"var(--card)",border:"1px solid var(--border)",borderRadius:"14px"};
   const navBtn = (on) => ({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
@@ -3009,7 +3009,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle,cap:"class:view"}]},
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
-  ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k)) })).filter(g => g.items.length);
+  ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
   const first = profile?.display_name?.split(" ")?.[0] || "Coach";
   const navBtn=(on)=>({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
   return (
@@ -3057,7 +3057,7 @@ const BOTTOM_NAV = [
 ];
 
 function BottomNav({ view, onNavigate, onMore, moreOpen, can=(()=>true) }) {
-  const items = BOTTOM_NAV.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.key));
+  const items = BOTTOM_NAV.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.key, { supabaseEnabled }));
   const tab = (on) => ({
     flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
     gap:"3px", padding:"7px 2px 4px", background:"transparent", border:"none", cursor:"pointer",
@@ -3460,7 +3460,7 @@ export default function App() {
     {key:"team",         label:"Team",         icon:"\ud83d\udee1\ufe0f",  group:"Studio", cap:"members:manage"},
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio",   cap:"integrations:manage"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio",   cap:"brand:view"},
-  ].filter(n => (!n.cap || can(n.cap)) && isViewEnabled(n.key));
+  ].filter(n => (!n.cap || can(n.cap)) && isViewEnabled(n.key, { supabaseEnabled }));
   const isFullscreen = view==="room-tv";
   const navGroups = ["Main","Insights","Tools","Studio"].filter(g => allNavItems.some(n => n.group===g));
   const navTo = key => {

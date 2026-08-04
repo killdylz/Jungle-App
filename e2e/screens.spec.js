@@ -41,7 +41,6 @@ const SCREENS = [
   ["Class Runner",    /Room TV|Check in|Run/i],
   ["Schedule",        /Planning & schedule/i],
   ["Members",         /Your roster and the attendance history behind it/i],
-  ["Team",            /Team/i],
   ["Brand Studio",    /Upload your brand|TEMPLATES/i],
 ];
 

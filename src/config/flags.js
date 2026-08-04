@@ -51,7 +51,29 @@ const MOCK_VIEW_FLAG = {
   glossary: false,
 };
 
-export function isViewEnabled(key) {
+// Views that need a SERVER, not a flag.
+//
+// UI-POLISH §3.5. The Team screen's entire content, with Supabase unconfigured,
+// was one sentence: "Team accounts are available on the online version of
+// Jungle." A nav entry whose only job is to tell you it does not work here is
+// worse than no nav entry — the coach spends a click and a screen to learn that
+// a thing they were offered is not on offer.
+//
+// This lives here rather than as an `&& supabaseEnabled` at the nav, because the
+// whole point of this module is that there is ONE place deciding what appears in
+// a nav; App.jsx has four nav arrays and a second rule would eventually apply to
+// three of them. It takes runtime context rather than reading `supabase.js`
+// itself so that flags.js stays a pure, importable statement of policy — a
+// config module that imports the Supabase client is a config module that cannot
+// be unit-tested.
+//
+// ⚠️ `ctx.supabaseEnabled === false` rather than `!ctx.supabaseEnabled`: an
+// omitted context must leave every view exactly as it was. A caller that has not
+// been taught about this yet gets the old answer, not a silently hidden screen.
+const NEEDS_SERVER = new Set(["team"]);
+
+export function isViewEnabled(key, ctx = {}) {
+  if (NEEDS_SERVER.has(key) && ctx.supabaseEnabled === false) return false;
   if (!(key in MOCK_VIEW_FLAG)) return true;
   const flag = MOCK_VIEW_FLAG[key];
   return flag === false ? false : !!FLAGS[flag];

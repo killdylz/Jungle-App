@@ -59,7 +59,7 @@ async function seedRichGym(page) {
 }
 
 const SCREENS = ["Dashboard", "Class Builder", "Coaches", "Exercise Library",
-                 "Class Runner", "Schedule", "Members", "Team", "Brand Studio"];
+                 "Class Runner", "Schedule", "Members", "Brand Studio"];
 
 test.describe("no stored value is shown to a coach raw", () => {
   for (const label of SCREENS) {

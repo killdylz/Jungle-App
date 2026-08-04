@@ -226,3 +226,46 @@ test("destructive controls are visually distinct from their neighbours", async (
   const deleteCoach = page.getByRole("button", { name: /^Delete coach / }).first();
   expect(await colourOf(deleteCoach)).toBe(removeColour);
 });
+
+// ── §3.5 · a nav entry whose only content is "not here" ──────────────────────
+//
+// With Supabase unconfigured, the Team screen's ENTIRE content was one sentence:
+// "Team accounts are available on the online version of Jungle." A destination
+// that costs a click and a screen to tell you it is not a destination.
+//
+// So it is not offered when there is no server behind it. The decision goes
+// through `isViewEnabled`, which is the single choke-point for what appears in a
+// nav — App.jsx has FOUR nav arrays, and an `&& supabaseEnabled` bolted onto one
+// of them is how a screen ends up visible in exactly one menu. All four now pass
+// the context.
+//
+// ⚠️ Removing Team from ALL_SCREENS was NOT a workaround for this test — the
+// inventory guard in responsive.spec.js checks that list against the running
+// app's sidebar in both directions, so leaving it in would correctly fail.
+test("Team is not offered when there is no server to manage a team on", async ({ page }) => {
+  const errors = watchConsole(page);
+  await freshApp(page);
+
+  // POSITIVE CONTROL: this build really is the credential-less one. Without it,
+  // "Team is absent" would also pass on a build where it is legitimately absent
+  // for some other reason, or on a page that failed to render at all.
+  await expect(page.getByRole("button", { name: "Class Runner", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Brand Studio", exact: true })).toBeVisible();
+
+  await expect(page.getByRole("button", { name: "Team", exact: true }),
+    "the sidebar must not offer a screen that cannot work here").toHaveCount(0);
+  await expect(page.getByText(/available on the online version/i),
+    "and the apology copy goes with it").toHaveCount(0);
+
+  // The More sheet is a separate nav array reading the same choke-point, and is
+  // exactly where a screen survives when only one array is updated.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await freshApp(page);
+  await page.locator("nav").first().getByRole("button", { name: "More", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Brand Studio$/ }).first(),
+    "positive control: the sheet is open and populated").toBeVisible();
+  await expect(page.getByRole("button", { name: /Team$/ }),
+    "the More sheet must agree with the sidebar").toHaveCount(0);
+
+  expectNoConsoleErrors(errors);
+});
