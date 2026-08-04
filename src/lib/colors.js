@@ -295,6 +295,24 @@ export function applySkinCSS(tokens, meta={}) {
   // was the dark one, and picked the less readable colour on a light skin.
   r.setProperty("--on-accent", inkOn(tokens.accent, tokens.bg, tokens.text));
   r.setProperty("--on-green",  inkOn(tokens.green,  tokens.bg, tokens.text));
+  // ── Destructive ─────────────────────────────────────────────────────────────
+  // UI-POLISH §3.8. Delete controls were `var(--muted)` with the same border and
+  // padding as the Edit button beside them — on the Coaches screen "Edit plan"
+  // and "Remove plan" are pixel-identical apart from the word, and a coach
+  // scanning a list of eleven plans is picking between them by reading.
+  //
+  // #EF4444 is not a new colour: it was already the app's de-facto danger red in
+  // eighteen hard-coded places across seven files. Naming it is what makes it a
+  // decision rather than a habit, and gives the next destructive control
+  // somewhere to look.
+  //
+  // NOT skin-derived, deliberately. Every other token here bends to the gym's
+  // brand, and a gym whose accent is red would end up with a delete button that
+  // matches its primary action — which is the exact confusion this exists to
+  // remove. Danger is the one colour in the product that must not be branded.
+  // It is not in PRESET_SKINS for the same reason: there is nothing to choose.
+  r.setProperty("--danger", "#EF4444");
+  r.setProperty("--danger-border", "#EF444440");
   // Alpha variant shortcuts for CSS-only colour transitions
   r.setProperty("--accent-10", tokens.accent + "1A");
   r.setProperty("--accent-20", tokens.accent + "33");

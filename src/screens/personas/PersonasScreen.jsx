@@ -906,7 +906,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                           announced as a bare "button" — on a control that deletes a
                           coach and everything extracted from their decks. */}
                       <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} aria-label={`Delete coach ${p.name}`} title="Delete persona"
-                        style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                        style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                     </div>
                   );
                 })}
@@ -1206,7 +1206,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                               header. The plan's title is what tells them apart. */}
                           <button onClick={()=>setEditingPlan(pl)} aria-label={`Edit plan ${pl.title}`} style={{background:"none",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",padding:"5px 10px"}}>Edit</button>
                           <Btn variant="ghost" onClick={()=>onDraftToBuilder(planToStages(pl.plan), pl.title, builderClass)} aria-label={`Draft ${pl.title} into the Builder`} style={{padding:"6px 12px"}}><Layers size={13}/> Draft</Btn>
-                          <button onClick={()=>removePlan(pl.id)} aria-label={`Remove plan ${pl.title}`} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
+                          <button onClick={()=>removePlan(pl.id)} aria-label={`Remove plan ${pl.title}`} title="Remove plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                         </div>
                       );
                     })}
@@ -1528,7 +1528,7 @@ function OrphanedMovements({ movements, onDelete }) {
           </div>
           {/* Named, like the catalogue's Edit buttons — without the movement's
               name these announce as identical "button"s that delete one each. */}
-          <button onClick={()=>onDelete(m.id)} aria-label={`Delete ${m.name} from the catalogue`} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
+          <button onClick={()=>onDelete(m.id)} aria-label={`Delete ${m.name} from the catalogue`} title="Delete movement" style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",display:"flex",padding:"4px"}}><Trash2 size={13}/></button>
         </div>
       ))}
     </div>

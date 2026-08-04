@@ -179,3 +179,50 @@ test("the Schedule does not advertise analytics that cannot arrive", async ({ pa
 
   expectNoConsoleErrors(errors);
 });
+
+// ── §3.8 · a delete must not look like an edit ───────────────────────────────
+//
+// On the Coaches screen "Edit plan" and "Remove plan" sit side by side and were
+// pixel-identical apart from the word inside them — both `var(--muted)`, same
+// border, same padding. A coach scanning eleven plans was distinguishing the
+// reversible action from the destructive one by READING, every time.
+//
+// `--danger` is deliberately NOT skin-derived. Every other token bends to the
+// gym's brand, and a gym whose accent is red would get a delete button that
+// matches its primary action — the exact confusion this removes. Danger is the
+// one colour in the product that must not be branded, which is why this test
+// asserts it differs from BOTH --muted and --accent rather than checking a hex.
+test("destructive controls are visually distinct from their neighbours", async ({ page }) => {
+  await freshApp(page);
+  await nav(page, "Coaches");
+  await page.getByRole("button", { name: /Load sample coach/ }).click();
+  await expect(page.getByText("S360 — CLASS SHAPE")).toBeVisible();
+
+  const colourOf = (loc) => loc.evaluate(el => getComputedStyle(el).color);
+  const edit   = page.getByRole("button", { name: /^Edit plan / }).first();
+  const remove = page.getByRole("button", { name: /^Remove plan / }).first();
+
+  // POSITIVE CONTROL: both controls must exist and be adjacent, or "they differ"
+  // is a claim about nothing.
+  await expect(edit).toBeVisible();
+  await expect(remove).toBeVisible();
+
+  const [editColour, removeColour] = [await colourOf(edit), await colourOf(remove)];
+  expect(removeColour,
+    "the destructive control must not share a colour with the reversible one next to it")
+    .not.toBe(editColour);
+
+  // ...and it must not be the brand accent either, which is what primary
+  // ACTIONS use. Distinct-from-muted alone would be satisfied by that.
+  const accent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+  expect(accent, "positive control: the skin must have applied").toBeTruthy();
+  const danger = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--danger").trim());
+  expect(danger, "--danger must be defined").toBeTruthy();
+  expect(danger.toLowerCase(), "--danger must not be the brand accent").not.toBe(accent.toLowerCase());
+
+  // The most expensive deletion in the product gets the same treatment.
+  const deleteCoach = page.getByRole("button", { name: /^Delete coach / }).first();
+  expect(await colourOf(deleteCoach)).toBe(removeColour);
+});

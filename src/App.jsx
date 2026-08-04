@@ -2513,7 +2513,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   {/* Named after the stage it deletes. A plan has five of these
                       and a bare "Remove" is five identical controls — the same
                       reasoning as the roster's per-member buttons. */}
-                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} aria-label={`Remove ${s.name || cfg.label || "stage"}`} data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
+                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} aria-label={`Remove ${s.name || cfg.label || "stage"}`} data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",padding:"4px",display:"flex",flexShrink:0}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
