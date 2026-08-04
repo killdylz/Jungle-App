@@ -150,6 +150,86 @@ test.describe("removing a class plan", () => {
   });
 });
 
+// ── Discarding an unsaved plan edit ──────────────────────────────────────────
+//
+// The plan editor is 35 buttons and 82 fields of local React state (measured in
+// the running app on the sample coach's plan) with four ways out, and all four
+// used to throw the lot away in silence. The backdrop is the one with teeth: it
+// is the entire screen outside a 720px panel, so hitting it is a miss rather
+// than a decision.
+//
+// Deliberately NOT a confirm. An untouched open — look at a plan, close it —
+// must stay instant, so the guard keys on `dirty` and the cost is paid only on
+// the path where something is actually at stake.
+test.describe("discarding an unsaved plan edit", () => {
+  const openEditor = (page) => page.getByRole("button", { name: /^Edit plan / }).first().click();
+  const titleField = (page) => page.getByLabel("Plan title");
+
+  test("a backdrop click offers the edits back instead of dropping them", async ({ page }) => {
+    const errors = watchConsole(page);
+    await loadSampleCoach(page);
+    await openEditor(page);
+
+    const saved = await titleField(page).inputValue();
+    expect(saved, "positive control: the editor must open on a real plan").toBeTruthy();
+    await titleField(page).fill("EDITED, NOT SAVED");
+
+    // The backdrop, not the ✕ — the corner of the overlay is nowhere near the panel.
+    await page.mouse.click(5, 5);
+    await expect(page.getByRole("heading", { name: "Edit plan" })).toHaveCount(0);
+
+    const undo = page.getByTestId("toast-undo");
+    await expect(undo, "a discarded plan edit must be recoverable").toBeVisible();
+    await expect(page.getByTestId("toast")).toContainText(/unsaved/i);
+    await undo.click();
+
+    // Back, with the edit intact — not merely reopened on the saved copy, which
+    // is what "restore" would look like if the draft were not carried across.
+    await expect(page.getByRole("heading", { name: "Edit plan" })).toBeVisible();
+    await expect(titleField(page)).toHaveValue("EDITED, NOT SAVED");
+
+    // And it is still only a draft: nothing has been written.
+    const plans = await stored(page, KEYS.plans);
+    expect(plans.some(pl => pl.title === "EDITED, NOT SAVED"),
+      "an undo restores the EDITOR, it must not silently save").toBe(false);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("Escape and Cancel are guarded too, and Save still writes", async ({ page }) => {
+    await loadSampleCoach(page);
+
+    await openEditor(page);
+    await titleField(page).fill("VIA ESCAPE");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("toast")).toContainText(/unsaved/i);
+
+    // Restore, then discard the same edits again through Cancel — the draft has
+    // to survive a round trip, or the second discard hands back an empty one.
+    await page.getByTestId("toast-undo").click();
+    await expect(titleField(page)).toHaveValue("VIA ESCAPE");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(page.getByTestId("toast")).toContainText(/unsaved/i);
+    await page.getByTestId("toast-undo").click();
+
+    // Saving from the restored draft writes the edit for real.
+    await page.getByRole("button", { name: /Save plan/ }).click();
+    await expect.poll(async () => (await stored(page, KEYS.plans)).some(pl => pl.title === "VIA ESCAPE"))
+      .toBe(true);
+  });
+
+  test("closing an UNTOUCHED editor says nothing at all", async ({ page }) => {
+    // The guard has to be free on the common path, or it is just a confirm with
+    // extra steps. This is the assertion that stops it drifting into one.
+    await loadSampleCoach(page);
+    await openEditor(page);
+    await expect(page.getByRole("heading", { name: "Edit plan" })).toBeVisible();
+
+    await page.mouse.click(5, 5);
+    await expect(page.getByRole("heading", { name: "Edit plan" })).toHaveCount(0);
+    await expect(page.getByTestId("toast")).toHaveCount(0);
+  });
+});
+
 // ── The toast itself ─────────────────────────────────────────────────────────
 test.describe("the toast primitive", () => {
   test("announces itself to a screen reader without interrupting", async ({ page }) => {

@@ -14,7 +14,7 @@
 // boundary is absent), `e2e/personas.spec.js`, and the accessible-name sweep.
 // Every icon below is imported explicitly for that reason.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ArrowLeft, Search, Loader, X, Layers, Check, Upload, Users, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "../../supabase.js";
 import * as store from "../../lib/store.js";
@@ -177,6 +177,10 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
   const [planForm, setPlanForm] = useState({ title:"", classType:"", focus:"", json:"" });
   const [planErr, setPlanErr] = useState("");
   const [editingPlan, setEditingPlan] = useState(null);
+  // The in-flight edit a discard handed back, held only long enough for the undo
+  // toast to be able to reopen the editor with it. Separate from `editingPlan`
+  // so the editor's pristine copy still comes from the SAVED plan.
+  const [planEditDraft, setPlanEditDraft] = useState(null);
   // Google Slides import (chunk 3): folder → deck list → per-deck extract.
   const [showSlides, setShowSlides] = useState(false);
   const [slidesFolder, setSlidesFolder] = useState("");
@@ -430,6 +434,22 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     }
     commitPlans(next);
     setEditingPlan(null);
+    setPlanEditDraft(null);
+    toast(`Saved “${updated.title || "plan"}”`);
+  };
+  // Closing the editor. `draft` is non-null only when there were unsaved edits;
+  // an untouched close says nothing, because acknowledging a no-op is noise.
+  const closePlanEditor = draft => {
+    const was = editingPlan;
+    setEditingPlan(null);
+    setPlanEditDraft(null);
+    if (!draft || !was) return;
+    toast("Discarded your unsaved changes", { undo: () => {
+      // Order matters only in that both land in the same commit; the editor
+      // reads `initial` on mount, and it mounts when `editingPlan` becomes set.
+      setPlanEditDraft(draft);
+      setEditingPlan(was);
+    } });
   };
   // Undo, no confirm. A plan is one row and the coach can see immediately
   // whether they hit the right one — interrupting every correct deletion to
@@ -825,7 +845,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{flexShrink:0,padding:isMobile?"14px 16px":"20px 28px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",gap:"12px"}}>
-        <button onClick={onBack} aria-label="Back" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+        <button onClick={onBack} aria-label="Back" data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
         <div style={{flex:1,minWidth:0}}>
           <p style={{fontSize:"11px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"2px"}}>COACHES</p>
           <p style={{fontSize:"12px",color:"var(--muted)"}}>Every coach's classes, style and formats — Jungle learns them and drafts new classes to match</p>
@@ -1198,7 +1218,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
         </div>
       </div>
 
-      {editingPlan && <PersonaPlanEditor plan={editingPlan} onSave={savePlanEdit} onClose={()=>setEditingPlan(null)}/>}
+      {editingPlan && <PersonaPlanEditor plan={editingPlan} initial={planEditDraft} onSave={savePlanEdit} onClose={closePlanEditor}/>}
     </div>
   );
 }
@@ -1517,13 +1537,46 @@ function OrphanedMovements({ movements, onDelete }) {
 
 // Full plan editor (blocks + exercises) — maximal editability before a plan
 // grounds generation. Modal over a deep-copied draft; Save writes back the plan.
-function PersonaPlanEditor({ plan, onSave, onClose }) {
+// `initial` restores an in-flight edit the coach discarded and then undid. It is
+// NOT the pristine copy — that always comes from `plan`, so reopening a restored
+// draft still knows it is dirty and can be discarded (and undone) a second time.
+function PersonaPlanEditor({ plan, initial = null, onSave, onClose }) {
   const vw = useWindowWidth(); const isMobile = vw < 640;
-  const dlg = useDialog(onClose, "Edit plan");
-  const [title, setTitle] = useState(plan.title || "");
-  const [classType, setClassType] = useState(plan.classType || "");
-  const [focus, setFocus] = useState(plan.focus || "");
-  const [blocks, setBlocks] = useState(() => JSON.parse(JSON.stringify(plan.plan?.blocks || [])));
+  const [title, setTitle] = useState(initial?.title ?? plan.title ?? "");
+  const [classType, setClassType] = useState(initial?.classType ?? plan.classType ?? "");
+  const [focus, setFocus] = useState(initial?.focus ?? plan.focus ?? "");
+  const [blocks, setBlocks] = useState(() =>
+    JSON.parse(JSON.stringify(initial?.blocks ?? plan.plan?.blocks ?? [])));
+
+  // ── Discarding an edit is the one loss this dialog can still cause ──────────
+  //
+  // This panel renders one row per section and one field row per movement —
+  // measured on the sample coach's plan in the running app, 35 buttons and 82
+  // fields, all of it in local state. It had FOUR ways out (backdrop, Escape,
+  // the ✕, Cancel) and all four threw the lot away in silence. The backdrop is
+  // the one that matters: it is the whole screen outside a 720px panel, and
+  // hitting it is a miss, not a decision.
+  //
+  // An undo rather than a confirm, for the reason in ui/toast.jsx: a confirm
+  // taxes the many closes the coach meant in order to catch the rare one they
+  // did not. Guarding on `dirty` means an untouched open — look at a plan, close
+  // it — stays instant and silent, which is the common case by a distance.
+  //
+  // Pristine is captured once from `plan`, so it survives every re-render and
+  // cannot drift as the coach types. The blocks comparison is a stringify: the
+  // state was deep-cloned out of this same value, and JSON round-tripping
+  // preserves key order, so an edit typed and then typed back is correctly NOT
+  // dirty.
+  const pristine = useRef({
+    title: plan.title || "", classType: plan.classType || "", focus: plan.focus || "",
+    blocks: JSON.stringify(plan.plan?.blocks || []),
+  }).current;
+  const dirty = title !== pristine.title || classType !== pristine.classType
+             || focus !== pristine.focus || JSON.stringify(blocks) !== pristine.blocks;
+  // `useDialog` holds onClose in a ref it refreshes every render, so handing it
+  // a new closure each time is safe and it always sees the current `dirty`.
+  const requestClose = () => onClose(dirty ? { title, classType, focus, blocks } : null);
+  const dlg = useDialog(requestClose, "Edit plan");
   const upBlock  = (i, patch) => setBlocks(bs => bs.map((b,j)=>j===i?{...b,...patch}:b));
   const upScheme = (i, patch) => setBlocks(bs => bs.map((b,j)=>j===i?{...b,scheme:{...(b.scheme||{}),...patch}}:b));
   const upEx     = (i,k,patch) => setBlocks(bs => bs.map((b,j)=> j===i ? {...b,exercises:(b.exercises||[]).map((e,m)=>m===k?{...e,...patch}:e)} : b));
@@ -1537,11 +1590,11 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
   const iconBtn = { background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"13px",fontWeight:"700",padding:"3px 9px",lineHeight:1 };
   const lbl = { fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:"3px" };
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:isMobile?"12px":"40px 20px",overflowY:"auto"}}>
+    <div onClick={requestClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:isMobile?"12px":"40px 20px",overflowY:"auto"}}>
       <div {...dlg} onClick={e=>e.stopPropagation()} style={{...P_CARD,width:"100%",maxWidth:"720px",padding:isMobile?"16px":"24px",outline:"none"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
           <h3 style={{fontSize:"16px",fontWeight:"800",color:"var(--text)",margin:0}}>Edit plan</h3>
-          <button onClick={onClose} aria-label="Close edit plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
+          <button onClick={requestClose} aria-label="Close edit plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex"}}><X size={18}/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr 1fr",gap:"8px",marginBottom:"16px"}}>
           {/* These three carry no placeholder, and their <label>s are unassociated
@@ -1600,7 +1653,7 @@ function PersonaPlanEditor({ plan, onSave, onClose }) {
 
         <Btn variant="ghost" onClick={addBlock} style={{width:"100%",justifyContent:"center",marginBottom:"16px"}}><Plus size={14}/> Add block</Btn>
         <div style={{display:"flex",gap:"8px",justifyContent:"flex-end"}}>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn variant="ghost" onClick={requestClose}>Cancel</Btn>
           <Btn onClick={()=>onSave({ ...plan, title, classType, focus, plan:{ ...(plan.plan||{}), blocks } })}><Check size={14}/> Save plan</Btn>
         </div>
       </div>
