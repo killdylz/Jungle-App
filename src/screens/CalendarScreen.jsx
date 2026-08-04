@@ -356,7 +356,7 @@ export function CalendarScreen({onBack, onStartClass}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"18px",flexWrap:"wrap",gap:"10px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={onBack} aria-label="Back" style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
+          <button onClick={onBack} aria-label="Back" data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--text)",display:"flex",alignItems:"center"}}><ArrowLeft size={18}/></button>
           <div>
             <h2 style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"20px",fontWeight:"700",color:"var(--text)",margin:0}}>Planning & schedule</h2>
             {/* Was "Shoreditch · 3 studios" — a hardcoded London district on a
@@ -375,16 +375,21 @@ export function CalendarScreen({onBack, onStartClass}) {
         </div>
         <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
           {/* Week nav */}
-          <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid var(--border)`,borderRadius:"9px",overflow:"hidden"}}>
+          {/* No `overflow:hidden` on this pill. It was here to keep children
+              inside the 9px radius, but both children are transparent text
+              buttons so it clipped nothing visible — while clipping the two
+              arrows' data-tap overlays back to a 31px-tall strip. The tap sweep
+              caught it; see the ⚠️ in index.css. */}
+          <div style={{display:"flex",alignItems:"center",gap:"6px",border:`1px solid var(--border)`,borderRadius:"9px"}}>
             {/* A guillemet is text, so these passed the "no unnamed buttons"
                 sweep while announcing as "‹" and "›". The label says which way
                 time moves, because "previous" and "next" are the whole meaning
                 of the control and the glyph carries none of it. */}
-            <button onClick={()=>setWeekOffset(w=>w-1)} aria-label="Previous week" style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>‹</button>
+            <button onClick={()=>setWeekOffset(w=>w-1)} aria-label="Previous week" data-tap style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>‹</button>
             <span style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",padding:"0 4px"}}>
               {weekOffset===0?"This week":weekOffset===1?"Next week":weekOffset===-1?"Last week":`Week ${weekOffset>0?"+":""}${weekOffset}`}
             </span>
-            <button onClick={()=>setWeekOffset(w=>w+1)} aria-label="Next week" style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
+            <button onClick={()=>setWeekOffset(w=>w+1)} aria-label="Next week" data-tap style={{padding:"8px 12px",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontWeight:"700"}}>›</button>
           </div>
           {/* "Demand heat" and "Auto-fill week" are still absent — they were dead
               buttons backed by nothing (audit 1.3) and there is still no real

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { freshApp, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { freshApp, watchConsole, expectNoConsoleErrors, ALL_SCREENS, navAnyWidth, waitForAppAnyWidth } from "./helpers.js";
+import { tapScan, reportTaps } from "./tapScan.js";
 
 // The phone layout (audit 1.1). "Most of this will be used on a phone in a loud
 // room", so the navigation a coach uses mid-class gets its own tests.
@@ -100,5 +101,69 @@ test.describe("mobile navigation", () => {
     expect(overflows, "check-in overflows at 375px").toBe(false);
 
     expectNoConsoleErrors(errors);
+  });
+});
+
+// ── §3.4 · every marked tap target, on every screen, at phone width ───────────
+//
+// Measuring the app at 390px found 100 of 186 visible controls under 44px. The
+// ones a trainer actually misses are the small SQUARE ones — an 18px back arrow,
+// a 19px movement preview, the 32px avatar that is the only route to settings on
+// every screen — so those carry `data-tap` and get a 44px hit area laid over
+// them without changing how they look.
+//
+// This sweep exists because that mechanism has two silent failure modes (an
+// `overflow:hidden` ancestor clips the overlay; a neighbour's overlay paints on
+// top of it) and BOTH leave the element's measured box exactly as it was. So it
+// hit-tests the running page instead of measuring rectangles. See tapScan.js.
+test.describe("tap targets at phone width", () => {
+  for (const screen of ALL_SCREENS) {
+    test(`${screen.side} — every marked control is thumb-sized`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await freshApp(page);
+      await waitForAppAnyWidth(page);
+      await navAnyWidth(page, screen);
+
+      const scan = await tapScan(page);
+      expect(scan.misses, reportTaps(`${screen.side} at 390px`, scan)).toEqual([]);
+    });
+  }
+
+  test("the sweep is actually looking at something", async ({ page }) => {
+    // POSITIVE CONTROL, and the only assertion here that can catch the sweep
+    // being switched off by accident. Every `misses: []` above is equally true
+    // of a page with no [data-tap] on it at all — a renamed attribute, a
+    // dropped stylesheet import, or a screen that failed to render would turn
+    // the whole describe block green while testing nothing.
+    //
+    // The header avatar is on all nine screens, so a total of zero is proof the
+    // scan matched nothing rather than proof the app is clean.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await freshApp(page);
+    await waitForAppAnyWidth(page);
+
+    const scan = await tapScan(page);
+    expect(scan.scanned, "the tap scan matched no controls — it is measuring nothing")
+      .toBeGreaterThan(0);
+  });
+
+  test("the 44px overlay is a hit area, not a bigger button", async ({ page }) => {
+    // The whole design claim in one assertion: the avatar still LOOKS like a
+    // 32px circle. If someone "fixes" a tap-target failure by growing the box,
+    // this fails and the review is about the header's layout, which is the
+    // conversation worth having.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await freshApp(page);
+    await waitForAppAnyWidth(page);
+
+    const avatar = page.getByRole("button", { name: "Your profile and settings" });
+    const box = await avatar.boundingBox();
+    expect(Math.round(box.height), "the avatar's VISIBLE box must stay 32px").toBe(32);
+
+    // ...and it opens from a point OUTSIDE that box. 32px inside a 44px target
+    // leaves 6px of overlay on each side, so 4px past the right edge is in the
+    // hit area and nowhere near the button — which is the entire claim.
+    await page.mouse.click(box.x + box.width + 4, box.y + box.height / 2);
+    await expect(page.getByRole("dialog", { name: /profile/i })).toBeVisible();
   });
 });

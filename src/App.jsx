@@ -1147,7 +1147,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"28px",boxSizing:"border-box"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"24px"}}>
-        <button onClick={onBack} aria-label="Back" style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:"var(--text)",display:"flex"}}>
+        <button onClick={onBack} aria-label="Back" data-tap style={{background:"none",border:`1px solid var(--border)`,borderRadius:"8px",padding:"7px",cursor:"pointer",color:"var(--text)",display:"flex"}}>
           <ArrowLeft size={16}/>
         </button>
         <div>
@@ -2279,7 +2279,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               sitting where every other screen puts Back and drawing a back
               chevron. The Builder now goes back like everything else, and
               Preview on TV keeps its own labelled button. */}
-          <button onClick={onBack} aria-label="Back" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
+          <button onClick={onBack} aria-label="Back" data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",display:"flex",alignItems:"center",flexShrink:0,padding:"4px"}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <div style={{minWidth:0}}>
@@ -2288,7 +2288,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               {/* Icon-only, so it had no accessible name at all — a screen reader
                   announced "button". aria-label and not title: a title does not
                   override text content for a button's accessible name. */}
-              <button aria-label="Rename class" onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
+              <button aria-label="Rename class" data-tap onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
@@ -3497,8 +3497,14 @@ export default function App() {
             {deviceId&&isMobile&&<Wifi size={13} color={"var(--green)"}/>}
             {/* "Share with Class" minted a base64 URL into a route that no longer
                 exists. The N4 member link replaces it (audit 2.2). */}
-            <button onClick={()=>setShowProfile(true)} aria-label="Your profile and settings" style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,flexShrink:0}}>
-              {displayProfile?.images?.[0]?.url?<img src={displayProfile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
+            {/* The only route to settings, on every screen, and it was a 32px
+                circle. The `overflow:hidden` that crops the avatar had to move
+                to the inner span: on the button it clipped the data-tap overlay
+                straight back to 32px, which looks exactly like the fix working. */}
+            <button onClick={()=>setShowProfile(true)} aria-label="Your profile and settings" data-tap style={{width:"32px",height:"32px",borderRadius:"50%",background:"var(--navy)",border:`1px solid var(--border)`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>
+              <span style={{width:"100%",height:"100%",borderRadius:"50%",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {displayProfile?.images?.[0]?.url?<img src={displayProfile.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="avatar"/>:<User size={15} color={"var(--muted)"}/>}
+              </span>
             </button>
           </div>
         </header>

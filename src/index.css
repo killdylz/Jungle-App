@@ -9,3 +9,50 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* ─── Spinners ────────────────────────────────────────────────────────────────
+   Six call sites use `animation: spin 1s linear infinite` on a Loader icon —
+   listing Slides decks, importing them, reading a pasted class, generating in a
+   coach's style. Every one of those is a slow, network-bound operation where the
+   only signal that the app is working is the icon turning.
+
+   The keyframes lived in src/App.css, which is Vite scaffolding that NOTHING
+   IMPORTS (main.jsx imports this file and only this file). So the animation
+   resolved to nothing and all six spinners were frozen icons: on the app's four
+   slowest paths, "working" and "hung" looked identical. App.css is deleted;
+   this is the definition that is actually loaded. */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Tap targets ─────────────────────────────────────────────────────────────
+   Measured at 390px across all nine screens: 100 of 186 visible controls were
+   under 44px, and the small SQUARE ones are where a thumb actually misses — an
+   18px back arrow, a 19px movement preview, a 32px avatar carrying the only
+   route to settings on every screen in the product.
+
+   The fix is a hit area, NOT a bigger box. Growing these to 44px visually would
+   turn a row of quiet icon buttons into a row of chunky ones and reflow layouts
+   that are already tight at this width; the point is to catch the thumb, not to
+   redraw the header. So `data-tap` lays a transparent 44px pseudo-element over
+   the control's centre. Pseudo-elements hit-test to their originating element,
+   so a tap anywhere in that square activates the button and nothing about the
+   rendering changes.
+
+   ⚠️ TWO THINGS THAT SILENTLY DEFEAT THIS, both of which bit during the build:
+     1. `overflow: hidden` on the control CLIPS the overlay back to the visible
+        box. The avatar button had it (for the round image crop) and gained
+        nothing until the crop moved to an inner element.
+     2. Adjacent `data-tap` controls closer than 44px apart make their overlays
+        overlap, and the overlap goes to whichever paints later — expanding one
+        target by stealing its neighbour's. `tapScan.js` hit-tests the eight
+        compass points of every marked control against the real page, so an
+        overlap that eats a neighbour fails the sweep rather than shipping. */
+[data-tap] { position: relative; }
+[data-tap]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}

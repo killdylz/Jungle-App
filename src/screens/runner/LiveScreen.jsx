@@ -290,7 +290,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
           {/* HEADER */}
           <div style={{height:"64px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-              <button onClick={onBack} aria-label="Back to class plan" style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
+              <button onClick={onBack} aria-label="Back to class plan" data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex"}}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
               </button>
               <div>
