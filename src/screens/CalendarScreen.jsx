@@ -485,7 +485,7 @@ export function CalendarScreen({onBack, onStartClass}) {
                         </button>
                       )}
                       {cls.id && (
-                        <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`}
+                        <button aria-label={`Remove ${cls.name} on ${day} at ${slot} from the schedule`} data-tap
                           onClick={()=>removeClass(cls.id, cls.name)}
                           style={{position:"absolute",top:"2px",right:"2px",background:"transparent",border:"none",padding:"2px",cursor:"pointer",color:"var(--muted)",lineHeight:0,opacity:0.55}}>
                           <X size={11}/>

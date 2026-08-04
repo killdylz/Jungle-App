@@ -299,7 +299,7 @@ export function RosterScreen({ onBack }) {
                 <Upload size={14}/> Choose CSV
                 <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
               </label>
-              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
+              <label data-tap style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
                 <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
                 Dates are day/month (e.g. 03/04 = 3 April)
               </label>

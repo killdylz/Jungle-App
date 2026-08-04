@@ -855,7 +855,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
 
           <div style={{display:"grid",gridTemplateColumns:isNarrow?"1fr":"1.4fr 1fr",gap:isMobile?"14px":"20px"}}>
             <div style={{...card,padding:"18px"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>Today's classes</div><button onClick={()=>onNavigate("calendar")} style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Calendar →</button></div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"14px"}}><div style={{fontSize:"14px",fontWeight:"800",color:"var(--text)"}}>Today's classes</div><button onClick={()=>onNavigate("calendar")} data-tap style={{background:"none",border:"none",color:"var(--accent)",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>Calendar →</button></div>
               {todayClasses.length===0 && <div style={{fontSize:"12px",color:"var(--muted)",padding:"8px 0"}}>No classes scheduled today.</div>}
               {todayClasses.map((c,i)=>(
                 <div key={i} data-testid="today-class" style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
@@ -2482,7 +2482,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   {/* Named after the stage it deletes. A plan has five of these
                       and a bare "Remove" is five identical controls — the same
                       reasoning as the roster's per-member buttons. */}
-                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} aria-label={`Remove ${s.name || cfg.label || "stage"}`} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
+                  <button onClick={e=>{e.stopPropagation();onRemoveStage(i);}} aria-label={`Remove ${s.name || cfg.label || "stage"}`} data-tap style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"4px",display:"flex",flexShrink:0}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
@@ -2544,6 +2544,19 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                               ))}
                             </select>
                           )}
+                          {/* ⚠️ Deliberately NOT `data-tap`, and this is the one
+                              place in the app where that decision is interesting.
+                              At 390px the exercise rows are ~30px apart, so two
+                              44px overlays on adjacent rows overlap and the lower
+                              one swallows the upper one's bottom third — the tap
+                              sweep caught it and named the thief. The overlay
+                              cannot fix a target that is smaller than its own row.
+                              The real fix is row height at phone width, which is a
+                              layout change to the Builder's densest surface rather
+                              than polish, so it is measured and left: 19x19px in a
+                              30px row. Mis-tapping opens a neighbouring movement's
+                              preview, which is wrong but harmless — the reason
+                              this is a follow-up and not a defect. */}
                           <button onClick={ev=>{ev.stopPropagation(); toggleGif(gkey, ex.n);}} aria-label={`Movement preview for ${ex.n}`} style={{background:"none",border:"none",cursor:"pointer",color:g?"var(--accent)":"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                           </button>

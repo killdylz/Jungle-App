@@ -95,13 +95,13 @@ export function AdminTeamScreen({ onBack }) {
 
   if (!supabaseEnabled) return (
     <div style={{ padding:"40px", maxWidth:"640px", margin:"0 auto" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"16px" }}>← Back</button>
+      <button onClick={onBack} data-tap style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"16px" }}>← Back</button>
       <div style={card}><div style={label}>Team</div><div style={{ fontSize:"13px", color:"var(--muted)", lineHeight:1.6 }}>Team accounts are available on the online version of Jungle.</div></div>
     </div>
   );
   if (!canManage) return (
     <div style={{ padding:"40px", maxWidth:"640px", margin:"0 auto" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"16px" }}>← Back</button>
+      <button onClick={onBack} data-tap style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"16px" }}>← Back</button>
       <div style={card}><div style={label}>Team</div><div style={{ fontSize:"13px", color:"var(--muted)", lineHeight:1.6 }}>You don't have permission to manage this gym's team.</div></div>
     </div>
   );
@@ -110,7 +110,7 @@ export function AdminTeamScreen({ onBack }) {
 
   return (
     <div style={{ padding:"clamp(20px,4vw,40px)", maxWidth:"860px", margin:"0 auto", width:"100%", boxSizing:"border-box" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"14px" }}>← Back</button>
+      <button onClick={onBack} data-tap style={{ background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"13px", marginBottom:"14px" }}>← Back</button>
       <div style={{ fontSize:"clamp(22px,3vw,28px)", fontWeight:"800", color:"var(--text)", marginBottom:"4px" }}>Team</div>
       <div style={{ fontSize:"13px", color:"var(--muted)", marginBottom:"22px" }}>{auth?.gym?.name || "Your gym"} · invite people and set what they can do.</div>
 
