@@ -132,7 +132,7 @@ product concepts. Four of the ten are now done or half-done. Here are the eight 
 re-verified against the code, highest value first — with §3.1 and §3.4 annotated where session 25
 overtook them.
 
-### 3.1 🔴 Unsaved-changes guard — HALF DONE. The Builder is still unguarded.
+### 3.1 ✅ Unsaved-changes guard — DONE, and the Builder half was a false premise
 
 ✅ **The plan editor is done** (`5525f2e`). It had four ways out — backdrop, Escape, ✕, Cancel —
 and all four silently discarded 35 buttons and 82 fields of local state. It now hands the draft
@@ -140,17 +140,29 @@ back through the undo toast, guarded on `dirty` so an untouched open stays insta
 Mutation-checked in both directions: forcing a silent discard and forcing always-dirty each turn
 a different test red.
 
-🔴 **The Builder is NOT done and it is the bigger of the two.** It holds a whole class in local
-React state and navigating away still loses it without a word. `navTo` in `App.jsx` is the single
-choke-point for every navigation — sidebar, bottom bar, More sheet and the dashboard rail all
-route through it — so that is where the guard goes, and it is a different shape from the plan
-editor's: the editor could return a draft to its parent because it unmounts into a component that
-is still there, whereas leaving the Builder means the destination has already rendered.
+🔴 **The Builder needs NO guard, and an earlier draft of this section was wrong to ask for one.**
+The claim — "it holds a whole class in local React state and navigating away loses it silently",
+with a guard proposed on `navTo` — was **driven in the running app and is false in both halves**:
 
-**Reuse the plan editor's structure, not its code:** capture `pristine` once in a ref, derive
-`dirty`, and let the toast hold the draft. The three tests in `destructive.spec.js` under
-"discarding an unsaved plan edit" are the template — including the one asserting the guard is
-**free on the untouched path**, which is the property that quietly rots into a confirm.
+- `stages`, `sessionName` and `classChoice` live at the **App root** (`App.jsx:3192-3194`), not in
+  `BuilderScreen`. `navTo` only changes `view`, which swaps which screen renders. The state is
+  never unmounted, so a navigation round trip cannot lose it.
+- A `useEffect` on all three calls `store.saveDraftClass` on **every change**, so the draft is on
+  disk before the coach can navigate at all. A rename survives a full `page.reload()`.
+
+**A guard on `navTo` would have interrupted a coach to protect them from a loss that cannot
+happen** — which is worse than no guard, because it teaches people to click through warnings.
+
+`e2e/builderDraft.spec.js` now pins the persistence that makes the guard unnecessary: mutate →
+assert the stored object → reload → assert again, three times over. Deleting the autosave effect
+turns all three red, so if someone later moves `stages` into `BuilderScreen` the claim becomes
+true again and the suite says so. **That is the condition for re-raising this, and nothing less
+is.**
+
+⚠️ **The lesson, which is the reusable part:** this item was carried across two session documents
+and restated more confidently each time, without once being run. The repo rule already covers it
+— *verify the backlog against the code before starting any named item* — and prose in a handoff is
+exactly the place that rule is hardest to remember to apply.
 
 ### 3.2 Save confirmation — the primitive now exists, wire it up
 
