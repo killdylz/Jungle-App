@@ -114,12 +114,36 @@ its neighbour). Pretending otherwise costs the neighbour.
 - ⚠️ **The check-in dialog's first button is "Done"**, so Space closes it. A test asserting the
   dialog stays open after Space is asserting that the button is broken.
 
+### Two more that landed after the block above was written
+
+- **§3.5 Team.** With Supabase unconfigured its entire content was *"Team accounts are available on
+  the online version of Jungle."* It is no longer offered. The decision goes through
+  `isViewEnabled`, which now takes runtime context — **all four nav arrays pass it**, because an
+  `&& supabaseEnabled` bolted onto one of them is exactly how a screen survives in a single menu.
+  ⚠️ Production is unaffected (`supabaseEnabled` is true there); this changes the credential-less
+  build, which is what e2e, an offline demo and the PIN-gated mode all see. Removing Team from
+  `ALL_SCREENS` is **not** a workaround — the inventory guard checks that list against the running
+  sidebar both ways, and the mutation reds the guard *and* the new test, for different reasons.
+
+- **§1.6 the interaction sweep** (`e2e/interactions.spec.js`). Presses every non-destructive,
+  non-navigating control on all eight screens and checks the **console** after each click — React's
+  boundary makes a crash look handled, so a DOM-only sweep passes on a screen that just died. The
+  denylist is the design, and its four exclusions each have a different reason.
+  🔴 **Its positive control fired immediately: Coaches and Members render three controls each on a
+  fresh install, so both would have swept an empty state and reported a pass** — the same trap the
+  tap sweep hit an hour earlier in a different file. Both are seeded now.
+  ⚠️ One thing deliberately NOT reported: an attendance row in the Members seed rendered the error
+  boundary, but the fixture had `at` as a **number** where `recordSession` writes an **ISO string**,
+  so the crash was as likely mine as the app's. **A sweep must not report a defect it manufactured.**
+  If the app really is fragile there, it needs a fixture built from a real check-in.
+
 ### Still open
 
-§3.2 save toasts (partial), §3.5's Members and Team empty states, §3.7 skeletons, sweeps §1.5 and
-§1.6, and §1.3's `removeClass` / `handleReset` / `handleNewClass`. **10 commits were unpushed at
-hand-off** — pushing deploys, so it was left as Dylan's call. §0 is unchanged: migrations `0005`
-and `0006` still need running, and until then the coach corpus exists on exactly one laptop.
+§3.2 save toasts (partial), §3.5's Members "Check-in speed" panel, §3.7 skeletons, sweep §1.5, and
+§1.3's `removeClass` / `handleReset` / `handleNewClass`. **Everything is pushed** —
+`main` is at `93fefb4`. ⚠️ `gh` is **not installed in this shell**, so the `Deploy to GitHub Pages`
+run could not be checked from here; verify it before assuming green. §0 is unchanged: migrations
+`0005` and `0006` still need running, and until then the coach corpus exists on exactly one laptop.
 
 ---
 
