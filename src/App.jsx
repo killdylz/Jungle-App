@@ -1620,7 +1620,6 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
   const [editingId,    setEditingId]    = useState(null);
   const [draftEx,      setDraftEx]      = useState({});
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [toast,        setToast]        = useState(null);
 
   const cls      = libData[selClass];
   const subKeys  = cls ? Object.keys(cls.subTypes) : [];
@@ -1639,7 +1638,30 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
   const startEdit  = ex => { setEditingId(ex.id); setDraftEx({...ex}); };
   const cancelEdit = ()  => { setEditingId(null); setDraftEx({}); };
   const saveEdit   = ()  => { updateExerciseList(rawEx.map(e=>e.id===editingId?{...draftEx}:e)); setEditingId(null); showToast("Saved"); };
-  const deleteEx   = id  => { if(!window.confirm("Delete this exercise?")) return; updateExerciseList(rawEx.filter(e=>e.id!==id)); showToast("Deleted"); };
+  // ── REGRESSION §1.3 · the last inverted guard ──────────────────────────────
+  //
+  // This asked "Delete this exercise?" while deleting a COACH — their whole
+  // class corpus, movement catalogue and generation ledger — was one unguarded
+  // click, until session 25 fixed that end. Now that the expensive deletion is
+  // protected, the cheap one being MORE protected is the leftover half of the
+  // same inversion.
+  //
+  // A confirm taxes every correct deletion to catch the rare wrong one. One
+  // exercise is a handful of fields, visible on screen, and the coach can see
+  // instantly whether they hit the right row — so the trade goes the other way
+  // here, exactly as it does for removing a class plan.
+  //
+  // The undo closure holds the LIST as it was, not the deleted row: restoring by
+  // re-appending would put the exercise back at the end, and this list is
+  // hand-ordered by the coach (libraryReorder.spec.js exists because that order
+  // is a real thing they set). Position is part of what was destroyed.
+  const deleteEx   = id  => {
+    const before = rawEx;
+    const victim = rawEx.find(e => e.id === id);
+    updateExerciseList(rawEx.filter(e=>e.id!==id));
+    toast(victim?.n ? `Deleted ${victim.n}` : "Exercise deleted",
+          { undo: () => { updateExerciseList(before); toast(victim?.n ? `${victim.n} restored` : "Restored"); } });
+  };
   const addNewEx   = ()  => {
     const ex = {id:"custom_"+Date.now(),n:"New Exercise",s:"3",r:"10",rest:"30s",muscles:"",notes:"",timing:"none"};
     updateExerciseList([...rawEx,ex]);
@@ -1702,7 +1724,16 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
     updateExerciseList(arr);
   };
   const handleExDragEnd = () => { setExDragOver(null); exDragIdx.current = null; };
-  const showToast = msg => { setToast(msg); setTimeout(()=>setToast(null), 2500); };
+  // Folded into the shared primitive. A local `setToast` + setTimeout cannot
+  // host a button, so the delete's undo needed the real one — and once one
+  // action in this screen toasts from the bottom of the viewport while four
+  // others toast from the top of the modal, the coach is watching two places for
+  // the same kind of message. One primitive, one position.
+  //
+  // Safe from behind this modal: the library overlay is zIndex 600 and the
+  // toast region is 900, so the toast paints above it rather than under it.
+  const { toast } = useToast();
+  const showToast = msg => toast(msg);
 
   const stageLabels = {warmup:"Warm-up",main:"Main set",cooldown:"Cool-down"};
   const dlg = useDialog(onClose, "Exercise library");
@@ -1720,8 +1751,8 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
         boxShadow:"0 30px 80px rgba(0,0,0,.45)",outline:"none"
       }}>
 
-        {/* Toast */}
-        {toast && <div style={{position:"absolute",top:"12px",left:"50%",transform:"translateX(-50%)",background:"var(--accent)",color:"var(--on-accent)",padding:"8px 18px",borderRadius:"20px",fontSize:"12px",fontWeight:"700",zIndex:10,pointerEvents:"none",whiteSpace:"nowrap"}}>{toast}</div>}
+        {/* (The local toast div is gone — see `showToast` above. It rendered
+             inside this modal, so it could never carry the delete's Undo.) */}
 
         {/* ── Top page header ── */}
         <div style={{flexShrink:0,padding:isMobile?"12px 16px":"16px 22px",borderBottom:`1px solid var(--border)`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>

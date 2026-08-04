@@ -109,37 +109,69 @@ test.describe("the Exercise Library writes to the gym's catalogue", () => {
       .toBeNull();
   });
 
-  test("delete asks first — and cancelling really does keep the movement", async ({ page }) => {
+  // ── §1.3 · the guard flipped from a confirm to an undo ─────────────────────
+  //
+  // This deletion used to ask "Delete this exercise?" while deleting a COACH —
+  // their whole class corpus, catalogue and generation ledger — was a single
+  // unguarded click. Session 25 fixed the expensive end; the cheap one being
+  // MORE protected was the leftover half of the same inversion.
+  //
+  // One exercise is a handful of fields, visible on screen, and the coach can
+  // see instantly whether they hit the right row, so a confirm taxes every
+  // correct deletion to catch a rare wrong one. Same trade as removing a class
+  // plan, and now the same mechanism.
+  test("delete goes straight through, and Undo puts it back where it was", async ({ page }) => {
     await freshApp(page);
     await openLibraryEditMode(page);
 
     const victim = await firstMovementName(page);
     const countBefore = await page.getByRole("button", { name: /^Delete / }).count();
+    expect(countBefore, "positive control: the library must have movements to delete")
+      .toBeGreaterThan(1);
+    // The full order, because position is part of what a delete destroys — this
+    // list is hand-ordered by the coach (see libraryReorder.spec.js).
+    const orderBefore = await page.getByRole("button", { name: /^Delete / }).evaluateAll(
+      els => els.map(e => e.getAttribute("aria-label")));
 
-    // Playwright auto-dismisses dialogs, so a test that ignores the confirm
-    // silently exercises the CANCEL path and still passes. Both branches are
-    // driven here, dismiss first — the session-15 rule.
-    page.once("dialog", d => d.dismiss());
+    // NO CONFIRM. If one reappeared, Playwright would auto-dismiss it and the
+    // row would survive — so the assertions below fail rather than pass quietly.
     await page.getByRole("button", { name: `Delete ${victim}` }).click();
-
-    await expect(page.getByText(victim).first(),
-      "cancelling the confirm must leave the movement in place").toBeVisible();
-    expect(await stored(page, KEY),
-      "a cancelled delete must write NOTHING to the gym's catalogue").toBeNull();
-
-    // Now accept it.
-    page.once("dialog", d => d.accept());
-    await page.getByRole("button", { name: `Delete ${victim}` }).click();
-    await expect(page.getByText("Deleted")).toBeVisible();
-
+    await expect(page.getByTestId("toast")).toContainText(`Deleted ${victim}`);
     await expect(page.getByRole("button", { name: `Delete ${victim}` }),
       "the deleted movement's controls must be gone").toHaveCount(0);
     expect(await page.getByRole("button", { name: /^Delete / }).count(),
       "exactly one movement should have been removed").toBe(countBefore - 1);
 
     const blob = await stored(page, KEY);
-    expect(blob, "an accepted delete must be persisted").not.toBeNull();
+    expect(blob, "the delete must be persisted, not just rendered").not.toBeNull();
     expect(blob.v).toBe(2);
+
+    // UNDO — and it has to restore the ORDER, not merely the row. Re-appending
+    // would put the movement back at the end of a list the coach arranged.
+    await page.getByTestId("toast-undo").click();
+    await expect(page.getByTestId("toast")).toContainText(`${victim} restored`);
+    await expect
+      .poll(async () => page.getByRole("button", { name: /^Delete / }).evaluateAll(
+        els => els.map(e => e.getAttribute("aria-label"))),
+        { message: "Undo must restore the coach's ordering, not append the row" })
+      .toEqual(orderBefore);
+  });
+
+  test("the undone delete survives a reload — it is a real write", async ({ page }) => {
+    // §1.5's rule. Local React state and a write that reached disk look
+    // identical until the page is reloaded.
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    const victim = await firstMovementName(page);
+
+    await page.getByRole("button", { name: `Delete ${victim}` }).click();
+    await page.getByTestId("toast-undo").click();
+    await expect(page.getByTestId("toast")).toContainText("restored");
+
+    await page.reload();
+    await openLibraryEditMode(page);
+    await expect(page.getByRole("button", { name: `Delete ${victim}` }),
+      "the restored movement must still be there after a reload").toHaveCount(1);
   });
 
   test("Reset to Defaults is destructive, asks in its own overlay, and can be refused", async ({ page }) => {
