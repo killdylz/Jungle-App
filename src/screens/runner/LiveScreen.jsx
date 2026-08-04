@@ -360,6 +360,43 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
           <div style={{flex:1,display:"flex",flexDirection:isMobile?"column":"row",minHeight:0,overflow:"hidden"}}>
             {/* MAIN CONTROL: big stage display */}
             <div style={{flex:1.7,display:"flex",flexDirection:"column",borderRight:isMobile?"none":`1px solid var(--border)`,minWidth:0}}>
+              {/* ── §3.6 · what changes without anyone clicking ────────────────
+                  This screen advances itself. The stage, the phase and the
+                  timer all change on a clock, and to a screen reader none of it
+                  existed: a coach running the room from a phone in their pocket
+                  with VoiceOver on got silence between the moment they pressed
+                  play and the moment they looked at the screen — which is the
+                  one thing this screen is designed to avoid.
+
+                  🔴 THE TIMER IS DELIBERATELY NOT LIVE, and §3.6 asking for it
+                  is the trap. `remaining` changes every second, so a live region
+                  around it would queue an announcement 1,800 times in a 30-minute
+                  class and talk over every other thing the coach's phone has to
+                  say. That is not an improvement on silence, it is worse than it.
+
+                  So the region announces what is DISCRETE and what a coach would
+                  actually want said out loud: the stage they just moved to, its
+                  position in the plan, and its first movement. Those change a
+                  handful of times per class, exactly when something happened.
+                  The big digits stay visual-only — a sighted coach reads them at
+                  a glance, and a non-sighted one is better served by the phone's
+                  own timer than by a number read aloud every second.
+
+                  `role="status"` + polite, never "alert": this must wait its turn
+                  rather than cut off whatever is being read. The region is always
+                  mounted, for the reason written up in ui/toast.jsx — a live
+                  region inserted at the same moment as its text is frequently
+                  not announced at all. */}
+              <div data-testid="runner-live-region" role="status" aria-live="polite" style={{
+                position:"absolute",width:"1px",height:"1px",padding:0,margin:"-1px",
+                overflow:"hidden",clip:"rect(0 0 0 0)",whiteSpace:"nowrap",border:0,
+              }}>
+                {stage
+                  ? `${cfg.label}. Stage ${liveState.idx+1} of ${stages.length}. ${stage.name || ""}` +
+                    (stage.exercises?.[0]?.n ? `. First movement ${stage.exercises[0].n}` : "")
+                  : "Class complete"}
+              </div>
+
               {/* Stage type + name */}
               <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",padding:"24px",position:"relative"}}>
                 {/* WORK/REST phase label */}

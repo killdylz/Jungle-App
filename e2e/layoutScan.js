@@ -48,7 +48,17 @@ export const layoutScan = (page) => page.evaluate(() => {
 
     // Leaf text nodes only: an element with element children reports its
     // children's scroll extent, and a cropped image has no text to lose.
-    if (el.children.length === 0 && (el.innerText || "").trim()) {
+    //
+    // ⚠️ ...and never a 1px box. The visually-hidden live-region pattern
+    // (1×1, overflow:hidden, clip-rect) is text that is DELIBERATELY not
+    // rendered — it exists to be spoken, not read — so it clips by design and
+    // trips this rule every time. The Class Runner's stage announcement failed
+    // all three widths on the day it was added. An ellipsis on it would silence
+    // the sweep and mean nothing, since nobody ever sees the truncation; the
+    // honest fix is that this rule is about text a HUMAN READS, and a 1px box
+    // is not that.
+    const srOnly = r.width <= 1 || r.height <= 1;
+    if (!srOnly && el.children.length === 0 && (el.innerText || "").trim()) {
       const cs = getComputedStyle(el);
       const hides = cs.overflowX === "hidden" || cs.overflow === "hidden";
       if (hides && cs.textOverflow !== "ellipsis" && el.scrollWidth > el.clientWidth + 1) {

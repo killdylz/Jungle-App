@@ -240,3 +240,60 @@ test.describe("keyboard shortcuts", () => {
     await expect(page.locator("kbd")).toHaveCount(0);
   });
 });
+
+// ── §3.6 · the screen that advances itself, announced ────────────────────────
+//
+// The Runner changes on a clock, and none of it reached a screen reader. A coach
+// running the room from a phone in their pocket with VoiceOver on got silence
+// between pressing play and looking down — the one thing this screen exists to
+// avoid.
+//
+// 🔴 The polish list asked for the STAGE AND TIMER to be live, and the timer half
+// is a trap worth keeping written down. `remaining` changes every second, so a
+// live region around it queues ~1,800 announcements in a 30-minute class and
+// talks over everything else the coach's phone needs to say. Worse than silence.
+// The region carries what is DISCRETE and changes when something has actually
+// happened.
+test.describe("the runner announces itself", () => {
+  const region = (page) => page.getByTestId("runner-live-region");
+
+  test("the stage change is announced; the ticking timer is not", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Class Runner");
+
+    const live = region(page);
+    await expect(live).toHaveAttribute("aria-live", "polite");
+    await expect(live).toHaveAttribute("role", "status");
+
+    // It names where in the plan the coach is, not just the stage's title —
+    // "Warm-Up" alone does not say whether the class has started or is ending.
+    await expect(live).toContainText("Stage 1 of 5");
+    const first = await live.textContent();
+
+    await page.getByRole("button", { name: "Next stage" }).click();
+    await expect(live).toContainText("Stage 2 of 5");
+    expect(await live.textContent(),
+      "the announcement must change when the stage does").not.toBe(first);
+
+    // THE TIMER MUST NOT BE IN IT. This is the assertion that stops a later
+    // "improvement" turning the region into a per-second announcement — the
+    // failure mode is invisible to every other test and only audible to the
+    // person it hurts.
+    await expect(live, "the region must not carry a value that ticks")
+      .not.toContainText(/\d+:\d\d/);
+  });
+
+  test("the region is mounted before it has anything to say", async ({ page }) => {
+    // A live region inserted into the DOM at the same moment as its text is
+    // frequently not announced at all — assistive tech has to be observing the
+    // node before the content changes. Same rule as the toast primitive.
+    await freshApp(page);
+    await nav(page, "Class Runner");
+    await expect(region(page)).toHaveCount(1);
+
+    // And it is invisible: this is an announcement, not a caption.
+    const box = await region(page).boundingBox();
+    expect(box.width).toBeLessThanOrEqual(2);
+    expect(box.height).toBeLessThanOrEqual(2);
+  });
+});
