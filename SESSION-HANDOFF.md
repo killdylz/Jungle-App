@@ -10,6 +10,119 @@ _Last updated: 2026-08-04 (session 25)_
 
 ---
 
+## Session 26 — three premises that were false, and the two defects underneath them
+
+> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **395 e2e**
+> (38 spec files, no fixmes) · five-chunk build: member path **211.57 kB**, staff **554.22 kB**
+> (StaffApp **343.82/360 kB**). App.jsx **3,386 lines** — the prompt said 3,602, then 3,608. Both
+> were wrong, which set the tone for the session.
+>
+> ⚠️ **A SECOND CLAUDE SESSION WAS WORKING THE SAME TREE.** Not the same port — the same files. It
+> committed uncommitted work, deleted a scratch file mid-use, left a live `MUTATION` marker in
+> `src/index.css` that would have made a gate run lie, and tore down the shared dev server on 5191
+> repeatedly. See `concurrent-session-shares-worktree` in memory. Stage only your own paths
+> (`git commit --only <paths>`) and grep for `MUTATION` before trusting any gate result.
+
+### The method: every named item was driven before it was built
+
+**Three items on the polish list were wrong, and each wrongness was the useful finding.**
+
+1. 🔴 **§3.1 said the Builder loses a class on navigation, and wanted a guard on `navTo`.** It does
+   not. `stages`/`sessionName`/`classChoice` live at the **App root**, so navigation never unmounts
+   them, and a `useEffect` autosaves on every change — a rename survives a full `page.reload()`.
+   The guard would have interrupted a coach to prevent a loss that cannot happen, which is worse
+   than no guard: an interruption that is never right teaches people to click through the one that
+   is. `e2e/builderDraft.spec.js` pins the persistence instead; deleting the autosave reds all
+   three tests. **That is the condition for re-raising this, and nothing less is.** The *plan
+   editor* loss was real — four dismiss paths, all silent — and now hands the draft back through
+   the undo toast, guarded on `dirty` so an untouched open stays instant.
+
+2. 🔴 **§3.4 listed three touch-target offenders. Measured, it was 100 of 186 controls under 44px
+   at 390px.** The list came from wherever the last person happened to look, not from a sweep.
+
+3. 🔴 **§1.4 asked for "assert the counter reaches 3/3". It must not.** Running a class flips
+   `showChecklist` false — the checklist is a cold-start surface that is REPLACED, not completed.
+   Writing the requested test would have pinned a product decision backwards.
+
+**And §3.6 asked for the timer to be `aria-live`.** `remaining` ticks every second: ~1,800
+announcements in a 30-minute class, over everything else the coach's phone must say. An
+accessibility feature can be actively hostile. The region carries what is DISCRETE instead, and a
+test asserts it never contains `/\d+:\d\d/`.
+
+### Two defects found underneath the polish, neither on any list
+
+🔴 **Every loading spinner in the app was frozen.** `@keyframes spin` lived in `src/App.css` — Vite
+scaffolding **nothing imports**. Six `animation: spin` call sites resolved to nothing. Four are on
+live, network-bound paths (Slides listing and import, reading a pasted class, generating in a
+coach's style), so on the app's four slowest journeys **"working" and "hung" looked identical**.
+Nothing throws, and a screenshot of a still spinner looks exactly like a moving one.
+
+🔴 **A dialog could start the class behind it.** The Runner binds shortcuts on `window`, and
+`useDialog` stops propagation for **Escape only**, deliberately. So with the check-in panel open —
+the one dialog opened mid-class — focusing "Done" and pressing Space **started the class**, and
+"n" advanced the room a stage, behind a dialog the coach is looking at. `isDialogOpen()` now
+exposes the stack `useDialog` already kept.
+
+### The tap-target mechanism, and the one control it could not fix
+
+`data-tap` lays a transparent 44px pseudo-element over a small control: the hit area grows, the
+visible box does not. **`tapScan.js` hit-tests the running page rather than measuring rectangles**,
+because both failure modes leave the element's rect identical:
+
+- **An `overflow:hidden` ancestor clips the overlay** — caught on the Calendar's week-nav pill.
+- 🔴 **An overlay eats its NEIGHBOUR**, and this one shipped in `40b31cb`. Marking the schedule's
+  Remove ✕ covered the Edit pencil 14px away and made it unclickable. **Nine tests went red on the
+  EDIT flow and not one mentions tap targets**: an overlay that eats a neighbour presents as the
+  neighbour being broken, three files away. `orphanScan` closes it.
+
+⚠️ **Adding `orphanScan` to the nine screen sweeps did not catch the mutation** — the sweeps run on
+a fresh app, a fresh app has an empty schedule, and neither button existed to scan. **An empty
+screen passes every scan trivially.** There is now one test that seeds a class first. That property
+is true of all nine sweeps above it, and is worth remembering before trusting the next one.
+
+**Two controls are deliberately left small, with the measurement written above them:** the
+Builder's 19px movement preview (a 44px target cannot fit a 30px row) and the schedule ✕ (14px from
+its neighbour). Pretending otherwise costs the neighbour.
+
+### Also shipped
+
+- **Two Schedule panels that could never fill.** "Jungle Intelligence" and "Trainer load" are
+  `FLAGS.mockAnalytics ? [...] : []` with the flag false, so both rendered their EMPTY state
+  permanently, promising a feature with no implementation behind it. Gated on the flag their data
+  already uses — one switch, not two. Took a hard-coded *"Mara is near weekly cap"* with them.
+- **`deleteEx` becomes an undo**, the last half of the inverted guard. The undo holds the **LIST**,
+  not the row: re-appending would put the movement back at the end of an order the coach set by
+  hand. The library's local `showToast` folded into the shared primitive — it structurally cannot
+  host a button, and two toast positions on one screen is worse than either.
+- **`--danger`**, deliberately NOT skin-derived: a gym whose accent is red would get a delete
+  button matching its primary action. The test asserts it differs from `--accent` too, because
+  "differs from muted" alone is satisfied by exactly that mistake.
+- **`layoutScan` skips 1px boxes.** The visually-hidden live region clips by design. The exemption
+  is itself mutation-checked — clipping "ELAPSED" into 20px still fails with "52px of text in
+  20px" — so the rule is narrowed, not weakened.
+
+### Traps this session paid for
+
+- ⚠️ **PowerShell mangles `node -e` containing `var(--muted)`** — `--` parses as a unary operator.
+  Use a bash heredoc `.mjs`, or the Edit tool.
+- ⚠️ **Git Bash `/tmp` is not Node's `C:\tmp`.** A heredoc written in bash and read by `node -e`
+  fails with ENOENT. Use one tool for both halves.
+- ⚠️ **`nav()` leaves focus on the button it clicked**, so a bare `Space` in a Runner test
+  re-activates the sidebar as well as firing the shortcut. Reset via body tabindex/focus.
+- ⚠️ **A JSX comment cannot be the first child of `{cond && (`** — it is not an expression. The
+  symptom is a broad e2e failure that reads exactly like a dev-server flake.
+- ⚠️ **The check-in dialog's first button is "Done"**, so Space closes it. A test asserting the
+  dialog stays open after Space is asserting that the button is broken.
+
+### Still open
+
+§3.2 save toasts (partial), §3.5's Members and Team empty states, §3.7 skeletons, sweeps §1.5 and
+§1.6, and §1.3's `removeClass` / `handleReset` / `handleNewClass`. **10 commits were unpushed at
+hand-off** — pushing deploys, so it was left as Dylan's call. §0 is unchanged: migrations `0005`
+and `0006` still need running, and until then the coach corpus exists on exactly one laptop.
+
+---
+
 ## Session 25 — the banner that could not be cleared, two sweeps, and the first undo
 
 > **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **381 e2e**
