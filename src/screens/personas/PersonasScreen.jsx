@@ -32,6 +32,7 @@ import { slidesEnabled, getSlidesToken, parseDriveId, resolveDriveTarget, listPr
 import { parsePlanText, deriveHints, PARSE_THRESHOLD, PARSER_VERSION } from "../../lib/planParser.js";
 import { useWindowWidth, Btn, Input, Select, Tag } from "../../ui/primitives.jsx";
 import { useDialog } from "../../ui/dialog.js";
+import { useToast } from "../../ui/toast.jsx";
 import { ROLE_LABEL, MOVEMENT_CATEGORY_LABEL, CLASS_CATEGORY_LABEL, SOURCE_LABEL,
          KIND_LABEL, schemeTypeLabel, readErrorMessage } from "../../ui/labels.js";
 
@@ -157,6 +158,7 @@ const extractMeta = (via, confidence) => ({
 // once 0005 is applied. LLM generation arrives with the Edge Function (chunk 2).
 export function PersonasScreen({ onBack, onDraftToBuilder }) {
   const vw = useWindowWidth();
+  const { toast } = useToast();
   const isMobile = vw < 480;
   const isTablet = vw < 900;
   const [personas, setPersonas] = useState(() => store.getPersonas());
@@ -253,13 +255,53 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     commitPersonas(personas.map(p => p.id === selectedId ? { ...p, name, description: headForm.description.trim() } : p));
     setEditHead(false);
   };
+  // The most expensive delete in the product, and until session 25 the only
+  // unguarded one: it takes the coach, their whole class corpus, the movement
+  // catalogue aggregated from it and their generation ledger. Meanwhile deleting
+  // a SINGLE exercise asked "are you sure?". The protection was inverted.
+  //
+  // This is the one action that gets both a confirm and an undo. An imported
+  // corpus is an LLM pass over a real deck the coach has taught from for years —
+  // it cannot be retyped, and it is the data the entire wedge feature is built
+  // on. The confirm says what will go and how much of it; the undo means saying
+  // yes by reflex is still recoverable.
   const removePersona = id => {
+    const p = personas.find(x => x.id === id);
+    const label = p?.name || "this coach";
+    const nPlans = plans.filter(pl => pl.personaId === id).length;
+    const nMoves = movements.filter(m => m.personaId === id).length;
+    const nGens  = generations.filter(g => g.personaId === id).length;
+    const also = [nPlans && `${nPlans} class plan${nPlans === 1 ? "" : "s"}`,
+                  nMoves && `${nMoves} movement${nMoves === 1 ? "" : "s"}`,
+                  nGens  && `${nGens} generated class${nGens === 1 ? "" : "es"}`].filter(Boolean);
+    // "1 class plan, 11 movements and 3 generated classes" — an Oxford-less list
+    // rather than `join(", ")`, which read as "1 class plan, 11 movements." and
+    // looked like a sentence that had been cut off mid-way.
+    const list = also.length < 2 ? also.join("")
+      : `${also.slice(0, -1).join(", ")} and ${also[also.length - 1]}`;
+    const detail = list ? ` This also deletes ${list}.` : "";
+    if (!window.confirm(`Delete ${label}?${detail} You can undo this straight after.`)) return;
+
+    // Captured BEFORE the delete. Restoring by re-deriving would not work:
+    // aggregateMovements rebuilds the catalogue from the plans on every
+    // recompute, so any manual edit on a zero-occurrence row — the rows its
+    // retention rule exists to preserve — would silently not come back.
+    const before = { personas, plans, movements, generations };
+
     const r = store.deletePersona(id);
     const moves = store.savePersonaMovements(store.getPersonaMovements().filter(m => m.personaId !== id));
     const gens = store.getPersonaGenerations().filter(g => g.personaId !== id); // server rows cascade via FK
     store.savePersonaGenerations(gens);
     setPersonas(r.personas); setPlans(r.plans); setMovements(moves); setGenerations(gens);
     if (selectedId === id) setSelectedId(r.personas[0]?.id || null);
+
+    toast(`Deleted ${label}`, { undo: () => {
+      const back = store.restorePersonaCascade(before);
+      setPersonas(back.personas); setPlans(back.plans);
+      setMovements(back.movements); setGenerations(back.generations);
+      setSelectedId(id);
+      toast(`${label} restored`);
+    } });
   };
   const seedSample = () => {
     const now = personas.slice();
@@ -389,7 +431,21 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     commitPlans(next);
     setEditingPlan(null);
   };
-  const removePlan = id => commitPlans(store.deletePersonaPlan(id));
+  // Undo, no confirm. A plan is one row and the coach can see immediately
+  // whether they hit the right one — interrupting every correct deletion to
+  // guard the rare wrong one is the trade a confirm makes, and it is the wrong
+  // one here. `deletePersonaPlan` routes through _bgDelete, which drops the
+  // delta mark, so re-saving really does re-push rather than computing an empty
+  // delta (the trap restorePersonaCascade exists for).
+  const removePlan = id => {
+    const before = plans;
+    const title = plans.find(pl => pl.id === id)?.title;
+    commitPlans(store.deletePersonaPlan(id));
+    toast(title ? `Removed “${title}”` : "Plan removed", { undo: () => {
+      commitPlans(before);
+      toast("Plan restored");
+    } });
+  };
 
   const changeMovement = updated => {
     const list = movements.map(m => m.id === updated.id ? updated : m);

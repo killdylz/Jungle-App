@@ -829,6 +829,33 @@ export function savePersonaGenerations(list) {
   }
 }
 
+// Put a deleted coach back, with everything that went with them.
+//
+// A plain re-save of the four lists is NOT enough, and the reason is the delta
+// writer. `deletePersona` removes only the coach_personas row from the server;
+// persona_plans, persona_movements and persona_generations go with it through
+// their FKs' ON DELETE CASCADE — no client call, so no `_unmark`. Those rows
+// still carry the fingerprints the server confirmed before the delete, so a
+// re-save computes an EMPTY delta and pushes nothing. The coach would see their
+// whole corpus restored on this device while the server stayed empty, and the
+// next server-wins hydrate would take it away again for good.
+//
+// Dropping the marks first is what makes the undo actually reach Postgres. The
+// knowledge of which tables cascade belongs here rather than in the screen: the
+// FKs are declared in migration 0005 two feet from this file's mental model, and
+// a screen cannot be expected to know that deleting one row deletes three tables.
+export function restorePersonaCascade({ personas, plans, movements, generations } = {}) {
+  (plans || []).forEach(pl => pl && _unmark("persona_plans", pl.id));
+  (movements || []).forEach(m => m && _unmark("persona_movements", m.id));
+  (generations || []).forEach(g => g && _unmark("persona_generations", g.id));
+  savePersonas(personas || []);
+  savePersonaPlans(plans || []);
+  const moves = savePersonaMovements(movements || []);
+  savePersonaGenerations(generations || []);
+  return { personas: personas || [], plans: plans || [], movements: moves,
+           generations: generations || [] };
+}
+
 // One-time hydrate for the Personas screen: pull both tables for the gym
 // (server wins), seed the server from local when it has none. Returns
 // { personas, plans } or null when not synced / on error (caller keeps local).

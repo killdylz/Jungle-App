@@ -21,6 +21,7 @@ import {
   _deltaRows, _markSynced, _unmark, publishOccurrences, startScheduledClass,
   appendPersonaGeneration, getPersonaGenerations,
   _clearLedgerIfSettled, syncErrorSignature,
+  restorePersonaCascade, getPersonas, getPersonaPlans, getPersonaMovements,
 } from "./store.js";
 import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
 import { atRiskMembers } from "./retention.js";
@@ -424,6 +425,68 @@ describe("_clearLedgerIfSettled", () => {
     }));
     _clearLedgerIfSettled("coach_personas", []);
     expect(syncErrors().map(e => e.table)).toEqual(["persona_plans"]);
+  });
+});
+
+// ── Undoing a coach delete has to survive the CASCADE ────────────────────────
+//
+// The subtle half of session 25's undo. `deletePersona` removes only the
+// coach_personas row from the server; persona_plans, persona_movements and
+// persona_generations go with it through their FKs' ON DELETE CASCADE — no
+// client call, so no `_unmark`. Those rows keep the fingerprints the server
+// confirmed BEFORE the delete, so a plain re-save computes an empty delta and
+// pushes nothing: the coach sees their corpus restored on this device while the
+// server stays empty, and the next server-wins hydrate takes it away for good.
+//
+// That failure is completely invisible locally — every local assertion passes.
+// It is only observable as "which rows would the next push send", which is what
+// these assert.
+describe("restorePersonaCascade", () => {
+  beforeEach(() => localStorage.clear());
+
+  const CORPUS = {
+    personas:    [{ id: "p1", name: "Coach Mike" }],
+    plans:       [{ id: "pl1", personaId: "p1", title: "S360" }],
+    movements:   [{ id: "mv1", personaId: "p1", name: "Back Squat" }],
+    generations: [{ id: "gn1", personaId: "p1" }],
+  };
+  // What the server had confirmed before the delete.
+  const markEverything = () => {
+    _markSynced("persona_plans",       [{ id: "pl1" }], [{ id: "pl1" }]);
+    _markSynced("persona_movements",   [{ id: "mv1" }], [{ id: "mv1" }]);
+    _markSynced("persona_generations", [{ id: "gn1" }], [{ id: "gn1" }]);
+  };
+
+  it("POSITIVE CONTROL: those marks really do suppress a push", () => {
+    // Without this, the assertions below could pass because the marks were never
+    // written in the first place — the test would prove nothing at all.
+    markEverything();
+    expect(_deltaRows("persona_plans", [{ id: "pl1" }]), "a confirmed row must NOT be in the delta").toEqual([]);
+    expect(_deltaRows("persona_movements", [{ id: "mv1" }])).toEqual([]);
+    expect(_deltaRows("persona_generations", [{ id: "gn1" }])).toEqual([]);
+  });
+
+  it("drops the cascaded tables' marks so the undo actually reaches Postgres", () => {
+    markEverything();
+    restorePersonaCascade(CORPUS);
+    expect(_deltaRows("persona_plans", [{ id: "pl1" }]),
+      "restored plans must be queued for re-push — the cascade deleted them server-side").toHaveLength(1);
+    expect(_deltaRows("persona_movements", [{ id: "mv1" }])).toHaveLength(1);
+    expect(_deltaRows("persona_generations", [{ id: "gn1" }])).toHaveLength(1);
+  });
+
+  it("puts every domain back on this device", () => {
+    restorePersonaCascade(CORPUS);
+    expect(getPersonas().map(p => p.id)).toEqual(["p1"]);
+    expect(getPersonaPlans().map(p => p.id)).toEqual(["pl1"]);
+    expect(getPersonaMovements().map(m => m.id)).toEqual(["mv1"]);
+  });
+
+  it("survives a degenerate or partial snapshot without throwing", () => {
+    // The undo closure is held for nine seconds across any amount of other
+    // state change; it must not be able to be the thing that breaks the screen.
+    expect(() => restorePersonaCascade()).not.toThrow();
+    expect(() => restorePersonaCascade({ personas: null, plans: [null] })).not.toThrow();
   });
 });
 

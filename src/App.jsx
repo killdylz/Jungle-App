@@ -50,6 +50,7 @@ import { hexA, wcagContrast, nudgeContrast,
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
 import { ThemeContext, useWindowWidth, Input, Select, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";
+import { ToastProvider, useToast } from "./ui/toast.jsx";
 import { useDialog } from "./ui/dialog.js";
 import { useAfterMount } from "./ui/useAfterMount.js";
 import ErrorBoundary from "./ui/ErrorBoundary.jsx";
@@ -3426,6 +3427,10 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
+    {/* ToastProvider wraps the whole staff app so a screen in its own module
+        (PersonasScreen, CalendarScreen) can acknowledge a save or offer an undo
+        without App.jsx threading a callback down to it. */}
+    <ToastProvider>
     <div style={{display:"flex",flexDirection:"row",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
       {!isFullscreen && !isCompact && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={displayProfile} can={can}/>}
       {/* Reserve the bar's height so the last card on a screen is not trapped
@@ -3591,6 +3596,7 @@ export default function App() {
       {showProfile&&<ProfileModal profile={displayProfile||{display_name:"Coach"}} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
     </div>
+    </ToastProvider>
     </ThemeContext.Provider>
   );
 }
