@@ -653,3 +653,25 @@ touch a dashboard.
 **A12 + A13 are the fun ones** — 35 minutes, and at the end of them there is something you can
 show a member. They do not block anything else, so do them when you want a win rather than a
 chore. Part B is empty; there is nothing waiting on an answer from you.
+
+---
+
+## Node 20 deprecation on the GitHub Actions runners  ·  added 2026-08-04 (session 26)
+
+**Not urgent, but it now has a clock on it.** Every `Deploy to GitHub Pages` run prints:
+
+> Node.js 20 is deprecated. `actions/checkout@v4`, `actions/setup-node@v4`,
+> `actions/upload-artifact@v4`, `actions/deploy-pages@v4` target Node.js 20 but are being
+> **forced to run on Node.js 24**.
+
+The deploy is green today because GitHub is overriding the runtime for us. When they stop, those
+four actions break and the deploy stops — and the deploy is what publishes the app.
+
+**These are exactly Dependabot PRs #1–#5**, open since 3 August. So the bumps are no longer a
+version-hygiene nag; they are the fix for a dated warning.
+
+**Recommended:** merge #1–#5 in a session where they are the ONLY change, so a red run has exactly
+one suspect. Major Actions bumps break CI in ways only a real run reveals, and bundling them with
+product work is how you spend a day bisecting.
+
+Left for Dylan per the standing rule: no infra changes, and no Dependabot merges, without asking.
