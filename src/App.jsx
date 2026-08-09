@@ -73,8 +73,14 @@ const PersonasScreen = React.lazy(() =>
 // literals, so rollup already folds the branch away and this screen is absent
 // from the bundle entirely — React.lazy would defeat that folding and emit a
 // 13 KB chunk into the SW precache that nothing ever fetches. The header of
-// AnalyticsScreen.jsx carries the measurements.
+// AnalyticsScreen.jsx carries the measurements. It is still the layout target
+// for the real screen below, which is the only reason it is kept at all.
 import AnalyticsScreen from "./screens/AnalyticsScreen.jsx";
+// The REAL analytics (N2), replacing the coming-soon stub on the same route.
+// LAZY for the opposite reason to the line above: this branch is live, so its
+// bytes are real bytes, and StaffApp had 12.65 kB of budget left.
+const RetentionScreen = React.lazy(() =>
+  import("./screens/RetentionScreen.jsx").then(m => ({ default: m.RetentionScreen })));
 // ui/labels.js went with the personas cluster — every one of its label MAPS is
 // read by that screen and nothing else. Session 25 added coach-facing copy that
 // is not a map: the sync banner's sentence, which lives there for the reason
@@ -3669,7 +3675,11 @@ export default function App() {
           </div>
         )}
         {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
-        {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<MockDisabledScreen title="Analytics" note="Real analytics land in Phase 2, built on live attendance data." onBack={()=>setView("dashboard")}/>)}
+        {/* The mock branch is kept, and stays folded away while the flag is false
+            — its layout is what this screen was built against. What changed is
+            the FALSE arm: it used to be a coming-soon panel, and is now the real
+            thing computed from the gym's own attendance rows. */}
+        {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<RetentionScreen onBack={()=>setView("dashboard")} onNavigate={setView}/>)}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")} onStartClass={handleStartScheduled}/>}
         {view==="music"&&(!FLAGS.music
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>

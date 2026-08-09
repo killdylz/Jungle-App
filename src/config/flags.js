@@ -43,8 +43,24 @@ export const FLAGS = {
 //
 // A coach cannot hold three mental models of "what goes in a class" (audit 2.3):
 // class shapes, the movement library, and starter templates collapse to two.
+// 🔴 `analytics` USED TO BE HERE, mapped to `mockAnalytics`, and removing it is
+// the whole nav half of the N2 build. The backlog said the analytics route "already
+// exists" and is "in three nav arrays" — both true, and both beside the point,
+// because this map meant `isViewEnabled("analytics")` returned false and every one
+// of those three nav arrays filtered the entry straight back out. The route was
+// live and unreachable: nothing in the product could navigate to it.
+//
+// It is gone from this map rather than flipped on, and the distinction matters.
+// `FLAGS.mockAnalytics` is still false and `AnalyticsScreen`'s invented KPIs are
+// still dead code — flipping it would ship "1,284 active members" and "£412 per
+// class" to a paying gym. What is now behind the route is `RetentionScreen`,
+// computed from the gym's own rows, so it needs no flag: the honesty gate lives in
+// `cohortModel`, which states what data is missing instead of drawing a shape.
+//
+// The lesson for the next screen gated this way: a mock flag doing double duty as
+// a nav gate makes "replace the mock" require a flags.js edit that reads exactly
+// like the thing the backlog forbade.
 const MOCK_VIEW_FLAG = {
-  analytics: "mockAnalytics",
   music: "music",
   integrations: false,
   templates: false,

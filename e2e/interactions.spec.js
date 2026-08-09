@@ -43,7 +43,11 @@ const SKIP = [
   // Destructive — driven properly elsewhere.
   /delete/i, /remove/i, /reset/i, /discard/i, /clear/i,
   // Navigation — moves the sweep off the screen under test.
-  /^(dashboard|class builder|coaches|exercise library|class runner|schedule|members|team|brand studio|builder|library|run|build|brand|more|back|home)$/i,
+  // `analytics` joined this list when the N2 screen replaced the flagged-off
+  // stub. Without it, every OTHER screen's sweep clicks the sidebar's Analytics
+  // entry and navigates away mid-sweep — a nav entry that becomes visible has to
+  // be added here as well as to ALL_SCREENS.
+  /^(dashboard|class builder|coaches|exercise library|class runner|schedule|members|team|brand studio|analytics|builder|library|run|build|brand|more|back|home)$/i,
   /^back/i, /go back/i, /^← /,
   // Writes a row, or leaves the app entirely.
   /^add to schedule$/i, /^save/i, /^publish/i, /^export/i, /^import/i,
@@ -90,8 +94,26 @@ const SEED = {
   },
 };
 
+// ── Screens with nothing to press, and why that is allowed ───────────────────
+//
+// This sweep's positive control demands four clickable controls, and it FIRED on
+// Analytics the moment that screen became reachable — which is the control doing
+// its job, not a defect to route around. Analytics is a read-only report: a
+// headline, a column chart of divs, and a table. Its only buttons are Back and
+// (on the empty state) "Import attendance history", both of which this file's
+// denylist correctly excludes as navigation.
+//
+// The wrong fix would be to add controls to the screen so a sweep has something
+// to click. What this sweep exists to catch on that screen — an unhandled throw
+// and a console error — is asserted by `retention.spec.js`, which drives it with
+// three different fixtures (empty, thin, a full imported year) and watches the
+// console on every one. The exemption is therefore a statement about the screen's
+// shape, and it is named rather than achieved by leaving it out of ALL_SCREENS,
+// because that list is checked against the app by responsive.spec.js.
+const REPORT_ONLY = new Set(["analytics"]);
+
 test.describe("no screen throws when a coach presses things", () => {
-  for (const screen of ALL_SCREENS) {
+  for (const screen of ALL_SCREENS.filter(s => !REPORT_ONLY.has(s.key))) {
     test(`${screen.side} survives being clicked`, async ({ page }) => {
       const errors = watchConsole(page);
       // Any window.confirm/alert a handler raises is cancelled, not accepted —

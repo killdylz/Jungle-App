@@ -114,6 +114,13 @@ export const ALL_SCREENS = [
   { key: "live",         side: "Class Runner",     bar: "Run" },
   { key: "calendar",     side: "Schedule",         sheet: "Schedule" },
   { key: "member",       side: "Members",          sheet: "Members",      bar: "Members" },
+  // Added when the analytics route stopped being flag-gated (N2). It was absent
+  // from this list for the reason the ⚠️ above describes: `isViewEnabled` returned
+  // false, so the entry never rendered anywhere and the sweep had nothing to
+  // visit. Removing that gate makes it a real screen at every width, and
+  // responsive.spec.js checks this list against the running app — so the omission
+  // would have failed loudly rather than silently, which is the design working.
+  { key: "analytics",    side: "Analytics",        sheet: "Analytics" },
   { key: "brand-studio", side: "Brand Studio",     sheet: "Brand Studio", bar: "Brand" },
 ];
 
