@@ -40,6 +40,9 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
 import { fmt, fmtOccurrence, fmtAgo } from "./lib/format.js";
+// Only the field names and the currency table — the arithmetic that reads them
+// lives on the Members screen, which is the only surface that shows the figure.
+import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
 // rgbToHex / rgbToHsl / hslToRgb are deliberately NOT imported: every one of
 // their ~45 call sites was inside a function that moved, so App.jsx no longer
 // converts colour spaces itself. That is the shape a good extraction leaves
@@ -396,7 +399,16 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
 
   const saveBranding = () => {
     const effectiveFont = draft.fontFamily === "custom" ? (draft.customFont||"system") : draft.fontFamily;
-    onBrandingChange({...draft, fontFamily: effectiveFont});
+    // ⚠️ `...gymBranding` FIRST, then the draft. This used to save the draft
+    // alone, which REPLACED the whole branding blob with the six keys this tab
+    // edits — so any per-gym fact stored alongside them was silently erased by an
+    // owner opening this tab and pressing Save. Nothing was lost while the blob
+    // held only these six; `membershipPrice` (set in Brand Studio) is the first
+    // key that would have been, and the failure would have looked like the price
+    // "not saving" with no error anywhere.
+    //
+    // The draft still wins on the fields it owns, so Save means what it says.
+    onBrandingChange({...gymBranding, ...draft, fontFamily: effectiveFont});
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -1539,6 +1551,49 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                   </button>
                 </div>
               )}
+
+              {/* ── Membership price ──────────────────────────────────────────
+                  Not branding in the visual sense, and it lives here anyway:
+                  `branding` is the blob that already round-trips to
+                  `brand_profiles` (0004), so this is the one place a per-gym
+                  fact can be stored without a migration — and migrations are
+                  Dylan's, not a session's.
+
+                  Its ONLY consumer is the Members screen's at-risk panel, which
+                  turns "3 members need attention" into a monthly figure. Left
+                  blank, that panel shows no money at all rather than a zero, so
+                  the copy below promises exactly what happens and no more. */}
+              <div>
+                <div style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",marginBottom:"5px"}}>Membership price</div>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <select aria-label="Currency" value={gymBranding[CURRENCY_FIELD]||DEFAULT_CURRENCY}
+                    onChange={e=>onBrandingChange({...gymBranding,[CURRENCY_FIELD]:e.target.value})}
+                    style={{padding:"9px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px",cursor:"pointer",flexShrink:0}}>
+                    {/* "S$ SGD", but just "AED" for the one currency whose symbol
+                        IS its code — "AED AED" read as a rendering bug, spotted
+                        by looking at the open select rather than by any test. */}
+                    {CURRENCIES.map(c => <option key={c.code} value={c.code}>
+                      {c.symbol.trim() === c.code ? c.code : `${c.symbol.trim()} ${c.code}`}
+                    </option>)}
+                  </select>
+                  {/* `inputMode="decimal"` with type="text", not type="number":
+                      a number input's spinner and scroll-to-change are a bad fit
+                      for a figure typed once, and Firefox lets a number input
+                      hold "e5" while reporting an empty value — which would read
+                      as unset while looking filled in. The string is parsed by
+                      `membershipPrice`, which rejects anything that is not a
+                      positive finite number. */}
+                  <input type="text" inputMode="decimal" aria-label="Membership price per month"
+                    value={gymBranding[PRICE_FIELD] ?? ""}
+                    onChange={e=>onBrandingChange({...gymBranding,[PRICE_FIELD]:e.target.value})}
+                    placeholder="e.g. 150"
+                    style={{flex:1,minWidth:0,padding:"9px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",color:"var(--text)",fontSize:"13px",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"5px",lineHeight:1.5}}>
+                  What one membership costs per month. Used to show the revenue behind the
+                  at-risk list on the Members screen. Leave it blank and no figure is shown.
+                </div>
+              </div>
             </div>
           </div>
         </div>

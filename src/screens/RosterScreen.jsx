@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
 import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
+import { membershipPrice, revenueAtRisk, describeRevenueAtRisk, fmtMoney } from "../lib/revenueAtRisk.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
 import { getLibrary } from "../lib/libraryAccess.js";
@@ -67,7 +68,18 @@ export function RosterScreen({ onBack }) {
   // The win-back draft is signed by the GYM, because the gym is the sender and
   // the organisation responsible for it. Read from the store rather than
   // threaded as a prop, matching the other components that need branding.
-  const gymName = store.getGymBranding()?.gymName || "";
+  const branding = store.getGymBranding() || {};
+  const gymName = branding.gymName || "";
+  // ── The owner's half of this panel ────────────────────────────────────────
+  // `null` when the gym has set no membership price, and every render below is
+  // gated on it — so a gym without one sees the screen exactly as it was. That
+  // absence is the feature, not a gap: a revenue figure is the most quotable
+  // thing here, so a guessed one would be the most damaging. See revenueAtRisk.js.
+  //
+  // Derived from `atRiskActive`, the same list the headline number counts, so the
+  // money can never disagree with the count beside it.
+  const price = membershipPrice(branding);
+  const revenue = revenueAtRisk(atRiskActive, price);
 
   const visitsFor = id => attendance.filter(a => a.memberId === id).length;
   const lastSeen = id => {
@@ -205,11 +217,47 @@ export function RosterScreen({ onBack }) {
               {describeRetention(retention, { active: atRiskActive.length, handled: atRiskHandled.length })}
             </p>
 
+            {/* ── What it is worth, if the gym has told us ────────────────────
+                An owner does not buy "1 member needs attention"; they buy a
+                figure they can hold against a subscription price. This is the
+                only thing on the screen that was missing to state it.
+
+                MONTHLY recurring revenue, not lifetime value — LTV needs a
+                tenure assumption no gym's data has earned yet, and this number
+                has to be one the owner can check in their head. So the
+                arithmetic sits next to it, exactly as every flag's `reason`
+                does: `3 members × S$150/month`.
+
+                Rendered only when `revenue` is non-null, which requires a price
+                the owner set AND at least one active flag. `--accent`, not
+                `--danger`: this is the panel's own emphasis colour, and the
+                figure is a prompt to act, not a destructive control. */}
+            {revenue && (
+              <div data-testid="revenue-at-risk"
+                   style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:"10px",flexWrap:"wrap",
+                           padding:"10px 12px",marginBottom:"12px",borderRadius:"8px",
+                           background:"color-mix(in srgb, var(--accent) 8%, transparent)",
+                           border:"1px solid color-mix(in srgb, var(--accent) 22%, transparent)"}}>
+                <div style={{fontFamily:"var(--display)",fontSize:"17px",fontWeight:"800",color:"var(--accent)"}}>
+                  {fmtMoney(revenue.total, price)}<span style={{fontSize:"12px",fontWeight:"600"}}>/month at risk</span>
+                </div>
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>{describeRevenueAtRisk(revenue, price)}</div>
+              </div>
+            )}
+
             {atRiskActive.map(f => (
               <div key={`${f.memberId}:${f.rule}`} style={{padding:"12px 0",borderTop:"1px solid var(--border)"}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:"8px",flexWrap:"wrap"}}>
                   <span style={{fontSize:"14px",fontWeight:"700",color:"var(--text)"}}>{f.name || "Unnamed member"}</span>
-                  <span style={{fontSize:"11px",color:"var(--muted)"}}>last in {f.daysSince} day{f.daysSince===1?"":"s"} ago · {f.visits} visit{f.visits===1?"":"s"}</span>
+                  <span style={{fontSize:"11px",color:"var(--muted)"}}>
+                    last in {f.daysSince} day{f.daysSince===1?"":"s"} ago · {f.visits} visit{f.visits===1?"":"s"}
+                    {/* Per flag, and the same figure on every row on purpose:
+                        one price per gym is the first cut (per-member pricing is
+                        a metering problem — GTM §2), so this is the unit the
+                        total is built from rather than a per-member valuation.
+                        Repeating it is what makes the total checkable. */}
+                    {price && <> · {fmtMoney(price.amount, price)}/mo</>}
+                  </span>
                 </div>
                 {/* The WHY, stated as the rule with its numbers. An operator has to
                     be able to phone a member about this and defend it. */}
