@@ -1183,10 +1183,26 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
           <div style={sectionStyle}>
             <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"12px"}}>TEMPLATES</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px"}}>
+              {/* ⚠️ A <button>, not the <div onClick> these were. Found while
+                  writing the reload sweep, which tried to click them by role and
+                  could not: a keyboard-only or screen-reader user could not choose a
+                  skin AT ALL. That is the three primary choices on the white-label
+                  screen — the whole "make it look like your gym" story — reachable
+                  only by mouse.
+                  Nothing in the suite would have noticed. keyboard.spec.js asserts
+                  every visible CONTROL is reachable by Tab, and a div with an
+                  onClick has no role, so it was never a control to reach; every
+                  existing test clicks these by their TEXT, which works on a div and
+                  hides the defect. Session 15's "five dead controls" in a different
+                  costume.
+                  `aria-pressed` because these are a set of toggles where exactly one
+                  is on, and "ACTIVE" was previously conveyed by colour and a tick —
+                  neither of which a screen reader announces. */}
               {presets.map(p => {
                 const active = activeSkinId===p.id && !customSkinTokens;
                 return (
-                  <div key={p.id} onClick={()=>{ onSkinChange(p.id); onCustomSkinChange(null); }}
+                  <button key={p.id} type="button" aria-pressed={active}
+                    onClick={()=>{ onSkinChange(p.id); onCustomSkinChange(null); }}
                     style={{
                       padding:"14px 12px",
                       background: active ? `${p.accent}12` : "var(--navy)",
@@ -1194,6 +1210,10 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                       borderRadius:"12px", cursor:"pointer",
                       boxShadow: active ? `0 0 0 3px ${p.accent}25` : "none",
                       transition:"all .25s",
+                      // A button brings its own alignment and font; these three were
+                      // laid out as blocks and must keep reading as cards.
+                      display:"block", width:"100%", textAlign:"left",
+                      font:"inherit", color:"inherit",
                     }}>
                     {/* Swatch row */}
                     <div style={{display:"flex",gap:"4px",marginBottom:"8px"}}>
@@ -1205,7 +1225,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                     <div style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.4"}}>{p.desc}</div>
                     <div style={{fontSize:"9px",color:"var(--muted)",marginTop:"5px",opacity:0.7}}>{p.fonts}</div>
                     {active && <div style={{marginTop:"8px",fontSize:"9px",fontWeight:"700",color:p.accent,display:"flex",alignItems:"center",gap:"3px"}}><Check size={10}/> ACTIVE</div>}
-                  </div>
+                  </button>
                 );
               })}
             </div>
