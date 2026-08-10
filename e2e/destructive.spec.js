@@ -18,6 +18,12 @@ import { freshApp, nav, stored, watchConsole, expectNoConsoleErrors } from "./he
 // asserts the row is gone would exercise CANCEL, see nothing happen, and pass
 // for entirely the wrong reason if the confirm were later removed. Both paths
 // are driven explicitly below, and the cancel path asserts the data SURVIVED.
+//
+// That trap is now one fewer: the coach delete's confirm is an IN-APP dialog
+// rather than `window.confirm`, so these tests click a real button instead of
+// negotiating with a native prompt Playwright would have silently cancelled. The
+// warning stays because the Builder's rename is still a `window.prompt` and the
+// next native dialog added anywhere will hit it again.
 
 const KEYS = {
   personas: "jungle_personas",
@@ -33,6 +39,11 @@ async function loadSampleCoach(page) {
 }
 
 const deleteCoachBtn = (page) => page.getByRole("button", { name: /^Delete coach / }).first();
+// The in-app confirm's own controls. `delete-coach-go` rather than a name match:
+// the button says "Delete <coach name>", so matching on text would couple every
+// test below to the sample coach's name.
+const confirmPanel = (page) => page.getByTestId("delete-coach-confirm");
+const confirmGo    = (page) => page.getByTestId("delete-coach-go");
 
 test.describe("deleting a coach", () => {
   test("cancelling the confirm keeps the coach and their whole corpus", async ({ page }) => {
@@ -50,15 +61,23 @@ test.describe("deleting a coach", () => {
     expect(before.plans.length, "the sample coach must bring plans").toBeGreaterThan(0);
     expect(before.movements.length, "the sample coach must bring a catalogue").toBeGreaterThan(0);
 
-    let asked = null;
-    page.once("dialog", (d) => { asked = d.message(); d.dismiss(); });
     await deleteCoachBtn(page).click();
 
-    expect(asked, "deleting a coach must ask first — it was one unguarded click").toBeTruthy();
+    const panel = confirmPanel(page);
+    await expect(panel, "deleting a coach must ask first — it was one unguarded click").toBeVisible();
     // The confirm has to say what goes with them, or "are you sure?" is a
-    // question the coach cannot actually answer.
+    // question the coach cannot actually answer. This is the reason it stopped
+    // being a native prompt: the cascade inventory IS the guard, and a native
+    // dialog renders it as one cramped run of text.
+    const asked = await panel.innerText();
     expect(asked).toMatch(/class plan/i);
     expect(asked).toMatch(/movement/i);
+    // And that the corpus is not backed up anywhere — a coach weighing this up is
+    // entitled to know that (migrations 0005/0006 are still unapplied).
+    expect(asked).toMatch(/not yet backed up|nothing else holds a copy/i);
+
+    await panel.getByRole("button", { name: "Cancel" }).click();
+    await expect(panel).toHaveCount(0);
 
     expect(await stored(page, KEYS.personas)).toEqual(before.personas);
     expect(await stored(page, KEYS.plans)).toEqual(before.plans);
@@ -71,8 +90,8 @@ test.describe("deleting a coach", () => {
     const before = await stored(page, KEYS.personas);
     const victim = before[0];
 
-    page.once("dialog", (d) => d.accept());
     await deleteCoachBtn(page).click();
+    await confirmGo(page).click();
 
     // Assert the STORED object, not just the screen — session 4's defects were
     // mostly cases where those two disagreed.
@@ -93,8 +112,8 @@ test.describe("deleting a coach", () => {
       movements: await stored(page, KEYS.movements),
     };
 
-    page.once("dialog", (d) => d.accept());
     await deleteCoachBtn(page).click();
+    await confirmGo(page).click();
 
     const undo = page.getByTestId("toast-undo");
     await expect(undo, "a delete this expensive must offer an undo").toBeVisible();
@@ -118,8 +137,8 @@ test.describe("deleting a coach", () => {
     await loadSampleCoach(page);
     const before = await stored(page, KEYS.plans);
 
-    page.once("dialog", (d) => d.accept());
     await deleteCoachBtn(page).click();
+    await confirmGo(page).click();
     await page.getByTestId("toast-undo").click();
     await expect.poll(async () => (await stored(page, KEYS.plans)).length).toBe(before.length);
 
@@ -242,8 +261,8 @@ test.describe("the toast primitive", () => {
     await expect(region).toHaveAttribute("aria-live", "polite");
     await expect(region).toHaveAttribute("role", "status");
 
-    page.once("dialog", (d) => d.accept());
     await deleteCoachBtn(page).click();
+    await confirmGo(page).click();
     await expect(page.getByTestId("toast")).toContainText("Deleted");
   });
 

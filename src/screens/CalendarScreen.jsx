@@ -22,6 +22,7 @@ import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
          startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
+import { useToast } from "../ui/toast.jsx";
 import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
@@ -84,6 +85,7 @@ export function CalendarScreen({onBack, onStartClass}) {
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [viewMode, setViewMode] = React.useState("grid"); // "grid" | "heat"
   const [dismissedTips, setDismissedTips] = React.useState([]);
+  const { toast } = useToast();
   // F5: user-created recurring classes
   const [userClasses, setUserClasses] = React.useState(() => store.getUserClasses());
   // Local-first: pull the gym's classes from Postgres once on mount (server
@@ -277,10 +279,29 @@ export function CalendarScreen({onBack, onStartClass}) {
   // remove clears all seven, so the confirm says which class rather than which
   // cell. Published occurrences and their attendance are untouched — those are
   // dated history, and a class that ran did run.
+  //
+  // UNDO rather than a confirm, following toast.jsx's rule: the guard scales with
+  // what is destroyed, and what is destroyed here is one scheduling RULE. Published
+  // occurrences and their attendance survive untouched — a class that ran did run —
+  // so the loss is a row a coach can put back in fifteen seconds by hand, and can
+  // now put back in one click without having read a modal first.
+  //
+  // ⚠️ The closure holds the PRIOR LIST, not the removed row. Position is part of
+  // what was lost: the grid paints in list order, so re-appending a restored rule
+  // can move it relative to another class sharing its slot. This is the rule
+  // CLAUDE.md states and it is not hypothetical here.
+  //
+  // ⚠️ `before` is read from state, NOT captured inside the `setUserClasses`
+  // updater. An updater is called twice under StrictMode, so toasting from inside
+  // one fires two toasts in dev and one in prod — the same class of trap as the
+  // mount-guard ref this repo already documents.
   const removeClass = (id, name) => {
     if (!id) return;
-    if (!window.confirm(`Remove "${name}" from the schedule? Classes already run keep their attendance.`)) return;
-    setUserClasses(list => list.filter(c => c.id !== id));
+    const before = userClasses;
+    if (!before.some(c => c.id === id)) return;
+    setUserClasses(before.filter(c => c.id !== id));
+    toast(name ? `Removed “${name}” from the schedule` : "Removed from the schedule",
+      { undo: () => { setUserClasses(before); toast(name ? `“${name}” is back` : "Restored"); } });
   };
 
   // ── B4: publish this week ─────────────────────────────────────────────────

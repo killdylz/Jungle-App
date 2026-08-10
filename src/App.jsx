@@ -2128,6 +2128,9 @@ function SmartBuildDialog({ onClose, smartPrompt, setSmartPrompt, runSmartBuild,
 }
 
 function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemoveTrack, onAddTrack, onReorderTrack, sessionName, onSessionNameChange, onStartSession, onReorderStages, onMoveExercise, onOverviewDisplay, onBack, classChoice, onClassChoiceChange, onDjClass, djProgress, crossfade, onCrossfadeChange, onExportClass, onImportClass, onShareCard, scheduledType}) {
+  // `showToast` belongs to the Library component, not this one — §3.2's first
+  // attempt called it here and it was simply not in scope.
+  const { toast } = useToast();
   // Export/import moved here from the retired Templates screen. Without this the
   // feature would have been orphaned by the nav change rather than folded.
   const importFileRef = useRef(null);
@@ -2182,10 +2185,16 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     if (gifState[gkey]) { setGifState(pv=>{const n={...pv}; delete n[gkey]; return n;}); return; }
     openGif(gkey, name);
   };
+  // §3.2. The one save in this file with NO visible consequence at all: the field
+  // clears and a GIF starts loading, so a key that was stored and a key that was
+  // silently dropped look identical — and if the fetch then fails, the coach cannot
+  // tell whether their key is wrong or was never saved. That is precisely the
+  // "a save and a no-op are indistinguishable" case toast.jsx was built for.
   const saveGifKey = (gkey, name) => {
     const v=(gifKeyDraft||"").trim(); if(!v) return;
     store.saveExerciseDbKey(v);
     setGifKeyDraft("");
+    toast("API key saved");
     setGifState(pv=>({...pv,[gkey]:{status:"loading"}}));
     fetchExerciseGif(name).then(url=>setGifState(pv=>({...pv,[gkey]:{status:url?"ok":"none",url}})));
   };
@@ -3195,6 +3204,9 @@ export default function App() {
   // from `isMobile`, which drives type/padding inside screens — a 700px tablet
   // wants the bottom bar but not phone-sized text.
   const isCompact = vw < COMPACT_NAV_PX;
+  // Available here because ToastProvider moved up into StaffApp.jsx. Used by
+  // handleNewClass, which is this component's only destructive action.
+  const { toast } = useToast();
 
   // `spPaused` is deliberately NOT destructured. useSpotify still returns it —
   // the hook's shape is the quarantine's contract and must not shrink — but the
@@ -3387,14 +3399,37 @@ export default function App() {
       .catch(err => setDjProgress({ active:false, stage:0, total:stages.length, done:false, error:err.message||"DJ failed" }));
   };
   // "New class" on the Dashboard, for a coach who already has a draft. The draft
-  // is auto-saved on every change (store.saveDraftClass above), so replacing it
-  // is the one destructive action on that screen — hence the confirm, matching
-  // how the Library guards a movement delete.
+  // is auto-saved on every change (store.saveDraftClass above), so replacing it is
+  // the one destructive action on that screen.
+  //
+  // It used to be a `window.confirm`, and toast.jsx's own header says why that was
+  // the wrong guard: "a confirm dialog interrupts every time, including the 99
+  // times the coach meant it, and its cost is paid on the success path". Pressing
+  // New class after finishing a session is the overwhelmingly common case, and a
+  // modal asking whether you meant it is friction on every single one.
+  //
+  // So: undo. The guard scales with what is destroyed, and what is destroyed here
+  // is one in-progress draft — cheap to hold in a closure, unlike the coach
+  // cascade, which keeps BOTH a confirm and an undo.
+  //
+  // ⚠️ The closure holds the PRIOR LIST, not a rebuilt one. `mkStages()` would
+  // produce a fresh default set, and restoring that is not restoring the coach's
+  // plan — it is quietly replacing it with a different blank.
   const handleNewClass = () => {
-    if (stages.length && !window.confirm("Start a new class? Your current plan will be replaced.")) return;
+    const before = { stages, sessionName };
     setStages(mkStages());
     setSessionName("My Workout");
     setView("builder");
+    // Nothing was lost if there was nothing there, and an undo offering to restore
+    // an empty plan is noise. Defence rather than a live path: the Dashboard
+    // renders this control only `{hasDraft && ...}`, so an empty plan never reaches
+    // here today — which is also why no e2e drives this branch.
+    if (!before.stages.length) return;
+    toast("Started a new class", { undo: () => {
+      setStages(before.stages);
+      setSessionName(before.sessionName);
+      toast("Your previous plan is back");
+    } });
   };
   const handleSelectTemplate = t => {
     const saved = templateTracks[t.id]||{};
@@ -3532,10 +3567,9 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ skin: activeSkinObj, gymBranding }}>
-    {/* ToastProvider wraps the whole staff app so a screen in its own module
-        (PersonasScreen, CalendarScreen) can acknowledge a save or offer an undo
-        without App.jsx threading a callback down to it. */}
-    <ToastProvider>
+    {/* ToastProvider now wraps this component from StaffApp.jsx rather than from
+        inside it — see the note there. Still the whole staff app; the difference is
+        that App can now toast, which a provider cannot do for itself. */}
     <div style={{display:"flex",flexDirection:"row",minHeight:"100vh",background:"var(--bg)",color:"var(--text)",fontFamily}}>
       {!isFullscreen && !isCompact && <AppSidebar view={view} onNavigate={navTo} onProfile={()=>setShowProfile(true)} profile={displayProfile} can={can}/>}
       {/* Reserve the bar's height so the last card on a screen is not trapped
@@ -3711,7 +3745,6 @@ export default function App() {
       {showProfile&&<ProfileModal profile={displayProfile||{display_name:"Coach"}} onClose={()=>setShowProfile(false)} onLogout={()=>{logout();auth?.signOut?.();setView("dashboard");setShowProfile(false);}} sessionHistory={sessionHistory} gymBranding={gymBranding} onBrandingChange={setGymBranding}/>}
     </div>
     </div>
-    </ToastProvider>
     </ThemeContext.Provider>
   );
 }

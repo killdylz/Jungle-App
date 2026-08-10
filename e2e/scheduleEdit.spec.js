@@ -61,19 +61,51 @@ test.describe("editing the schedule", () => {
     await page.getByRole("button", { name: "Add to schedule" }).click();
     await expect.poll(async () => (await stored(page, KEY))?.length ?? 0).toBe(1);
 
-    // Dismissing the confirm keeps it — removing a recurring rule is destructive.
-    page.once("dialog", (d) => d.dismiss());
-    await page.getByRole("button", { name: /^Remove Typo Clas/ }).click();
-    expect((await stored(page, KEY))?.length).toBe(1);
-
-    page.once("dialog", (d) => d.accept());
+    // UNDOABLE, not confirmed. This used to drive `window.confirm` through both
+    // branches; removing a rule now happens immediately and offers an undo, on
+    // the rule toast.jsx states — the guard scales with what is destroyed, and
+    // published occurrences and their attendance survive a rule being removed.
     await page.getByRole("button", { name: /^Remove Typo Clas/ }).click();
     await expect.poll(async () => (await stored(page, KEY))?.length ?? 0).toBe(0);
 
     // And the cell goes back to being an empty, addable slot.
     await expect(page.getByRole("button", { name: "Add a class on Thu at 09:00" })).toHaveCount(1);
 
+    // The undo is the guard, so it is the load-bearing assertion. It must restore
+    // the STORED rule, not just repaint the cell.
+    await expect(page.getByTestId("toast")).toContainText("Removed “Typo Clas”");
+    await page.getByTestId("toast-undo").click();
+    await expect.poll(async () => (await stored(page, KEY))?.map(c => c.name) ?? []).toContain("Typo Clas");
+    await expect(page.getByRole("button", { name: /^Remove Typo Clas/ })).toHaveCount(1);
+
     expectNoConsoleErrors(errors);
+  });
+
+  test("the undo restores the rule's IDENTITY, not a fresh copy of it", async ({ page }) => {
+    // A rule's `id` is its identity: `occurrencesForWeek` stamps it onto every
+    // occurrence as `ruleId`. An undo that re-founded the rule with a new id would
+    // look perfect and quietly break the link from a dated class back to what
+    // scheduled it — the same defect the rename tests below exist to catch.
+    //
+    // ⚠️ No fixed clock here, deliberately. `page.clock.setFixedTime` freezes
+    // `Date.now()`, and a re-minted `uc${Date.now()}` would then be IDENTICAL to
+    // the original — so this assertion would pass against the very bug it is for.
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    await page.getByRole("button", { name: "Add a class on Thu at 09:00" }).click();
+    await page.getByPlaceholder(/class name/i).fill("Identity Test");
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+    await expect.poll(async () => (await stored(page, KEY))?.length ?? 0).toBe(1);
+    const before = (await stored(page, KEY))[0].id;
+    expect(before, "control: the rule must have an id to compare").toBeTruthy();
+
+    await page.getByRole("button", { name: /^Remove Identity Test/ }).click();
+    await expect.poll(async () => (await stored(page, KEY))?.length ?? 0).toBe(0);
+    await page.getByTestId("toast-undo").click();
+
+    await expect.poll(async () => (await stored(page, KEY))?.length ?? 0).toBe(1);
+    expect((await stored(page, KEY))[0].id).toBe(before);
   });
 });
 

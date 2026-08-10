@@ -34,8 +34,8 @@ test.describe("dashboard hero controls", () => {
     await expect(page.getByText(/GOOD (MORNING|AFTERNOON|EVENING), COACH/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Resume building" })).toBeVisible();
 
-    // Replacing an auto-saved plan is destructive, so it confirms first.
-    page.once("dialog", (d) => d.accept());
+    // No confirm any more: replacing an auto-saved plan is UNDOABLE instead. See
+    // the test below for why, and toast.jsx's header for the rule.
     await page.getByRole("button", { name: "New class", exact: true }).click();
 
     // Landing is proven by a control unique to the Builder. Asserting on the
@@ -47,7 +47,12 @@ test.describe("dashboard hero controls", () => {
     expectNoConsoleErrors(errors);
   });
 
-  test("\"New class\" replaces the plan; dismissing the confirm keeps it", async ({ page }) => {
+  test("\"New class\" replaces the plan, and the undo brings the coach's work back", async ({ page }) => {
+    // This used to drive a `window.confirm` through both branches. The confirm is
+    // gone: toast.jsx's own reasoning is that a confirm "interrupts every time,
+    // including the 99 times the coach meant it", and pressing New class after
+    // finishing a session is overwhelmingly the common case. The undo is what
+    // replaces it, so the undo is what this test drives.
     await freshApp(page);
 
     // Rename the draft so the stored object can distinguish "replaced" from
@@ -59,20 +64,32 @@ test.describe("dashboard hero controls", () => {
       .toBe("Thursday Hyrox");
 
     await page.getByRole("button", { name: "Dashboard", exact: true }).click();
-
-    // Dismissed: the coach keeps their work.
-    page.once("dialog", (d) => d.dismiss());
     await page.getByRole("button", { name: "New class", exact: true }).click();
-    await expect(page.getByText(/GOOD (MORNING|AFTERNOON|EVENING), COACH/)).toBeVisible();
-    expect((await stored(page, "jungle_draft_class"))?.name).toBe("Thursday Hyrox");
 
-    // Accepted: a fresh class, and the coach is in the Builder to edit it.
-    page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "New class", exact: true }).click();
+    // Replaced, and the coach is in the Builder to edit the new one.
     await expect(page.getByRole("button", { name: "Preview on TV" })).toBeVisible();
     await expect.poll(async () => (await stored(page, "jungle_draft_class"))?.name)
       .toBe("My Workout");
+
+    // The undo survived the navigation to the Builder — the toast region is fixed
+    // and mounted at the root, which is the whole reason it can.
+    await expect(page.getByTestId("toast")).toContainText("Started a new class");
+    await page.getByTestId("toast-undo").click();
+
+    // The STORED draft is back, name and all. Asserting the rendered stage list
+    // would pass on a re-render that never wrote anything.
+    await expect.poll(async () => (await stored(page, "jungle_draft_class"))?.name)
+      .toBe("Thursday Hyrox");
+    await expect(page.getByTestId("toast")).toContainText("Your previous plan is back");
   });
+
+  // NOT TESTED, and deliberately: `handleNewClass` skips the undo toast when there
+  // was no draft to lose, and that branch is unreachable from the UI. The
+  // Dashboard renders the button that calls it only `{hasDraft && ...}` — with an
+  // empty plan the hero's primary button says "New class" and goes straight to the
+  // Builder without touching this handler. The guard stays as defence for a future
+  // second call site; a test driving it would have to fake a control that does not
+  // exist, and a test of an invented path is worse than no test.
 
   test("retired screens are absent from the sidebar", async ({ page }) => {
     await freshApp(page);

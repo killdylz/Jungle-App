@@ -171,6 +171,9 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
   // imported anything.
   const [coldCT, setColdCT] = useState("");
   const [form, setForm] = useState({ name:"", kind:"coach", description:"" });
+  // { id, label, cascade } while the delete dialog is up; null otherwise. See
+  // askRemovePersona for why this is not a window.confirm.
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [editHead, setEditHead] = useState(false);
   const [headForm, setHeadForm] = useState({ name:"", description:"" });
   const [showAddPlan, setShowAddPlan] = useState(false);
@@ -269,7 +272,19 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
   // it cannot be retyped, and it is the data the entire wedge feature is built
   // on. The confirm says what will go and how much of it; the undo means saying
   // yes by reflex is still recoverable.
-  const removePersona = id => {
+  //
+  // ⚠️ The confirm is an IN-APP dialog, not `window.confirm`. Three reasons, and
+  // the first is the one that matters: a native confirm renders its message as one
+  // cramped run of text, and this message is the inventory of what is about to be
+  // destroyed — "1 class plan, 11 movements and 3 generated classes" is the whole
+  // point of the guard and deserves to be readable. Second, `--danger` is this
+  // repo's rule for a destructive control and a native dialog cannot honour it.
+  // Third, Playwright AUTO-DISMISSES native dialogs, so every test that thought it
+  // was exercising this delete was exercising cancel.
+  //
+  // `pendingDelete` holds the id and the sentence, so the dialog is a dumb renderer
+  // and the counting stays here next to the cascade it describes.
+  const askRemovePersona = id => {
     const p = personas.find(x => x.id === id);
     const label = p?.name || "this coach";
     const nPlans = plans.filter(pl => pl.personaId === id).length;
@@ -283,8 +298,13 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     // looked like a sentence that had been cut off mid-way.
     const list = also.length < 2 ? also.join("")
       : `${also.slice(0, -1).join(", ")} and ${also[also.length - 1]}`;
-    const detail = list ? ` This also deletes ${list}.` : "";
-    if (!window.confirm(`Delete ${label}?${detail} You can undo this straight after.`)) return;
+    setPendingDelete({ id, label, cascade: list });
+  };
+
+  const removePersona = id => {
+    const p = personas.find(x => x.id === id);
+    const label = p?.name || "this coach";
+    setPendingDelete(null);
 
     // Captured BEFORE the delete. Restoring by re-deriving would not work:
     // aggregateMovements rebuilds the catalogue from the plans on every
@@ -467,9 +487,22 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
     } });
   };
 
+  // ── §3.2: a save the coach asked for, acknowledged ────────────────────────
+  // Toasted, unlike the aggregation `recompute` this calls and unlike the
+  // catalogue-seeding effect above — both of those run without anyone asking, and
+  // toast.jsx's rule is that a toast on a write the coach did not request becomes
+  // noise people learn to ignore.
+  //
+  // The criterion for adding one here is toast.jsx's own: "a save and a no-op are
+  // indistinguishable". Editing a movement's ALIASES, NOTES or CATEGORY changes
+  // nothing in the collapsed row — a coach who fixes a cue watches the editor
+  // close and has no evidence anything was stored. Name and equipment do show, but
+  // splitting the acknowledgement by which field changed would be a rule nobody
+  // could predict from the outside.
   const changeMovement = updated => {
     const list = movements.map(m => m.id === updated.id ? updated : m);
     recompute(plans, list, selectedId); // re-fold occurrences under any new alias/name
+    toast(`Saved “${updated.name}”`);
   };
   // ⚠️ Only ever reachable from the "not in any plan" list. A row with
   // occurrences is re-derived on the next recompute, which is why the main
@@ -905,7 +938,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                           name computation and never reaches a touch device, so this
                           announced as a bare "button" — on a control that deletes a
                           coach and everything extracted from their decks. */}
-                      <button onClick={e=>{e.stopPropagation();removePersona(p.id);}} aria-label={`Delete coach ${p.name}`} title="Delete persona"
+                      <button onClick={e=>{e.stopPropagation();askRemovePersona(p.id);}} aria-label={`Delete coach ${p.name}`} title="Delete persona"
                         style={{background:"none",border:"none",cursor:"pointer",color:"var(--danger)",display:"flex",padding:"4px"}}><Trash2 size={14}/></button>
                     </div>
                   );
@@ -1219,6 +1252,65 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
       </div>
 
       {editingPlan && <PersonaPlanEditor plan={editingPlan} initial={planEditDraft} onSave={savePlanEdit} onClose={closePlanEditor}/>}
+
+      {pendingDelete && (
+        <DeleteCoachConfirm pending={pendingDelete}
+          onCancel={()=>setPendingDelete(null)}
+          onConfirm={()=>removePersona(pendingDelete.id)}/>
+      )}
+    </div>
+  );
+}
+
+// ─── The one delete that keeps BOTH a confirm and an undo ─────────────────────
+//
+// An imported corpus is an LLM pass over a real deck a coach has taught from for
+// years. It cannot be retyped, it is the data the entire wedge feature rests on,
+// and — until migrations 0005/0006 are applied — it exists on ONE DEVICE with no
+// server copy. So this is the one place in the product where the cost of
+// interrupting a coach who meant it is worth paying, and it still offers an undo
+// afterwards because saying yes by reflex has to stay recoverable.
+//
+// It was a `window.confirm`, which fits none of that: it renders the cascade
+// inventory as one cramped run of text, cannot use `--danger`, and is
+// auto-dismissed by Playwright — so every test that thought it drove this delete
+// was driving cancel.
+function DeleteCoachConfirm({ pending, onCancel, onConfirm }) {
+  const dlg = useDialog(onCancel, `Delete ${pending.label}?`);
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:"16px"}}
+         onClick={onCancel}>
+      <div {...dlg} onClick={e=>e.stopPropagation()} data-testid="delete-coach-confirm"
+        style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"12px",padding:"22px",maxWidth:"400px",outline:"none"}}>
+        <p style={{fontFamily:"var(--display)",fontSize:"16px",fontWeight:"800",color:"var(--text)",marginBottom:"10px"}}>
+          Delete {pending.label}?
+        </p>
+        {/* The inventory, on its own lines. This IS the guard — a coach has to be
+            able to see that "and 3 generated classes" is in the sentence. */}
+        {pending.cascade && (
+          <p style={{fontSize:"13px",color:"var(--text)",lineHeight:1.6,marginBottom:"8px"}}>
+            This also deletes <strong>{pending.cascade}</strong>.
+          </p>
+        )}
+        <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"18px"}}>
+          You can undo this straight after — the Undo button stays for a few seconds.
+          {/* Named, not implied. A coach deciding whether to risk this is entitled
+              to know the copy is only on this device. */}
+          {" "}Coach data is not yet backed up to a server, so nothing else holds a copy.
+        </p>
+        <div style={{display:"flex",gap:"8px",justifyContent:"flex-end"}}>
+          <button onClick={onCancel}
+            style={{padding:"9px 18px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"8px",cursor:"pointer",color:"var(--text)",fontSize:"12px",fontWeight:"600"}}>
+            Cancel
+          </button>
+          {/* `--danger`, deliberately not skin-derived: a gym whose accent is red
+              must not get a delete button matching its primary action. */}
+          <button onClick={onConfirm} data-testid="delete-coach-go"
+            style={{padding:"9px 18px",background:"var(--danger)",border:"none",borderRadius:"8px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"800"}}>
+            Delete {pending.label}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
