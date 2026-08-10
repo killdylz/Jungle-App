@@ -219,6 +219,23 @@ the Dashboard renders the control only `{hasDraft && ...}`. The guard stays as d
 call site. A test of an invented path is worse than no test, and this repo's own rule is not to
 report a defect a fixture manufactured.
 
+### Verified on the DEPLOYED bundle, not just locally
+
+The local build is credential-less, so rollup drops every sync path and a local `dist/` cannot
+answer "did this ship". `sw.js` is the precache manifest and lists every hashed asset, so from a tab
+on the live origin one loop fetches them all and greps them. Result at `d3578a2`:
+
+- `RetentionScreen-*.js` **is** in the deployment — N2 shipped.
+- there is **no `Analytics*` chunk at all** — `FLAGS.mockAnalytics` stayed false and the mock is
+  folded out of the PROD bundle, which the local build could not have told us. **The absent chunk
+  is the assertion.**
+- **none** of seven invented strings from that mock ("1,284", "£412", "Shoreditch", "Mara K.", …)
+  appear anywhere in the deployed JS, and the retired "Real analytics land in Phase 2" panel is
+  gone; all three N2 honesty strings are present.
+
+⚠️ **The live staff app cannot be DRIVEN** — it sits behind the Supabase sign-in wall. Drive on the
+dev server; verify shipping on the bundle. The recipe is in memory under `vite-build-stale-reads`.
+
 ### What is genuinely left
 
 - 🔴 **Migrations `0005` and `0006` have never been applied.** Unchanged for several sessions and
