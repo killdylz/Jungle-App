@@ -12,10 +12,10 @@ _Last updated: 2026-08-10 (session 27)_
 
 ## Session 27 — the product finally states a number an owner buys on, and six premises were wrong
 
-> **Gates green at `1a7bce4`.** `lint:crash` **0** · **875 unit** (30 files) · **439 e2e**
+> **Gates green at `dc25bf2`.** `lint:crash` **0** · **875 unit** (30 files) · **440 e2e**
 > (44 spec files) · six-chunk build: member path **211.57 kB**, staff **557.70 kB**
 > (StaffApp **349.46/360 kB** — 10.5 kB left, and it is still the binding constraint).
-> App.jsx **3,787 lines**. Seven commits, each pushed and CI-checked. One worktree, no
+> App.jsx **3,787 lines**. Nine commits, each pushed and CI-checked. One worktree, no
 > concurrent session this time.
 
 **The brief was a queue of eight items with an explicit instruction to verify each against the
@@ -66,6 +66,16 @@ reload), each row its own test with a control that the check fails before the ac
 **§2.5 — the checklist now acknowledges completion, and the greeting cannot shout an email.**
 
 **`_bgDelete` records a failed delete and can retry it**, via a tombstone queue.
+
+**And a defect in §2.1 that only appeared after it shipped**, found by re-reading
+`atRiskMembers` rather than by any test: `retentionSummary` returns `atRisk: null` in the
+"not-recording" state and the panel renders `—`, but rule 1 (`new_member_low_visits`) is gated on a
+known join date and NOT on `activity.recording`, so it still fires. A gym whose last check-in was
+three weeks ago, with a hand-added member in their first month, showed `—` as the count and
+**"S$150/month at risk" beside it** — a confident figure next to an explicit "we cannot tell",
+which is exactly the self-contradiction the money exists to avoid. Both the total and the per-flag
+figure are now gated on the headline being a NUMBER, not merely on a price existing. **The panel
+rendering flag rows under a `—` predates this work; putting a currency total there did not.**
 
 ### The six false premises, in order of how much they changed
 
