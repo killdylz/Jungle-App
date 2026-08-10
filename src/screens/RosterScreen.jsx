@@ -78,8 +78,21 @@ export function RosterScreen({ onBack, onNavigate }) {
   //
   // Derived from `atRiskActive`, the same list the headline number counts, so the
   // money can never disagree with the count beside it.
+  //
+  // ⚠️ AND gated on the headline being a NUMBER at all. `retention.atRisk` is null
+  // in the "no-data" and "not-recording" states, where the panel shows `—` — but
+  // `atRiskMembers` can still return flags there, because rule 1
+  // (`new_member_low_visits`) is gated on a known join date and NOT on
+  // `activity.recording`. So a gym whose last check-in was three weeks ago, with a
+  // hand-added member in their first month, renders `—` as the count and would have
+  // rendered a confident "S$150/month at risk" beside it. A figure next to an
+  // explicit "we cannot tell" is the exact self-contradiction this money is
+  // supposed to avoid, and it is the more quotable of the two.
   const price = membershipPrice(branding);
-  const revenue = revenueAtRisk(atRiskActive, price);
+  const revenue = retention.atRisk == null ? null : revenueAtRisk(atRiskActive, price);
+  // Same gate for the per-flag figure: money appears only when the panel is making
+  // a countable claim.
+  const showMoney = revenue != null || (price && retention.atRisk != null);
   // The P6 card's whole sentence, verdict included, comes from the library that
   // does the arithmetic — the screen never decides "meets target" itself.
   const speed = describeCheckinSpeed(p6);
@@ -259,7 +272,7 @@ export function RosterScreen({ onBack, onNavigate }) {
                         a metering problem — GTM §2), so this is the unit the
                         total is built from rather than a per-member valuation.
                         Repeating it is what makes the total checkable. */}
-                    {price && <> · {fmtMoney(price.amount, price)}/mo</>}
+                    {showMoney && <> · {fmtMoney(price.amount, price)}/mo</>}
                   </span>
                 </div>
                 {/* The WHY, stated as the rule with its numbers. An operator has to

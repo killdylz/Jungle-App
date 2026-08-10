@@ -164,6 +164,40 @@ test.describe("revenue at risk", () => {
     await expect(page.getByTestId("revenue-at-risk")).toContainText("S$300/month at risk");
   });
 
+  test("no money beside a dash — a figure cannot sit next to 'we cannot tell'", async ({ page }) => {
+    // 🔴 The state that produces it, found by reading `atRiskMembers` rather than by
+    // any test: `retention.atRisk` is null while the studio is NOT RECORDING (no
+    // check-in in 14 days), so the headline shows `—`. But rule 1
+    // (`new_member_low_visits`) is gated on a known join date and NOT on recording,
+    // so it still fires — the panel renders `—` above a flagged member. A confident
+    // "S$150/month at risk" beside an explicit "we cannot tell" is the exact
+    // self-contradiction this money is meant to avoid, and the more quotable half.
+    const errors = watchConsole(page);
+    await seed(page, { gymName: "The Garage", membershipPrice: "150" });
+    // One member, joined 20 days ago (inside the first-month window, past the grace
+    // period), one visit 20 days ago — so nothing is recent and the studio reads as
+    // not recording.
+    await page.evaluate(([joined, when]) => {
+      localStorage.setItem("jungle_members", JSON.stringify(
+        [{ id: "m-new", name: "Nadia Ismail", email: "", status: "active", joinedAt: joined, externalRef: "" }]));
+      localStorage.setItem("jungle_attendance", JSON.stringify(
+        [{ id: "a1", classInstanceId: "c1", memberId: "m-new", source: "coach", checkedInAt: when }]));
+    }, [day(20), iso(20)]);
+    await page.reload();
+    await nav(page, "Members");
+
+    // CONTROLS: this really is the not-recording state, and it really does flag
+    // someone. Without both, "no money" would be true of an empty panel.
+    await expect(page.getByText(/absence alerts are paused/)).toBeVisible();
+    await expect(page.getByText(/Joined 20 days ago and has attended 1 time/)).toBeVisible();
+
+    await expect(page.getByTestId("revenue-at-risk")).toHaveCount(0);
+    const text = await page.locator("body").innerText();
+    expect(text, "a money figure appeared beside an unmeasurable headline").not.toMatch(ANY_MONEY);
+
+    expectNoConsoleErrors(errors);
+  });
+
   test("the profile modal's branding Save does not erase the price", async ({ page }) => {
     // The bug this pins is not hypothetical: ProfileModal's branding tab saved
     // its own six-field DRAFT as the whole branding blob, so pressing Save there
