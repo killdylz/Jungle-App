@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   summarize, recordSession, getSessions, clearSessions, p6Summary,
+  describeCheckinSpeed, fmtDuration,
   median, IDLE_GAP_MS, P6_TARGET_SEC,
 } from "./checkinMetrics.js";
 
@@ -120,5 +121,92 @@ describe("recordSession / p6Summary", () => {
     localStorage.setItem("jungle_checkin_metrics", "{not json");
     expect(getSessions()).toEqual([]);
     expect(p6Summary().meetsTarget).toBeNull();
+  });
+
+  it("reports the median class size, not the mean", () => {
+    // The per-class consequence is built on this, so one 40-person special event
+    // must not describe a studio's ordinary Tuesday.
+    recordSession({ classInstanceId: "c1", openedAt: T0, stamps: [at(2), at(4)] });                       // 2
+    recordSession({ classInstanceId: "c2", openedAt: T0, stamps: [at(2), at(4), at(6)] });                // 3
+    const many = []; for (let i = 1; i <= 40; i++) many.push(at(i));
+    recordSession({ classInstanceId: "big", openedAt: T0, stamps: many });                                // 40
+    expect(p6Summary().medianClassSize).toBe(3);          // median of 2, 3, 40 — mean would be 15
+  });
+});
+
+// ─── Saying it to an owner ───────────────────────────────────────────────────
+// This card sat under the at-risk list showing `—` and `NO DATA` on a fresh
+// install — the visual grammar of a broken gauge, on the screen that exists to
+// show a gym owner what retention is worth. The instrument stays; the sentence
+// changed. These pin the parts that made it read as a fault.
+describe("describeCheckinSpeed", () => {
+  beforeEach(() => { localStorage.clear(); clearSessions(); });
+
+  it("shows NO figure and NO verdict when nothing has been measured", () => {
+    const d = describeCheckinSpeed(p6Summary());
+    expect(d.state).toBe("unmeasured");
+    // The headline is empty so the screen has nothing to render in the numeral
+    // slot. A greyed-out "—" beside "NO DATA" is what read as a failure.
+    expect(d.headline).toBe("");
+    expect(d.detail).not.toMatch(/—|NO DATA|OVER|FAIL/i);
+    // And it must not read as the gym's fault or as a met target.
+    expect(d.detail).toMatch(/Nothing measured yet/);
+    expect(d.detail).toMatch(/Class Runner/);
+  });
+
+  it("attributes the target to JUNGLE, in both states", () => {
+    // "The target is under 5s" is unattributed: an owner cannot tell whose target
+    // it is, or that they are not the one failing it. Naming Jungle turns an
+    // internal threshold into a promise the owner is entitled to see measured.
+    expect(describeCheckinSpeed(p6Summary()).detail).toMatch(/Jungle's own target/);
+    recordSession({ classInstanceId: "c1", openedAt: T0, stamps: [at(2), at(4)] });
+    expect(describeCheckinSpeed(p6Summary()).detail).toMatch(/Jungle aims to keep this/);
+  });
+
+  it("states the consequence in coach time, from the gym's OWN class size", () => {
+    recordSession({ classInstanceId: "c1", openedAt: T0, stamps: [at(4), at(8), at(12), at(16)] });
+    recordSession({ classInstanceId: "c2", openedAt: T0, stamps: [at(4), at(8), at(12), at(16)] });
+    const p = p6Summary();
+    expect(p.medianSec).toBe(4);
+    expect(p.medianClassSize).toBe(4);
+    const d = describeCheckinSpeed(p);
+    expect(d.state).toBe("meets");
+    expect(d.headline).toBe("4s a member");
+    expect(d.detail).toContain("A typical class here is 4 members");
+    expect(d.detail).toContain("roughly 16s of your coach's time");
+    // "roughly" is doing work: the per-class figure is a product of two medians,
+    // not a directly measured total, and it says so.
+    expect(d.detail).toMatch(/roughly/);
+  });
+
+  it("says OVER when it is over, rather than softening it", () => {
+    recordSession({ classInstanceId: "c1", openedAt: T0, stamps: [at(9), at(18)] });
+    const d = describeCheckinSpeed(p6Summary());
+    expect(d.state).toBe("over");
+    expect(d.headline).toBe("9s a member");
+  });
+
+  it("survives a null summary rather than throwing on the owner's screen", () => {
+    expect(describeCheckinSpeed(null).state).toBe("unmeasured");
+    expect(describeCheckinSpeed(undefined).state).toBe("unmeasured");
+  });
+});
+
+describe("fmtDuration", () => {
+  it("keeps short spans in seconds and long ones in minutes", () => {
+    // 75s reads more easily than "1 min 15s" when the comparison in an owner's
+    // head is how long a queue at the door feels.
+    expect(fmtDuration(45)).toBe("45s");
+    expect(fmtDuration(89)).toBe("89s");
+    expect(fmtDuration(90)).toBe("1 min 30s");
+    expect(fmtDuration(180)).toBe("3 min");
+    expect(fmtDuration(215)).toBe("3 min 35s");
+  });
+
+  it("returns empty rather than '0s' or 'NaNs'", () => {
+    expect(fmtDuration(0)).toBe("");
+    expect(fmtDuration(null)).toBe("");
+    expect(fmtDuration(NaN)).toBe("");
+    expect(fmtDuration(-5)).toBe("");
   });
 });

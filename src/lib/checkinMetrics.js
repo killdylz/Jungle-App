@@ -99,11 +99,88 @@ export function p6Summary(sessions = read()) {
   return {
     sessions: sessions.length,
     members,
+    // How big a class actually is here, so the consequence of the per-member
+    // figure can be stated without inventing a roster size. Median for the same
+    // reason the timing is a median: one 40-person special event should not
+    // describe a studio's ordinary Tuesday.
+    medianClassSize: sessions.length ? median(sessions.map(s => s.count || 0)) : null,
     medianSec: med == null ? null : Math.round(med * 10) / 10,
     // `null` when there is nothing to judge — NOT `true`. An unmeasured law must
     // never read as a passing one; that is the failure mode this module exists
     // to remove, and defaulting to "meeting target" would recreate it exactly.
     meetsTarget: med == null ? null : med <= P6_TARGET_SEC,
     idleSkipped: sessions.reduce((n, s) => n + (s.idleSkipped || 0), 0),
+  };
+}
+
+// ─── Saying it to a GYM OWNER rather than to ourselves ───────────────────────
+//
+// This instrument was written for us. P6 is a DESIGN LAW — Jungle's own promise
+// that checking a member in takes under five seconds — and the reason to measure
+// it is that an unmeasured law is indistinguishable from a met one. That reasoning
+// is still good. What was wrong was where it was said.
+//
+// On the Members screen, directly under the at-risk list, an owner read:
+//
+//   Check-in speed · "Not measured yet — check members in from the Class Runner
+//   and the typical time per member appears here. The target is under 5s." · —
+//   · NO DATA
+//
+// Three things wrong with that, in the middle of the screen meant to sell
+// retention. "The target" is unattributed, so an owner cannot tell whose target it
+// is or that they are not failing it. `—` beside `NO DATA` is the visual grammar
+// of a broken gauge, not of a feature waiting for its first class. And seconds per
+// member is not a unit an owner thinks in.
+//
+// So the number is unchanged and the sentence is rewritten: the target is named as
+// JUNGLE'S, which turns an internal threshold into a promise the owner is entitled
+// to see measured; the consequence is stated in the unit they care about, coach
+// time per class, from their own median class size; and the empty state says
+// "nothing yet" and points at the thing that fills it.
+//
+// Lives here rather than in the screen because this is the third instance of the
+// same rule in this repo (`describeRetention`, `describeCohorts`): the wording that
+// explains a measurement belongs next to the measurement, or the two drift and the
+// screen ends up describing arithmetic it no longer does.
+
+// "45s" / "1 min 20s" / "3 min". Seconds below 90 stay seconds, because "1 min 15s"
+// is a harder read than "75s" and an owner is comparing it to how long a queue at
+// the door feels.
+export function fmtDuration(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  const s = Math.round(sec);
+  if (s < 90) return `${s}s`;
+  const min = Math.floor(s / 60), rem = s % 60;
+  return rem ? `${min} min ${rem}s` : `${min} min`;
+}
+
+/**
+ * What to tell the gym about check-in speed, including when the answer is
+ * "nothing yet". Returns { headline, detail, state } where `state` is
+ * "unmeasured" | "meets" | "over" — the screen never derives the verdict itself.
+ */
+export function describeCheckinSpeed(p6) {
+  if (!p6 || p6.medianSec == null) {
+    return {
+      state: "unmeasured",
+      headline: "",
+      // No number, no dash, no verdict. An empty instrument must read as a
+      // feature that has not started yet, and the previous copy read as a fault
+      // the owner had caused and could not fix.
+      detail: `Nothing measured yet. Once you run a class from the Class Runner, this shows how long checking members in takes your coaches. Jungle's own target is under ${P6_TARGET_SEC} seconds a member.`,
+    };
+  }
+  const perClass = p6.medianClassSize ? p6.medianSec * p6.medianClassSize : null;
+  // "roughly", and the word is doing work: the per-class figure is the median
+  // per-member time times the median class size, not a directly measured total.
+  // Every input is the gym's own, and the estimate is labelled as one.
+  const consequence = perClass
+    ? ` A typical class here is ${p6.medianClassSize} member${p6.medianClassSize === 1 ? "" : "s"}, so roughly ${fmtDuration(perClass)} of your coach's time per class.`
+    : "";
+  return {
+    state: p6.meetsTarget ? "meets" : "over",
+    headline: `${p6.medianSec}s a member`,
+    detail: `Measured across ${p6.sessions} class${p6.sessions === 1 ? "" : "es"} and ${p6.members} check-in${p6.members === 1 ? "" : "s"}.${consequence}`
+      + ` Jungle aims to keep this under ${P6_TARGET_SEC}s; long gaps where the coach was doing something else are left out.`,
   };
 }

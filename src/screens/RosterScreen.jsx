@@ -17,7 +17,7 @@ import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
 import { getLibrary } from "../lib/libraryAccess.js";
 import { memberCsv, rosterCsv, memberCsvFilename, rosterCsvFilename } from "../lib/csvExport.js";
-import { p6Summary, P6_TARGET_SEC } from "../lib/checkinMetrics.js";
+import { p6Summary, P6_TARGET_SEC, describeCheckinSpeed } from "../lib/checkinMetrics.js";
 import { useWindowWidth, Btn, StatCard } from "../ui/primitives.jsx";
 // NOTE: `lint:crash` CANNOT see these. `no-undef` resolves plain identifiers but
 // not JSX element names, so a missing icon import compiles, lints clean, and
@@ -28,7 +28,7 @@ import { ArrowLeft, Check, Upload, Download } from "lucide-react";
 
 const EMPTY_FORM = { name: "", email: "", joinedAt: "", status: "active" };
 
-export function RosterScreen({ onBack }) {
+export function RosterScreen({ onBack, onNavigate }) {
   const vw = useWindowWidth();
   const isMobile = vw < 640;
   const [members, setMembers] = useState(() => store.getMembers());
@@ -80,6 +80,9 @@ export function RosterScreen({ onBack }) {
   // money can never disagree with the count beside it.
   const price = membershipPrice(branding);
   const revenue = revenueAtRisk(atRiskActive, price);
+  // The P6 card's whole sentence, verdict included, comes from the library that
+  // does the arithmetic — the screen never decides "meets target" itself.
+  const speed = describeCheckinSpeed(p6);
 
   const visitsFor = id => attendance.filter(a => a.memberId === id).length;
   const lastSeen = id => {
@@ -309,30 +312,6 @@ export function RosterScreen({ onBack }) {
             )}
           </div>
 
-          {/* P6 instrument (I4). Shown even with no data, and explicitly as "not
-              measured yet" rather than a passing tick — the whole reason this
-              exists is that an unmeasured design law was indistinguishable from
-              a met one. */}
-          <div style={{...card,display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:"200px"}}>
-              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Check-in speed</div>
-              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginTop:"2px"}}>
-                {p6.medianSec == null
-                  ? `Not measured yet — check members in from the Class Runner and the typical time per member appears here. The target is under ${P6_TARGET_SEC}s.`
-                  : `Typical time per member across ${p6.sessions} class${p6.sessions===1?"":"es"} (${p6.members} check-in${p6.members===1?"":"s"}). Target is under ${P6_TARGET_SEC}s; long idle gaps are excluded.`}
-              </p>
-            </div>
-            <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
-                           color:p6.meetsTarget==null?"var(--muted)":p6.meetsTarget?"var(--green)":"var(--accent)"}}>
-                {p6.medianSec == null ? "—" : `${p6.medianSec}s`}
-              </div>
-              <div style={{fontSize:"10px",letterSpacing:"1px",fontWeight:"600",color:"var(--muted)"}}>
-                {p6.meetsTarget==null?"NO DATA":p6.meetsTarget?"MEETS TARGET":"OVER TARGET"}
-              </div>
-            </div>
-          </div>
-
           {/* ── CSV backfill ───────────────────────────────────────────── */}
           <div style={card}>
             <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
@@ -518,6 +497,57 @@ export function RosterScreen({ onBack }) {
                 ))}
                 {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
               </div>
+            )}
+          </div>
+
+          {/* ── P6 instrument (I4), MOVED and REWRITTEN ──────────────────────
+              It used to sit directly under the at-risk panel — an internal
+              engineering threshold, in the middle of the screen that exists to
+              show an owner what retention is worth, rendering `—` and `NO DATA`
+              on a fresh install. `—` next to `NO DATA` is the visual grammar of a
+              broken gauge; an owner reads it as a fault they caused.
+
+              Not deleted: the reason it exists is that an unmeasured design law
+              is indistinguishable from a met one, and that reasoning is still
+              good. Two things changed instead.
+
+              Position: it is now last. Operational detail about coach time ranks
+              below who is leaving, what that costs, and the roster itself. That is
+              the ordering an owner reads the screen in.
+
+              Wording: `describeCheckinSpeed` owns it, and names the target as
+              JUNGLE'S — which turns an unattributed threshold into a promise the
+              owner is entitled to see measured — plus the consequence in coach
+              minutes per class, from the gym's own median class size. The empty
+              state carries no number, no dash and no verdict at all, so it reads
+              as a feature that has not started rather than one that has failed. */}
+          <div style={{...card,display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}} data-testid="checkin-speed">
+            <div style={{flex:1,minWidth:"200px"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Check-in speed</div>
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginTop:"2px"}}>{speed.detail}</p>
+            </div>
+            {/* Only rendered once there IS a measurement. The alternative — a
+                greyed-out figure — is what read as a fault. */}
+            {speed.state !== "unmeasured" && (
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
+                             color:speed.state==="meets"?"var(--green)":"var(--accent)"}}>
+                  {p6.medianSec}s
+                </div>
+                <div style={{fontSize:"10px",letterSpacing:"1px",fontWeight:"600",color:"var(--muted)"}}>
+                  {speed.state==="meets"?`UNDER JUNGLE'S ${P6_TARGET_SEC}s`:`OVER JUNGLE'S ${P6_TARGET_SEC}s`}
+                </div>
+              </div>
+            )}
+            {/* The empty state names the Class Runner, so it carries the door to
+                it. Same rule as the analytics gate: an empty state that says what
+                to do and then makes the owner go and find it is a dead end with
+                instructions. */}
+            {speed.state === "unmeasured" && onNavigate && (
+              <button onClick={()=>onNavigate("live")} data-tap
+                style={{...ghostBtn,padding:"8px 14px",fontSize:"12px",color:"var(--text)"}}>
+                Open the Class Runner
+              </button>
             )}
           </div>
         </div>
