@@ -117,9 +117,84 @@ function _noteSyncError(table, msg) {
 }
 function _clearSyncError(table) {
   try {
+    // ⚠️ A successful UPSERT does not settle an outstanding DELETE. The retry
+    // pushers for id-keyed tables re-send the local list, which never removes a
+    // row the server still has — so clearing here on that success would report the
+    // table synced while a deletion was still unlanded, and the banner would go
+    // quiet on a divergence that is still real. See PENDING_DEL_KEY.
+    if (_pendingDeletesFor(table).length) return;
     const all = readJSON(SYNC_ERR_KEY, {});
     if (all[table]) { delete all[table]; writeJSON(SYNC_ERR_KEY, all); }
   } catch (_) { /* ignore */ }
+}
+
+// ─── Tombstones for failed deletes (§2.5) ────────────────────────────────────
+//
+// WHAT WAS WRONG
+// `_bgDelete` sent its failure to `console.warn` and nowhere else. So a delete
+// that failed never entered the ledger, never showed the banner, was never
+// retried — and the next hydrate found the row still on the server and put it
+// back. The coach deletes a coach, sees them go, and finds them again tomorrow.
+//
+// WHY THE OBVIOUS FIX IS WORSE THAN NOTHING
+// Simply calling `_noteSyncError` makes the retry machinery LIE. `_dueRetries`
+// hands the table to `_RETRY_PUSHERS[table]`, which for every id-keyed domain is
+// `save*(get*())` — an upsert of the local list. An upsert cannot remove a row the
+// server has and local does not, so the retry SUCCEEDS, `_clearSyncError` fires,
+// and the ledger reports a healthy table whose deletion never happened. That is a
+// confident wrong answer about data loss, which is worse than the silence it
+// replaced.
+//
+// WHAT RETRYING A DELETE MEANS WITH NO LOCAL TOMBSTONE — the decision §2.5 asked
+// for. It means nothing, because after the local delete there is no record that
+// the id ever existed; the local list cannot express "and not this one". So the
+// tombstone has to be written explicitly, and it does two jobs:
+//
+//   1. it is the retry's ARGUMENT — (table, col, val) is exactly what re-issuing
+//      the DELETE needs and exactly what the local list has thrown away;
+//   2. it SUPPRESSES the resurrection while the retry is outstanding, so hydrate
+//      drops a server row the coach has already deleted instead of adopting it.
+//
+// Job 2 is the one the coach feels. Without it, the row comes back on the next
+// hydrate even though the retry will remove it a minute later.
+//
+// ⚠️ ONE TABLE ALREADY GOT THIS RIGHT and is the reason the shape is worth
+// copying: `library_overrides`' pusher is `if (d) saveLibraryCustom(d); else
+// resetLibraryCustom()`, which MIRRORS whichever operation failed because "no
+// overrides" is derivable from local state (DEC-13). A blob table needs no
+// tombstone — the absence IS the tombstone. Only id-keyed tables do, because
+// absence from a list of many rows says nothing about which row left.
+const PENDING_DEL_KEY = "jungle_pending_deletes";
+
+// Exported for tests: these decide whether a deletion is honoured or quietly
+// undone, so they are pinned directly rather than through a live Supabase — the
+// same reasoning as _guardList and _dueRetries.
+export function _pendingDeletes() { return readJSON(PENDING_DEL_KEY, []) || []; }
+export function _pendingDeletesFor(table) {
+  return _pendingDeletes().filter(d => d && d.table === table);
+}
+function _writePendingDeletes(list) {
+  try {
+    if (list.length) writeJSON(PENDING_DEL_KEY, list); else remove(PENDING_DEL_KEY);
+  } catch (_) { /* never let bookkeeping break a write */ }
+}
+function _addPendingDelete(table, col, val) {
+  const list = _pendingDeletes();
+  // Idempotent: the same delete failing on every retry must leave one tombstone,
+  // not one per attempt. Unbounded growth here would be a localStorage quota bug
+  // that only appears for the gym with the worst connection.
+  if (list.some(d => d.table === table && d.col === col && d.val === val)) return;
+  _writePendingDeletes([...list, { table, col, val, at: Date.now() }]);
+}
+function _removePendingDelete(table, col, val) {
+  const list = _pendingDeletes();
+  const next = list.filter(d => !(d.table === table && d.col === col && d.val === val));
+  if (next.length !== list.length) _writePendingDeletes(next);
+}
+// The ids this table has outstanding deletes for. Used by the hydrate guard to
+// refuse a server row the coach has already removed.
+export function _deletedIdsFor(table) {
+  return new Set(_pendingDeletesFor(table).filter(d => d.col === "id").map(d => d.val));
 }
 // { msg, at } for the last failed write to `table`, or null when it last succeeded.
 export function syncErrorFor(table) { return readJSON(SYNC_ERR_KEY, {})[table] || null; }
@@ -196,12 +271,29 @@ export function _dueRetries(errors, { online, now, baseMs = RETRY_BASE_MS, capMs
 // so it is worth pinning directly rather than through a hydrate that needs a
 // live Supabase. Same reasoning as _ciToRow.
 export function _guardList(table, serverRows, getLocal, resave, label = table) {
-  if (!syncErrorFor(table)) return serverRows;
-  const onServer = new Set((serverRows || []).map(r => r.id));
-  const localOnly = (getLocal() || []).filter(r => r && !onServer.has(r.id));
-  if (!localOnly.length) return serverRows;
+  // ── A row the coach already deleted must not come back ──────────────────────
+  // Applied BEFORE the sync-error gate, and unconditionally: an outstanding
+  // tombstone is itself the evidence that this table is behind, and a delete whose
+  // failure predates a later successful upsert would otherwise slip through a
+  // cleared ledger. Without this the deletion visibly undoes itself on the next
+  // hydrate and the retry only fixes it a minute later — the coach has already
+  // seen the row return.
+  const deleted = _deletedIdsFor(table);
+  let rows = serverRows;
+  if (deleted.size) {
+    rows = (serverRows || []).filter(r => !deleted.has(r?.id));
+    if (rows.length !== (serverRows || []).length) {
+      console.warn(`[store] ${label}: dropping ${(serverRows || []).length - rows.length} server row(s) `
+        + `the coach deleted while a delete was still unsent`);
+    }
+    _flushPendingDeletes(table);
+  }
+  if (!syncErrorFor(table)) return rows;
+  const onServer = new Set((rows || []).map(r => r.id));
+  const localOnly = (getLocal() || []).filter(r => r && !onServer.has(r.id) && !deleted.has(r.id));
+  if (!localOnly.length) return rows;
   console.warn(`[store] ${label}: keeping ${localOnly.length} local row(s) the server never received; retrying push`);
-  const merged = [...serverRows, ...localOnly];
+  const merged = [...rows, ...localOnly];
   resave(merged);                 // writes local + retries the upsert
   return merged;
 }
@@ -344,8 +436,34 @@ function _bgDelete(table, col, val) {
   // each call site) keeps every present and future delete honest by construction.
   if (col === "id") _unmark(table, val);
   supabase.from(table).delete().eq(col, val).then(
-    ({ error }) => { if (error) console.warn(`[store] ${table} delete failed:`, error.message); },
-    () => {});
+    ({ error }) => {
+      if (error) {
+        console.warn(`[store] ${table} delete failed:`, error.message);
+        // The tombstone FIRST, so `_noteSyncError`'s entry can never be cleared by
+        // a successful upsert before the delete has actually landed — see
+        // `_clearSyncError`, which now refuses while this queue is non-empty.
+        _addPendingDelete(table, col, val);
+        _noteSyncError(table, error.message);
+      } else {
+        _removePendingDelete(table, col, val);
+        _clearSyncError(table);
+      }
+    },
+    (e) => {
+      // A rejected request — offline, DNS, a dropped socket — reached neither
+      // branch above before this commit and so was invisible twice over.
+      _addPendingDelete(table, col, val);
+      _noteSyncError(table, e?.message || String(e));
+    });
+}
+
+// Re-issue every outstanding delete for a table. Called from the retry pushers of
+// id-keyed domains, where the pusher's own upsert cannot express a removal.
+// Fire-and-forget like every other write here; each call removes its own tombstone
+// on success and re-notes on failure, so the backoff keeps working.
+function _flushPendingDeletes(table) {
+  if (!_synced()) return;
+  _pendingDeletesFor(table).forEach(d => _bgDelete(d.table, d.col, d.val));
 }
 
 // ── Classes (F5: user-created recurring classes) ──────────────────────────
@@ -1556,9 +1674,14 @@ const _RETRY_PUSHERS = {
                           dj_bpm_min: getDjBpmMin(), dj_bpm_max: getDjBpmMax(), dj_transition: getDjTransition(),
                           dj_follow_structure: getDjFollowStructure(), dj_take_requests: getDjTakeRequests(),
                           dj_clean_edits: getDjCleanEdits() }, "user_id"); },
-  coach_personas:       () => savePersonas(getPersonas()),
-  persona_plans:        () => savePersonaPlans(getPersonaPlans()),
-  persona_movements:    () => savePersonaMovements(getPersonaMovements()),
+  // ⚠️ These three are the only tables `_bgDelete` touches by `id`, and an upsert
+  // of the local list cannot express a removal — so each flushes its tombstones
+  // BEFORE re-pushing. Without the flush the retry would succeed on the push,
+  // report the table healthy, and leave the deleted row on the server forever.
+  // See PENDING_DEL_KEY for the whole argument.
+  coach_personas:       () => { _flushPendingDeletes("coach_personas"); savePersonas(getPersonas()); },
+  persona_plans:        () => { _flushPendingDeletes("persona_plans"); savePersonaPlans(getPersonaPlans()); },
+  persona_movements:    () => { _flushPendingDeletes("persona_movements"); savePersonaMovements(getPersonaMovements()); },
   persona_generations:  () => savePersonaGenerations(getPersonaGenerations()),
   members:              () => saveMembers(getMembers()),
   class_instances:      () => saveClassInstances(getClassInstances()),

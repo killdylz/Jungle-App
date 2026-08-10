@@ -16,6 +16,7 @@ import {
   getMembers, addMember, getAttendance, recordAttendance,
   ensureClassInstance, getClassInstances, _ciToRow,
   _guardList, _blobStale, syncErrors, applyAttendanceImport, saveMembers,
+  _pendingDeletes, _pendingDeletesFor, _deletedIdsFor,
   getDraftClass, saveDraftClass,
   updateMember, memberStatus, MEMBER_STATUSES, _mergeAppendLog, _dueRetries,
   _deltaRows, _markSynced, _unmark, publishOccurrences, startScheduledClass,
@@ -351,6 +352,93 @@ describe("_guardList — id-keyed domains", () => {
     setSyncError("t");
     expect(_guardList("t", [{ id: "a" }], () => null, () => {})).toEqual([{ id: "a" }]);
     expect(_guardList("t", [{ id: "a" }], () => [null, { id: "b" }], () => {}).map(r => r.id)).toEqual(["a", "b"]);
+  });
+});
+
+// ─── §2.5 · a delete that failed must not undo itself ────────────────────────
+//
+// `_bgDelete` sent its failure to console.warn and nowhere else: never in the
+// ledger, never retried, and the next hydrate found the row still on the server
+// and put it back. The coach deletes a coach, watches them go, and finds them
+// again tomorrow.
+//
+// The tombstone queue is what makes a delete retryable at all — after the local
+// delete there is no record the id ever existed, so the local list cannot express
+// "and not this one". These pin the two jobs it does. See PENDING_DEL_KEY in
+// store.js for the reasoning, including why simply recording a sync error would be
+// worse than the silence it replaced.
+describe("pending deletes", () => {
+  beforeEach(() => localStorage.clear());
+
+  const seed = (rows) => localStorage.setItem("jungle_pending_deletes", JSON.stringify(rows));
+  const tomb = (table, val, col = "id") => ({ table, col, val, at: Date.now() });
+
+  it("reads back per table and never leaks between them", () => {
+    seed([tomb("coach_personas", "p1"), tomb("persona_plans", "pl9"), tomb("coach_personas", "p2")]);
+    expect(_pendingDeletes()).toHaveLength(3);
+    expect(_pendingDeletesFor("coach_personas").map(d => d.val)).toEqual(["p1", "p2"]);
+    expect(_pendingDeletesFor("persona_plans").map(d => d.val)).toEqual(["pl9"]);
+    expect(_pendingDeletesFor("members")).toEqual([]);
+  });
+
+  it("collects only id-keyed tombstones as deleted ids", () => {
+    // A blob delete is keyed on `gym_id` and needs no tombstone — the absence of a
+    // local override IS the tombstone, and `library_overrides`' retry pusher
+    // already mirrors that. Feeding a gym_id row to the row-level guard would
+    // filter every row belonging to that gym.
+    seed([tomb("coach_personas", "p1"), tomb("library_overrides", "gym-7", "gym_id")]);
+    expect([..._deletedIdsFor("coach_personas")]).toEqual(["p1"]);
+    expect(_deletedIdsFor("library_overrides").size).toBe(0);
+  });
+
+  it("degrades to empty on corrupted storage rather than throwing on hydrate", () => {
+    localStorage.setItem("jungle_pending_deletes", "{not json");
+    expect(_pendingDeletes()).toEqual([]);
+    expect(_deletedIdsFor("coach_personas").size).toBe(0);
+  });
+
+  // ── Job 1: the resurrection the coach actually sees ────────────────────────
+  it("drops a server row the coach deleted while the delete was unsent", () => {
+    seed([tomb("coach_personas", "gone")]);
+    const server = [{ id: "keep" }, { id: "gone" }];
+    const out = _guardList("coach_personas", server, () => [{ id: "keep" }], () => {});
+    expect(out.map(r => r.id)).toEqual(["keep"]);
+  });
+
+  it("drops it even when the ledger has since been cleared", () => {
+    // Deliberately no sync error. A later successful upsert to the same table
+    // clears the ledger, and the deletion is still outstanding — so the guard runs
+    // this filter unconditionally rather than behind `syncErrorFor`.
+    expect(syncErrors()).toEqual([]);
+    seed([tomb("coach_personas", "gone")]);
+    const out = _guardList("coach_personas", [{ id: "keep" }, { id: "gone" }], () => [], () => {});
+    expect(out.map(r => r.id)).toEqual(["keep"]);
+  });
+
+  it("does not re-add a deleted row through the local-only path", () => {
+    // The nastiest interaction. `_guardList` keeps local rows the server never
+    // received; a stale local copy still holding the deleted row would otherwise be
+    // treated as unsynced work and pushed straight back up.
+    localStorage.setItem("jungle_sync_errors", JSON.stringify({ coach_personas: { msg: "boom", at: Date.now() } }));
+    seed([tomb("coach_personas", "gone")]);
+    let resaved = null;
+    const out = _guardList("coach_personas", [{ id: "keep" }],
+      () => [{ id: "keep" }, { id: "gone" }, { id: "genuinely-unsynced" }], r => { resaved = r; });
+    expect(out.map(r => r.id)).toEqual(["keep", "genuinely-unsynced"]);
+    expect(resaved.map(r => r.id)).toEqual(["keep", "genuinely-unsynced"]);
+  });
+
+  it("CONTROL: with no tombstone the guard behaves exactly as before", () => {
+    // Without this the five assertions above would all pass against a guard that
+    // dropped every server row it was handed.
+    const server = [{ id: "keep" }, { id: "gone" }];
+    expect(_guardList("coach_personas", server, () => [{ id: "keep" }], () => {})).toBe(server);
+  });
+
+  it("is scoped per table — one domain's tombstone cannot filter another's rows", () => {
+    seed([tomb("persona_plans", "gone")]);
+    const server = [{ id: "keep" }, { id: "gone" }];
+    expect(_guardList("coach_personas", server, () => [], () => {})).toBe(server);
   });
 });
 
