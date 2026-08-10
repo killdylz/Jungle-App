@@ -675,3 +675,30 @@ one suspect. Major Actions bumps break CI in ways only a real run reveals, and b
 product work is how you spend a day bisecting.
 
 Left for Dylan per the standing rule: no infra changes, and no Dependabot merges, without asking.
+
+> **Still true at `1a7bce4` (session 27, 2026-08-10).** Session 27's prompt asked for this to be
+> recorded here as if it were new; it was already written up above by session 26 on 2026-08-04, and
+> nothing has changed except that the warning is now a week older. Every deploy in this session
+> printed it. Re-verified rather than re-filed.
+
+---
+
+## A copy string that must be deleted when 0005/0006 are applied  ·  added 2026-08-10 (session 27)
+
+**Not a decision — a coupling to remember, and it will not announce itself.**
+
+The coach-delete confirm (session 27, `PersonasScreen.jsx` → `DeleteCoachConfirm`) tells the coach:
+
+> Coach data is not yet backed up to a server, so nothing else holds a copy.
+
+That is true today and it is why the dialog exists at all — a persona cascade is the most
+expensive data in the product and, with `0005_coach_personas.sql` and `0006_persona_generations.sql`
+unapplied, it lives on one device. **The moment you apply those two migrations the sentence becomes
+a lie**, and it is a lie that makes a coach more frightened of a reversible action than they need
+to be.
+
+**When A-whatever-number applying 0005/0006 gets done: delete that sentence.** Nothing will fail.
+No test asserts it is absent, because a test that did would be asserting a fact about your Supabase
+project rather than about the code. `e2e/destructive.spec.js` asserts it is PRESENT, so removing the
+string means updating that assertion in the same commit — which is the reminder, if you are reading
+the test output.

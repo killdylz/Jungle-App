@@ -15,8 +15,10 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `e03cae0`: **`lint:crash` 0 · 809 unit (28 files) · 393 e2e (38 spec files) ·
-5-chunk build · 0 over budget.** App.jsx is **3,420 lines**.
+Green as of `1a7bce4`: **`lint:crash` 0 · 875 unit (30 files) · 439 e2e (44 spec files) ·
+6-chunk build · 0 over budget.** App.jsx is **3,787 lines**. StaffApp **349.46 / 360 kB — 10.5 kB
+left, and it is the binding constraint on anything new.** A new screen goes in a `lazy()` chunk
+**with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
 
 - `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
   advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
@@ -125,6 +127,13 @@ the category that rots silently, because nothing breaks when it regresses.
 scan that found nothing are indistinguishable from the assertion's side, and this repo has been
 fooled by exactly that. If a sweep cannot be made to fail, delete it.
 
+🔴 **`toHaveCount(0)` is NOT an assertion that something never happens.** It is satisfied the
+instant the count is zero, which includes "has not rendered yet". Session 27 proved it: a mutation
+making an autosave fire a toast on every write left all three "stays silent" tests green. For any
+"X never appears" claim, **observe** — a `MutationObserver` recording every mount, read after the
+action — or at minimum poll a store write first so the effect has demonstrably run.
+`e2e/saveToasts.spec.js` has the shape.
+
 🔴 **An empty screen passes every scan trivially.** This has now bitten twice in one session, in
 two different files: a tap sweep and an interaction sweep both went green on screens that had
 nothing on them. Seed the fixture, and assert the thing you are about to measure exists first.
@@ -153,6 +162,16 @@ not. **Assert the STORED object, not only what was rendered.**
 - ⚠️ **A fixed clock freezes `Date.now()`**, so ids derived from it collide across a re-mint.
 - ⚠️ **Do not report a defect your own fixture manufactured.** If you had to guess a row's
   shape, a crash on it is not evidence.
+- ⚠️ **Apostrophes in the UI are `&rsquo;` — a real U+2019.** `getByText("Who's slipping away")`
+  matches nothing, and the test then fails on its selector rather than on the thing it tests.
+- ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
+  traps focus, so any loop visiting every screen must visit it **last**.
+- ⚠️ **`jungle_skin` holds a bare string, not JSON** — the `stored()` helper parses and cannot
+  read it.
+- ⚠️ **A control that is a `<div onClick>` is invisible to `keyboard.spec.js`**, which sweeps
+  elements with a ROLE. Session 27 found the Brand Studio's three skin presets that way — and only
+  because a test tried to click one *by role*. Clicking by TEXT works on a div, so the workaround
+  that makes tests pass is what hides the defect.
 - ⚠️ **Screenshots fail unless the Browser pane is displayed.** Use `read_page`, `get_page_text`
   and `javascript_tool` geometry reads.
 
@@ -179,6 +198,19 @@ not. **Assert the STORED object, not only what was rendered.**
   An undo holds the **prior list**, not the deleted row — position is part of what was lost.
 - **A confident wrong number is worse than no number**, and a panel promising a feature that
   cannot arrive is worse than no panel.
+- **`isViewEnabled` maps some views to a MOCK flag**, so "the route exists and is in three nav
+  arrays" can be true while the entry renders nowhere. `analytics` was live and unreachable for
+  months that way. Replacing a mock with a real screen means removing it from `MOCK_VIEW_FLAG`,
+  which is not the same as flipping the flag.
+- **Cohorts key on FIRST RECORDED VISIT, never `joinedAt`.** `applyAttendanceImport` writes
+  `joinedAt: ""`, so a gym that imported two years of history has zero known join dates — the
+  opposite of what a join-date analysis would imply about who has more data. `retention.js`'s rule 1
+  refuses the same substitution for a different reason: it asserts a tenure it does not hold.
+- **A pooled retention curve with per-point denominators can RISE**, and each point is individually
+  correct while the line lies. Use one population for every point (`lib/cohorts.js`).
+- **A failed DELETE needs a tombstone, not a ledger entry.** `_noteSyncError` alone makes the retry
+  lie: the pusher's upsert cannot remove a server row, so it succeeds and clears the error. See
+  `PENDING_DEL_KEY` in `store.js`.
 
 ---
 

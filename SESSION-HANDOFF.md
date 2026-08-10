@@ -1,14 +1,239 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-04 (session 25)_
+_Last updated: 2026-08-10 (session 27)_
 
-> 📁 **Sessions 6–23 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–25 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
 
 ---
+
+## Session 27 — the product finally states a number an owner buys on, and six premises were wrong
+
+> **Gates green at `1a7bce4`.** `lint:crash` **0** · **875 unit** (30 files) · **439 e2e**
+> (44 spec files) · six-chunk build: member path **211.57 kB**, staff **557.70 kB**
+> (StaffApp **349.46/360 kB** — 10.5 kB left, and it is still the binding constraint).
+> App.jsx **3,787 lines**. Seven commits, each pushed and CI-checked. One worktree, no
+> concurrent session this time.
+
+**The brief was a queue of eight items with an explicit instruction to verify each against the
+code first, and a warning that the document was wrong somewhere.** It was wrong in six places.
+Four of those wrongnesses changed what got built; two meant the work was already done. That ratio
+is now consistent enough across sessions 26 and 27 to treat as the normal state of a handoff
+prompt rather than an unlucky one.
+
+### What shipped
+
+**§2.1 — money on the at-risk panel.** The retention loop was entirely the coach's: it names
+members and shows the arithmetic behind each flag. An owner does not buy "4 members need
+attention"; they buy "S$600/month is walking out the door". Everything needed to say that was
+already computed except what a membership costs, so the feature is one field
+(`branding.membershipPrice`, set in Brand Studio, no migration — the blob already round-trips to
+`brand_profiles`) and `members × price`.
+
+The absent case is the feature and most of the tests. No price ⇒ **no money anywhere on the
+screen** — not a zero, not a placeholder, not a "set a price" nudge. The e2e asserts no currency
+symbol appears in the body text at all, deliberately broader than the fixture's own currency,
+because a check for "S$" would pass while the screen rendered a pound sign. MRR not LTV, because
+LTV needs a tenure assumption no gym's data has earned. Derived from the ACTIVE flags so the money
+can never contradict the count beside it — a contradiction that has shipped on this panel once
+already.
+
+**§2.2 — N2 cohort analytics, replacing the coming-soon stub on the analytics route.** A real
+retention curve from the gym's own rows, a per-cohort table, and a stated half-life. Its own lazy
+12 kB chunk.
+
+**§2.3 — the P6 instrument stopped reading as a broken gauge.** It sat under the at-risk list
+showing `—` beside `NO DATA` on a fresh install: an unattributed engineering threshold in the
+middle of the screen that sells retention. Not deleted — the reason it exists (an unmeasured design
+law is indistinguishable from a met one) is still good. Moved last, and rewritten: the target is
+named as **Jungle's**, which turns an internal number into a promise the owner can hold us to, and
+the consequence is stated in coach-minutes per class from the gym's own median class size.
+
+**§1.3 — the last three `window.confirm`s**, each getting the guard its cost deserves. New class →
+undo. Remove a schedule rule → undo. Coach delete → in-app confirm **and** undo, because that one
+is an LLM pass over a deck a coach has taught from for years and lives on one device.
+
+**§3.2 — the two saves that were genuinely silent**: the ExerciseDB API key (no visible
+consequence at all) and a movement-catalogue edit (aliases, notes and category do not show in the
+collapsed row). Everything else stays silent, and that half has the teeth.
+
+**§1.5 — the reload sweep.** Eight writes × (stored value, screen, then both again after a
+reload), each row its own test with a control that the check fails before the action.
+
+**§2.5 — the checklist now acknowledges completion, and the greeting cannot shout an email.**
+
+**`_bgDelete` records a failed delete and can retry it**, via a tombstone queue.
+
+### The six false premises, in order of how much they changed
+
+1. 🔴 **§2.2 said "the route already exists, in three nav arrays".** True, and beside the point.
+   `flags.js` mapped `analytics` to the `mockAnalytics` flag, so `isViewEnabled("analytics")`
+   returned **false** and all three nav arrays filtered the entry straight back out. **The route was
+   live and unreachable — nothing in the product could navigate to it.** The nav half of that build
+   is deleting one line from `MOCK_VIEW_FLAG`. That is *not* flipping the flag: `FLAGS.mockAnalytics`
+   is still false and `AnalyticsScreen`'s invented KPIs are still folded out of the bundle.
+   **The lesson: a mock flag doing double duty as a nav gate makes "replace the mock" require a
+   flags.js edit that reads exactly like the thing the queue forbade.**
+
+2. 🔴 **§2.2 assumed cohorts could be keyed on `joinedAt`. They cannot, and it inverts.**
+   `applyAttendanceImport` creates every imported member with `joinedAt: ""` (store.js:1303). So
+   the gym that imports two years of history — the exact gym that makes N2 possible — has **zero
+   known join dates**, and a join-date analysis would show it an empty screen while showing a gym
+   that typed its roster in by hand a full one. A cohort is therefore *the month a member first
+   appears in the records*, and the screen says so rather than calling it a join date.
+   `retention.js` refuses the same substitution for its rule 1 and is right to: that rule asserts a
+   tenure it does not hold, while this describes the data it does.
+
+3. 🔴 **§1.3's list of the last three confirms named `handleReset`.** It is not one and has not
+   been for some time — it already has an in-app dialog *and* a toast. The third confirm was the
+   **coach delete**, which the queue did not mention at all and which is the most expensive
+   destructive action in the product. The item had the wrong end of it.
+
+4. 🔴 **§2.5 said the app "knows the coach's name everywhere else".** It knows it nowhere:
+   `display_name` comes from the Google/Supabase session, and the credential-less build — what
+   GitHub Pages serves — has no session. "COACH" is the honest output of holding no name, confirmed
+   by driving it. The real defect was one step further down the chain: `display_name` falls back to
+   `user.email`, and `split(" ")[0]` greeted a coach with **their whole email address** in 12px
+   letterspaced accent caps.
+
+5. **§3.7 said lazy chunks show a bare fallback and hydration shows nothing.** Neither survives
+   contact. `ScreenLoading` renders a centred "Loading…"; the root fallback in `main.jsx` already
+   wears `bootColours()` so a light-palette studio gets its own background rather than a flash of
+   near-black, with an ErrorBoundary outside it. And hydration showing nothing is **correct** for a
+   local-first app — a spinner would claim the data is not ready when it already is. What remains is
+   skeleton screens, which is cosmetic, costs bytes against 10 kB of headroom, and carries the
+   item's own warning that moving the `screen-loading` testid silently stops every navigation in the
+   suite from waiting. **Deliberately not done. Do not re-raise without a new argument.**
+
+6. **§3 asked for the Node 20 deprecation to be recorded in `DYLAN-QUEUE.md`.** Session 26 wrote it
+   up on 2026-08-04. Re-verified rather than re-filed; a status line says so.
+
+### The defects found by building, which no premise predicted
+
+🔴 **My own first cohort curve RISED, and a unit test caught it.** Right censoring's obvious fix is
+a per-point denominator — at month k, count only members old enough to be observable that far.
+Every point is then individually correct and **the line as a whole lies**: month 7 read 50% after
+month 6 read 33%. Nobody came back; those are percentages of different populations, and the members
+old enough to be measured at month 7 were a more loyal subset. An owner reads that upturn as "they
+return". Fixed with **one population for the whole curve** — the members who have had the full
+observed horizon — so `last >= cohort + k` is nested in k and the line is monotonic in fact rather
+than in a comment. The same artefact appears in table form and takes the same fix: one denominator
+per row.
+
+🔴 **The Brand Studio's three skin presets were `<div onClick>`.** A keyboard-only or screen-reader
+user could not choose a skin **at all** — the three primary choices on the white-label screen. It
+surfaced only because the reload sweep tried to click one *by role* and waited out its timeout.
+Nothing in the suite would ever have caught it: `keyboard.spec.js` asserts every visible CONTROL is
+reachable by Tab, and a div with an onClick has no role, so it was never a control to reach — and
+every existing test clicks these by their TEXT, which works on a div. **The workaround that made the
+tests pass is what hid the defect.** Now `<button aria-pressed>`.
+
+🔴 **`ProfileModal`'s branding Save erased any key set elsewhere.** It wrote its six-field draft
+*as* the whole branding blob. Nothing was lost while the blob held only those six; `membershipPrice`
+is the first key that would have been, and the symptom would have been a price that "does not save"
+with nothing in the console.
+
+🔴 **The Dashboard checklist's congratulation was unreachable code.** `describeSetup` has always had
+a "Setup is done" branch. `showChecklist` is `sessions === 0`; the `run` step is done at
+`sessions > 0`. The conditions are exact opposites, so **completing the third step is what hides the
+card carrying the congratulation** and the ceiling a coach can see is "2 / 3". The old copy also told
+them to run a class they must already have run to get there. The acknowledgement moved to the other
+side of the switch (`justFinished = complete && sessions === 1`), retiring itself on the second class
+so it needs neither a dismiss button nor a stored flag.
+
+🔴 **`_bgDelete`: the obvious fix would have been worse than the silence.** A failed delete only hit
+`console.warn`, so it never entered the ledger, was never retried, and the next hydrate put the row
+back. But simply calling `_noteSyncError` makes the retry machinery **lie**: `_RETRY_PUSHERS[table]`
+is `save*(get*())` for every id-keyed domain, an upsert cannot remove a row the server has and local
+does not, so the retry SUCCEEDS, `_clearSyncError` fires, and the ledger reports a healthy table
+whose deletion never happened.
+
+**What retrying a delete means with no local tombstone — the decision.** It means nothing, which is
+why the tombstone must exist. `jungle_pending_deletes` holds `{table, col, val, at}` and does two
+jobs: it is the retry's *argument* (what the local list threw away), and it *suppresses the
+resurrection* so hydrate drops a row the coach already deleted instead of adopting it. Job 2 is the
+one the coach feels. `_clearSyncError` now refuses while a tombstone is outstanding — one choke-point
+rather than a rule repeated at every call site.
+
+⚠️ **One table already had this right and is why the shape is worth copying.**
+`library_overrides`' pusher is `if (d) saveLibraryCustom(d); else resetLibraryCustom()` — it MIRRORS
+whichever operation failed, because "no overrides" is derivable from local (DEC-13). A blob table
+needs no tombstone; the absence IS the tombstone. **That table was one ledger entry from correct,
+and it is the only one of the four whose bug is reachable today** — resetting the exercise library
+offline left the server's overrides in place and the next hydrate wrote them back. The three persona
+tables are latent only because 0005/0006 are unapplied.
+
+### Traps paid for, in order of how much time they cost
+
+🔴 **`expect(toast).toHaveCount(0)` IS NOT AN ASSERTION OF SILENCE.** It is satisfied the instant the
+count is zero, which includes "has not rendered yet". **Proved, not reasoned:** a mutation making the
+Schedule's autosave toast on every write left all three silence tests GREEN. It is a scan that ran on
+nothing, in a different costume. Silence is now *observed* — a `MutationObserver` records every toast
+that ever mounts and the assertion reads the record afterwards. **Any future "X never happens" test
+in this repo needs this shape.**
+
+⚠️ **A component cannot consume a context it provides.** `ToastProvider` was rendered inside App's own
+JSX, so App could not toast — which blocked turning its `window.confirm` into an undo, because the
+state to restore lives in App. Moved up into `StaffApp.jsx`. Still wraps the whole staff app; the
+toast is `position: fixed`, so its place in the tree does not affect where it appears.
+
+⚠️ **`Who&rsquo;s slipping away` is a real U+2019.** A locator using an ASCII apostrophe matches
+nothing, so a layout test failed on its selector rather than on the layout.
+
+⚠️ **Toasting from inside a `setState` updater fires twice under StrictMode.** Read the prior list
+from state instead.
+
+⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and traps
+focus, so any loop that visits it mid-sweep cannot click the next nav entry. Visit it last.
+
+⚠️ **`jungle_skin` holds a bare string, not JSON**, so the `stored()` helper cannot read it.
+
+⚠️ **An unlisted chunk in `check-size.mjs` has no ceiling at all** — it is counted in the file total
+and never fails. A new lazy chunk that nobody adds can grow forever. `RetentionScreen` now has one.
+
+⚠️ **Making a nav entry visible breaks two sweeps, both by design.** `ALL_SCREENS` is checked against
+the running app by `responsive.spec.js`, so omitting the new entry failed loudly — the ⚠️ above that
+list, working. And `interactions.spec.js` needed `analytics` in its navigation denylist, or every
+other screen's sweep clicks it and navigates away mid-sweep. Its four-control positive control also
+**fired correctly** on the screen itself: Analytics is a read-only report whose only buttons are Back
+and an import link, both already denied. The wrong fix is adding controls so a sweep has something to
+click; it is exempted by name with the reasoning recorded.
+
+### One test deleted rather than fixed
+
+`handleNewClass` skips the undo when there was no draft to lose, and that branch is **unreachable** —
+the Dashboard renders the control only `{hasDraft && ...}`. The guard stays as defence for a future
+call site. A test of an invented path is worse than no test, and this repo's own rule is not to
+report a defect a fixture manufactured.
+
+### What is genuinely left
+
+- 🔴 **Migrations `0005` and `0006` have never been applied.** Unchanged for several sessions and
+  still the most expensive data in the product: a gym's personas, plans and movement catalogue exist
+  on **one device with no server copy**. The coach-delete dialog now *says so* to the coach, which
+  means **that sentence becomes a lie the moment you apply them** — recorded in `DYLAN-QUEUE.md`
+  with the test that will remind you.
+- 🔴 **N4 member links are built and undeployed** — seven sessions now. Still the only member-facing
+  surface and the only place the white-label story can be proven on an actual member.
+- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps that are also the fix
+  for the Node 20 deprecation warning printed by every deploy in this session. Dylan's call.
+- **§3.7 skeleton states** — decided against, with the argument above. Not an open item.
+- **StaffApp has 10.5 kB of headroom.** Anything new goes in a lazy chunk with its own budget line.
+
+### The honest assessment
+
+The commercial gap the prompt named — "Jungle proves its value to the COACH and is sold to the
+OWNER; both halves exist and nothing connects them with a number" — is closed. The owner's screen now
+states monthly revenue at risk with its arithmetic, and the S$299 tier's third feature exists rather
+than being parked behind a precondition the product already satisfied.
+
+What is left in the queue is not theatre, but it is thinner than what came off it. The next session's
+highest-value work is almost certainly **not on this list**: it is getting 0005/0006 and N4 in front
+of a real gym, both of which need Dylan and neither of which any amount of code will move.
+
 
 ## Session 26 — three premises that were false, and the two defects underneath them
 
@@ -156,378 +381,5 @@ repo needs `--repo killdylz/Jungle-App` or it cannot infer the base repo.
 
 §0 is unchanged: migrations `0005` and `0006` still need running, and until then the coach corpus
 exists on exactly one laptop.
-
----
-
-## Session 25 — the banner that could not be cleared, two sweeps, and the first undo
-
-> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **381 e2e**
-> (35 spec files, no fixmes) · `deadctl` **0 suspect / 73 files** · five-chunk build:
-> member path **211.49 KB**, staff **557.10 KB** (StaffApp **346.92/360 KB**, the tightest
-> budget in the repo). App.jsx **3,608 lines** (was 3,513). Last commit **`b74cfe3`**.
-
-**The brief had four parts in order: regression depth, remove what is awkward, UI polish with no
-new surfaces, then keep going.** Depth and the awkward parts landed. Polish is where 26 starts.
-
-### The banner Dylan asked to delete was telling the truth — and was still bad UI
-
-The four domains it names are **exactly** the tables created by migrations `0005` and `0006`,
-and no others. That pattern rules out both cheaper explanations. It is not RLS: `0003`'s
-`library_overrides` and `brand_profiles` carry the *identical* write predicate
-(`is_platform_admin() or is_gym_admin(gym_id)`) and are not in the ledger, so `is_gym_admin()`
-returns true for this user — and `0006`'s `persona_generations` uses a **looser** member-level
-policy and still fails. It is not a CHECK constraint: that is per-column and per-table, and this
-is four tables at once. What is left is that **the tables are not there**; `0005`'s header still
-reads "DRAFT — not yet applied". **Running 0005 and 0006 is Dylan's five-minute action, and the
-banner clearing itself is the proof.**
-
-All four of its actual defects are fixed: **Try now** (wired to the `_retryNow({force:true})`
-that already existed and had no button), the exact Postgres string in a `<details>`,
-"last tried 2 min ago · 14 failed attempts" from the `at`/`attempts` the ledger already stored,
-copy and colour that **escalate** past five attempts, and a dismiss keyed on a signature of
-table+message.
-
-🔴 **The signature deliberately excludes `at` and `attempts`.** Every failed retry rewrites
-both, so a signature including either would resurrect a dismissed banner within 30 seconds and
-make the button a lie. A new table, or the same table with a new message, always returns. There
-is no "never show again".
-
-### Two defects found while diagnosing, both invisible locally
-
-🔴 **A ledger entry nothing could clear.** `_bgUpsertDelta` makes no request when there is no
-delta, and `_clearSyncError` only runs after a *successful* request — so once a table's rows
-were confirmed or deleted following a failure, the entry became immortal. The banner named a
-domain with nothing left to send, forever, and no coach action could clear it. A warning that
-cannot be resolved stops being read as a warning. `_clearLedgerIfSettled` closes it: an empty
-delta means every local row carries a server-confirmed fingerprint, so a ledger entry claiming
-otherwise is provably stale.
-
-🔴 **`restorePersonaCascade`.** Undoing a coach delete cannot just re-save the four lists.
-`deletePersona` removes only the `coach_personas` row server-side; plans, movements and
-generations go via **ON DELETE CASCADE** — no client call, so no `_unmark`, so their delta marks
-survive, so a re-save computes an **empty delta and pushes nothing**. The coach sees their whole
-corpus restored on this device while the server stays empty, and the next server-wins hydrate
-takes it away for good. Every local assertion passes through all of that; the only way to see it
-is to ask what the next push would send, which is what the unit test does.
-
-### Two sweeps, each with a positive control and each proven able to fail
-
-**§1.1 responsive** — 9 screens × 390/768/1280, fresh render at each width. Two rules kept
-separate: the page must not scroll sideways, and no leaf element may cut text off without an
-ellipsis. The per-element spill list is a *diagnostic* on the first rule, not a rule — an element
-wider than the viewport is legitimate inside a container built to scroll, and failing those would
-make the sweep noisy enough to be switched off.
-
-**§1.2 keyboard** — every visible control reachable by Tab, focus never lost to `<body>` before
-the screen is walked. Where a dialog is open the expected set scopes to inside it, turning
-"everything is reachable" into an assertion that the trap works.
-
-`ALL_SCREENS` + `navAnyWidth` in `helpers.js` hold all three nav vocabularies (sidebar "Class
-Builder" / sheet "Builder" / bar "Build"), and `responsive.spec.js` **checks that list against
-the running app's sidebar in both directions** — a hand-written list of screens is exactly the
-thing that silently stops matching.
-
-### One toast primitive, and the first undo in the product
-
-§2.1 was accurate: deleting a coach took their corpus, catalogue and generation ledger on one
-unguarded click, while deleting a **single exercise** asked "are you sure?". The protection was
-inverted, and the thing it failed to protect is the most expensive data in the product.
-
-`src/ui/toast.jsx` — one provider at the staff root, `role="status"` + `aria-live="polite"`,
-region **always mounted** (a live region inserted at the same moment as its text is frequently
-not announced), 9s for undoable toasts vs 2.5s for plain, and `pointerEvents:none` on the empty
-region so it cannot eat taps meant for the bottom bar. The coach delete gets **both** a confirm
-and an undo; removing a plan gets undo only.
-
-### Then it kept going: the plan editor, and a hit area a thumb can find
-
-**§3.1 (half).** The plan editor held 35 buttons and 82 fields of local state and had four ways
-out — backdrop, Escape, ✕, Cancel — all of which discarded it in silence. It now hands the draft
-back through the undo toast, guarded on `dirty` so an untouched open stays instant. **The Builder
-is still unguarded and is the bigger of the two.**
-
-**§3.4, plus a real defect underneath it.** `@keyframes spin` lived in `src/App.css`, which
-**nothing imports** — `main.jsx` imports `index.css` and only that. Six Loader spinners were
-frozen, four of them on the app's slowest network paths, where a still icon and a hung app look
-identical. Tap targets: 100 of 186 visible controls were under 44px at 390px; `data-tap` lays a
-transparent 44px pseudo-element over the thumb-critical ones so the hit area grows and the
-rendering does not.
-
-🔴 **The tap sweep hit-tests the running page rather than measuring rectangles**, because the two
-ways the overlay silently dies — an `overflow:hidden` ancestor clipping it, a neighbour's overlay
-painting over it — both leave the measured box exactly as it was. A rect-based sweep reports a
-false pass on a target that is dead to a thumb. Only the marked controls are proven; **the ~90
-unmarked ones are a judgement call, not a backlog item** — marking adjacent controls closer than
-44px apart just makes them steal from each other.
-
-### Traps this session paid for
-
-- 🔴 **`blur()` does not reset the tab order.** Chromium keeps a *sequential focus navigation
-  starting point* that survives a blur. `document.body.setAttribute("tabindex","-1");
-  document.body.focus();` is what resets it. The first keyboard sweep failed on six screens for
-  this reason **and the app was correct every time**.
-- 🔴 **`nav()` leaves focus on the button it clicked**, so any tab-order test starts halfway down.
-- ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing a
-  literal escape into source needs a guarded one-shot `.mjs`.
-- ⚠️ **Screenshots fail unless the Browser pane is displayed.** Geometry reads via
-  `javascript_tool` caught the toast's 15px clearance over the bottom bar and the
-  "1 class plan, 11 movements" copy defect that all 367 tests passed.
-- ⚠️ **`_bgDelete` records no sync error** — a failed DELETE reaches only `console.warn`, never
-  the ledger, so it is never retried and never shown. Same class of bug the ledger exists for, in
-  the one path never wired to it. **Not fixed**; it needs a decision about what retrying a delete
-  means with no local tombstone.
-- 🔴 **Never put `git status` and `git add -A` in one shell command.** The status scrolls past
-  unread and `-A` sweeps up whatever else is in the tree. It happened here: a commit about the
-  plan editor swallowed the entire tap-target body of work plus a throwaway probe spec. Caught
-  before pushing and split into `5525f2e` + `b74cfe3`, but only because the file list was checked
-  afterwards. **Read the status, then stage explicit paths.**
-- ⚠️ **A `*.spec.js` scratch file in `e2e/` runs in CI** — there is no `testMatch` narrowing.
-- ⚠️ **`overflow:hidden` clips a `::after` hit-area overlay** back to the visible box, with no
-  change to the measured rectangle — it looks exactly like the fix working.
-
-### Eight mutation proofs, all reverted with the inverse edit
-
-The settle step, the signature's blindness to `at`, the null-timestamp guard, the dismissal key,
-a 1400px min-width (1010px of sideways scroll), a 12px nowrap container ("53px of text in 20px —
-HOME"), `tabIndex={-1}` on the nav (9 of 17 unreachable), an `onFocus` that blurs (0 of 17), the
-cascade unmarking, and the coach-delete confirm. One of them caught a real bug before it shipped:
-`fmtAgo(null)` rendered **"19675 days ago"**, because `Number(null)` is 0, not NaN.
-
----
-
-## Session 24 — a delete that never worked, a day that was not a day, and a fourth reader
-
-> **Gates green.** `lint:crash` **0** · **784 unit** (28 files, no todos) · **307 e2e**
-> (31 spec files, no fixmes) · five-chunk build: index **204.50 KB** (byte-identical — the
-> member path is untouched) + StaffApp **340.43 KB** + PersonasScreen **93.35 KB** +
-> ClassSummary **5.81 KB** + summaryApi **0.85 KB**. App.jsx **3,513 lines** (unchanged).
->
-> **The local backlog is empty at the end of this session** — see "What is left, honestly".
->
-> **A12/A13/A1 confirmed still not done** — asked before any work, per §10.1. N4 is still code
-> nobody has run: **sixth session running**, and nothing below depended on it.
-
-### The method
-
-Session 23's rule — *do something ELSE and look again* — found the catalogue delete exactly
-where §10.2 predicted. The session's other two findings came from a move worth naming
-separately, because it is what turned a bug report into a design decision:
-
-> **Ask whether the affordance can EVER work, not whether it worked this time.**
-
-The prompt described the delete as a write that gets reverted. It was worse than that, and the
-difference decided the fix: the list is filtered to rows with at least one occurrence, so
-*every* row the button appeared on was guaranteed to be re-derived. There was no case where it
-worked. The one case where deleting holds — a zero-occurrence row — is never rendered at all.
-A repair was not available; only removal or reinterpretation.
-
-The same question applied to a number: not "is this 44 or 45 today" but "what question is this
-arithmetic answering". It was answering *how many whole 24-hour periods have elapsed*, which
-nobody was asking.
-
-### 🔴 1. A delete button that never once worked — `b018f6d`
-
-§10.2's item, and the repro held. Delete `Farmer Carry`: gone from screen, gone from
-`localStorage`, still gone after a reload. Edit a note on `Kettlebell Swing`, and it is back
-in both.
-
-`aggregateMovements` re-derives the catalogue from the plans on every recompute, and any
-movement save or plan edit triggers one. There is no tombstone. **But `ctMoves` filters to
-`(m.classTypes?.[curCT] || 0) > 0`**, which is what makes this unfixable as drawn — a seeded
-zero-count row rendered no row and no delete button, while the control row rendered both.
-
-**The product question, decided rather than patched.** A tombstone would make the button honest
-and the LIST dishonest: the catalogue would stop saying what the corpus contains — its entire
-promise — while the movement stayed visible in the plan editor. That is the same two-readers
-drift as the class-type rename, bought deliberately. So the button is gone, and the list states
-where membership comes from: *"a movement leaves this list by leaving the plans that use it."*
-`store.deletePersonaMovement` went with it; its only caller was that button.
-
-⚠️ **§10.2's suggested control was wrong**, and checking it is what produced the better fix.
-The prompt said to check the zero-count case because "delete may already work there". It does —
-and it is unreachable, so keeping a conditional for it would have shipped dead UI.
-
-### 🔴 2. "Days ago" counted 24-hour periods where an owner counts dates — `6ff99c7`
-
-**Two e2e tests in `csvImport.spec.js` were failing on a CLEAN tree at `5854d93`** — the
-session-24 prompt's "297 e2e" did not record it. They were not stale. They had always been
-**time-of-day flaky**, and session 23 happened to run them in the evening.
-
-The importer anchors a date-only CSV value at **noon UTC**. `daysBetween` floored the raw
-millisecond gap, so an imported Jun 19 read against Aug 3 — 45 days on any calendar — came out
-as **44** for every run before 20:00 SGT. The same floor told a coach that a member who trained
-yesterday evening was last in **"0 days ago"**.
-
-That number is not incidental: the panel's design is that every flag **carries the arithmetic
-that produced it so an owner can argue with it**, and this was the one number in the sentence
-that was wrong. "Days ago" now counts **local calendar days** — floor both instants to local
-midnight, difference those, and **round** rather than floor because a DST transition leaves the
-span 23 or 25 hours short of a whole multiple.
-
-**Consequence, stated rather than discovered later: the 14-day absence rule now fires on the
-calendar day it crosses, up to a day earlier than before.**
-
-⚠️ **None of the 772 existing unit tests moved.** Their fixtures are whole-day offsets from a
-noon-UTC anchor, so both definitions agree on every one — **which is exactly why the defect
-survived: the arithmetic was only ever tested at the one time of day where both answers match.**
-
-🔴 And `winback.spec.js` had written the off-by-one down next to the right answer. It advances
-the clock twenty days, comments *"Twenty days pass and he stops again"*, and asserted **19**.
-Neither was ever questioned. **A test can encode a defect in its prose and its assertion at the
-same time and still look like documentation.**
-
-### 🔴 3. The class type had a FOURTH reader — `aa0e96f`
-
-Session 23 found three readers of a class type's name and moved all three. There were four.
-Every generation-ledger row carries `classType`, and `recentGens` selects on
-`g.classType === curCT`, so a rename does not mis-file those rows — it makes them
-**unreachable**.
-
-| | ledger | "Recently generated" | Reopen |
-|---|---|---|---|
-| before rename | `S360` | visible | 1 |
-| after `S360` → `S360 Strength` | still `S360` | **gone** | **0** |
-
-Two things break at once and **only one is visible**. The coach loses their history and every
-way back into a class they were handed. The quiet half: that same list is what
-`presetDraftOpts` receives as `recent` — the record of what has already been recommended.
-Steered away from an empty list, the next draft can hand back the class it produced last time.
-**No error, no blank panel, just a generator that has silently stopped varying.**
-
-`renameClassTypeInGenerations` carries the rows, scoped to one persona. The rename-vs-move
-rule now lives in **one `isMove` helper both functions call** — a second copy of a shared rule
-is how the fourth reader came to be missed. The generation's TITLE is deliberately not
-rewritten: it records what the coach was handed.
-
-**Also closed from §10.3:** `Reopen` had zero coverage and now has three assertions that
-matter — it lands the RECORDED plan (same block count) under the right Builder class, it does
-**not** append a second ledger row (reopening is a read; a write would pollute repeat-avoidance
-with classes the coach never re-ran), and it survives a rename. `GEN_CAP` had no test; 55
-generations now go in, and the assertion that earns its keep is that the cap counts **per
-persona**, so a busy coach cannot evict a quiet one's history.
-
-### 🔴 4. The movements a coach edited and stopped using — `b03dd45`
-
-The other half of §1, and what made removing that delete a clean trade rather than a loss.
-
-`aggregateMovements` keeps a zero-occurrence row when it carries a manual edit — **and a
-DERIVED equip counts, so most rows qualify** — so a coach who drops a movement from a plan
-keeps the equipment, kind, aliases and cue they set on it. Correct. But `ctMoves` renders only
-rows WITH occurrences, so those kept rows were **invisible and unreachable**: they accumulated
-locally and synced to Postgres with no way to see or remove them, and the coach's own edits
-became cruft they could not reach.
-
-They are also the **only** rows where deleting means anything, because nothing re-derives them.
-So `store.deletePersonaMovement` returns — **conditional**, with the condition written above it,
-since calling it on a row with occurrences reintroduces the original bug and it looks fixed
-until you touch something else. Its one caller is a new persona-scoped **"Not in any plan"**
-card, outside the Movements card and read-only apart from delete: a zero-occurrence row belongs
-to no class type, so filing it under the current tab would be a fiction.
-
-The state is reachable by ordinary use, so no synthetic fixture was needed — **which retired
-the warning drafted for it** ("build the fixture first, the sample coach has none"); the fixture
-already existed as a test from `b018f6d`.
-
-🔴 **Rendering it at 1280px and 390px caught two copy defects no assertion would have:** the
-explainer built a possessive out of the persona name (*"No plan of Example Coach — The Garage's
-uses them now"*), and the per-row line restated the card's own heading instead of naming what
-deleting would cost. **Look at the screen, not only at the assertions about it.**
-
-### 5. `deadctl` decides the FLAGS question instead of asking you to — `4112f8c`
-
-🔴 **The premise was wrong, which the work found immediately.** The recorded item said all four
-suspects "sit inside `FLAGS.mockAnalytics ? [...] : []`". **Only one does.** AnalyticsScreen has
-no FLAGS reference outside its header comment — its three buttons are gated CROSS-FILE by
-App.jsx. A lexical check would have suppressed one, left three, and looked like it worked.
-
-Three mechanisms: lexical branches, a list a flag empties and then `.map`s, and a component
-whose every render site is dead. Everything else still over-reports, and an unreadable
-`flags.js` makes it say so and report all four — a suppressor that fails silently is worse than
-a noisy report. Flipping `mockAnalytics` moves **seven** findings in **both** directions, which
-is the control a blanket suppressor cannot pass.
-
-### 6. Repeat-avoidance is driven at last, and it works — `8704985`
-
-Not broken; uncovered. 🔴 **The sample coach has eleven movements and its shape consumes exactly
-eleven**, so with zero slack two drafts are byte-identical whatever the ledger says — a test on
-that fixture passes against a completely broken implementation. ⚠️ And seeding a second plan
-into `localStorage` was not enough: the catalogue re-derives only on a plan COMMIT, so the probe
-measured nothing and passed. The fixture now forces the recompute and asserts the catalogue grew
-first. 🔴 Avoidance is **per preset** — only "Something different" avoids; "the usual" repeating
-IS the feature.
-
-### 7. `BrandStudioScreen` measured, and declined — no commit
-
-Stubbing its body gives StaffApp 340.43 → 315.70 KB: **24.73 KB raw, 5.89 KB gzip**. Members
-gain zero (not on their path); installed staff gain zero and pay an extra request, because
-`build-sw` precaches every chunk; only a staff first visit gains, 5.89 KB of ~783 KB. The repo
-split `PersonasScreen` at **93.35 KB** — 3.8× larger. **Not every look ends in a change.**
-
-### 8. A size guard, and two pieces of repo hygiene — `76b800c`
-
-Nothing failed on bundle growth before this, and re-measuring found it had already happened:
-the **member path was 206.69 kB at session 19 and is 213.13 kB now.** `npm run size` fails the
-build past a ceiling, and CI runs it `--prod` after the build.
-
-🔴 **The trap it had to survive is one §4.2 states in prose and prose cannot enforce.** A
-credential-less build and a prod-shaped one are DIFFERENT builds — StaffApp is **340.43 kB**
-local and **581.02 kB** in CI, because without `VITE_SUPABASE_*` rollup drops the whole
-`@supabase` client. So there are two budget sets and the mode is **asserted, not assumed**:
-`GoTrueClient` only survives when the client is really bundled, so passing the wrong flag exits
-2 instead of passing against numbers that do not describe the build. It also exits 2 on an empty
-`dist/assets` — a guard that measured nothing looks exactly like one that passed.
-
-Sizes use **kB = 1000**, matching vite and therefore every figure in these docs. The first
-version used KiB and disagreed with the handoff by 2.4%, which is how someone eventually
-corrects the wrong number.
-
-Also: `.gitignore` only ignored `*.local`, so `.env` or `.env.production` would have sailed past
-it **on a public repo**; and `.github/dependabot.yml` now runs weekly, grouped, React majors
-excluded. ⚠️ **Dependabot opened 6 PRs immediately and none are merged** — `actions/setup-node
-4 → 7` is a major bump that could break CI, and the React ones touch the toolchain.
-
-**Checked and deliberately NOT changed:** the token-core drift guard is sound. A one-character
-edit to a mirrored Edge Function copy fails `classToken.mirror.test.js`, and importing
-`sync-token-core.mjs` does not repair what it inspects — `main()` runs only as a command.
-Verified by introducing real drift and confirming the file was still mutated afterwards.
-
-### Design decisions worth not re-litigating
-
-- **The catalogue states membership, it does not offer deletion** — except on the one list where
-  deleting is true. Same reason as the Smart Recommendation and the Builder's scheduled-type
-  notice: stating beats silently applying.
-- **"Days ago" is a calendar count.** The datum is a date; the reader is a human with a calendar.
-- **A rename carries the ledger; a MOVE does not.** Identical rule to the style profile, and it
-  is now literally the same function call.
-- **Reopen is a read.** It must never append to the ledger.
-- **A zero-occurrence row is kept, not purged.** The coach's edits outlive the plan that used
-  the movement; letting go of them is their call, not a cleanup's.
-- **`deadctl` over-reports by default** and suppresses only what a literal flag decides. If it
-  cannot read the flags it says so and reports everything.
-- **Repeat-avoidance is a per-preset preference, not a global filter.**
-- **`BrandStudioScreen` stays in App.jsx**, on measured numbers rather than taste.
-
-### What is left, honestly
-
-**Locally: nothing.** Every item this session opened with is closed, structural debt has been
-empty for nine sessions, `deadctl` and `dead` both report 0, and there are no TODOs or skipped
-tests in the tree.
-
-What remains is not code: **`DYLAN-QUEUE.md` Part A**, and A7 above all — the Slides import is
-the feature the whole pitch rests on and has never met a real deck.
-
-**Two undriven surfaces remain, both re-verified against `e2e/` at the end of this session** —
-grep them again before believing this, but they were real when written:
-
-1. **The movement editor's equipment / category / alias save.** `changeMovement` is now driven
-   for `notes` and for the rename-merge path; the equipment chips, the category chips and the
-   alias field are typed into by nothing. Four `e2e` matches for "Equipment"/"Aliases" are all
-   comments or assertions about the DERIVED value.
-2. **Cold start → rename.** `coldstart.spec.js` fills a class-type name twice and never renames
-   one, so §1c's rename has never run against a **preset-sourced** blueprint — the one shape
-   where `blueprints[ct]` was written by `startClassTypeFromPreset` rather than by the coach.
-
-⚠️ **And 6 unmerged Dependabot PRs**, opened by this session's own change. They are the only
-open items with a clock on them.
 
 ---
