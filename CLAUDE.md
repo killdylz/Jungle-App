@@ -50,6 +50,10 @@ share a filesystem view.
   double quotes run as command substitution, so a message mentioning a `cancelled` run silently
   loses the word and prints `cancelled: command not found`. A single-quoted heredoc is the other
   safe option; anything double-quoted is not.
+  ⚠️ **`Out-File -Encoding utf8` is NOT safe either** — PS 5.1 writes a BOM, which git keeps, so
+  the commit subject starts with an invisible U+FEFF and reads as `﻿Subject` in `git log`. Session
+  27 shipped one (`b984401`) and left it rather than force-pushing over a cosmetic fault. Use the
+  Write tool.
 - ⚠️ **`git add -A` before `rm`ing your message file commits the message file.** Prefer
   `git commit -F msg.txt --only <paths>`.
 - ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing
