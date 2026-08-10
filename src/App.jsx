@@ -27,7 +27,7 @@ import { STAGE_LIBRARY_MAP, CLASS_STAGE_TEMPLATES, DEFAULT_STAGE_TEMPLATE } from
 // (I6 stage 5). Same rule as the personas and roster extractions — a dead
 // `import` still pulls the module into App.jsx's chunk, so deleting the import
 // line is the half of the move that actually costs bytes.
-import { setupProgress, describeSetup } from "./lib/setupProgress.js";
+import { setupProgress, describeSetup, coachFirstName } from "./lib/setupProgress.js";
 import { shareCardModel, drawShareCard, shareCardFilename } from "./lib/shareCard.js";
 import { getLibrary, saveLibrary, resetLibrary, BUILT_IN_LIBRARY,
          newClassTypeKey, makeClassType } from "./lib/libraryAccess.js";
@@ -714,7 +714,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
-  const first = profile?.display_name?.split(" ")?.[0] || "Coach";
+  const first = coachFirstName(profile?.display_name);
   const dayN=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   const monN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dateStr = `${dayN[now.getDay()]} ${now.getDate()} ${monN[now.getMonth()]}`;
@@ -857,6 +857,23 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
                   </div>
                 ))}
               </div>
+              {/* Reaching the end, said once. See `justFinished` in
+                  setupProgress.js for why it lives here and not on the checklist:
+                  finishing the third step is what HIDES the checklist, so its own
+                  "setup is done" line was unreachable. Retires itself when the
+                  second class is run — no dismiss button, no key to remember. */}
+              {setup.justFinished && (
+                <div data-testid="setup-complete" style={{...card,padding:isMobile?"12px 14px":"14px 18px",
+                     background:"color-mix(in srgb, var(--green) 8%, transparent)",
+                     border:"1px solid color-mix(in srgb, var(--green) 24%, transparent)"}}>
+                  <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>
+                    <Check size={13} style={{verticalAlign:"-2px"}}/> That&rsquo;s your studio set up, and your first class is in the books.
+                  </div>
+                  <div style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginTop:"3px"}}>
+                    The numbers above are yours now — they fill in as you run classes.
+                  </div>
+                </div>
+              )}
               {setup.nextStep && (
                 <div data-testid="setup-nudge" style={{...card,padding:isMobile?"12px 14px":"14px 18px",display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:"180px"}}>
@@ -3100,7 +3117,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
     {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
   ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
-  const first = profile?.display_name?.split(" ")?.[0] || "Coach";
+  const first = coachFirstName(profile?.display_name);
   const navBtn=(on)=>({width:"100%",display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",marginBottom:"2px",borderRadius:"8px",border:"none",cursor:"pointer",background:on?"color-mix(in srgb, var(--accent) 14%, transparent)":"transparent",color:on?"var(--accent)":"var(--text)",fontSize:"13px",fontWeight:on?"700":"500",textAlign:"left"});
   return (
     <aside style={{width:"238px",flexShrink:0,background:"var(--card)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0}}>

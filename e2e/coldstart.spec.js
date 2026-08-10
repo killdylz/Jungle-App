@@ -190,6 +190,63 @@ test.describe("a coach with nothing can still get to a class", () => {
   });
 });
 
+// ─── §2.5 · reaching the end is said, once ───────────────────────────────────
+//
+// 🔴 THE FINDING, and it is structural rather than a missing message. The
+// checklist's own "setup is done" line could never be read: `showChecklist` is
+// `sessions === 0` and the `run` step is done at `sessions > 0`, so completing the
+// third step is exactly what hides the card carrying the congratulation. The most
+// a coach could ever see there was "2 / 3".
+//
+// So the acknowledgement lives on the other side of the switch, where they
+// actually arrive.
+test.describe("finishing setup is acknowledged", () => {
+  const COMPLETE = '[data-testid="setup-complete"]';
+
+  test("appears with the first class once every step is done", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { sessions: 1, plans: 2, members: 6 });
+
+    // Control: this is the KPI side of the switch, not the checklist.
+    await expect(page.locator(CHECKLIST)).toHaveCount(0);
+    await expect(page.getByText("Day streak", { exact: false })).toBeVisible();
+
+    await expect(page.locator(COMPLETE)).toBeVisible();
+    await expect(page.locator(COMPLETE)).toContainText(/first class is in the books/);
+    // Not a nag: nothing is still outstanding, so no "Still to do" beside it.
+    await expect(page.locator(NUDGE)).toHaveCount(0);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("retires itself on the second class rather than becoming a permanent compliment", async ({ page }) => {
+    await freshApp(page);
+    await seed(page, { sessions: 2, plans: 2, members: 6 });
+    await expect(page.getByText("Day streak", { exact: false })).toBeVisible();
+    await expect(page.locator(COMPLETE)).toHaveCount(0);
+  });
+
+  test("stays away while a step is still outstanding", async ({ page }) => {
+    // One class run, no roster. This gym gets its numbers and a quiet nudge — it
+    // has not finished, and telling it otherwise would be the flattering lie the
+    // whole cold-start surface exists to avoid.
+    await freshApp(page);
+    await seed(page, { sessions: 1, plans: 2, members: 0 });
+    await expect(page.locator(COMPLETE)).toHaveCount(0);
+    await expect(page.locator(NUDGE)).toBeVisible();
+  });
+
+  test("never shows on the checklist itself, however complete the rest is", async ({ page }) => {
+    await freshApp(page);
+    await seed(page, { sessions: 0, plans: 4, members: 12 });
+    await expect(page.locator(CHECKLIST)).toBeVisible();
+    await expect(page.locator(COMPLETE)).toHaveCount(0);
+    // And the card tops out at 2/3, which is the reason this feature exists.
+    await expect(page.locator(CHECKLIST).getByText("2 / 3")).toBeVisible();
+  });
+});
+
 test.describe("the checklist survives a phone", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 

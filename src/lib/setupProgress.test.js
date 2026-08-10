@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { setupProgress, describeSetup, SETUP_STEPS } from "./setupProgress.js";
+import { setupProgress, describeSetup, coachFirstName, SETUP_STEPS } from "./setupProgress.js";
 
 // The first screen a new gym sees. The thing under test is the DECISION — does
 // the KPI row have anything real to say, and if not, which step is named next —
@@ -97,7 +97,78 @@ describe("describeSetup — says where they are without flattering an empty gym"
   });
 
   it("closes out when everything is ticked", () => {
-    expect(describeSetup(setupProgress({ classes: 1, sessions: 2, members: 9 }))).toMatch(/Setup is done/);
+    expect(describeSetup(setupProgress({ classes: 1, sessions: 2, members: 9 }))).toMatch(/All three steps are done/);
+  });
+
+  // 🔴 …and that sentence is UNREACHABLE from the checklist, which is the finding
+  // behind `justFinished`. Completing the third step is what hides the card, so a
+  // coach can never read it there. It used to say "Run a class and this page starts
+  // filling in" — copy only someone who had already run one could ever have seen.
+  it("cannot show a completion line on the card that is hidden by completing it", () => {
+    for (let sessions = 0; sessions <= 3; sessions++) {
+      const p = setupProgress({ classes: 4, sessions, members: 12 });
+      expect(p.showChecklist && p.complete,
+        `sessions=${sessions}: the checklist and completion are showing together`).toBe(false);
+    }
+  });
+});
+
+describe("reaching the end is said once, after the switch", () => {
+  it("fires on the first class with everything else done", () => {
+    expect(setupProgress({ classes: 4, sessions: 1, members: 12 }).justFinished).toBe(true);
+  });
+
+  it("does not fire while a step is outstanding", () => {
+    expect(setupProgress({ classes: 4, sessions: 1, members: 0 }).justFinished).toBe(false);
+    expect(setupProgress({ classes: 0, sessions: 1, members: 12 }).justFinished).toBe(false);
+  });
+
+  it("retires itself rather than becoming a permanent compliment", () => {
+    // No dismiss button and no stored flag: a second class is what stands it down.
+    expect(setupProgress({ classes: 4, sessions: 2, members: 12 }).justFinished).toBe(false);
+    expect(setupProgress({ classes: 4, sessions: 40, members: 12 }).justFinished).toBe(false);
+  });
+
+  it("never fires while the checklist is the thing on screen", () => {
+    const p = setupProgress({ classes: 4, sessions: 0, members: 12 });
+    expect(p.showChecklist).toBe(true);
+    expect(p.justFinished).toBe(false);
+  });
+});
+
+// ─── What to call the coach ──────────────────────────────────────────────────
+// The greeting reads "GOOD AFTERNOON, <name>" in 12px letterspaced accent caps
+// across the top of the Dashboard, so whatever this returns is shouted.
+describe("coachFirstName", () => {
+  it("takes the first name when there is one", () => {
+    expect(coachFirstName("Priya Nair")).toBe("Priya");
+    expect(coachFirstName("  Marcus  ")).toBe("Marcus");
+  });
+
+  it("never greets a coach with their email address", () => {
+    // The live path: `display_name` falls back to `user.email` for a Google
+    // account with no name set, and the old `split(" ")[0]` returned the whole
+    // address. Digits are the giveaway that a local part is not a name.
+    expect(coachFirstName("dylanrodrigues2710@gmail.com")).toBe("Coach");
+    expect(coachFirstName("dylan.rodrigues@studio.com")).toBe("Dylan");
+    expect(coachFirstName("priya_nair@studio.com")).toBe("Priya");
+    expect(coachFirstName("coach-mara@studio.com")).toBe("Coach");
+  });
+
+  it("capitalises an email-derived name but leaves a real one alone", () => {
+    // The sidebar renders this raw; only the Dashboard greeting upper-cases it, so
+    // a lower-case "dylan" would show up in the one place nobody looks.
+    expect(coachFirstName("dylan@studio.com")).toBe("Dylan");
+    // A name the coach typed is theirs.
+    expect(coachFirstName("de Souza Fernandes")).toBe("de");
+  });
+
+  it("falls back to Coach rather than to nothing", () => {
+    // The credential-less build has no session and therefore no name at all.
+    // "Coach" there is honest, not a defect — see the note in setupProgress.js.
+    for (const v of [undefined, null, "", "   ", "@x.com", "123", "42@x.com"]) {
+      expect(coachFirstName(v), `${JSON.stringify(v)}`).toBe("Coach");
+    }
   });
 
   // U1: the coach is never shown our vocabulary.
