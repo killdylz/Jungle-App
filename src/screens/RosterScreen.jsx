@@ -386,8 +386,16 @@ export function RosterScreen({ onBack, onNavigate }) {
                 )}
               </div>
             )}
+            {/* The panel below is derived from `--green`, not Canopy's #7BE3A4: the
+                import-succeeded card was mint on every skin, so a gym on Pulse or
+                Atelier got one Canopy-green card in the middle of their own palette.
+                ⚠️ This comment sits OUTSIDE the conditional on purpose. A JSX comment
+                placed inside a `cond && ( ... )` arm makes two children of a
+                single-expression arm, which is a syntax error — and writing the closing
+                comment delimiter inside a JSX comment ends it early, which is a second
+                one. Both broke the build while this line was being written. */}
             {result?.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #7BE3A455",background:"#7BE3A414",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid color-mix(in srgb, var(--green) 33%, transparent)",background:"color-mix(in srgb, var(--green) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
                 Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
                 {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
                 {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}

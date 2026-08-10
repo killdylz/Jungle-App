@@ -1275,7 +1275,13 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                   <button key={v.id} onClick={()=>setVibe(v.id)}
                     style={{padding:"5px 11px",borderRadius:"999px",fontSize:"11px",fontWeight:"600",cursor:"pointer",
                       background:vibe===v.id?"var(--accent)":"var(--navy)",
-                      color:vibe===v.id?"#0A0F0C":"var(--muted)",
+                      // `--on-accent`, not Canopy's near-black. `inkOn` computes this
+                      // token by asking which of bg/text contrasts more against the
+                      // accent, and hardcoding `#0A0F0C` bypassed it: measured on a
+                      // navy accent (#12224A), where the token resolves to #F4F6F2,
+                      // this pill rendered at 1.25:1 — invisible, on the one screen
+                      // the product is demoed from.
+                      color:vibe===v.id?"var(--on-accent)":"var(--muted)",
                       border:`1px solid ${vibe===v.id?"var(--accent)":"var(--border)"}`,transition:"all .15s"}}>
                     {v.label}
                   </button>
@@ -1296,7 +1302,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
             {/* Analyze button */}
             {!analyzing && !generatedSkin && (
               <button onClick={runAnalysis} disabled={!logoSrc}
-                style={{width:"100%",padding:"12px",background:logoSrc?"var(--accent)":"rgba(255,255,255,.06)",border:"none",borderRadius:"10px",cursor:logoSrc?"pointer":"not-allowed",fontSize:"13px",fontWeight:"700",color:logoSrc?"#0A0F0C":"var(--muted)",fontFamily:`'${displayFont}',sans-serif`,transition:"all .2s"}}>
+                style={{width:"100%",padding:"12px",background:logoSrc?"var(--accent)":"rgba(255,255,255,.06)",border:"none",borderRadius:"10px",cursor:logoSrc?"pointer":"not-allowed",fontSize:"13px",fontWeight:"700",color:logoSrc?"var(--on-accent)":"var(--muted)",fontFamily:`'${displayFont}',sans-serif`,transition:"all .2s"}}>
                 Analyse & generate identity
               </button>
             )}
@@ -1308,8 +1314,14 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                   <div key={i} style={{display:"flex",alignItems:"center",gap:"9px"}}>
                     <div style={{width:"18px",height:"18px",borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
                       background:i<analyzeStep?"var(--accent)":i===analyzeStep?`color-mix(in srgb, var(--accent) 13%, transparent)`:"var(--navy)",
+                      // `color` on the wrapper and `currentColor` on the icon, rather
+                      // than `color="var(--on-accent)"` on the icon itself: lucide
+                      // passes its `color` prop through to the SVG `stroke`
+                      // PRESENTATION ATTRIBUTE, and a `var()` in a presentation
+                      // attribute is not resolved everywhere. Inheriting is safe.
+                      color:"var(--on-accent)",
                       border:`1px solid ${i<=analyzeStep?"var(--accent)":"var(--border)"}`}}>
-                      {i<analyzeStep && <Check size={10} color="#0A0F0C" strokeWidth={3}/>}
+                      {i<analyzeStep && <Check size={10} color="currentColor" strokeWidth={3}/>}
                       {i===analyzeStep && <div style={{width:"5px",height:"5px",borderRadius:"50%",background:"var(--accent)"}}/>}
                     </div>
                     <span style={{fontSize:"12px",color:i<=analyzeStep?"var(--text)":"var(--muted)"}}>{s}</span>
@@ -1351,7 +1363,13 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                 </div>
                 <div style={{display:"flex",gap:"8px"}}>
                   <button onClick={applyGenerated}
-                    style={{flex:1,padding:"10px",background:generatedSkin.tokens.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"#0A0F0C",fontFamily:`'${displayFont}',sans-serif`}}>
+                    /* ⚠️ NOT `var(--on-accent)` here, and this is the interesting one
+                       of the four: this button is painted with the GENERATED skin's
+                       accent, not the one currently applied, so the live token is the
+                       ink for the wrong colour. `inkOn` is called directly against the
+                       generated skin's own tokens — which is exactly what
+                       `applySkinCSS` will do when the coach presses it. */
+                    style={{flex:1,padding:"10px",background:generatedSkin.tokens.accent,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:inkOn(generatedSkin.tokens.accent,generatedSkin.tokens.bg,generatedSkin.tokens.text),fontFamily:`'${displayFont}',sans-serif`}}>
                     Apply to all surfaces
                   </button>
                   <button onClick={()=>{setGeneratedSkin(null);setGeneratedThemes([]);}}
