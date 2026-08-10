@@ -12,7 +12,13 @@ reasoning in the commit message, and keep going.
 testing traps and the domain rules. **This file does not repeat them.** It carries only the state,
 the evidence, and the work queue.
 
-**Last commit `a7ea434`, tree clean, pushed, deploy green.**
+**Last commit `8c581d0`, tree clean, pushed.**
+
+⚠️ **This prompt was written at `a7ea434` and then §2.1's proven half was fixed at `8c581d0`, so
+§2.1 is marked partly done.** Every line number and gate figure below is from `a7ea434`; the only
+things that moved are the four `#0A0F0C` sites in `BrandStudioScreen`, `RosterScreen:390`, and the
+addition of `e2e/brandTokens.spec.js` (so e2e is **442 across 45 spec files**, not 440/44).
+**Re-derive any line number before cutting.**
 
 ### The regression, run fresh at `a7ea434` — this is measured, not carried forward
 
@@ -142,10 +148,27 @@ handle both or it will waste your session the same way:
 so a scan of nothing looked identical to a clean scan. **Assert a minimum count of text nodes
 actually measured, per screen, in the same run.**
 
-**Done when:** a mutation-checked e2e sweep composites alpha, asserts what it measured, and fails
-on a real contrast violation across every screen at both widths and on **at least one light custom
-skin** (the polarity case `colors.js` documents as the one that inverts); the on-accent hardcodes
-are gone; and every raw hex left in a live component is either a token or has a comment saying why
+**✅ PARTLY DONE ALREADY, at `8c581d0`.** The proven half was fixed rather than left as a known
+1.25:1 control on the demo surface. Shipped: the four on-accent hardcodes (the fourth calls `inkOn`
+directly against the *generated* skin's tokens, because that button is painted with the theme being
+previewed rather than the applied one), `RosterScreen:390`'s mint success panel, and
+**`e2e/brandTokens.spec.js`** — the first thing in the suite to enforce the tokens-only rule. It
+runs on a hand-built light skin with a dark accent, carries three positive controls including a
+per-screen count of text nodes actually measured, and is mutation-checked.
+
+**What is LEFT, and it is the larger half:**
+
+- The spec **skips translucent pairs** rather than guessing at them. That is the honest subset, not
+  the finished job — it means every chip, badge and pill in the app is currently unmeasured.
+  **Compositing alpha is the work**, and it is what turns this from a spot-check into the sweep.
+- It runs at one width and on one skin. It should run at 390px too, and across all three presets
+  plus the light custom skin.
+- ~165 raw hex literals remain in live components. Most are fine; each needs a token or a comment
+  saying why it cannot be one.
+- Only opaque *text* pairs are checked. Borders, focus rings and icon strokes are not.
+
+**Done when:** the sweep composites alpha, runs at both widths on a dark preset and a light custom
+skin, and every raw hex left in a live component is either a token or carries a comment saying why
 it cannot be.
 
 ---
