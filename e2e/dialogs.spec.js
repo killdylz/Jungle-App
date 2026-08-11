@@ -96,6 +96,19 @@ test.describe("every overlay behaves like a dialog", () => {
     test(`${name} puts focus inside on open`, async ({ page }) => {
       await freshApp(page);
       await open(page);
+      // ⚠️ WAIT FOR THE DIALOG BEFORE READING FOCUS. `page.evaluate` does not
+      // auto-wait the way a locator assertion does, so this read raced the
+      // render — invisibly, while every dialog mounted synchronously. Session
+      // 28 made ProfileModal and the library modal lazy, and the read then
+      // landed in the beat before the chunk arrived and reported focus outside
+      // a dialog that did not exist yet.
+      //
+      // This is not a weaker assertion: it is the same claim, synchronised.
+      // Focus is set in `useDialog`'s effect, which React runs in the commit
+      // that inserts the element — so once the element exists, focus has moved.
+      // The two sibling tests here never failed because a locator assertion is
+      // the first thing they do.
+      await expect(page.getByRole("dialog")).toHaveCount(1);
       const inside = await page.evaluate(() =>
         document.querySelector('[role="dialog"]')?.contains(document.activeElement));
       expect(inside, `${name}: focus stayed outside the dialog on open — the ` +
