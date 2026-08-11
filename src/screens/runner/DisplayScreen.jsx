@@ -10,7 +10,7 @@ import { useTheme, BrandLogo, Tag, useWindowWidth } from "../../ui/primitives.js
 import { useAfterMount } from "../../ui/useAfterMount.js";
 import { fmt, fmtSec } from "../../lib/format.js";
 import { brandCopy } from "../../lib/brandCopy.js";
-import { prefersReducedMotion, tvFont, grpColor } from "./displayKit.js";
+import { prefersReducedMotion, tvFont, grpColor, FONT_SCALES, scaleMultOf } from "./displayKit.js";
 import { hueInk } from "../../lib/colors.js";
 
 // ─── DisplayScreen (TV mode) ──────────────────────────────────────────────────
@@ -23,12 +23,9 @@ export const DISPLAY_PRESETS = [
   { id:"timer",   label:"Timer Only",  desc:"Giant full-screen clock"   },
   ...(FLAGS.music ? [{ id:"music", label:"Music Focus", desc:"Big album art + timer" }] : []),
 ];
-export const FONT_SCALES = [
-  { id:"s",  label:"S",  mult:0.75 },
-  { id:"m",  label:"M",  mult:1    },
-  { id:"l",  label:"L",  mult:1.4  },
-  { id:"xl", label:"XL", mult:1.85 },
-];
+// FONT_SCALES moved to displayKit.js — see the note there. Re-exported so the
+// settings panel below keeps its one import.
+export { FONT_SCALES };
 
 // Tempo guide (Fable §4.2 / N5): the zero-license default that keeps the rhythm
 // value when no soundtrack is playing. A silent, visual metronome — one ring
@@ -44,7 +41,7 @@ export function TempoGuide({ bpm, color, reduce, hasTracks }) {
         {!reduce && <span style={{position:"absolute",inset:"6px",borderRadius:"50%",border:`3px solid ${color}`,animation:`jg-tempo ${beat}s ease-out infinite`}}/>}
         <div style={{width:"92px",height:"92px",borderRadius:"50%",background:`color-mix(in srgb, ${color} 16%, transparent)`,border:`2px solid ${color}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <span style={{fontSize:"32px",fontWeight:"900",color:"var(--text)",lineHeight:"1",fontVariantNumeric:"var(--num)"}}>{bpm}</span>
-          <span style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",letterSpacing:"1px"}}>BPM</span>
+          <span style={{fontSize:tvFont(11),fontWeight:"700",color:"var(--muted)",letterSpacing:"1px"}}>BPM</span>  /* a sub-component: no scaleMult in scope, and the absolute floor is what this needed */
         </div>
       </div>
       <div>
@@ -105,7 +102,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const scaleMult = FONT_SCALES.find(f=>f.id===fontScale)?.mult || 1;
+  const scaleMult = scaleMultOf(fontScale);
 
   // Color-coded timer
   const ratio = remaining / dur;
@@ -188,11 +185,12 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
               transition:"all 0.3s",
             }}>
               <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"color-mix(in srgb, var(--muted) 50%, transparent)":"var(--muted)",flexShrink:0}}/>
-              <span style={{fontSize:compact?"9px":"10px",fontWeight:isCurrent?"800":"600",color:isCurrent?sCfg.color:isPast?"var(--muted)":"var(--muted)",whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
+              <span style={{fontSize:tvFont(compact?11:12),fontWeight:isCurrent?"800":"600",  /* the stage-journey rail: 9px on a wall, and it never scaled */
+                color:isCurrent?sCfg.color:isPast?"var(--muted)":"var(--muted)",whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
                 {isPast?"✓ ":""}{s.name}
               </span>
             </div>
-            {i < stages.length-1 && <span style={{color:"var(--muted)",fontSize:"8px",opacity:0.4,flexShrink:0}}>▶</span>}
+            {i < stages.length-1 && <span style={{color:"var(--muted)",fontSize:tvFont(11,scaleMult),opacity:0.4,flexShrink:0}}>▶</span>}
           </div>
         );
       })}
@@ -364,7 +362,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
             return (
               <div style={{marginBottom:"28px",background:ivHue+"12",border:`2px solid ${ivHue}`,borderRadius:"16px",padding:"18px 24px",display:"flex",alignItems:"center",gap:"24px"}}>
                 <div>
-                  <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"2px",display:"block",marginBottom:"4px"}}>{ivState.phase}</span>
+                  <span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"2px",display:"block",marginBottom:"4px"}}>{ivState.phase}</span>
                   <p style={{fontSize:tvFont(64,scaleMult),fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
                 </div>
                 <div>

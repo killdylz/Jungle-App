@@ -142,12 +142,24 @@ object where `//` is legal.
 
 ### What is genuinely left
 
-**§2.4 (UI discipline — type scale, spacing, micro-labels, motion) was not done.** It is the one
-queue item this session did not reach, and it is the least urgent: the sweeps now cover contrast
-and the Room TV, and the type-scale collapse is a large diff that wants a session of its own with
-fresh loads at both widths. Two of its findings are already recorded in code — 9px text on the
-Brand Studio preset line and the Room TV's exit hint both moved to 11px as a side effect of the
-contrast work.
+**§2.4 was measured before it was touched, and three of its four claims did not survive that.**
+The type scale's biggest single value is 10px used **97 times** — one consistent micro-label
+idiom, a design language rather than drift, and collapsing it is a 340-node diff that changes a
+decision. The spacing claim ("4px grid, card padding 20, gap 16") is false: 10px is the most-used
+value in the app (×329) and this product is built on a ~2px grid. The micro-label detector
+over-reports, so acting on it would be acting on a number I do not trust. Motion needs nothing
+added. **All of that is recorded rather than churned.**
+
+What §2.4 *did* find is a real defect and it was not on its list: **`tvFont`'s legibility floor was
+`scaled * 0.7`** — a fraction of the thing it protects, which cannot protect the small end of a
+scale. On a **1280×720** wall the Plan board's exercise names rendered at **9px**. The floor is now
+absolute (`TV_MIN_PX`), eight raw sub-11px literals across the three boards went through `tvFont`,
+and **the coach's S/M/L/XL setting — which did nothing on two of the three boards, because
+`FONT_SCALES` lived inside `DisplayScreen.jsx` — now reaches all three.**
+
+⚠️ An earlier pass converted every fixed size on those boards to `tvFont` mechanically and made it
+**worse**: `tvFont(11)` resolves to 7px on a 720p wall, because chrome pushed through a
+display-scale function inherits its shrink. Reverted whole. `tvFont` is for type on a wall.
 
 **The standing risks are unchanged and all three still need Dylan:** migrations `0005`/`0006`
 unapplied, N4 built and undeployed for eight sessions, ten Dependabot PRs. Add one: the per-coach

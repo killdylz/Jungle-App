@@ -3,13 +3,17 @@ import { useEffect } from "react";
 import { Music } from "lucide-react";
 import { FLAGS } from "../../config/flags.js";
 import { SCFG } from "../../data/stageConfig.js";
+import * as store from "../../lib/store.js";
 import { BrandLogo, useWindowWidth } from "../../ui/primitives.jsx";
-import { tvFont, grpColor } from "./displayKit.js";
+import { tvFont, grpColor, scaleMultOf } from "./displayKit.js";
 import { hueInk } from "../../lib/colors.js";
 
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
 export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
   const vw = useWindowWidth();
+  // The coach's stored S/M/L/XL choice. Read here for the first time: these
+  // `tvFont` calls passed no `mult`, so the setting did nothing on this board.
+  const scaleMult = scaleMultOf(store.getDisplayPrefs().fontScale);
   const isMobile = vw < 480;
   const isTablet = vw < 900;
   const totalDur    = stages.reduce((a,s)=>a+s.dur,0);
@@ -84,7 +88,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                   light brand is dark ink and was invisible on the old near-black. */}
               <BrandLogo size={24} showName/>
               <div>
-                <p style={{fontSize:tvFont(26),fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
+                <p style={{fontSize:tvFont(26,scaleMult),fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 {/* "0 tracks" was printed here on the room's TV before a class,
@@ -171,14 +175,15 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                       {/* Stage label */}
                       <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"8px"}}>
                         <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
-                        <span style={{fontSize:"10px",fontWeight:"800",color:hueInk(cfg.color),
+                        <span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:hueInk(cfg.color),  /* room-facing: tvFont so it holds its share of the wall and cannot fall below TV_MIN_PX */
+                          
                           textTransform:"uppercase",letterSpacing:"1px"}}>
                           {cfg.label}{isPeak?" · PEAK":""}
                         </span>
                         {isCur && <span style={{marginLeft:"auto",fontSize:"11px",fontWeight:"900",letterSpacing:"1px",color:"var(--on-accent)",background:"var(--accent)",padding:"2px 9px",borderRadius:"999px"}}>NOW</span>}
                       </div>
                       {/* Stage name */}
-                      <p style={{fontSize:tvFont(16),fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
+                      <p style={{fontSize:tvFont(16,scaleMult),fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
                       {/* Duration + BPM. The BPM range is a music-matching target;
                           with no music to match it is noise on a member-facing
                           card. TempoGuide is the survivor of the BPM UI — it needs
@@ -200,7 +205,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                           paddingLeft:"10px",borderLeft:`3px solid ${cfg.color}`,
                           marginBottom:"4px"
                         }}>
-                          <p style={{fontSize:tvFont(13),fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
+                          <p style={{fontSize:tvFont(13,scaleMult),fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
                           <p style={{fontSize:"11px",color:"var(--muted)"}}>
                             {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
                           </p>

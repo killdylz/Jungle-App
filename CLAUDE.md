@@ -15,7 +15,7 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 28: **`lint:crash` 0 · 896 unit (31 files) · 452 e2e (44 spec files) ·
+Green as of session 28: **`lint:crash` 0 · 902 unit (32 files) · 456 e2e (44 spec files) ·
 11-chunk build · 0 over budget.** App.jsx is **2,371 lines**. StaffApp **292.06 / 360 kB — 68 kB
 left**, so it is no longer the binding constraint; `index.js` (204.72 / 215) is now the tightest.
 A new screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted
@@ -171,6 +171,15 @@ not. **Assert the STORED object, not only what was rendered.**
   matches nothing, and the test then fails on its selector rather than on the thing it tests.
 - ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
   traps focus, so any loop visiting every screen must visit it **last**.
+- 🔴 **A LEGIBILITY FLOOR MUST BE ABSOLUTE, NOT PROPORTIONAL.** `tvFont`'s floor was
+  `scaled * 0.7` — 70% of the thing it was protecting, which shrinks the small end of the scale
+  by exactly 30%. On a **1280×720** wall (a projector, or a laptop on HDMI) every room-facing
+  size lands on it, so `tvFont(13)` exercise names rendered at **9px**. `TV_MIN_PX` is now an
+  absolute minimum. ⚠️ A `clamp()` whose floor exceeds its cap is **invalid CSS and the browser
+  drops the declaration** — lift the cap, never lower the floor.
+- ⚠️ **`tvFont` is for type on a WALL, not for chrome.** Pushing an 11px label through it makes
+  it **7px** on a 720p display. A mechanical conversion of every fixed size on the room boards
+  made them worse and was reverted whole.
 - 🔴 **`ALL_SCREENS` IS THE NAV, NOT THE PRODUCT.** The Room TV is a fullscreen overlay off the
   Class Runner, so every sweep that iterates `ALL_SCREENS` — a11y, layout, tap, contrast — had
   never once looked at the surface `UI-UX-DIRECTION` §1 calls the one that must be flawless. It
