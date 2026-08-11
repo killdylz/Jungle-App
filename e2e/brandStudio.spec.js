@@ -153,6 +153,101 @@ test.describe("a gym's own palette survives leaving the app", () => {
 // The wedge of this whole screen — upload your mark, get your identity — and the
 // button says what it promises in its own label. It wrote the identity to
 // storage, showed it in the panel above, and left every screen on Canopy.
+// 🔴 THE GENERATOR IGNORED THE LOGO ENTIRELY, AND THE SUITE COULD NOT SEE IT.
+//
+// `runAnalysis` walks four `setTimeout` steps and generated the identity at the
+// last one from `palette` — state set by the extraction at step 1. `advance` is
+// a closure built when `runAnalysis` runs, so it captured `palette` as it was
+// then: `null`, because `handleFile` had just cleared it. `setPalette`
+// re-rendered and made a new closure; the timer chain already in flight kept
+// the old one. Final step read `null`, took the `|| ["#7BE3A4"]` fallback, and
+// generated from CANOPY'S MINT — every time, for every logo. `luma` was stale
+// the same way, so the LIGHT-skin branch of the generator was unreachable in
+// production: a studio with a pale identity could not get one.
+//
+// ⚠️ WHY THE TEST BELOW LOOKED UNNECESSARY. The test above it uses
+// `public/icon-512.png` — Jungle's own icon, which IS Canopy green. Its own
+// comment says the accent could not be the discriminator and picks `bg`
+// instead; but the broken path derives a background too (`#0b130e`, not
+// Canopy's `#0A0F0C`), so that assertion passed against the defect as well.
+//
+// **A fixture whose colour equals the default cannot prove the colour came from
+// the fixture.** This drives two logos that are nothing like Canopy and nothing
+// like each other, and asserts the outputs DIFFER — which is the only shape of
+// assertion the old fixture could never make.
+test.describe("the generated identity comes from the gym's logo", () => {
+  // A flat square of one colour, made in the page. The extractor reads real
+  // pixels through a canvas, so this exercises the same path a real PNG does.
+  const logoOf = (page, hex) => page.evaluate((c) => {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const x = cv.getContext("2d"); x.fillStyle = c; x.fillRect(0, 0, 64, 64);
+    return cv.toDataURL("image/png");
+  }, hex);
+
+  async function generateFrom(page, hex) {
+    await openBrandStudio(page);
+    const png = await logoOf(page, hex);
+    await page.locator('input[type="file"]').first().setInputFiles(
+      { name: "logo.png", mimeType: "image/png", buffer: Buffer.from(png.split(",")[1], "base64") });
+    await page.getByRole("button", { name: /Analyse & generate identity/i }).click();
+    await expect(page.getByText("GENERATED IDENTITY")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Apply to all surfaces" }).click();
+    return stored(page, "jungle_custom_skin");
+  }
+
+  // Hue of a hex, 0-360. Comparing hue rather than the literal value: the
+  // generator legitimately adjusts saturation and lightness for contrast, and an
+  // assertion on the exact hex would pin the generator's arithmetic instead of
+  // the claim that the logo reached it.
+  const hueOf = (hex) => {
+    const n = parseInt(hex.replace("#", ""), 16);
+    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (!d) return 0;
+    const h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return h * 60;
+  };
+  const hueGap = (a, b) => { const d = Math.abs(hueOf(a) - hueOf(b)) % 360; return d > 180 ? 360 - d : d; };
+
+  test("two different logos produce two different identities", async ({ page }) => {
+    const CRIMSON = "#B5122C", BLUE = "#1D4ED8";
+    const red = await generateFrom(page, CRIMSON);
+    const blue = await generateFrom(page, BLUE);
+
+    // The defect in one line: these were byte-identical, and both were green.
+    expect(blue.accent, "two unrelated logos produced the same accent — the generator "
+      + "is not reading the logo at all").not.toBe(red.accent);
+    expect(blue.bg).not.toBe(red.bg);
+
+    // …and each one is its OWN logo's colour, not merely different from the
+    // other. Without this, a generator that alternated between two wrong answers
+    // would pass the assertions above.
+    expect(hueGap(red.accent, CRIMSON), `crimson logo gave ${red.accent}`).toBeLessThan(30);
+    expect(hueGap(blue.accent, BLUE), `blue logo gave ${blue.accent}`).toBeLessThan(30);
+
+    // CONTROL: Canopy's mint is what the broken path produced, so neither result
+    // may be it. Stated separately because "they differ" would still hold if one
+    // of them were the fallback.
+    for (const [name, skin] of [["crimson", red], ["blue", blue]]) {
+      expect(hueGap(skin.accent, PRESET_SKINS.canopy.tokens.accent),
+        `${name} landed on Canopy's mint — the fallback, not the logo`).toBeGreaterThan(30);
+    }
+  });
+
+  test("a pale logo generates a LIGHT identity, which was unreachable before", async ({ page }) => {
+    // `luma` was stale in the same closure, so the generator's `mode === "light"`
+    // branch never ran in production however pale the mark was — a boutique
+    // studio with a cream identity got a near-black app. All of colors.js's
+    // light-polarity work (borderOn, inkOn) was live and unreachable.
+    const pale = await generateFrom(page, "#D4A017");
+    const bgLum = parseInt(pale.bg.replace("#", ""), 16);
+    expect(bgLum, `a pale mark produced ${pale.bg}, which is not a light background`)
+      .toBeGreaterThan(0x888888);
+    // The border polarity has to follow, or every card edge is invisible.
+    expect(pale.border, "a light skin needs a dark hairline").toContain("rgba(0,0,0");
+  });
+});
+
 test.describe("Apply to all surfaces applies to all surfaces", () => {
   test("a generated identity reaches the app, and survives a reload", async ({ page }) => {
     const errors = watchConsole(page);

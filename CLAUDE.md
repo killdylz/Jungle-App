@@ -15,10 +15,11 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `dc25bf2`: **`lint:crash` 0 · 875 unit (30 files) · 440 e2e (44 spec files) ·
-6-chunk build · 0 over budget.** App.jsx is **3,787 lines**. StaffApp **349.46 / 360 kB — 10.5 kB
-left, and it is the binding constraint on anything new.** A new screen goes in a `lazy()` chunk
-**with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+Green as of session 28: **`lint:crash` 0 · 896 unit (31 files) · 452 e2e (44 spec files) ·
+11-chunk build · 0 over budget.** App.jsx is **2,371 lines**. StaffApp **292.06 / 360 kB — 68 kB
+left**, so it is no longer the binding constraint; `index.js` (204.72 / 215) is now the tightest.
+A new screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted
+chunk has no ceiling at all.
 
 - `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
   advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
@@ -170,6 +171,11 @@ not. **Assert the STORED object, not only what was rendered.**
   matches nothing, and the test then fails on its selector rather than on the thing it tests.
 - ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
   traps focus, so any loop visiting every screen must visit it **last**.
+- 🔴 **`ALL_SCREENS` IS THE NAV, NOT THE PRODUCT.** The Room TV is a fullscreen overlay off the
+  Class Runner, so every sweep that iterates `ALL_SCREENS` — a11y, layout, tap, contrast — had
+  never once looked at the surface `UI-UX-DIRECTION` §1 calls the one that must be flawless. It
+  was painting raw stage hues at **4.22:1 on Canopy**. `brandTokens.spec.js` enters it explicitly;
+  any new sweep must too.
 - 🔴 **NOT EVERY COMPUTED COLOUR IS `rgb(...)`.** A `color-mix()` computes to
   `color(srgb 0.93 0.31 0.31)` — channels in **0–1, not 0–255**. This cost real time twice in
   one session: a contrast scanner that scraped the numbers read every mixed ink as

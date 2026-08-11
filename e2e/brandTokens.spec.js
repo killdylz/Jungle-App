@@ -71,6 +71,21 @@ async function seedSkin(page, { custom = null, preset = null, width = 1280 } = {
     }
     localStorage.setItem("jungle_class_instances", JSON.stringify(instances));
     localStorage.setItem("jungle_attendance", JSON.stringify(rows));
+    // 🔴 A CLASS IN THE BUILDER, so the Room TV has something on it.
+    // Without this the board renders its empty state and the scan measures
+    // chrome — a sweep of nothing that reads exactly like a clean sweep. Proved
+    // the hard way: with no stages, reverting the plan rail's `hueInk` left this
+    // spec GREEN. Four DIFFERENT stage types, because the defect is a per-stage
+    // hue and one type would exercise one colour.
+    localStorage.setItem("jungle_draft_class", JSON.stringify({
+      name: "Sunrise Strength", classChoice: null,
+      stages: [
+        { id:"s1", type:"warmup",   name:"Warm-Up",         dur:300, exercises:[{n:"Light Jog",s:"",r:"5 min",rest:""}], tracks:[] },
+        { id:"s2", type:"strength", name:"Strength Block",  dur:900, exercises:[{n:"Back Squat",s:"4",r:"8",rest:"90s"}], tracks:[] },
+        { id:"s3", type:"circuit",  name:"Circuit Blast",   dur:600, exercises:[{n:"Burpee Complex",s:"3",r:"10",rest:"30s"}], tracks:[] },
+        { id:"s4", type:"recovery", name:"Active Recovery", dur:300, exercises:[{n:"Easy Walk",s:"",r:"5 min",rest:""}], tracks:[] },
+      ],
+    }));
   }, { skin: custom, presetId: preset, gym: GYM });
   await page.reload();
   if (width >= 900) await waitForApp(page); else await waitForAppAnyWidth(page);
@@ -192,6 +207,33 @@ test.describe("brand tokens carry the gym's palette, not Canopy's", () => {
           + "`color-mix()` ink in this product as near-black").toBe(true);
 
         const failures = [];
+        // 🔴 THE ROOM TV FIRST, because it is the surface that matters most and
+        // the one every sweep in this suite was blind to. `UI-UX-DIRECTION` §1:
+        // "the Room TV and the member link are the two surfaces a member ever
+        // sees. They must be flawless before any staff screen gets polish." It is
+        // a fullscreen overlay off the Class Runner, not a nav destination, so it
+        // is not in `ALL_SCREENS` and no screen sweep has ever visited it —
+        // which is how the plan rail came to paint raw stage hues as ink there.
+        // Found by DRIVING the demo (§2.3). A sweep over the nav is a sweep over
+        // the staff app.
+        await navAnyWidth(page, ALL_SCREENS.find(s => s.key === "live"));
+        const tv = page.getByRole("button", { name: /^Room TV$/ });
+        expect(await tv.count(), "no Room TV button — the most important surface "
+          + "in the product is not being scanned").toBe(1);
+        await tv.first().click();
+        await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+        // 🔴 THE BOARD MUST HAVE A CLASS ON IT. An empty Room TV passes this scan
+        // trivially — proved, not assumed: with no seeded stages, reverting the
+        // plan rail's `hueInk` left this spec GREEN. The rail is where the
+        // per-stage hues are, so if it is not on screen nothing here is measured.
+        await expect(page.getByText("Strength Block · 15m"),
+          "the Room TV is showing no class — this scan measures chrome").toBeVisible();
+        const tvRes = await scanContrast(page);
+        expect(tvRes.measured, `Room TV at ${width}px: only ${tvRes.measured} text nodes measured`)
+          .toBeGreaterThan(8);
+        if (tvRes.bad.length) failures.push(reportContrast("Room TV", tvRes));
+        await page.keyboard.press("Escape");
+
         for (const screen of SWEEP_SCREENS) {
           await navAnyWidth(page, screen);
           const res = await scanContrast(page);

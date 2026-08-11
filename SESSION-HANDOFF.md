@@ -1,6 +1,6 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-10 (session 27)_
+_Last updated: 2026-08-11 (session 28)_
 
 > 📁 **Sessions 6–25 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
@@ -9,6 +9,158 @@ _Last updated: 2026-08-10 (session 27)_
 > summarised or dropped; the older blocks moved verbatim.
 
 ---
+
+## Session 28 — the white-label generator gave every gym the same identity, and nothing could see it
+
+> **Gates green.** `lint:crash` **0** · **896 unit** (31 files) · **452 e2e** (44 spec files) ·
+> eleven-chunk build: member path **211.72 kB**, staff **502.49 kB** (StaffApp **292.06 / 360 kB**
+> — **68 kB of headroom**, up from 10.5, and it is no longer the binding constraint).
+> App.jsx **2,371 lines**, down from 3,787. Four commits, each pushed. One worktree.
+
+**The brief was §2.1 through §2.6 with the standing instruction to verify each item first.** Two
+of its premises were wrong, and both were wrong in the direction that costs the most: they said
+something was *finished* when the thing underneath it had never worked at all.
+
+### The one that matters, and it was not on the list
+
+🔴 **"Upload your brand — Jungle designs the identity" designed ONE identity, for everybody.**
+Three logos — crimson `#B5122C`, blue `#1D4ED8`, gold `#D4A017` — driven through upload → analyse
+→ apply produced **byte-identical skins**, all of them Canopy's mint.
+
+`runAnalysis` walks four `setTimeout` steps and generates at the last one from `palette`, a state
+variable the extraction sets at step 1. `advance` is a closure built when `runAnalysis` runs, so it
+captured `palette` as it was then — `null`, cleared by `handleFile` a moment earlier. `setPalette`
+re-rendered and made a new closure; the timer chain already in flight kept the old one. Final step
+read `null`, took the `|| ["#7BE3A4"]` fallback. Every time, for every gym, on the screen
+`PRODUCT-DIRECTION` §3 says the company is sold from.
+
+**`luma` was stale in the same closure, and that is the half nobody would have found later.**
+Polarity is detected from the mark's luminance, so with `luma` frozen at its initial `0.2` the
+generator's `mode === "light"` branch was **unreachable in production**. A boutique studio with a
+cream identity could not get a light app however pale their logo. Every hour of light-polarity work
+in `colors.js` — `borderOn`, `inkOn`, this session's `hueInk` — was live and could not be reached
+through the door the product opens. The fix is one argument threaded down the chain.
+
+⚠️ **Why the suite could not see it, and the lesson is about fixtures.** The existing test uses
+`public/icon-512.png` — Jungle's own icon, which IS Canopy green. Its own comment says the accent
+cannot be the discriminator and picks `bg` instead; but the broken path derives a background too
+(`#0b130e`, not Canopy's `#0A0F0C`), so **that assertion passed against the defect as well**. A
+fixture whose colour equals the default cannot prove the colour came from the fixture. The new test
+drives two logos that are nothing like Canopy and nothing like each other, asserts the outputs
+DIFFER, then asserts each accent's HUE matches its own logo — so a generator alternating between
+two wrong answers still fails.
+
+**It was found by DRIVING the demo, which is §2.3, which was billed as a measurement task.**
+
+### What shipped
+
+**§2.1 — the contrast sweep composites alpha, and found nine real defects.** The half that landed
+at `8c581d0` measured opaque pairs only; every chip, badge, pill and dimmed row in the product was
+unmeasured. `e2e/contrastScan.js` now composites source-over from the first opaque backdrop through
+every translucent ancestor, folds `opacity` in, runs at 1280 AND 390 on Canopy AND a hand-built
+light skin, and confirms every violation on a second read so a mid-transition colour cannot be
+reported.
+
+The defects, and the worst one is on the shipped default: **a paused member's row carried
+`opacity: 0.62`**, which dimmed their email, last-seen date, status badge and the Edit button that
+reactivates them from 6.72:1 to **3.36:1 on Canopy**. Four readouts below AA at once. It now recedes
+by losing its plate. Also: the Class Runner's 120px countdown at 1.97:1 on a light skin, the Brand
+Studio's own **AA badges at 1.47:1** — the accessibility audit failing the accessibility rule, on
+the demo surface — `--muted` dimmed a second time by an opacity in three places, and `#fff` on a
+class-type plate at 3.76:1.
+
+**`hueInk` is the rule underneath all of them.** A decorative hue used as INK becomes
+`color-mix(in srgb, var(--text) 65%, hue)`: anchor to the colour this skin reads in, let the hue
+tint it. Pure CSS, re-resolves on a reskin with no re-render. **65 is measured, not chosen** — at
+60% the worst pair is 4.36:1, and `colors.test.js` asserts both the floor and that edge, so the
+anchor cannot be weakened silently. A *filled* plate is the other case and takes
+`inkOn(hue,"#000000","#FFFFFF")`.
+
+`--warn` joins `--danger` on the same terms: not skin-derived, because a gym whose accent is amber
+must not get a warning banner matching its primary action.
+
+**§2.2 — StaffApp 350 → 292 kB.** `BrandStudioScreen` (26.5 kB), `LibraryBrowserModal` (19.2) and
+`ProfileModal` (13.7) moved to their own modules and lazy chunks. Brand Studio first not for its
+size but because it is the sole caller of `colors.js`'s palette generator, so the chunk takes that
+machinery with it and a coach opening the Builder at 6am stops downloading it.
+
+**§2.6 — which of your classes members come back to.** The join no booking system holds:
+`class_instances.classType` × `attendance`. Of the members whose first visit to a type was at least
+28 days ago, the share who came back within 28 days of it. One clock for everyone, so a class
+cannot look better for being older — the same rule `cohorts.js` learned when its first curve rose.
+A type below eight measurable members is **named as excluded**, and unattributable check-ins are
+counted on screen. It does not rank coaches; the argument both ways is in `DYLAN-QUEUE.md` as a
+decision for Dylan.
+
+**§2.3 — the demo walk, and it also found the Room TV.**
+
+### The premise that was false, and the blind spot it exposed
+
+🔴 **Every screen sweep in this suite has been sweeping the staff app and calling it the product.**
+The Room TV is a fullscreen overlay off the Class Runner, not a nav destination, so it is not in
+`ALL_SCREENS` — and a11y, layout, tap and contrast sweeps all iterate `ALL_SCREENS`.
+`UI-UX-DIRECTION` §1 says the Room TV and the member link "must be flawless before any staff screen
+gets polish", and no sweep had ever looked at it.
+
+On it: the plan rail painted raw stage hues as ink — **4.22:1 on Canopy**, 1.85:1 on a light skin —
+the exit hint sat at 2.04:1, and the panel's glow was `rgba(123,227,164,.06)`, Canopy's mint
+hardcoded, hazing the room-facing board of a gym whose brand is anything else.
+
+### Traps paid for, in order of how much they cost
+
+🔴 **NOT EVERY COMPUTED COLOUR IS `rgb()`.** `color-mix()` computes to
+`color(srgb 0.93 0.31 0.31)` — channels in **0–1, not 0–255**. A scanner that scrapes the numbers
+reads that as `rgb(1,1,1)`. Pointed at Canopy it invented eleven Brand Studio violations, all of
+them chips that had just been fixed; pointed at a light skin the same misreading scored those chips
+as near-black on white and **passed** them. Both wrong, in opposite directions, from one missing
+branch — and the passing run is the more dangerous, because a green sweep is what stops you looking.
+It bit twice: `syncBanner.spec.js`'s positive control asserted `/^rgb/` and failed on a change that
+was correct. **Assert that a colour EXISTS, not what shape it takes.**
+
+🔴 **Two more scans of nothing, and they are the same failure as the tab whose `innerWidth` was 0.**
+(a) With no class seeded, the Room TV renders its empty state and the scan measures chrome —
+reverting the plan rail fix left the spec GREEN. (b) The scanner bailed on any ancestor with a
+`background-image`, and the Room TV's panel is a 6%-alpha gradient over `var(--bg)`, so every glyph
+on the board was skipped while the per-screen count passed on the chrome outside it. A count
+control only helps if it counts the thing you care about.
+
+⚠️ **Appending 8-bit hex alpha (`` `${c}18` ``) only works while `c` is 6-digit hex.**
+`var(--warn)18` is not a colour and the element loses its tint *and* its border, silently. A hue
+used for both a FILL and INK needs **two values**. Caught by `syncBanner.spec.js`.
+
+⚠️ **`page.evaluate` does not auto-wait.** `dialogs.spec.js`'s focus test read `document.activeElement`
+immediately after opening a dialog — invisible while every dialog mounted synchronously, and a
+failure the moment two became lazy. Its two sibling tests never failed because a locator assertion
+is the first thing they do.
+
+⚠️ **A JSX comment cannot sit beside the element inside a `&&(…)` or a ternary arm** — that makes
+two children of one expression. Three build failures. Put it in JS position, or inside the style
+object where `//` is legal.
+
+⚠️ **`lint:crash` resolves identifiers, not module exports.** `import { resolveClassType } from
+"../lib/libraryAccess.js"` passed the crash gate and failed the build; it lives in `libraryStore.js`.
+
+### What is genuinely left
+
+**§2.4 (UI discipline — type scale, spacing, micro-labels, motion) was not done.** It is the one
+queue item this session did not reach, and it is the least urgent: the sweeps now cover contrast
+and the Room TV, and the type-scale collapse is a large diff that wants a session of its own with
+fresh loads at both widths. Two of its findings are already recorded in code — 9px text on the
+Brand Studio preset line and the Room TV's exit hint both moved to 11px as a side effect of the
+contrast work.
+
+**The standing risks are unchanged and all three still need Dylan:** migrations `0005`/`0006`
+unapplied, N4 built and undeployed for eight sessions, ten Dependabot PRs. Add one: the per-coach
+retention decision, written up in `DYLAN-QUEUE.md`.
+
+**The honest read on where the product is.** The queue was "make what exists look and feel like a
+product a studio pays S$299 a month for". The most expensive thing found this session says that was
+the right instruction and the wrong assumption underneath it: the white-label promise was not
+imperfect, it was **not being kept at all**, and four sessions of polish sat on top of a generator
+that ignored its input. The lesson is the one this repo keeps re-learning in new costumes — a
+passing suite tells you the code matches the tests, and only driving the product tells you the tests
+matched the product.
+
 
 ## Session 27 — the product finally states a number an owner buys on, and six premises were wrong
 
@@ -260,153 +412,3 @@ than being parked behind a precondition the product already satisfied.
 What is left in the queue is not theatre, but it is thinner than what came off it. The next session's
 highest-value work is almost certainly **not on this list**: it is getting 0005/0006 and N4 in front
 of a real gym, both of which need Dylan and neither of which any amount of code will move.
-
-
-## Session 26 — three premises that were false, and the two defects underneath them
-
-> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **395 e2e**
-> (38 spec files, no fixmes) · five-chunk build: member path **211.57 kB**, staff **554.22 kB**
-> (StaffApp **343.82/360 kB**). App.jsx **3,386 lines** — the prompt said 3,602, then 3,608. Both
-> were wrong, which set the tone for the session.
->
-> ⚠️ **A SECOND CLAUDE SESSION WAS WORKING THE SAME TREE.** Not the same port — the same files. It
-> committed uncommitted work, deleted a scratch file mid-use, left a live `MUTATION` marker in
-> `src/index.css` that would have made a gate run lie, and tore down the shared dev server on 5191
-> repeatedly. See `concurrent-session-shares-worktree` in memory. Stage only your own paths
-> (`git commit --only <paths>`) and grep for `MUTATION` before trusting any gate result.
-
-### The method: every named item was driven before it was built
-
-**Three items on the polish list were wrong, and each wrongness was the useful finding.**
-
-1. 🔴 **§3.1 said the Builder loses a class on navigation, and wanted a guard on `navTo`.** It does
-   not. `stages`/`sessionName`/`classChoice` live at the **App root**, so navigation never unmounts
-   them, and a `useEffect` autosaves on every change — a rename survives a full `page.reload()`.
-   The guard would have interrupted a coach to prevent a loss that cannot happen, which is worse
-   than no guard: an interruption that is never right teaches people to click through the one that
-   is. `e2e/builderDraft.spec.js` pins the persistence instead; deleting the autosave reds all
-   three tests. **That is the condition for re-raising this, and nothing less is.** The *plan
-   editor* loss was real — four dismiss paths, all silent — and now hands the draft back through
-   the undo toast, guarded on `dirty` so an untouched open stays instant.
-
-2. 🔴 **§3.4 listed three touch-target offenders. Measured, it was 100 of 186 controls under 44px
-   at 390px.** The list came from wherever the last person happened to look, not from a sweep.
-
-3. 🔴 **§1.4 asked for "assert the counter reaches 3/3". It must not.** Running a class flips
-   `showChecklist` false — the checklist is a cold-start surface that is REPLACED, not completed.
-   Writing the requested test would have pinned a product decision backwards.
-
-**And §3.6 asked for the timer to be `aria-live`.** `remaining` ticks every second: ~1,800
-announcements in a 30-minute class, over everything else the coach's phone must say. An
-accessibility feature can be actively hostile. The region carries what is DISCRETE instead, and a
-test asserts it never contains `/\d+:\d\d/`.
-
-### Two defects found underneath the polish, neither on any list
-
-🔴 **Every loading spinner in the app was frozen.** `@keyframes spin` lived in `src/App.css` — Vite
-scaffolding **nothing imports**. Six `animation: spin` call sites resolved to nothing. Four are on
-live, network-bound paths (Slides listing and import, reading a pasted class, generating in a
-coach's style), so on the app's four slowest journeys **"working" and "hung" looked identical**.
-Nothing throws, and a screenshot of a still spinner looks exactly like a moving one.
-
-🔴 **A dialog could start the class behind it.** The Runner binds shortcuts on `window`, and
-`useDialog` stops propagation for **Escape only**, deliberately. So with the check-in panel open —
-the one dialog opened mid-class — focusing "Done" and pressing Space **started the class**, and
-"n" advanced the room a stage, behind a dialog the coach is looking at. `isDialogOpen()` now
-exposes the stack `useDialog` already kept.
-
-### The tap-target mechanism, and the one control it could not fix
-
-`data-tap` lays a transparent 44px pseudo-element over a small control: the hit area grows, the
-visible box does not. **`tapScan.js` hit-tests the running page rather than measuring rectangles**,
-because both failure modes leave the element's rect identical:
-
-- **An `overflow:hidden` ancestor clips the overlay** — caught on the Calendar's week-nav pill.
-- 🔴 **An overlay eats its NEIGHBOUR**, and this one shipped in `40b31cb`. Marking the schedule's
-  Remove ✕ covered the Edit pencil 14px away and made it unclickable. **Nine tests went red on the
-  EDIT flow and not one mentions tap targets**: an overlay that eats a neighbour presents as the
-  neighbour being broken, three files away. `orphanScan` closes it.
-
-⚠️ **Adding `orphanScan` to the nine screen sweeps did not catch the mutation** — the sweeps run on
-a fresh app, a fresh app has an empty schedule, and neither button existed to scan. **An empty
-screen passes every scan trivially.** There is now one test that seeds a class first. That property
-is true of all nine sweeps above it, and is worth remembering before trusting the next one.
-
-**Two controls are deliberately left small, with the measurement written above them:** the
-Builder's 19px movement preview (a 44px target cannot fit a 30px row) and the schedule ✕ (14px from
-its neighbour). Pretending otherwise costs the neighbour.
-
-### Also shipped
-
-- **Two Schedule panels that could never fill.** "Jungle Intelligence" and "Trainer load" are
-  `FLAGS.mockAnalytics ? [...] : []` with the flag false, so both rendered their EMPTY state
-  permanently, promising a feature with no implementation behind it. Gated on the flag their data
-  already uses — one switch, not two. Took a hard-coded *"Mara is near weekly cap"* with them.
-- **`deleteEx` becomes an undo**, the last half of the inverted guard. The undo holds the **LIST**,
-  not the row: re-appending would put the movement back at the end of an order the coach set by
-  hand. The library's local `showToast` folded into the shared primitive — it structurally cannot
-  host a button, and two toast positions on one screen is worse than either.
-- **`--danger`**, deliberately NOT skin-derived: a gym whose accent is red would get a delete
-  button matching its primary action. The test asserts it differs from `--accent` too, because
-  "differs from muted" alone is satisfied by exactly that mistake.
-- **`layoutScan` skips 1px boxes.** The visually-hidden live region clips by design. The exemption
-  is itself mutation-checked — clipping "ELAPSED" into 20px still fails with "52px of text in
-  20px" — so the rule is narrowed, not weakened.
-
-### Traps this session paid for
-
-- ⚠️ **PowerShell mangles `node -e` containing `var(--muted)`** — `--` parses as a unary operator.
-  Use a bash heredoc `.mjs`, or the Edit tool.
-- ⚠️ **Git Bash `/tmp` is not Node's `C:\tmp`.** A heredoc written in bash and read by `node -e`
-  fails with ENOENT. Use one tool for both halves.
-- ⚠️ **`nav()` leaves focus on the button it clicked**, so a bare `Space` in a Runner test
-  re-activates the sidebar as well as firing the shortcut. Reset via body tabindex/focus.
-- ⚠️ **A JSX comment cannot be the first child of `{cond && (`** — it is not an expression. The
-  symptom is a broad e2e failure that reads exactly like a dev-server flake.
-- ⚠️ **The check-in dialog's first button is "Done"**, so Space closes it. A test asserting the
-  dialog stays open after Space is asserting that the button is broken.
-
-### Two more that landed after the block above was written
-
-- **§3.5 Team.** With Supabase unconfigured its entire content was *"Team accounts are available on
-  the online version of Jungle."* It is no longer offered. The decision goes through
-  `isViewEnabled`, which now takes runtime context — **all four nav arrays pass it**, because an
-  `&& supabaseEnabled` bolted onto one of them is exactly how a screen survives in a single menu.
-  ⚠️ Production is unaffected (`supabaseEnabled` is true there); this changes the credential-less
-  build, which is what e2e, an offline demo and the PIN-gated mode all see. Removing Team from
-  `ALL_SCREENS` is **not** a workaround — the inventory guard checks that list against the running
-  sidebar both ways, and the mutation reds the guard *and* the new test, for different reasons.
-
-- **§1.6 the interaction sweep** (`e2e/interactions.spec.js`). Presses every non-destructive,
-  non-navigating control on all eight screens and checks the **console** after each click — React's
-  boundary makes a crash look handled, so a DOM-only sweep passes on a screen that just died. The
-  denylist is the design, and its four exclusions each have a different reason.
-  🔴 **Its positive control fired immediately: Coaches and Members render three controls each on a
-  fresh install, so both would have swept an empty state and reported a pass** — the same trap the
-  tap sweep hit an hour earlier in a different file. Both are seeded now.
-  ⚠️ One thing deliberately NOT reported: an attendance row in the Members seed rendered the error
-  boundary, but the fixture had `at` as a **number** where `recordSession` writes an **ISO string**,
-  so the crash was as likely mine as the app's. **A sweep must not report a defect it manufactured.**
-  If the app really is fragile there, it needs a fixture built from a real check-in.
-
-### Still open
-
-§3.2 save toasts (partial), §3.5's Members "Check-in speed" panel, §3.7 skeletons, sweep §1.5, and
-§1.3's `removeClass` / `handleReset` / `handleNewClass`. **Everything is pushed and the deploy is
-green** — `main` at `68ac39a`, `Deploy to GitHub Pages` **success**.
-
-⚠️ **Cancelled deploy runs in this repo are usually NOT failures.** Four pushes inside sixteen
-minutes produced one `success` and three `cancelled`: GitHub Pages uses a concurrency group that
-cancels an in-flight deploy the moment a newer push arrives, so only the last one needs to finish.
-Reading one of those as a red build is the mirror image of session 24's mistake. Judge the run
-whose SHA is `HEAD`, by workflow **name**, and ignore superseded ones.
-
-`gh` **is now installed and authenticated** (2.97.0, as `killdylz`) — the earlier note that it was
-missing is obsolete. ⚠️ It resolves on `PATH` only in a shell started *after* the install; an
-older session must call `"C:\Program Files\GitHub CLI\gh.exe"` by full path, and `gh` outside the
-repo needs `--repo killdylz/Jungle-App` or it cannot infer the base repo.
-
-§0 is unchanged: migrations `0005` and `0006` still need running, and until then the coach corpus
-exists on exactly one laptop.
-
----

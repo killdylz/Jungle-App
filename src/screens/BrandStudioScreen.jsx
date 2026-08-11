@@ -149,30 +149,52 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
     setGeneratedSkin(null);
     setGeneratedThemes([]);
 
-    const advance = (i) => {
+    // 🔴 THE EXTRACTED PALETTE IS CARRIED DOWN THE CHAIN, NOT READ FROM STATE.
+    //
+    // This walked through four `setTimeout` steps and generated the identity at
+    // the last one from `palette` — a state variable set by the extraction at
+    // step 1. `advance` is a closure created when `runAnalysis` runs, so it
+    // captured `palette` as it was THEN, which `handleFile` had just set to
+    // `null`. `setPalette` re-rendered and built a new closure; the timer chain
+    // already in flight kept the old one. So the final step read `null`, took
+    // the `|| ["#7BE3A4"]` fallback, and generated from CANOPY'S MINT — every
+    // time, for every logo.
+    //
+    // Measured, not reasoned: three logos (#B5122C crimson, #1D4ED8 blue,
+    // #D4A017 gold) produced BYTE-IDENTICAL skins, all green. "Upload your
+    // brand — Jungle designs the identity" designed one identity for everybody,
+    // on the screen `PRODUCT-DIRECTION` §3 says the company is sold from, and
+    // nothing could see it: the swatch row rendered the real logo colours
+    // correctly one panel above, so the screen looked like it was working.
+    //
+    // Passed as an ARGUMENT rather than held in a ref: a ref would fix the
+    // symptom while leaving the next step free to read state that has not
+    // arrived. The chain now carries everything it needs.
+    const advance = (i, pal, lm) => {
       if (i === 1) {
         // Real palette extraction at step 1
-        extractPalette(logoSrc, (swatches, lm) => {
+        extractPalette(logoSrc, (swatches, lumaOut) => {
           const extracted = swatches || ["#7BE3A4"];   // see generateThemes below: a generator SEED
+          const lumaVal = lumaOut != null ? lumaOut : 0.2;
           setPalette(extracted);
-          setLuma(lm!=null?lm:0.2);
+          setLuma(lumaVal);
           setAnalyzeStep(2);
-          setTimeout(() => advance(2), 900);
+          setTimeout(() => advance(2, extracted, lumaVal), 900);
         });
       } else if (i >= analyzeSteps.length) {
         setAnalyzing(false);
-        // Generate skin from extracted palette
-        // Canopy's accent as the seed when a logo yields no usable swatch — an
+        // Generate the skin from the palette THIS RUN extracted.
+        // Canopy's accent is the seed when a logo yields no usable swatch — an
         // input to the generator, not a painted colour.
-        const themes = generateThemes(palette || ["#7BE3A4"], luma);
+        const themes = generateThemes(pal || ["#7BE3A4"], lm != null ? lm : 0.2);
         setGeneratedThemes(themes);
         setGeneratedSkin(themes[0]);
       } else {
         setAnalyzeStep(i);
-        setTimeout(() => advance(i + 1), 900);
+        setTimeout(() => advance(i + 1, pal, lm), 900);
       }
     };
-    setTimeout(() => { setAnalyzeStep(1); advance(1); }, 700);
+    setTimeout(() => { setAnalyzeStep(1); advance(1, null, null); }, 700);
   };
 
   const applyGenerated = () => {

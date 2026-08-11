@@ -62,7 +62,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
       }}>
 
         {/* Inner screen */}
-        <div style={{flex:1,background:`radial-gradient(120% 90% at 50% 0%,rgba(123,227,164,.06),transparent),var(--bg)`,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{flex:1,background:`radial-gradient(120% 90% at 50% 0%,color-mix(in srgb, var(--accent) 6%, transparent),transparent),var(--bg)`  /* the glow was Canopy's mint spelled raw — a green haze on the ROOM-FACING board of a gym whose brand is anything else */,borderRadius:isMobile?"0":"10px",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
           {/* Header row */}
           <div style={{
@@ -76,7 +76,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                 display:"flex",alignItems:"center",gap:"6px",padding:"7px 13px",
                 background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
                 cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",flexShrink:0
-              }}>← {!isMobile && <span style={{opacity:0.5,fontSize:"10px"}}>Esc</span>}</button>
+              }}>← {!isMobile && <span style={{color:"var(--muted)",fontSize:"11px"}}>Esc</span>}</button>
               {/* The mark the other two boards already carried. Floor uses the
                   same call, so a member switching modes sees one identity rather
                   than three. Safe here only because the background above is now a
@@ -118,7 +118,19 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                     minWidth:0,
                   }}>
                     <div style={{width:"6px",height:"6px",borderRadius:"50%",background:chipCur?"var(--on-accent)":cfg.color,flexShrink:0}}/>
-                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":cfg.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    {/* ⚠️ THE ROOM-FACING BOARD, and the stage hue was raw ink
+                        on it. `UI-UX-DIRECTION` §1: "the Room TV and the member
+                        link are the two surfaces a member ever sees. They must be
+                        flawless before any staff screen gets polish." The plan
+                        rail read amber, violet and red straight onto `--bg` —
+                        right on a dark preset, 1.97:1 on a light identity, which
+                        became reachable the moment the logo generator was fixed
+                        in this same session. Found by DRIVING the demo (§2.3),
+                        not by the sweep: the Room TV is a fullscreen overlay off
+                        the Class Runner, not a nav destination, so it was outside
+                        `ALL_SCREENS` and outside every screen sweep in the
+                        suite. `brandTokens.spec.js` now visits it. */}
+                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":hueInk(cfg.color),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                       {s.name || cfg.label} · {fmtDur(s.dur)}
                     </span>
                   </div>

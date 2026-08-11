@@ -106,10 +106,30 @@ const SCANNER = `(() => {
     if (!(opacityFrom[0] > 0)) return { skip: "opacity" };
 
     // Walk out to the first layer that is genuinely opaque.
-    let baseAt = -1;
+    //
+    // 🔴 A GRADIENT LAYER IS NOT AUTOMATICALLY UNMEASURABLE, and treating it as
+    // one made this sweep blind to the most important surface in the product.
+    // The Room TV's panel is a radial-gradient of rgba(...,.06) to transparent
+    // over var(--bg) — the shorthand's trailing colour becomes the
+    // background-color, so there IS a solid layer under a 6%-alpha decoration.
+    // Bailing on the whole subtree meant every glyph on the board was skipped,
+    // the measured count included only the chrome outside the panel, and the
+    // per-screen control passed. The plan rail painted raw stage hues at 1.97:1
+    // the whole time.
+    //
+    // So: a gradient layer that ALSO declares a background-colour is measured
+    // against that colour and counted as approximate — exact when the gradient
+    // is transparent, and off by at most the gradient's own alpha otherwise. A
+    // gradient with NO colour under it genuinely cannot be known, and only that
+    // case is skipped.
+    let baseAt = -1, approx = 0;
     for (let i = 0; i < chain.length; i++) {
-      if (styles[i].backgroundImage && styles[i].backgroundImage !== "none") return { skip: "gradient" };
+      const hasImage = styles[i].backgroundImage && styles[i].backgroundImage !== "none";
       const c = parse(styles[i].backgroundColor);
+      if (hasImage) {
+        if (!c || c.a * opacityFrom[i] < 0.999) return { skip: "gradient" };
+        approx++;
+      }
       if (c && c.a * opacityFrom[i] >= 0.999) { baseAt = i; break; }
     }
     // Nothing opaque in the chain: the browser canvas is white, and the app
@@ -127,7 +147,7 @@ const SCANNER = `(() => {
     if (!fgRaw) return { skip: "no-color" };
     const fgA = fgRaw.a * opacityFrom[0];
     if (fgA <= 0.02) return { skip: "invisible-text" };
-    return { fg: over({ ...fgRaw, a: Math.min(1, fgA) }, acc), bg: acc };
+    return { fg: over({ ...fgRaw, a: Math.min(1, fgA) }, acc), bg: acc, approx };
   };
 
   // WCAG 1.4.3 exempts "inactive user interface components" from the contrast
