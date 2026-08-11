@@ -27,6 +27,7 @@ import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
 import { resolveClassType } from "../lib/libraryStore.js";
+import { hueInk } from "../lib/colors.js";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
@@ -348,6 +349,9 @@ export function CalendarScreen({onBack, onStartClass}) {
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
   ] : [];
 
+  // MOCK DATA, gated off (FLAGS.mockAnalytics is false and the invented KPIs are
+  // verified absent from the deployed bundle). The hexes are part of the fixture,
+  // not part of the theme — they never reach a gym.
   const trainers = FLAGS.mockAnalytics ? [
     {name:"Mara K.",  classes:14, cap:16, color:"#F59E0B"},
     {name:"Dev R.",   classes:11, cap:14, color:"#22D3A6"},
@@ -653,10 +657,10 @@ export function CalendarScreen({onBack, onStartClass}) {
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                   <span style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{t.name}</span>
-                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?hueInk("var(--warn)"):"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
                 </div>
                 <div style={{height:"7px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
-                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
+                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"var(--warn)":t.color  /* a FILL: the meter bar, not ink */,borderRadius:"4px",transition:"width 0.4s"}}/>
                 </div>
                 <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
               </div>
@@ -666,7 +670,7 @@ export function CalendarScreen({onBack, onStartClass}) {
             )}
           </div>
           {trainers.some(t=>t.classes/t.cap>0.85) && (
-            <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
+            <div style={{marginTop:"14px",padding:"10px 12px",background:"color-mix(in srgb, var(--warn) 8%, transparent)",border:"1px solid var(--warn-border)",borderRadius:"8px",fontSize:"11px",color:hueInk("var(--warn)"),lineHeight:"1.5"}}>
               ⚠ Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
             </div>
           )}

@@ -49,7 +49,7 @@ import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib
 // behind — the caller keeps the vocabulary it actually speaks.
 import { hexA, wcagContrast, nudgeContrast,
          extractPalette, extractDominantColor, DEFAULT_PROGRAMS,
-         generateSkinFromPalette, generateThemes, applySkinCSS, inkOn } from "./lib/colors.js";
+         generateSkinFromPalette, generateThemes, applySkinCSS, inkOn, hueInk } from "./lib/colors.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
 import { ThemeContext, useWindowWidth, Input, Select, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";
@@ -133,8 +133,17 @@ function injectSkinFonts(_skin) { /* bundled at build time — nothing to fetch 
 
 // hexA and DEFAULT_PROGRAMS moved to src/lib/colors.js (imported above).
 function ProgramChip({ name, tint }) {
-  const hex = tint || "#7BE3A4";
-  return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:hex,background:hexA(hex,0.14),border:`1px solid ${hexA(hex,0.4)}`,whiteSpace:"nowrap"}}>{name}</span>;
+  // The fallback is Canopy's mint, and it is DATA rather than a missed token: a
+  // program with no tint of its own gets the default skin's first program
+  // colour, the same value `DEFAULT_PROGRAMS` carries.
+  const hex = tint || "#7BE3A4";   // DEFAULT_PROGRAMS' first tint, i.e. data
+
+  // ⚠️ The tint paints the PLATE and tints the INK, but is not the ink itself.
+  // Measured on a light skin, the Brand Studio's three program chips read
+  // 1.64–2.40:1 with the tint used raw — on the screen the product is demoed
+  // from. `hueInk` anchors the ink to `--text` so the chip stays recognisably
+  // violet/teal/mint at any polarity. See colors.js.
+  return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 10px",borderRadius:"999px",fontSize:"11px",fontWeight:"700",color:hueInk(hex),background:hexA(hex,0.14),border:`1px solid ${hexA(hex,0.4)}`,whiteSpace:"nowrap"}}>{name}</span>;
 }
 
 
@@ -465,8 +474,10 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
               {[
                 {icon:"🏋️",label:"Total Sessions",value:String(totalSessions),color:"var(--accent)"},
                 {icon:"⏱️",label:"Total Hours",   value:totalHours+"h",      color:"var(--green)"},
-                {icon:"📊",label:"Avg Duration",  value:avgDur+" min",        color:"#8B5CF6"},
-                {icon:"🔥",label:"Day Streak",    value:String(streak),       color:"#F97316"},
+                // Violet and orange are decoration; `hueInk` keeps them legible
+                // whatever polarity the gym's skin has. See colors.js.
+                {icon:"📊",label:"Avg Duration",  value:avgDur+" min",        color:hueInk("#8B5CF6")},
+                {icon:"🔥",label:"Day Streak",    value:String(streak),       color:hueInk("#F97316")},
               ].map(s=>(
                 <div key={s.label} style={{padding:"10px 12px",background:"var(--navy)",borderRadius:"8px",border:`1px solid var(--border)`}}>
                   <p style={{fontSize:"18px",fontWeight:"800",color:s.color,lineHeight:"1"}}>{s.value}</p>
@@ -474,7 +485,7 @@ function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gymBrandin
                 </div>
               ))}
             </div>
-            {topType && <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"10px"}}>🏆 Most trained: <span style={{color:SCFG[topType]?.color||"var(--green)",fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
+            {topType && <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"10px"}}>🏆 Most trained: <span style={{color:hueInk(SCFG[topType]?.color||"var(--green)"),fontWeight:"700"}}>{SCFG[topType]?.label||topType}</span></p>}
           </div>
           {/* Recent sessions */}
           <div style={{flex:1,overflowY:"auto",padding:"14px 18px"}}>
@@ -955,6 +966,10 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
 // ─── BrandStudioScreen ────────────────────────────────────────────────────────
 // Smart brand recommendation: gym archetype -> curated accent + vibe + suggested preset.
 const GYM_ARCHETYPES = [
+  // ⚠️ THESE HEXES ARE DATA, and it is the one table where that is unambiguous:
+  // each is a SUGGESTED accent — the seed a gym's own palette is generated from
+  // when it has no logo to read. Tokenising them would mean recommending the
+  // gym the colour it already has, which is not a recommendation.
   { label:"HIIT / Bootcamp",     kw:["hiit","bootcamp","conditioning","sweat","burn"], accent:"#FF5A3C", vibe:"energetic", preset:"pulse",   note:"High-intensity - a hot, punchy accent that reads across a dark room." },
   { label:"HYROX / Functional",  kw:["hyrox","functional","engine","race","competitive","erg"], accent:"#D6FF3D", vibe:"energetic", preset:"pulse",   note:"Race energy - electric lime with tabular numerals and accent glow." },
   { label:"Strength / CrossFit", kw:["strength","crossfit","power","barbell","lift","heavy"], accent:"#F5A623", vibe:"bold", preset:"pulse",   note:"Heavy and industrial - a bold amber-steel accent." },
@@ -976,6 +991,9 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
 
   // ── Preset templates ──────────────────────────────────────────────────────────
   const presets = [
+    // The three shipped skins, shown as swatches OF themselves. `PRESET_SKINS`
+    // in skins.js is the source; these are the preview chips beside each name,
+    // and a preview painted in the CURRENT skin would show three identical rows.
     { id:"canopy",  label:"Canopy",  desc:"Natural · Wellness",   accent:"#7BE3A4", bg:"#0A0F0C", preview:["#7BE3A4","#CFF5DE","#0F1611"], fonts:"Space Grotesk · Hanken" },
     { id:"pulse",   label:"Pulse",   desc:"Electric · HIIT",      accent:"#D6FF3D", bg:"#08090A", preview:["#D6FF3D","#ECFFA3","#101113"], fonts:"Anton · Archivo" },
     { id:"atelier", label:"Atelier", desc:"Luxury · Editorial",   accent:"#C8A86A", bg:"#0C0C0E", preview:["#C8A86A","#E8D6AE","#131316"], fonts:"Instrument Serif · Manrope" },
@@ -1058,7 +1076,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
       if (i === 1) {
         // Real palette extraction at step 1
         extractPalette(logoSrc, (swatches, lm) => {
-          const extracted = swatches || ["#7BE3A4"];
+          const extracted = swatches || ["#7BE3A4"];   // see generateThemes below: a generator SEED
           setPalette(extracted);
           setLuma(lm!=null?lm:0.2);
           setAnalyzeStep(2);
@@ -1067,6 +1085,8 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
       } else if (i >= analyzeSteps.length) {
         setAnalyzing(false);
         // Generate skin from extracted palette
+        // Canopy's accent as the seed when a logo yields no usable swatch — an
+        // input to the generator, not a painted colour.
         const themes = generateThemes(palette || ["#7BE3A4"], luma);
         setGeneratedThemes(themes);
         setGeneratedSkin(themes[0]);
@@ -1137,7 +1157,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
     try {
       const ratio = wcagContrast(fg, bg);
       const pass = ratio >= 4.5;
-      return <span style={{fontSize:"9px",padding:"1px 5px",borderRadius:"4px",background:pass?"rgba(123,227,164,.15)":"rgba(239,68,68,.15)",color:pass?"#7BE3A4":"#EF4444",fontWeight:"700",marginLeft:"4px"}}>{ratio.toFixed(1)}:1</span>;
+      return <span style={{fontSize:"9px",padding:"1px 5px",borderRadius:"4px",background:pass?"rgba(123,227,164,.15)":"rgba(239,68,68,.15)",color:pass?hueInk("var(--green)"):hueInk("var(--danger)"),fontWeight:"700",marginLeft:"4px"}}>{ratio.toFixed(1)}:1</span>;
     } catch(_){ return null; }
   };
 
@@ -1240,7 +1260,11 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                     </div>
                     <div style={{fontFamily:`'${displayFont}',sans-serif`,fontSize:"13px",fontWeight:"800",color:active?p.accent:"var(--text)",marginBottom:"2px"}}>{p.label}</div>
                     <div style={{fontSize:"10px",color:"var(--muted)",lineHeight:"1.4"}}>{p.desc}</div>
-                    <div style={{fontSize:"9px",color:"var(--muted)",marginTop:"5px",opacity:0.7}}>{p.fonts}</div>
+                    {/* `--muted` is ALREADY the recessive colour. Dimming it a second
+                        time with an opacity took it to 2.73:1 on a light skin and
+                        3.60:1 on Canopy — below AA on the shipped default. 11px,
+                        not 9px: the type scale's smallest step (UI-UX §1). */}
+                    <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"5px"}}>{p.fonts}</div>
                     {active && <div style={{marginTop:"8px",fontSize:"9px",fontWeight:"700",color:p.accent,display:"flex",alignItems:"center",gap:"3px"}}><Check size={10}/> ACTIVE</div>}
                   </button>
                 );
@@ -1448,7 +1472,7 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                       nothing. Named from the same `label` the sighted user
                       reads, so the two can never drift apart. */}
                   <input type="color" aria-label={`${label} colour`}
-                    value={draftTokens[key]?.startsWith("rgba")?"var(--card)":draftTokens[key]||"#000000"}
+                    value={draftTokens[key]?.startsWith("rgba")?"var(--card)":draftTokens[key]||"#000000"}  /* <input type="color"> requires a 6-digit hex and rejects anything else; this is the empty-value default the element demands, not a painted colour */
                     onChange={e=>setDraftTokens(d=>({...d,[key]:e.target.value}))}
                     style={{width:"30px",height:"30px",borderRadius:"6px",border:`1px solid var(--border)`,cursor:"pointer",background:"none",padding:"1px"}}/>
                   <div style={{flex:1}}>
@@ -1513,7 +1537,12 @@ function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, activeSkin
                     <div style={{fontSize:"10px",color:"var(--muted)"}}>{c.ratio.toFixed(2)}:1 · needs {c.min}:1{c.big?" · large/graphic":""}</div>
                   </div>
                   <span style={{fontSize:"10px",fontWeight:"800",padding:"2px 7px",borderRadius:"999px",flexShrink:0,
-                    background:c.pass?"rgba(123,227,164,.15)":"rgba(239,68,68,.15)",color:c.pass?"#7BE3A4":"#EF4444"}}>{c.pass?"AA":"FAIL"}</span>
+                    // 🔴 These two badges ARE the AA audit, and on a light skin
+                    // they measured 1.47:1 — the compliance feature failing the
+                    // compliance rule, on the demo surface. Canopy's mint and the
+                    // danger red were spelled raw; the tokens plus `hueInk` make
+                    // them readable on any palette a gym builds.
+                    background:c.pass?"rgba(123,227,164,.15)":"rgba(239,68,68,.15)",color:c.pass?hueInk("var(--green)"):hueInk("var(--danger)")}}>{c.pass?"AA":"FAIL"}</span>
                   {fixablePair(c) && (
                     <button onClick={()=>fixPair(c)} title="Nudge this text colour until it passes AA"
                       style={{fontSize:"10px",fontWeight:"700",padding:"3px 8px",borderRadius:"6px",border:`1px solid var(--border)`,background:"var(--navy)",color:"var(--text)",cursor:"pointer",flexShrink:0}}>Fix</button>
@@ -1699,7 +1728,8 @@ function ResetLibraryConfirm({ onCancel, onConfirm }) {
         <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
         <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
           <button onClick={onCancel} style={{padding:"8px 20px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>Cancel</button>
-          <button onClick={onConfirm} style={{padding:"8px 20px",background:"#EF4444",border:"none",borderRadius:"7px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
+          <button onClick={onConfirm} style={{padding:"8px 20px",background:"var(--danger)",border:"none",borderRadius:"7px",cursor:"pointer",color:"#FFFFFF",  // white on --danger is 3.76:1 at 12px/700 — see the WOD tab; --danger is a FIXED colour, so `inkOn` against black/white is the rule
+          fontSize:"12px",fontWeight:"700"}}>Reset Library</button>
         </div>
       </div>
     </div>
@@ -1959,7 +1989,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                     style={{padding:"7px 14px",background:editMode?classColor+"22":"var(--navy)",border:`1px solid ${editMode?classColor:"var(--border)"}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:"var(--muted)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
                     ✏️ {editMode?"Done":"Edit"}
                   </button>
-                  {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid #EF444440",borderRadius:"8px",cursor:"pointer",color:"#EF4444",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
+                  {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid var(--danger-border)",borderRadius:"8px",cursor:"pointer",color:"var(--danger)",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
               </>
             </div>
 
@@ -1973,7 +2003,11 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                       <button key={sk} onClick={()=>{setSelSub(sk);setEditingId(null);}}
                         style={{flexShrink:0,padding:"5px 14px",borderRadius:"999px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",whiteSpace:"nowrap",
                           background:isActive?classColor:"transparent",
-                          color:isActive?"#fff":"var(--muted)",
+                          // ⚠️ A FILLED plate, so `hueInk` is the wrong tool — the
+                          // plate is the catalogue colour and owes nothing to the
+                          // skin. `inkOn` against pure black/white for the same
+                          // reason. White on the WOD red measured 3.76:1.
+                          color:isActive?inkOn(classColor,"#000000","#FFFFFF"):"var(--muted)",
                           outline:isActive?"none":`1px solid var(--border)`,
                           transition:"background 0.15s"}}>
                         {s.label}
@@ -1996,7 +2030,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                           borderBottom:isActive?`2px solid ${classColor}`:"2px solid transparent",
                           transition:"color 0.15s,border-color 0.15s"
                         }}>
-                        {lbl} <span style={{fontSize:"11px",opacity:0.7}}>{cnt}</span>
+                        {lbl} <span style={{fontSize:"11px",color:"var(--muted)"}}>{cnt}</span>
                       </button>
                     );
                   })}
@@ -2048,7 +2082,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                               style={{padding:"5px 8px",background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"6px",color:"var(--text)",fontSize:"11px",outline:"none",width:"100%",resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}}/>
                             <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
                               <button onClick={cancelEdit} style={{padding:"5px 14px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Cancel</button>
-                              <button onClick={saveEdit} disabled={!draftEx.n?.trim()} style={{padding:"5px 14px",background:classColor,border:"none",borderRadius:"6px",cursor:"pointer",color:"#fff",fontSize:"11px",fontWeight:"700",opacity:!draftEx.n?.trim()?0.5:1}}>Save Exercise</button>
+                              <button onClick={saveEdit} disabled={!draftEx.n?.trim()} style={{padding:"5px 14px",background:classColor,border:"none",borderRadius:"6px",cursor:"pointer",color:inkOn(classColor,"#000000","#FFFFFF"),fontSize:"11px",fontWeight:"700",opacity:!draftEx.n?.trim()?0.5:1}}>Save Exercise</button>
                             </div>
                           </div>
                         ) : (
@@ -2067,8 +2101,10 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                               {(ex.muscles || glossaryEntry(ex.n)?.muscles) && (
                                 <p style={{fontSize:"11px",color:"var(--muted)"}}>{ex.muscles || glossaryEntry(ex.n).muscles}</p>
                               )}
+                              {/* No second dim on top of `--muted` — see the Brand
+                                  Studio preset line for the same fix and the numbers. */}
                               {(ex.notes || glossaryEntry(ex.n)?.cues) && (
-                                <p style={{fontSize:"11px",color:"var(--muted)",opacity:0.85,marginTop:"3px",lineHeight:"1.45"}}>
+                                <p style={{fontSize:"11px",color:"var(--muted)",marginTop:"3px",lineHeight:"1.45"}}>
                                   {ex.notes || glossaryEntry(ex.n).cues}
                                 </p>
                               )}
@@ -2108,7 +2144,7 @@ function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=null })
                                       exercise for the same reason every other
                                       icon-only control in this repo does. */}
                                   <button onClick={()=>startEdit(ex)} aria-label={`Edit ${ex.n}`} style={{background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>✏️</button>
-                                  <button onClick={()=>deleteEx(ex.id)} aria-label={`Delete ${ex.n}`} style={{background:"transparent",border:"1px solid #EF444430",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"#EF4444",fontSize:"11px"}}>🗑️</button>
+                                  <button onClick={()=>deleteEx(ex.id)} aria-label={`Delete ${ex.n}`} style={{background:"transparent",border:"1px solid var(--danger-border)",borderRadius:"6px",padding:"4px 8px",cursor:"pointer",color:"var(--danger)",fontSize:"11px"}}>🗑️</button>
                                 </>
                               )}
                             </div>
@@ -2568,7 +2604,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           ⚡ {!isMobile && "Smart "}Distribute
         </button>
         {FLAGS.music && <button onClick={()=>{ if(isMobile||isTablet) setShowDjModal(true); else onDjClass(); }} disabled={djProgress?.active}
-          style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?"var(--border)":"linear-gradient(135deg,#1DB954,#148a3d)",color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
+          style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:djProgress?.active?"var(--border)":"linear-gradient(135deg,#1DB954,#148a3d)"  /* Spotify green — a third-party brand mark, see PlaylistImportModal */,color:"#fff",border:"none",borderRadius:"8px",cursor:djProgress?.active?"wait":"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
           {djProgress?.active ? "⏳ DJ'ing..." : "🎧 DJ This Class"}
         </button>}
         <button onClick={()=>setShowSmart(true)} style={{display:"flex",alignItems:"center",gap:"6px",padding:isMobile?"6px 10px":"8px 14px",background:"var(--accent)",color:"var(--bg)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:isMobile?"12px":"13px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0,boxShadow:"var(--glow)"}}>⚡ {isMobile?"Build":"Build for me"}</button>
@@ -2588,9 +2624,9 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
 
       {/* Template change banner */}
       {templatePrompt && (
-        <div style={{padding:"10px 24px",background:"#F59E0B18",borderBottom:`1px solid #F59E0B50`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
+        <div style={{padding:"10px 24px",background:"color-mix(in srgb, var(--warn) 9%, transparent)",borderBottom:`1px solid var(--warn-border)`,display:"flex",alignItems:"center",gap:"10px",flexWrap:"wrap"}}>
           <span style={{fontSize:"11px",color:"var(--text)",flex:1,minWidth:"200px"}}>
-            <span style={{fontWeight:"700",color:"#F59E0B"}}>⚠️ Apply {LIB[templatePrompt.classType]?.icon} {LIB[templatePrompt.classType]?.label} template?</span>
+            <span style={{fontWeight:"700",color:hueInk("var(--warn)")}}>⚠️ Apply {LIB[templatePrompt.classType]?.icon} {LIB[templatePrompt.classType]?.label} template?</span>
             {" "}This will replace your current stages.
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
@@ -2860,7 +2896,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                         <div key={ti}
                           draggable onDragStart={e=>handleTrackDragStart(e,ti)} onDragOver={e=>handleTrackDragOver(e,ti)} onDrop={e=>handleTrackDrop(e,ti)} onDragEnd={handleTrackDragEnd}
                           style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",borderRadius:"8px",background:trackDragOver===ti?"var(--navy)":"transparent",border:`1px solid ${trackDragOver===ti?"var(--border)":"transparent"}`,cursor:"grab"}}>
-                          <div style={{width:"32px",height:"32px",borderRadius:"7px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 4px,#22382a 4px,#22382a 8px)",flexShrink:0,overflow:"hidden"}}>
+                          <div style={{width:"32px",height:"32px",borderRadius:"7px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 4px,#22382a 4px,#22382a 8px)"  /* "no album art" hatch, inside the FLAGS.music quarantine */,flexShrink:0,overflow:"hidden"}}>
                             {t.album?.images?.[0]?.url && <img src={t.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
@@ -3067,7 +3103,8 @@ function SyncBanner() {
   // threshold the sentence stops promising it will sort itself out, and the
   // colour stops being the app's ordinary "heads up" amber.
   const stuck = tries >= SYNC_STUCK_AFTER;
-  const hue = stuck ? "#EF4444" : "#F59E0B";
+  // Fixed severity colours, never skin-derived — see `--danger` in colors.js.
+  const hue = stuck ? "var(--danger)" : "var(--warn)";
 
   const tryNow = () => {
     setRetrying(true);
@@ -3086,7 +3123,13 @@ function SyncBanner() {
                fontSize:"11px",fontWeight:"700",flexShrink:0};
   return (
     <div data-testid="sync-banner" data-stuck={stuck ? "1" : "0"} role="status" aria-live="polite"
-         style={{padding:"9px 24px",background:`${hue}14`,borderBottom:`1px solid ${hue}55`,fontSize:"12px",color:"var(--text)",lineHeight:1.5}}>
+         style={{padding:"9px 24px",
+         // ⚠️ `color-mix`, not `${hue}14`. Appending 8-bit hex alpha to a colour
+         // STRING only works while that string is 6-digit hex — the moment the
+         // severity colours became tokens, `var(--warn)14` stopped being a colour
+         // and the banner lost its tint AND its border on both states. The e2e
+         // caught it; CalendarScreen's grid documents the same trap.
+         background:`color-mix(in srgb, ${hue} 8%, transparent)`,borderBottom:`1px solid color-mix(in srgb, ${hue} 33%, transparent)`,fontSize:"12px",color:"var(--text)",lineHeight:1.5}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:"12px",flexWrap:"wrap"}}>
         <div style={{flex:"1 1 240px",minWidth:0}}>
           <strong>Some changes haven’t synced yet</strong> ({names.join(", ")}). {syncBannerMessage(tries)}
@@ -3529,6 +3572,9 @@ export default function App() {
     const v = (n, f) => (cs.getPropertyValue(n) || "").trim() || f;
     const canvas = document.createElement("canvas");
     drawShareCard(canvas, model,
+      // Canopy's values as the LAST RESORT if a token reads empty — `v` prefers
+      // the live custom property every time. A share card with no colours at
+      // all is worse than one wearing the default skin.
       { bg:v("--bg","#0A0F0C"), text:v("--text","#E8EFE9"), muted:v("--muted","#8AA294"), accent:v("--accent","#7BE3A4") },
       { display:v("--display","sans-serif"), body:v("--body","sans-serif") });
     canvas.toBlob(blob => {

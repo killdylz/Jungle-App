@@ -11,6 +11,7 @@ import { useAfterMount } from "../../ui/useAfterMount.js";
 import { fmt, fmtSec } from "../../lib/format.js";
 import { brandCopy } from "../../lib/brandCopy.js";
 import { prefersReducedMotion, tvFont, grpColor } from "./displayKit.js";
+import { hueInk } from "../../lib/colors.js";
 
 // ─── DisplayScreen (TV mode) ──────────────────────────────────────────────────
 // "Music Focus" (big album art + timer) is filtered out while music is
@@ -108,7 +109,8 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
 
   // Color-coded timer
   const ratio = remaining / dur;
-  const timerColor = ratio > 0.5 ? cfg.color : ratio > 0.25 ? "#F59E0B" : "var(--accent)";
+  // See LiveScreen: a stage hue used as ink needs anchoring to `--text`.
+  const timerColor = ratio > 0.5 ? hueInk(cfg.color) : ratio > 0.25 ? hueInk("#F59E0B") : "var(--accent)";
   const isPulsing = remaining <= 10 && remaining > 0 && liveState.playing;
   const hasNoTracks = !stage?.tracks?.length;
 
@@ -185,7 +187,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
               opacity:isFuture?0.45:1,
               transition:"all 0.3s",
             }}>
-              <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"#ffffff50":"var(--muted)",flexShrink:0}}/>
+              <div style={{width:compact?"6px":"7px",height:compact?"6px":"7px",borderRadius:"50%",background:isCurrent?sCfg.color:isPast?"color-mix(in srgb, var(--muted) 50%, transparent)":"var(--muted)",flexShrink:0}}/>
               <span style={{fontSize:compact?"9px":"10px",fontWeight:isCurrent?"800":"600",color:isCurrent?sCfg.color:isPast?"var(--muted)":"var(--muted)",whiteSpace:"nowrap",textOverflow:"ellipsis",overflow:"hidden",maxWidth:compact?"80px":"120px"}}>
                 {isPast?"✓ ":""}{s.name}
               </span>
@@ -257,8 +259,8 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
             <div style={{height:"100%",background:timerColor,width:`${progress}%`,borderRadius:"4px",transition:"width 0.5s, background 0.5s"}}/>
           </div>
           {nextStage
-            ? <p style={{fontSize:tvFont(20,scaleMult),color:"var(--muted)",marginTop:"26px"}}>Next: <span style={{color:nextCfg.color,fontWeight:"800"}}>{nextStage.name}</span></p>
-            : <p style={{fontSize:tvFont(18,scaleMult),color:cfg.color,fontWeight:"700",marginTop:"26px"}}>Final stage</p>}
+            ? <p style={{fontSize:tvFont(20,scaleMult),color:"var(--muted)",marginTop:"26px"}}>Next: <span style={{color:hueInk(nextCfg.color),fontWeight:"800"}}>{nextStage.name}</span></p>
+            : <p style={{fontSize:tvFont(18,scaleMult),color:hueInk(cfg.color),fontWeight:"700",marginTop:"26px"}}>Final stage</p>}
         </div>
         <div style={{height:"5px",display:"flex",overflow:"hidden"}}>
           {stages.map((s,i)=>{ const c=SCFG[s.type]?.color||"var(--border)"; return <div key={s.id} style={{flex:`0 0 ${(s.dur/totalDur)*100}%`,background:i<liveState.idx?c+"60":i===liveState.idx?c:"var(--navy)"}}/>; })}
@@ -356,9 +358,11 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
             const ivState = calcIntervalState(stage?.exercises, liveState.elapsed);
             if (!ivState) return <div style={{marginBottom:"12px"}}/>;
             const isWork = ivState.phase === "WORK";
-            const ivColor = isWork ? "#EF4444" : "#06B6D4";
+            // See LiveScreen: the fill keeps the raw hue, the ink is anchored.
+            const ivHue = isWork ? "#EF4444" : "#06B6D4";
+            const ivColor = hueInk(ivHue);
             return (
-              <div style={{marginBottom:"28px",background:ivColor+"12",border:`2px solid ${ivColor}`,borderRadius:"16px",padding:"18px 24px",display:"flex",alignItems:"center",gap:"24px"}}>
+              <div style={{marginBottom:"28px",background:ivHue+"12",border:`2px solid ${ivHue}`,borderRadius:"16px",padding:"18px 24px",display:"flex",alignItems:"center",gap:"24px"}}>
                 <div>
                   <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"2px",display:"block",marginBottom:"4px"}}>{ivState.phase}</span>
                   <p style={{fontSize:tvFont(64,scaleMult),fontWeight:"900",color:ivColor,lineHeight:"1",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmtSec(ivState.phaseRemaining)}</p>
@@ -408,7 +412,7 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
                   <div key={i} style={{padding:"18px 22px",background:"var(--card)",border:`1px solid var(--border)`,borderLeft:`5px solid ${cfg.color}`,borderRadius:"10px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}>
                       <p style={{fontSize:tvFont(solo?34:24,scaleMult),fontWeight:"800",color:"var(--text)",lineHeight:"1.1"}}>{ex.n}</p>
-                      {ex.timing && ex.timing!=="none" && <span style={{fontSize:"11px",padding:"2px 7px",background:"#8B5CF620",color:"#8B5CF6",borderRadius:"4px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
+                      {ex.timing && ex.timing!=="none" && <span style={{fontSize:"11px",padding:"2px 7px",background:"#8B5CF620",color:hueInk("#8B5CF6"),borderRadius:"4px",fontWeight:"700",flexShrink:0}}>{ex.timing==="tabata"?"TABATA":ex.timing==="emom"?"EMOM":`${ex.workSec}s/${ex.restSec}s`}</span>}
                     </div>
                     <p style={{fontSize:tvFont(solo?20:16,scaleMult),color:"var(--muted)",fontWeight:"600"}}>{[ex.s&&`${ex.s} sets`,ex.r&&(/^\d+(\s*[-–/x×]\s*\d+)*$/.test(String(ex.r).trim())?`${ex.r} reps`:String(ex.r)),ex.rest&&`${ex.rest} rest`,ex.timing&&ex.timing!=="none"&&`${ex.rounds||8} rounds`].filter(Boolean).join(" · ")}</p>
                   </div>
@@ -461,11 +465,11 @@ export function DisplayScreen({stages, liveState, onBack, player, deviceId, nowP
           <>
             <span style={{width:"14px",height:"14px",borderRadius:"50%",background:nextCfg.color,flexShrink:0,boxShadow:`0 0 12px ${nextCfg.color}80`}}/>
             <span style={{fontSize:tvFont(30,scaleMult),fontWeight:"800",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:1,minWidth:0}}>{nextStage.name}</span>
-            <span style={{fontSize:tvFont(17,scaleMult),fontWeight:"700",color:nextCfg.color,flexShrink:0}}>{Math.round((nextStage.dur||0)/60)} min</span>
+            <span style={{fontSize:tvFont(17,scaleMult),fontWeight:"700",color:hueInk(nextCfg.color),flexShrink:0}}>{Math.round((nextStage.dur||0)/60)} min</span>
             {nextMoves.length>0 && <span style={{fontSize:tvFont(18,scaleMult),color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>· {nextMoves.join("  ·  ")}</span>}
           </>
         ) : (
-          <span style={{fontSize:tvFont(24,scaleMult),fontWeight:"800",color:cfg.color}}>Final stage — class wraps after this 🎉</span>
+          <span style={{fontSize:tvFont(24,scaleMult),fontWeight:"800",color:hueInk(cfg.color)}}>Final stage — class wraps after this 🎉</span>
         )}
       </div>
     </div>

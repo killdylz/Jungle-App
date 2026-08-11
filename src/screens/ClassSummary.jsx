@@ -27,6 +27,11 @@ import { summaryTotals } from "../lib/summaryContent.js";
 // URL becomes a PDPA disclosure. If a personalised version is ever wanted, it
 // needs a different token design and a privacy notice first (spec §F6).
 
+// The member-facing page's palette when the class token carries no brand — an
+// old link, or a gym that never opened Brand Studio. Raw hex because there is
+// no skin on this route at all: `ClassSummary` is its own chunk, served to
+// someone who is not a customer, with no localStorage and no `applySkinCSS`.
+// The tokens a real link DOES carry are applied over these.
 const FALLBACK = {
   bg: "#0A0F0C", card: "#0F1611", text: "#E8EFE9", muted: "#8AA294",
   accent: "#7BE3A4", border: "rgba(255,255,255,.10)",

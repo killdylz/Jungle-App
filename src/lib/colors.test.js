@@ -3,7 +3,7 @@ import {
   hexToRgb, rgbToHex, rgbToHsl, hslToRgb, hexA,
   wcagContrast, nudgeContrast, relativeLuminance,
   generateSkinFromPalette, generateThemes, DEFAULT_PROGRAMS,
-  inkOn, borderOn,
+  inkOn, borderOn, hueInk,
 } from "./colors.js";
 
 // These arrived with decomposition stage 1 (AUDIT-FINDINGS §3.1). The extraction
@@ -235,5 +235,114 @@ describe("borderOn — a hairline that is visible on its own surface", () => {
         expect(borderOn(tokens.border, tokens.bg)).toBe(tokens.border);
       }
     }
+  });
+});
+
+// ─── hueInk: the 60/40 anchor, checked against every hue the product ships ───
+//
+// `hueInk` is a CSS string, so nothing at runtime can measure it. This is the
+// only place the ratio inside it is defended, and it is defended by evaluating
+// the mix the browser will perform rather than by pinning the string.
+//
+// The claim: a hue used as INK on a plate of that same hue at its usual 14%
+// tint clears AA on every skin this product can be wearing. If a future edit
+// drops the anchor to 50%, the worst pair falls to 3.81:1 and this goes red.
+describe("hueInk — a decorative hue made readable on any skin", () => {
+  // `color-mix(in srgb, A p%, B)` and `background: rgba(hue, .14)` over a
+  // surface, computed the way the compositor will.
+  const mix = (a, p, b) => {
+    const A = hexToRgb(a), B = hexToRgb(b);
+    return rgbToHex(...A.map((v, i) => v * p + B[i] * (1 - p)));
+  };
+  const over = (top, alpha, bottom) => mix(top, alpha, bottom);
+
+  // Every surface a chip can land on, on every skin a gym can be wearing —
+  // including a hand-built LIGHT identity, which is the polarity the presets
+  // cannot exercise because all three of them are dark.
+  const SKINS = {
+    canopy:  { bg: "#0A0F0C", card: "#0F1611", navy: "#141D17", text: "#E8EFE9" },
+    pulse:   { bg: "#08090A", card: "#101113", navy: "#17181B", text: "#F4F5F2" },
+    atelier: { bg: "#0C0C0E", card: "#131316", navy: "#1A1A1E", text: "#ECEAE6" },
+    light:   { bg: "#F4F6F2", card: "#FFFFFF", navy: "#E7ECE6", text: "#12181B" },
+  };
+  // SCFG's ten stage colours, the three presets' program tints, and the eight
+  // archetype accents the Brand Studio recommends. Spelled out rather than
+  // imported so a hue added to one of those tables and NOT added here is a
+  // visible omission rather than a silently widened claim.
+  const HUES = [
+    "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#10B981", "#F97316", "#3B82F6",
+    "#A78BFA", "#34D399", "#22D3EE", "#FB7185", "#FBBF24", "#38BDF8",
+    "#C8A86A", "#D4A5A5", "#9FB4C4", "#FF5A3C", "#D6FF3D", "#F5A623", "#7BE3A4", "#A855F7", "#5BD0C0",
+  ];
+  const ANCHOR = 0.65;   // the number inside hueInk
+
+  it("clears AA for every shipped hue on every skin and surface", () => {
+    let worst = { ratio: Infinity };
+    for (const [skinName, skin] of Object.entries(SKINS)) {
+      for (const surface of ["bg", "card", "navy"]) {
+        for (const hue of HUES) {
+          const plate = over(hue, 0.14, skin[surface]);
+          const ratio = wcagContrast(mix(skin.text, ANCHOR, hue), plate);
+          if (ratio < worst.ratio) worst = { ratio, skinName, surface, hue };
+        }
+      }
+    }
+    expect(worst.ratio, `worst pair: ${worst.hue} on ${worst.skinName}/${worst.surface}`)
+      .toBeGreaterThanOrEqual(4.5);
+  });
+
+  // The degenerate case, and it is reachable: `--green` is a skin token, so a
+  // gym can set it to whatever it likes — including its own card colour, which
+  // leaves the plate identical to the surface and the tint doing nothing.
+  it("clears AA even when the hue IS the surface", () => {
+    for (const [skinName, skin] of Object.entries(SKINS)) {
+      for (const surface of ["bg", "card", "navy"]) {
+        const ratio = wcagContrast(mix(skin.text, ANCHOR, skin[surface]), skin[surface]);
+        expect(ratio, `${skinName}/${surface}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  // 🔴 The positive control, and it is the reason the anchor is a defensible
+  // number rather than a comfortable one. "Every ratio ≥ 4.5" is satisfied just
+  // as well by an anchor of 1.0 — plain `--text`, no hue at all — so a test
+  // that only checked the floor would keep passing while the feature quietly
+  // disappeared into a solid colour. This asserts 65% is at the EDGE: ONE STEP
+  // weaker is 60%, which is what this was first written as, and it fails.
+  it("fails at a 60% anchor — the ratio is load-bearing, not decorative", () => {
+    const ratios = [];
+    for (const skin of Object.values(SKINS)) {
+      for (const surface of ["bg", "card", "navy"]) {
+        for (const hue of HUES) {
+          ratios.push(wcagContrast(mix(skin.text, 0.6, hue), over(hue, 0.14, skin[surface])));
+        }
+      }
+    }
+    expect(Math.min(...ratios), "a 60% anchor must NOT clear AA, or 65% is arbitrary")
+      .toBeLessThan(4.5);
+  });
+
+  // And the other edge: enough hue must survive to be SEEN. A mix that is 95%
+  // text clears every ratio above and is not a feature.
+  //
+  // ⚠️ Measured as colour distance, not as contrast, and the difference is not
+  // pedantic. Pulse's lime `#D6FF3D` mixed into its near-white `--text` lands at
+  // **1.003:1 against that text** — WCAG contrast is a luminance ratio and these
+  // two have almost the same luminance — while being an unmistakably different
+  // colour. Asserting contrast here would have demanded the hue be made DARKER
+  // to prove it was visible, which is the opposite of the point.
+  it("keeps the hue visible — the ink is not just --text", () => {
+    for (const skin of Object.values(SKINS)) {
+      for (const hue of HUES) {
+        const a = hexToRgb(mix(skin.text, ANCHOR, hue)), b = hexToRgb(skin.text);
+        const dist = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        expect(dist, `${hue} vanishes into --text`).toBeGreaterThan(20);
+      }
+    }
+  });
+
+  it("emits a color-mix the browser can resolve, with the hue intact", () => {
+    expect(hueInk("#F59E0B")).toBe("color-mix(in srgb, var(--text) 65%, #F59E0B)");
+    expect(hueInk("var(--green)")).toBe("color-mix(in srgb, var(--text) 65%, var(--green))");
   });
 });

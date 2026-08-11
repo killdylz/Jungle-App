@@ -248,6 +248,43 @@ export function inkOn(surfaceHex, bgHex, textHex) {
   return vsBg > vsText ? bgHex : textHex;
 }
 
+// ── A decorative hue used as INK ────────────────────────────────────────────
+//
+// `inkOn` answers "what reads ON this surface" and returns one of two skin
+// colours. This answers the opposite question, and it is the one the product
+// kept getting wrong: a chip, pill or timer wants to be AMBER, or the stage's
+// violet, or the program's teal — a hue that is not a skin token and carries
+// meaning the skin cannot supply.
+//
+// Written as `color: #F59E0B` that is right on the three dark presets and
+// unreadable the moment a studio builds a light identity. Measured on a light
+// skin: the Class Runner's "WARM-UP" label and its 120px countdown both read
+// **1.97:1**, and the stage chips 1.88–3.33:1. Every one of them was invisible
+// to the old sweep, which skipped translucent pairs.
+//
+// 🔴 THE RULE, and why the ratio is a constant rather than a computation.
+// Anchor the ink to `--text` and let the hue tint it: `--text` is by definition
+// the colour this skin reads in, so 65% of it is readable on this skin's
+// surfaces whatever polarity they have, and the remaining 35% is enough hue to
+// still say "amber". It is pure CSS, so it re-resolves on a reskin with no
+// re-render, no `getComputedStyle` read and no bytes of runtime.
+//
+// 65/35 is not a taste call, and it is not a round number picked for comfort.
+// `colors.test.js` walks every hue in the product (`SCFG`, every preset's
+// `programs`, the archetype accents) across every preset skin plus a hand-built
+// light one, on all three surfaces, with the chip plate at its usual 14% tint.
+// At 65% the worst pair clears **5.08:1**; at 60% it is **4.36:1** and fails —
+// which is what the test asserts, so the anchor cannot be weakened without the
+// suite saying so. Pulse's own `#D6FF3D` on a light skin's `--navy` is the pair
+// that sets the floor. It holds for an ARBITRARY hue too, including one equal
+// to the surface itself — the degenerate case a gym's own `--green` can reach,
+// where the floor is 5.18:1.
+//
+// ⚠️ For a FILLED plate — a pill painted solid in the hue rather than tinted by
+// it — this is the wrong tool and `inkOn(hue, "#000000", "#FFFFFF")` is the
+// right one. The plate is then the hue itself and owes nothing to the skin.
+export const hueInk = (color) => `color-mix(in srgb, var(--text) 65%, ${color})`;
+
 /**
  * A hairline border token whose polarity matches the surface it sits on.
  *
@@ -313,6 +350,22 @@ export function applySkinCSS(tokens, meta={}) {
   // It is not in PRESET_SKINS for the same reason: there is nothing to choose.
   r.setProperty("--danger", "#EF4444");
   r.setProperty("--danger-border", "#EF444440");
+  // ── Warning ─────────────────────────────────────────────────────────────────
+  // The same argument as `--danger`, one step down in severity, and the same
+  // evidence: `#F59E0B` was already the app's de-facto warning amber in a dozen
+  // hardcoded places across six files — the template-overwrite banner, the sync
+  // banner's "stuck" state, the capacity warning on the Schedule, the persona
+  // conflict notice. Naming it makes it a decision instead of a habit.
+  //
+  // NOT skin-derived, for `--danger`'s reason: a gym whose accent is amber must
+  // not get a warning banner that matches its primary action.
+  //
+  // ⚠️ AS A FILL it is used directly; AS INK it still goes through `hueInk`.
+  // Amber on a light identity's background measured 1.97:1 — a warning nobody
+  // can read is worse than no warning, and that is not something a token fixes
+  // on its own.
+  r.setProperty("--warn", "#F59E0B");
+  r.setProperty("--warn-border", "#F59E0B55");
   // Alpha variant shortcuts for CSS-only colour transitions
   r.setProperty("--accent-10", tokens.accent + "1A");
   r.setProperty("--accent-20", tokens.accent + "33");

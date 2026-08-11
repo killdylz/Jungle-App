@@ -193,7 +193,7 @@ function PlaylistImportModal({ stages, selIdx, onAddTrack, onAddTracksToAll, onC
         {grantingAccess ? "A Spotify window just opened — approve access there, then come back." : "A small window will open — you'll be back here in seconds."}
       </p>
       <button onClick={handleGrantAccess} disabled={grantingAccess}
-        style={{padding:"12px 32px",background: grantingAccess ? "var(--muted)" : "#1DB954",color:"white",border:"none",borderRadius:"24px",cursor: grantingAccess ? "default" : "pointer",fontWeight:"700",fontSize:"14px",display:"flex",alignItems:"center",gap:"9px",boxShadow: grantingAccess ? "none" : "0 4px 14px #1DB95440",transition:"all 0.2s"}}>
+        style={{padding:"12px 32px",background: grantingAccess ? "var(--muted)" : "#1DB954"  /* Spotify green: a third-party brand mark on a "Connect Spotify" action. Repainting it in the gym's colours misrepresents whose service it is */,color:"white",border:"none",borderRadius:"24px",cursor: grantingAccess ? "default" : "pointer",fontWeight:"700",fontSize:"14px",display:"flex",alignItems:"center",gap:"9px",boxShadow: grantingAccess ? "none" : "0 4px 14px #1DB95440",transition:"all 0.2s"}}>
         <span>🎵</span> {grantingAccess ? "Waiting for Spotify…" : "Grant Playlist Access"}
       </button>
     </div>

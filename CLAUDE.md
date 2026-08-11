@@ -170,6 +170,16 @@ not. **Assert the STORED object, not only what was rendered.**
   matches nothing, and the test then fails on its selector rather than on the thing it tests.
 - ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
   traps focus, so any loop visiting every screen must visit it **last**.
+- 🔴 **NOT EVERY COMPUTED COLOUR IS `rgb(...)`.** A `color-mix()` computes to
+  `color(srgb 0.93 0.31 0.31)` — channels in **0–1, not 0–255**. This cost real time twice in
+  one session: a contrast scanner that scraped the numbers read every mixed ink as
+  `rgb(1,1,1)` and *silently passed* a screen full of unreadable text, and a `toMatch(/^rgb/)`
+  positive control failed on a change that was correct. Parse the `color(` form, and assert
+  that a colour **exists** rather than what shape it takes.
+- ⚠️ **Appending 8-bit hex alpha (`` `${c}18` ``) only works while `c` is 6-digit hex.**
+  `var(--warn)18` is not a colour, and the element loses the tint *and* the border silently.
+  A hue used for both a FILL and INK therefore needs **two values** — the raw hex for the
+  plate, `hueInk(hex)` for the text. `CalendarScreen`'s `GRID_FALLBACK` documents the same trap.
 - ⚠️ **`jungle_skin` holds a bare string, not JSON** — the `stored()` helper parses and cannot
   read it.
 - ⚠️ **A control that is a `<div onClick>` is invisible to `keyboard.spec.js`**, which sweeps
@@ -193,8 +203,13 @@ not. **Assert the STORED object, not only what was rendered.**
   comment above it.
 - **`restorePersonaCascade` and `_clearLedgerIfSettled`** (`store.js`) look redundant and are
   not. Both have unit tests saying so. Do not "simplify" them.
-- **`--danger` is deliberately not skin-derived.** A gym whose accent is red must not get a
-  delete button matching its primary action.
+- **`--danger` and `--warn` are deliberately not skin-derived.** A gym whose accent is red
+  must not get a delete button matching its primary action. Both are FILLS; used as INK they
+  still go through `hueInk`.
+- **A decorative hue used as INK goes through `hueInk`** (`colors.js`) — `color-mix(in srgb,
+  var(--text) 65%, hue)`. The 65% is measured, not chosen: at 60% the worst pair is 4.36:1 and
+  `colors.test.js` asserts BOTH the floor and that edge. A **filled** plate is the other case
+  and takes `inkOn(hue,"#000000","#FFFFFF")` instead.
 - **`isViewEnabled` is the single choke-point** for what appears in a nav — there are four nav
   arrays in `App.jsx`, and a second rule bolted onto one of them is how a screen survives in
   exactly one menu.

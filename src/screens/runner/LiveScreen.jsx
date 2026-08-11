@@ -9,6 +9,7 @@ import { apiPlay, TrackSearch, SpotifyDevicePicker } from "../../music/index.js"
 import { useWindowWidth } from "../../ui/primitives.jsx";
 import { isDialogOpen } from "../../ui/dialog.js";
 import { fmt, fmtSec } from "../../lib/format.js";
+import { hueInk } from "../../lib/colors.js";
 import { prefersReducedMotion } from "./displayKit.js";
 import { CheckInPanel } from "./CheckInPanel.jsx";
 import { MemberLinkDialog } from "./MemberLinkDialog.jsx";
@@ -173,7 +174,12 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
 
   // Color-coded timer: green >50%, amber 25-50%, red <25%
   const ratio = remaining / dur;
-  const timerColor = ratio > 0.5 ? cfg.color : ratio > 0.25 ? "#F59E0B" : "var(--accent)";
+  // The countdown's three states. `hueInk` because a stage hue and the amber
+  // warning are DECORATION being used as INK: on the three dark presets they are
+  // legible by luck, and on a hand-built light identity the 120px timer measured
+  // **1.97:1** — the largest text in the product, unreadable, on the surface a
+  // coach reads mid-class. See `colors.js`.
+  const timerColor = ratio > 0.5 ? hueInk(cfg.color) : ratio > 0.25 ? hueInk("#F59E0B") : "var(--accent)";
   const isPulsing = remaining <= 10 && remaining > 0 && liveState.playing;
   const hasNoTracks = !stage?.tracks?.length;
 
@@ -272,6 +278,14 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
   return (
     <div style={{
       flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:isMobile?"flex-start":"center",
+      // ⚠️ `#000` and the `#111` bezel below are the TABLET FRAME this screen
+      // draws around the class — a picture of a device, not a surface of the
+      // product. They are deliberately not skin-derived for the reason a photo
+      // frame is not repainted to match the wall: tinting the bezel with the
+      // gym's palette makes it read as a UI panel rather than as a device, and
+      // the display INSIDE it already carries the brand. The room-facing boards
+      // in DisplayScreen are all `var(--bg)` — see the note at its Timer-Only
+      // preset, where the last hardcoded `#000` on an actual board was removed.
       background:"#000", overflowY:"auto", padding:isMobile?"0":"20px", boxSizing:"border-box"
     }}>
       {/* Tablet bezel — shown on non-mobile */}
@@ -400,12 +414,12 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
               {/* Stage type + name */}
               <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"6px",padding:"24px",position:"relative"}}>
                 {/* WORK/REST phase label */}
-                <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",fontSize:"12px",letterSpacing:"5px",color:cfg.color,fontWeight:"700"}}>
+                <div style={{position:"absolute",top:"20px",left:"50%",transform:"translateX(-50%)",fontSize:"12px",letterSpacing:"5px",color:hueInk(cfg.color),fontWeight:"700"}}>
                   {cfg.label.toUpperCase()}
                 </div>
 
                 {/* Big timer */}
-                <div style={{fontFamily:"var(--display)",fontSize:isMobile?"80px":"120px",fontWeight:"700",lineHeight:"1",letterSpacing:"-3px",color:cfg.color,textShadow:`0 0 60px ${cfg.color}40`}}>
+                <div style={{fontFamily:"var(--display)",fontSize:isMobile?"80px":"120px",fontWeight:"700",lineHeight:"1",letterSpacing:"-3px",color:hueInk(cfg.color),textShadow:`0 0 60px ${cfg.color}40`}}>
                   {fmt(remaining)}
                 </div>
 
@@ -432,11 +446,17 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                   const ivState = calcIntervalState(stage?.exercises, elapsed);
                   if (!ivState) return null;
                   const isWork = ivState.phase==="WORK";
-                  const ivColor = isWork?"#EF4444":"#06B6D4";
+                  // Work / rest. ⚠️ TWO values, deliberately: the plate and the
+                  // border append 8-bit hex alpha (`${ivHue}15`), which is only a
+                  // colour while the string is 6-digit hex — so the fill keeps the
+                  // raw hue and only the INK goes through `hueInk`. Merging them
+                  // into one token-shaped value silently voids every tint.
+                  const ivHue = isWork?"#EF4444":"#06B6D4";
+                  const ivColor = hueInk(ivHue);
                   return (
-                    <div style={{marginTop:"12px",background:`${ivColor}15`,border:`2px solid ${ivColor}`,borderRadius:"12px",padding:"12px 16px",textAlign:"center",width:"100%",maxWidth:"300px"}}>
+                    <div style={{marginTop:"12px",background:`${ivHue}15`,border:`2px solid ${ivHue}`,borderRadius:"12px",padding:"12px 16px",textAlign:"center",width:"100%",maxWidth:"300px"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",marginBottom:"6px"}}>
-                        <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"1.5px",padding:"2px 6px",background:`${ivColor}25`,borderRadius:"4px"}}>{ivState.phase}</span>
+                        <span style={{fontSize:"10px",fontWeight:"800",color:ivColor,textTransform:"uppercase",letterSpacing:"1.5px",padding:"2px 6px",background:`${ivHue}25`,borderRadius:"4px"}}>{ivState.phase}</span>
                         <span style={{fontSize:"11px",color:"var(--muted)"}}>{ivState.exName}</span>
                       </div>
                       <p style={{fontSize:"40px",fontWeight:"900",color:ivColor,lineHeight:"1",margin:"0 0 3px"}}>{fmtSec(ivState.phaseRemaining)}</p>
@@ -481,7 +501,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                 {/* Mic mode */}
                 {player && (
                   <button onClick={handleMicMode} title={micMode ? (micActive ? "Ducking - mic live" : "Mic Mode armed (M)") : "Mic Mode (M)"}
-                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"#EF4444":"#EF444440"}`,background:micMode?"#EF444420":"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",animation:(micMode&&!reduce)?"jg-pulse 1s ease-in-out infinite":"none"}}>
+                    style={{width:"44px",height:"44px",borderRadius:"50%",border:`1px solid ${micMode?"var(--danger)":"var(--danger-border)"}`,background:micMode?"color-mix(in srgb, var(--danger) 13%, transparent)":"var(--card)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",animation:(micMode&&!reduce)?"jg-pulse 1s ease-in-out infinite":"none"}}>
                     <Mic size={16}/>
                   </button>
                 )}
@@ -529,7 +549,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                     const sCfg = SCFG[s.type]||SCFG.circuit;
                     return (
                       <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px 13px",borderRadius:"11px",background:i===0?"var(--card)":"var(--navy)",border:`1px solid ${i===0?"var(--border)":"var(--border)"}`}}>
-                        <span style={{fontSize:"11px",fontWeight:"700",color:sCfg.color,background:`${sCfg.color}18`,padding:"3px 8px",borderRadius:"5px",flexShrink:0}}>{sCfg.label}</span>
+                        <span style={{fontSize:"11px",fontWeight:"700",color:hueInk(sCfg.color),background:`${sCfg.color}18`,padding:"3px 8px",borderRadius:"5px",flexShrink:0}}>{sCfg.label}</span>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:"14px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
                           <div style={{fontSize:"11px",color:"var(--muted)"}}>{fmt(s.dur)}</div>
@@ -550,7 +570,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                   {nowPlaying ? (
                     <>
                       <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
-                        <div style={{width:"46px",height:"46px",borderRadius:"9px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 5px,#22382a 5px,#22382a 10px)",flexShrink:0,overflow:"hidden"}}>
+                        <div style={{width:"46px",height:"46px",borderRadius:"9px",background:"repeating-linear-gradient(45deg,#1b2a20,#1b2a20 5px,#22382a 5px,#22382a 10px)"  /* "no album art" hatch — a placeholder texture inside the music quarantine, which is flag-gated off */,flexShrink:0,overflow:"hidden"}}>
                           {nowPlaying.album?.images?.[0]?.url && <img src={nowPlaying.album.images[0].url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
@@ -592,7 +612,7 @@ export function LiveScreen({stages, onBack, liveState, onPlayPause, player, devi
                 <p style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.name}</p>
                 <p style={{fontSize:"10px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nowPlaying.artists?.[0]?.name}</p>
               </div>
-              <button onClick={handleMicMode} style={{background:"none",border:"none",cursor:"pointer",color:micMode?"#EF4444":"var(--muted)",padding:"6px",display:"flex"}}>
+              <button onClick={handleMicMode} style={{background:"none",border:"none",cursor:"pointer",color:micMode?"var(--danger)":"var(--muted)",padding:"6px",display:"flex"}}>
                 <Mic size={18}/>
               </button>
               <button onClick={handleDisplayMode} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"6px",display:"flex"}}>

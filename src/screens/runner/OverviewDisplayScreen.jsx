@@ -5,6 +5,7 @@ import { FLAGS } from "../../config/flags.js";
 import { SCFG } from "../../data/stageConfig.js";
 import { BrandLogo, useWindowWidth } from "../../ui/primitives.jsx";
 import { tvFont, grpColor } from "./displayKit.js";
+import { hueInk } from "../../lib/colors.js";
 
 // ─── OverviewDisplayScreen (pre-class TV overview) ────────────────────────────
 export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }) {
@@ -158,7 +159,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                       {/* Stage label */}
                       <div style={{display:"flex",alignItems:"center",gap:"7px",marginBottom:"8px"}}>
                         <div style={{width:"8px",height:"8px",borderRadius:"50%",background:cfg.color,flexShrink:0}}/>
-                        <span style={{fontSize:"10px",fontWeight:"800",color:cfg.color,
+                        <span style={{fontSize:"10px",fontWeight:"800",color:hueInk(cfg.color),
                           textTransform:"uppercase",letterSpacing:"1px"}}>
                           {cfg.label}{isPeak?" · PEAK":""}
                         </span>
@@ -217,7 +218,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                         <p style={{fontSize:"11px",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           <span style={{color:"var(--text)",fontWeight:"600"}}>{firstTrack.t}</span>
                           {firstTrack.a && <span> — {firstTrack.a}</span>}
-                          {trList.length>1 && <span style={{color:cfg.color}}> +{trList.length-1}</span>}
+                          {trList.length>1 && <span style={{color:hueInk(cfg.color)}}> +{trList.length-1}</span>}
                         </p>
                       ) : (
                         <p style={{fontSize:"11px",color:"var(--muted)",fontStyle:"italic"}}>No tracks</p>
