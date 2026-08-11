@@ -702,3 +702,50 @@ No test asserts it is absent, because a test that did would be asserting a fact 
 project rather than about the code. `e2e/destructive.spec.js` asserts it is PRESENT, so removing the
 string means updating that assertion in the same commit — which is the reminder, if you are reading
 the test output.
+
+---
+
+## A DECISION: should Jungle rank COACHES the way it now ranks class types?  ·  added 2026-08-11 (session 28)
+
+**This is yours, not mine, and I have deliberately not built it.**
+
+Session 28 shipped "which of your class types keeps members" (`lib/classTypeRetention.js`, on the
+Analytics screen). It joins `class_instances.class_type` to `attendance` and reports, per class
+type, the share of members who tried it and came back within four weeks.
+
+**The identical join, with `class_instances.coach_name` instead of `class_type`, produces a coach
+league table.** It is four lines of code. The data is already there; nothing is missing. I did not
+write those four lines, and here is the case both ways so you can decide rather than discover it
+in a demo.
+
+**For:**
+- It is the most commercially obvious number in the product. An owner deciding who to give the
+  Saturday 9am slot to would pay for it on its own.
+- It is *already computable by hand* from data the gym owns, so the question is whether Jungle
+  presents it, not whether it exists.
+- Coach quality genuinely varies and a studio that cannot see it is running blind on its largest
+  controllable cost.
+
+**Against, and this is why I stopped:**
+- `GTM-SINGAPORE` §2 prices per LOCATION precisely so coaches are not taxed, because **coaches are
+  the adoption engine**. The product's whole route to market is a coach bringing their own deck in
+  and their studio following.
+- A screen that ranks coaches is a screen a coach will refuse to feed. The moment a coach believes
+  their check-in data is being scored, the cheapest defence is to stop checking people in — and
+  attendance is the spine every other number in the product stands on, including the at-risk panel
+  and the money figure beside it.
+- The number would be **wrong in a way that is invisible**: coaches do not get comparable classes.
+  A coach given the 6am weekday slot is measured on people who were always going to come; a coach
+  given the Sunday beginner intro is measured on people trying a gym for the first time. Class type
+  suffers this too, but far less — a type is a *thing the studio chose to programme*, and the whole
+  point of ranking types is that the studio can change them. A coach cannot change their slot.
+- It is not reversible in the way a feature normally is. Once an owner has seen a coach ranking,
+  un-shipping it does not un-see it.
+
+**My recommendation: no, or not without a shape that fixes the third bullet** — e.g. comparing a
+coach only against the SAME class type in the SAME slot, and refusing to report at all below a
+population where that comparison holds. That is a much larger build than four lines and it should
+not be started until you have said you want it.
+
+**What I need from you:** yes / no / "yes but only in the slot-matched shape". Nothing is blocked
+on this — the class-type ranking is shipped and stands alone.
