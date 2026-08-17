@@ -15,20 +15,34 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 28: **`lint:crash` 0 · 902 unit (32 files) · 456 e2e (44 spec files) ·
-11-chunk build · 0 over budget.** App.jsx is **2,371 lines**. StaffApp **292.06 / 360 kB — 68 kB
-left**, so it is no longer the binding constraint; `index.js` (204.72 / 215) is now the tightest.
-A new screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted
-chunk has no ceiling at all.
+Green as of `601332b` (session 29): **`lint:crash` 0 · 935 unit (33 files) · 466 e2e (46 spec
+files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
-- `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
-  advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
-  it resolves identifiers, not JSX element names.
+**⚠️ `index.js` is the binding constraint — 203.06 / 215 kB, 5.6% headroom — and it is 93%
+REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
+**all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
+**cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
+has 18.6% headroom and is no longer the constraint.
+
+🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
+and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
+downloads, while a comment in `BrandStudioScreen.jsx` claimed the opposite for a whole session.
+**Any eager import from a module is an import of all of it.** A new screen goes in a `lazy()`
+chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+
+- `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports a few hundred
+  advisory problems and that is expected; judge on runtime. ⚠️ The crash gate is **blind to
+  `<UndefinedComponent/>`**: it resolves identifiers, not JSX element names. It is also blind to
+  an **unused import** — App.jsx carried nine dead ones for a session — but it does catch a
+  duplicate binding, which is the division of labour that config documents.
 - ⚠️ **e2e can fail broadly on a stale dev server holding port 5191.** Symptoms are
   `ERR_CONNECTION_REFUSED` or `Failed to fetch dynamically imported module` across many specs.
   **Re-run once before investigating.**
 - Raise a size ceiling **only** in the commit that needs it, and say what bought the bytes.
 - **No infra changes without asking Dylan.**
+- ⚠️ **Do not edit source while the e2e suite is running.** Vite HMR fires, `main.jsx`
+  re-executes, and specs fail on `createRoot() on a container that has already been passed to
+  createRoot()`. It reads like a real defect and is not. Session 29 lost a 7-minute run to it.
 
 ---
 
@@ -195,6 +209,16 @@ not. **Assert the STORED object, not only what was rendered.**
   `var(--warn)18` is not a colour, and the element loses the tint *and* the border silently.
   A hue used for both a FILL and INK therefore needs **two values** — the raw hex for the
   plate, `hueInk(hex)` for the text. `CalendarScreen`'s `GRID_FALLBACK` documents the same trap.
+- ⚠️ **`el.focus()` does NOT trigger `:focus-visible`.** A programmatic focus sweep reported 35
+  of 40 controls as ringless; all false. Press Tab.
+- ⚠️ **Chrome reports `outline-style: auto` with a computed width of `0px`.** A check for
+  `outlineWidth > 0` calls every default-ringed button a failure and buries real hits among
+  invented ones. The signal is the STYLE being `none`.
+- ⚠️ **A control that opts out cannot measure the rule it opted out of.** An inline
+  `transition:all .15s` beats the global reskin rule, so measuring that element says nothing
+  about the rule.
+- ⚠️ **`test.use({ reducedMotion })` does not apply through a scratch Playwright config, and
+  fails OPEN.** Use `page.emulateMedia` and assert the precondition — that is what caught it.
 - ⚠️ **`jungle_skin` holds a bare string, not JSON** — the `stored()` helper parses and cannot
   read it.
 - ⚠️ **A control that is a `<div onClick>` is invisible to `keyboard.spec.js`**, which sweeps
@@ -242,6 +266,16 @@ not. **Assert the STORED object, not only what was rendered.**
   refuses the same substitution for a different reason: it asserts a tenure it does not hold.
 - **A pooled retention curve with per-point denominators can RISE**, and each point is individually
   correct while the line lies. Use one population for every point (`lib/cohorts.js`).
+- **The Brand Studio AA panel and `e2e/brandTokens.spec.js` share ONE implementation** of the
+  compositing maths, in `colors.js`; `contrastScan.js` serialises those functions into the page.
+  They must stay self-contained — arguments and each other, nothing else — or they arrive with
+  undefined bindings. `colors.test.js` asserts that by evaluating them in an empty scope.
+- **`contrast.passesAA` is `textOnBg >= 4.5` and NOTHING else.** It is not a verdict on a
+  palette: a generated accent can be 1.25:1 on its own background while it reads true. Anything
+  showing an AA claim to an owner must read `auditPairs`.
+- **A gym's accent is not ours to nudge.** `--danger`'s rule generalises: a colour the gym chose
+  is reported, never silently bent. `DYLAN-QUEUE.md` A14 is the open yes/no on the two palettes
+  where that leaves it below AA.
 - **A failed DELETE needs a tombstone, not a ledger entry.** `_noteSyncError` alone makes the retry
   lie: the pusher's upsert cannot remove a server row, so it succeeds and clears the error. See
   `PENDING_DEL_KEY` in `store.js`.
@@ -255,7 +289,8 @@ not. **Assert the STORED object, not only what was rendered.**
 - `DYLAN-QUEUE.md` — what needs Dylan rather than code.
 - Commit messages carry the reasoning. `git log` is the real design record here.
 
-🔴 **Outstanding and not code:** migrations `0005_coach_personas.sql` and
+🔴 **Outstanding and not code:** `DYLAN-QUEUE.md` **A14** is a yes/no on whether Jungle bends a
+gym's accent to make it legible — nothing is blocked on it. Migrations `0005_coach_personas.sql` and
 `0006_persona_generations.sql` have never been applied. Until they are, a gym's personas, plans
 and movement catalogue exist on **one device with no server copy**. Also **10 unmerged Dependabot
 PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**

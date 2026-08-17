@@ -1,12 +1,171 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-11 (session 28)_
+_Last updated: 2026-08-17 (session 29)_
 
-> 📁 **Sessions 6–25 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–27 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 29 — the consequences of one defect, and a chunk that was 93% React
+
+> **Gates green at `601332b`.** `lint:crash` **0** · **935 unit** (33 files) · **466 e2e**
+> (46 spec files) · 12-chunk build · **0 over budget**. `index.js` **203.06 / 215 kB**
+> (5.6% headroom, up from 4.2%). Six commits, each pushed after its own green run.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
+> there is no run to judge and `gh run list` shows nothing for this work. The local suite is
+> the only gate, and every number above is from it.
+
+**The brief led with the consequences of session 28's generator defect rather than with
+features, and that was the right shape.** Six items, all worked. Two turned out to be
+measurement tasks whose measurement changed the answer, and the queue was wrong in three
+places — one of which reversed what I was about to build.
+
+### What shipped
+
+**§2.1 — the gyms the generator fix arrived too late for.** Session 28 fixed `runAnalysis`;
+it does nothing for a studio that had already pressed **Apply to all surfaces**. Their
+`jungle_custom_skin` holds Canopy-derived tokens and those tokens are the source of truth.
+Brand Studio now offers a re-read, and the restraint is the feature: pressing it writes
+NOTHING — only **Apply** does, as the coach's own second click.
+
+🔴 **The queue's suggested heuristic — "accent is exactly `#7BE3A4`" — is wrong in both
+directions, and finding that out is most of the value of the item.** The broken path produced
+three themes and the coach picked one. Signature and Charge land on mint, but **Steel's accent
+is `#aeccba`**, so an accent test never sees that third of the affected gyms. The detector is
+the whole eight-token set against two frozen historical sets, and the value that makes it safe
+is the derived background: the fallback generates `#0b130e` where Canopy's own preset is
+`#0A0F0C`. A studio that hand-picked mint sits on Canopy's surfaces and is never told its brand
+is a bug.
+
+**§2.2 — the AA panel was narrower than the gate that judges it.** Five opaque token pairs,
+presented to an owner as *"Member-visible text meets WCAG AA"*, while the sweep failed the same
+palettes in nine places. Now fourteen rows in `lib/brandAudit.js`, sharing its compositing with
+`e2e/contrastScan.js` through `colors.js` — the scanner serialises those exact functions into
+the page with `Function.prototype.toString()`, so **one mutation to `compositeOver` turns 5 unit
+tests and 4 sweep tests red together**.
+
+**§2.3 — the 350ms transition STAYS, which is the opposite of what I expected.** Of the
+elements carrying it, 17–41 per screen are CONTROLS, and outside Brand Studio not one control
+declares a transition of its own. It is not a reskin detail that leaked — it is the product's
+entire interaction feel, and scoping it would have made every selection and toggle in the app
+snap. What was wrong is narrower and not a taste call: it never consulted
+`prefers-reduced-motion`, so 145 elements animated for a user who had asked their OS for none.
+Now gated behind a media query.
+
+**§2.4 — `AnalyticsScreen.jsx` deleted**, 284 lines of invented KPIs kept as a layout target
+that the real screen hit two sessions ago. `FLAGS.mockAnalytics` **stays**: `CalendarScreen`
+still gates three mock panels on it, which is exactly what "check whether the flag itself still
+has a reader" was asking.
+
+**§2.5 — no keyboard user could see which text field they were in.** `outline:"none"` inline on
+the shared `Input`/`Select` primitives and ~16 more fields, beating any stylesheet rule. One
+`:focus-visible` rule with `!important` — the one case it is the right tool.
+
+**§2.6 — `index.js` is 93% React.** Attributed by decoding the sourcemap's VLQ mappings:
+react-dom alone is 172.40 kB of 201, and **all of our own code in the entry chunk is 11.19 kB**.
+The chunk is not tight because app code crept in; the budget was set close to React's floor.
+
+### What was false
+
+**The queue's `#7BE3A4` heuristic** (§2.1) — above. It would have left the Steel gyms wearing
+the wrong brand with nothing offered.
+
+**"25 raw hex literals that every white-label sweep has to be told to ignore"** (§2.4). No sweep
+names that file — not `rawValueScan`, not `brandTokens`, not `check-size`. They all measure a
+rendered DOM and the screen never rendered. The hexes cost the sweeps nothing, and **the deletion
+buys no bytes either**: `StaffApp.js` is byte-identical afterwards, because rollup had already
+folded the branch away. The case for deleting it is the one `flags.js` makes — read during every
+refactor, one flag from a customer's screen — not size.
+
+**`BrandStudioScreen.jsx`'s header, in writing, for a whole session** (§2.6): "it is the ONLY
+caller of `colors.js`'s generator machinery, so the chunk takes that with it." It did not.
+`main.jsx` imports ONE function from `colors.js` — `bootColours` — and **rollup places whole
+modules**, so that single eager edge kept the generator in the chunk a member downloads.
+Corrected in place rather than deleted, because the mistake is easy to repeat. Splitting it out
+bought 2.84 kB and is the only app-code lever that exists there.
+
+**Also:** App.jsx imported eleven symbols from `colors.js` and used two. The other nine, the
+generator included, had been dead since session 28.
+
+### Three defects the widened audit found immediately
+
+**Fixed.** The generator clamped `muted` against `bg` alone, and on a LIGHT identity `bg` is the
+*lightest* surface — so the nudge stopped at 4.5:1 against the easiest thing in the palette and
+left secondary text at 3.95–4.08:1 on `card` and `navy`, where most of it sits. Nine light-mode
+themes affected. Now clamped against every surface; 60 themes checked, 0 failures. ⚠️ Dark output
+is byte-identical, so no shipped preset moved and §2.1's frozen sets are untouched.
+
+**Reported, not fixed — `DYLAN-QUEUE.md` A14, a yes/no.** A dark logo generates an accent that
+cannot be used as a graphic on its own background (navy `#12224A` → **1.25:1**, blue 2.90,
+crimson 2.86, against 1.4.11's 3:1). And on a light identity a mid-luminance accent has no
+readable label: `inkOn` picks the better of bg/text, but violet `#A855F7` gives 3.70 and 4.13, so
+both lose. Neither is fixable without bending a colour the gym chose, which is the rule
+`--danger` already states. **The generated-identity badge was reading `contrast.passesAA` —
+`textOnBg >= 4.5` and nothing else — so it rendered "✓ Passes WCAG AA" over the 1.25:1 accent.**
+It now reads the full audit.
+
+### Traps paid for
+
+⚠️ **Editing source during an e2e run costs you the run.** Three specs failed on
+`createRoot() on a container that has already been passed to createRoot()` — Vite HMR firing
+because I touched `colors.js` mid-suite. Not a code defect; 7 minutes to re-run and confirm.
+
+⚠️ **`el.focus()` does not trigger `:focus-visible`.** A programmatic sweep reported 35 of 40
+controls on the Builder as ringless. All false. Press Tab.
+
+⚠️ **Chrome reports `outline-style: auto` with a computed width of `0px`.** A check for
+`outlineWidth > 0` calls every default-ringed button a failure and buries the real hits in
+invented ones. The signal is the STYLE being `none`.
+
+⚠️ **A control that opts out cannot measure the rule it opted out of.** The first attempt at
+§2.3 measured the Brand Studio's vibe pill and found no difference — that pill is one of nine
+elements declaring `transition:all .15s` inline, and inline beats a stylesheet.
+
+⚠️ **`test.use({ reducedMotion })` did not apply through the scratch Playwright config** the
+cloud container needs, and it failed OPEN. Only the explicit precondition assertion caught it.
+`page.emulateMedia` instead.
+
+⚠️ **A score computed from a rounded display string is not the same number.** Rows in the audit
+carry unrounded colours for scoring and the CSS string only for painting — the difference is
+~0.03, invisible until a pair sits on 4.50.
+
+### Environment
+
+**Playwright cannot launch out of the box** — @playwright/test 1.61.1 wants Chromium r1228, the
+image ships r1194 at `/opt/pw-browsers`, and the CDN is proxy-blocked. A five-line scratch config
+importing the repo config and overriding `projects[].use.launchOptions.executablePath`,
+`testDir`, `outputDir` and `webServer[].cwd` works; **`playwright.config.js` was not touched**.
+🔴 The trap underneath it is real: a piped `playwright test … | tail` **exits 0 when nothing
+launched**. Read the count. Every count in this block was read from the run.
+
+⚠️ **The branch started 5 commits behind.** Session 28's work is on
+`claude/gracious-hopper-quifam`, not `main`, and this branch pointed at `main`. The prompt's
+baseline `0ed2811` did not exist here until it was fast-forwarded. Worth checking first: every
+number in the brief was correct once the branch was on the right base, and all six matched.
+
+### What is genuinely left
+
+Nothing on this queue. The remaining items need Dylan, not code:
+
+- 🔴 **A14 is new and it is a yes/no**, not work — does Jungle bend a gym's accent to make it
+  legible? My recommendation is (b), offer a nudge the coach can decline, the shape §2.1 uses.
+- 🔴 **Migrations `0005` / `0006` still unapplied.** Personas, plans and the movement catalogue
+  exist on ONE DEVICE with no server copy. ⚠️ The coach-delete dialog tells the coach that, and
+  `e2e/destructive.spec.js` asserts the string — so applying them makes a shipped sentence a lie.
+- 🔴 **N4 member links built and undeployed — ten sessions.** A12/A13, 35 minutes of Dylan's
+  time. It is the only member-facing surface, and the only place the white-label story can be
+  proven on an actual member.
+- ⚠️ **A1, the Supabase region, still unconfirmed.** Five-minute read-only check, and the only
+  item that gets dramatically more expensive with age.
+- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps.
+
+**If `index.js` ever has to shrink again, it is not a refactor.** It is React itself — a
+preact/compat swap, which is infra and Dylan's — or raising the ceiling and saying so. The
+measurement is in `check-size.mjs`'s header so the next session does not re-derive it.
 
 ---
 
@@ -172,255 +331,3 @@ imperfect, it was **not being kept at all**, and four sessions of polish sat on 
 that ignored its input. The lesson is the one this repo keeps re-learning in new costumes — a
 passing suite tells you the code matches the tests, and only driving the product tells you the tests
 matched the product.
-
-
-## Session 27 — the product finally states a number an owner buys on, and six premises were wrong
-
-> **Gates green at `dc25bf2`.** `lint:crash` **0** · **875 unit** (30 files) · **440 e2e**
-> (44 spec files) · six-chunk build: member path **211.57 kB**, staff **557.70 kB**
-> (StaffApp **349.46/360 kB** — 10.5 kB left, and it is still the binding constraint).
-> App.jsx **3,787 lines**. Nine commits, each pushed and CI-checked. One worktree, no
-> concurrent session this time.
-
-**The brief was a queue of eight items with an explicit instruction to verify each against the
-code first, and a warning that the document was wrong somewhere.** It was wrong in six places.
-Four of those wrongnesses changed what got built; two meant the work was already done. That ratio
-is now consistent enough across sessions 26 and 27 to treat as the normal state of a handoff
-prompt rather than an unlucky one.
-
-### What shipped
-
-**§2.1 — money on the at-risk panel.** The retention loop was entirely the coach's: it names
-members and shows the arithmetic behind each flag. An owner does not buy "4 members need
-attention"; they buy "S$600/month is walking out the door". Everything needed to say that was
-already computed except what a membership costs, so the feature is one field
-(`branding.membershipPrice`, set in Brand Studio, no migration — the blob already round-trips to
-`brand_profiles`) and `members × price`.
-
-The absent case is the feature and most of the tests. No price ⇒ **no money anywhere on the
-screen** — not a zero, not a placeholder, not a "set a price" nudge. The e2e asserts no currency
-symbol appears in the body text at all, deliberately broader than the fixture's own currency,
-because a check for "S$" would pass while the screen rendered a pound sign. MRR not LTV, because
-LTV needs a tenure assumption no gym's data has earned. Derived from the ACTIVE flags so the money
-can never contradict the count beside it — a contradiction that has shipped on this panel once
-already.
-
-**§2.2 — N2 cohort analytics, replacing the coming-soon stub on the analytics route.** A real
-retention curve from the gym's own rows, a per-cohort table, and a stated half-life. Its own lazy
-12 kB chunk.
-
-**§2.3 — the P6 instrument stopped reading as a broken gauge.** It sat under the at-risk list
-showing `—` beside `NO DATA` on a fresh install: an unattributed engineering threshold in the
-middle of the screen that sells retention. Not deleted — the reason it exists (an unmeasured design
-law is indistinguishable from a met one) is still good. Moved last, and rewritten: the target is
-named as **Jungle's**, which turns an internal number into a promise the owner can hold us to, and
-the consequence is stated in coach-minutes per class from the gym's own median class size.
-
-**§1.3 — the last three `window.confirm`s**, each getting the guard its cost deserves. New class →
-undo. Remove a schedule rule → undo. Coach delete → in-app confirm **and** undo, because that one
-is an LLM pass over a deck a coach has taught from for years and lives on one device.
-
-**§3.2 — the two saves that were genuinely silent**: the ExerciseDB API key (no visible
-consequence at all) and a movement-catalogue edit (aliases, notes and category do not show in the
-collapsed row). Everything else stays silent, and that half has the teeth.
-
-**§1.5 — the reload sweep.** Eight writes × (stored value, screen, then both again after a
-reload), each row its own test with a control that the check fails before the action.
-
-**§2.5 — the checklist now acknowledges completion, and the greeting cannot shout an email.**
-
-**`_bgDelete` records a failed delete and can retry it**, via a tombstone queue.
-
-**And a defect in §2.1 that only appeared after it shipped**, found by re-reading
-`atRiskMembers` rather than by any test: `retentionSummary` returns `atRisk: null` in the
-"not-recording" state and the panel renders `—`, but rule 1 (`new_member_low_visits`) is gated on a
-known join date and NOT on `activity.recording`, so it still fires. A gym whose last check-in was
-three weeks ago, with a hand-added member in their first month, showed `—` as the count and
-**"S$150/month at risk" beside it** — a confident figure next to an explicit "we cannot tell",
-which is exactly the self-contradiction the money exists to avoid. Both the total and the per-flag
-figure are now gated on the headline being a NUMBER, not merely on a price existing. **The panel
-rendering flag rows under a `—` predates this work; putting a currency total there did not.**
-
-### The six false premises, in order of how much they changed
-
-1. 🔴 **§2.2 said "the route already exists, in three nav arrays".** True, and beside the point.
-   `flags.js` mapped `analytics` to the `mockAnalytics` flag, so `isViewEnabled("analytics")`
-   returned **false** and all three nav arrays filtered the entry straight back out. **The route was
-   live and unreachable — nothing in the product could navigate to it.** The nav half of that build
-   is deleting one line from `MOCK_VIEW_FLAG`. That is *not* flipping the flag: `FLAGS.mockAnalytics`
-   is still false and `AnalyticsScreen`'s invented KPIs are still folded out of the bundle.
-   **The lesson: a mock flag doing double duty as a nav gate makes "replace the mock" require a
-   flags.js edit that reads exactly like the thing the queue forbade.**
-
-2. 🔴 **§2.2 assumed cohorts could be keyed on `joinedAt`. They cannot, and it inverts.**
-   `applyAttendanceImport` creates every imported member with `joinedAt: ""` (store.js:1303). So
-   the gym that imports two years of history — the exact gym that makes N2 possible — has **zero
-   known join dates**, and a join-date analysis would show it an empty screen while showing a gym
-   that typed its roster in by hand a full one. A cohort is therefore *the month a member first
-   appears in the records*, and the screen says so rather than calling it a join date.
-   `retention.js` refuses the same substitution for its rule 1 and is right to: that rule asserts a
-   tenure it does not hold, while this describes the data it does.
-
-3. 🔴 **§1.3's list of the last three confirms named `handleReset`.** It is not one and has not
-   been for some time — it already has an in-app dialog *and* a toast. The third confirm was the
-   **coach delete**, which the queue did not mention at all and which is the most expensive
-   destructive action in the product. The item had the wrong end of it.
-
-4. 🔴 **§2.5 said the app "knows the coach's name everywhere else".** It knows it nowhere:
-   `display_name` comes from the Google/Supabase session, and the credential-less build — what
-   GitHub Pages serves — has no session. "COACH" is the honest output of holding no name, confirmed
-   by driving it. The real defect was one step further down the chain: `display_name` falls back to
-   `user.email`, and `split(" ")[0]` greeted a coach with **their whole email address** in 12px
-   letterspaced accent caps.
-
-5. **§3.7 said lazy chunks show a bare fallback and hydration shows nothing.** Neither survives
-   contact. `ScreenLoading` renders a centred "Loading…"; the root fallback in `main.jsx` already
-   wears `bootColours()` so a light-palette studio gets its own background rather than a flash of
-   near-black, with an ErrorBoundary outside it. And hydration showing nothing is **correct** for a
-   local-first app — a spinner would claim the data is not ready when it already is. What remains is
-   skeleton screens, which is cosmetic, costs bytes against 10 kB of headroom, and carries the
-   item's own warning that moving the `screen-loading` testid silently stops every navigation in the
-   suite from waiting. **Deliberately not done. Do not re-raise without a new argument.**
-
-6. **§3 asked for the Node 20 deprecation to be recorded in `DYLAN-QUEUE.md`.** Session 26 wrote it
-   up on 2026-08-04. Re-verified rather than re-filed; a status line says so.
-
-### The defects found by building, which no premise predicted
-
-🔴 **My own first cohort curve RISED, and a unit test caught it.** Right censoring's obvious fix is
-a per-point denominator — at month k, count only members old enough to be observable that far.
-Every point is then individually correct and **the line as a whole lies**: month 7 read 50% after
-month 6 read 33%. Nobody came back; those are percentages of different populations, and the members
-old enough to be measured at month 7 were a more loyal subset. An owner reads that upturn as "they
-return". Fixed with **one population for the whole curve** — the members who have had the full
-observed horizon — so `last >= cohort + k` is nested in k and the line is monotonic in fact rather
-than in a comment. The same artefact appears in table form and takes the same fix: one denominator
-per row.
-
-🔴 **The Brand Studio's three skin presets were `<div onClick>`.** A keyboard-only or screen-reader
-user could not choose a skin **at all** — the three primary choices on the white-label screen. It
-surfaced only because the reload sweep tried to click one *by role* and waited out its timeout.
-Nothing in the suite would ever have caught it: `keyboard.spec.js` asserts every visible CONTROL is
-reachable by Tab, and a div with an onClick has no role, so it was never a control to reach — and
-every existing test clicks these by their TEXT, which works on a div. **The workaround that made the
-tests pass is what hid the defect.** Now `<button aria-pressed>`.
-
-🔴 **`ProfileModal`'s branding Save erased any key set elsewhere.** It wrote its six-field draft
-*as* the whole branding blob. Nothing was lost while the blob held only those six; `membershipPrice`
-is the first key that would have been, and the symptom would have been a price that "does not save"
-with nothing in the console.
-
-🔴 **The Dashboard checklist's congratulation was unreachable code.** `describeSetup` has always had
-a "Setup is done" branch. `showChecklist` is `sessions === 0`; the `run` step is done at
-`sessions > 0`. The conditions are exact opposites, so **completing the third step is what hides the
-card carrying the congratulation** and the ceiling a coach can see is "2 / 3". The old copy also told
-them to run a class they must already have run to get there. The acknowledgement moved to the other
-side of the switch (`justFinished = complete && sessions === 1`), retiring itself on the second class
-so it needs neither a dismiss button nor a stored flag.
-
-🔴 **`_bgDelete`: the obvious fix would have been worse than the silence.** A failed delete only hit
-`console.warn`, so it never entered the ledger, was never retried, and the next hydrate put the row
-back. But simply calling `_noteSyncError` makes the retry machinery **lie**: `_RETRY_PUSHERS[table]`
-is `save*(get*())` for every id-keyed domain, an upsert cannot remove a row the server has and local
-does not, so the retry SUCCEEDS, `_clearSyncError` fires, and the ledger reports a healthy table
-whose deletion never happened.
-
-**What retrying a delete means with no local tombstone — the decision.** It means nothing, which is
-why the tombstone must exist. `jungle_pending_deletes` holds `{table, col, val, at}` and does two
-jobs: it is the retry's *argument* (what the local list threw away), and it *suppresses the
-resurrection* so hydrate drops a row the coach already deleted instead of adopting it. Job 2 is the
-one the coach feels. `_clearSyncError` now refuses while a tombstone is outstanding — one choke-point
-rather than a rule repeated at every call site.
-
-⚠️ **One table already had this right and is why the shape is worth copying.**
-`library_overrides`' pusher is `if (d) saveLibraryCustom(d); else resetLibraryCustom()` — it MIRRORS
-whichever operation failed, because "no overrides" is derivable from local (DEC-13). A blob table
-needs no tombstone; the absence IS the tombstone. **That table was one ledger entry from correct,
-and it is the only one of the four whose bug is reachable today** — resetting the exercise library
-offline left the server's overrides in place and the next hydrate wrote them back. The three persona
-tables are latent only because 0005/0006 are unapplied.
-
-### Traps paid for, in order of how much time they cost
-
-🔴 **`expect(toast).toHaveCount(0)` IS NOT AN ASSERTION OF SILENCE.** It is satisfied the instant the
-count is zero, which includes "has not rendered yet". **Proved, not reasoned:** a mutation making the
-Schedule's autosave toast on every write left all three silence tests GREEN. It is a scan that ran on
-nothing, in a different costume. Silence is now *observed* — a `MutationObserver` records every toast
-that ever mounts and the assertion reads the record afterwards. **Any future "X never happens" test
-in this repo needs this shape.**
-
-⚠️ **A component cannot consume a context it provides.** `ToastProvider` was rendered inside App's own
-JSX, so App could not toast — which blocked turning its `window.confirm` into an undo, because the
-state to restore lives in App. Moved up into `StaffApp.jsx`. Still wraps the whole staff app; the
-toast is `position: fixed`, so its place in the tree does not affect where it appears.
-
-⚠️ **`Who&rsquo;s slipping away` is a real U+2019.** A locator using an ASCII apostrophe matches
-nothing, so a layout test failed on its selector rather than on the layout.
-
-⚠️ **Toasting from inside a `setState` updater fires twice under StrictMode.** Read the prior list
-from state instead.
-
-⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and traps
-focus, so any loop that visits it mid-sweep cannot click the next nav entry. Visit it last.
-
-⚠️ **`jungle_skin` holds a bare string, not JSON**, so the `stored()` helper cannot read it.
-
-⚠️ **An unlisted chunk in `check-size.mjs` has no ceiling at all** — it is counted in the file total
-and never fails. A new lazy chunk that nobody adds can grow forever. `RetentionScreen` now has one.
-
-⚠️ **Making a nav entry visible breaks two sweeps, both by design.** `ALL_SCREENS` is checked against
-the running app by `responsive.spec.js`, so omitting the new entry failed loudly — the ⚠️ above that
-list, working. And `interactions.spec.js` needed `analytics` in its navigation denylist, or every
-other screen's sweep clicks it and navigates away mid-sweep. Its four-control positive control also
-**fired correctly** on the screen itself: Analytics is a read-only report whose only buttons are Back
-and an import link, both already denied. The wrong fix is adding controls so a sweep has something to
-click; it is exempted by name with the reasoning recorded.
-
-### One test deleted rather than fixed
-
-`handleNewClass` skips the undo when there was no draft to lose, and that branch is **unreachable** —
-the Dashboard renders the control only `{hasDraft && ...}`. The guard stays as defence for a future
-call site. A test of an invented path is worse than no test, and this repo's own rule is not to
-report a defect a fixture manufactured.
-
-### Verified on the DEPLOYED bundle, not just locally
-
-The local build is credential-less, so rollup drops every sync path and a local `dist/` cannot
-answer "did this ship". `sw.js` is the precache manifest and lists every hashed asset, so from a tab
-on the live origin one loop fetches them all and greps them. Result at `d3578a2`:
-
-- `RetentionScreen-*.js` **is** in the deployment — N2 shipped.
-- there is **no `Analytics*` chunk at all** — `FLAGS.mockAnalytics` stayed false and the mock is
-  folded out of the PROD bundle, which the local build could not have told us. **The absent chunk
-  is the assertion.**
-- **none** of seven invented strings from that mock ("1,284", "£412", "Shoreditch", "Mara K.", …)
-  appear anywhere in the deployed JS, and the retired "Real analytics land in Phase 2" panel is
-  gone; all three N2 honesty strings are present.
-
-⚠️ **The live staff app cannot be DRIVEN** — it sits behind the Supabase sign-in wall. Drive on the
-dev server; verify shipping on the bundle. The recipe is in memory under `vite-build-stale-reads`.
-
-### What is genuinely left
-
-- 🔴 **Migrations `0005` and `0006` have never been applied.** Unchanged for several sessions and
-  still the most expensive data in the product: a gym's personas, plans and movement catalogue exist
-  on **one device with no server copy**. The coach-delete dialog now *says so* to the coach, which
-  means **that sentence becomes a lie the moment you apply them** — recorded in `DYLAN-QUEUE.md`
-  with the test that will remind you.
-- 🔴 **N4 member links are built and undeployed** — seven sessions now. Still the only member-facing
-  surface and the only place the white-label story can be proven on an actual member.
-- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps that are also the fix
-  for the Node 20 deprecation warning printed by every deploy in this session. Dylan's call.
-- **§3.7 skeleton states** — decided against, with the argument above. Not an open item.
-- **StaffApp has 10.5 kB of headroom.** Anything new goes in a lazy chunk with its own budget line.
-
-### The honest assessment
-
-The commercial gap the prompt named — "Jungle proves its value to the COACH and is sold to the
-OWNER; both halves exist and nothing connects them with a number" — is closed. The owner's screen now
-states monthly revenue at risk with its arithmetic, and the S$299 tier's third feature exists rather
-than being parked behind a precondition the product already satisfied.
-
-What is left in the queue is not theatre, but it is thinner than what came off it. The next session's
-highest-value work is almost certainly **not on this list**: it is getting 0005/0006 and N4 in front
-of a real gym, both of which need Dylan and neither of which any amount of code will move.
