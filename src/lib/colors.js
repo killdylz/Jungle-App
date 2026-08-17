@@ -535,9 +535,41 @@ export function applySkinCSS(tokens, meta={}) {
     document.body.style.fontFamily = `'${meta.fonts.body}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
   }
   // FR-A4: smooth reskin transition (inject once)
+  //
+  // ── Session 29 measured this before touching it, and MOSTLY LEFT IT ALONE ──
+  //
+  // The rule is global and permanent: injected once, `#root *`, never removed. So
+  // it is not scoped to the reskin it exists for — every colour change in the
+  // product eases over a third of a second, forever. Measured per screen:
+  // Dashboard 145 elements, Class Builder 263, Schedule 249, Brand Studio 371.
+  //
+  // ⚠️ IT IS LOAD-BEARING, and the numbers are why. Of the elements carrying it,
+  // 17–41 per screen are CONTROLS, and outside Brand Studio not one control
+  // declares a transition of its own — so this rule is the entire product's
+  // interaction feel, not a reskin detail that leaked. Removing it would make
+  // every selection, toggle and active-nav change in the app snap, and no test in
+  // this repo would notice. That is a product decision with a human in it, and
+  // "scope it to the reskin" would have made it invisibly.
+  //
+  // 🔴 WHAT IS NOT A TASTE CALL: it never consulted `prefers-reduced-motion`.
+  // A user who has told their operating system they do not want motion got 145
+  // animating elements on the Dashboard anyway — verified by driving the app in a
+  // reduce context and counting. This product already honours that preference on
+  // the room-facing displays (`prefersReducedMotion` in displayKit.js); the shell
+  // was the half that did not.
+  //
+  // A media query rather than a JS check, deliberately: it re-evaluates when the
+  // user changes the preference, with no listener to register and no state to
+  // keep. `no-preference` is the right side to gate on — a browser that reports
+  // neither value gets no transition, which is the safe way round.
+  //
+  // ⚠️ The contrast sweep's 500 ms settle-and-reread STAYS. It is needed for the
+  // default case, which is unchanged, and this narrows who animates rather than
+  // when.
   if (!document.getElementById("jungle-reskin-tx")) {
     const _tx = document.createElement("style"); _tx.id = "jungle-reskin-tx";
-    _tx.textContent = "#root *{transition:background-color .35s ease,color .35s ease,border-color .35s ease,fill .35s ease;}";
+    _tx.textContent = "@media (prefers-reduced-motion: no-preference){"
+      + "#root *{transition:background-color .35s ease,color .35s ease,border-color .35s ease,fill .35s ease;}}";
     document.head.appendChild(_tx);
   }
   // Body background keeps in sync with skin
