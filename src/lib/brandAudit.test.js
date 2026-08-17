@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { auditPairs, textFailures, hueInkOn, platedOn, CHIP_ALPHA, BADGE_ALPHA } from "./brandAudit.js";
 import { PRESET_SKINS } from "./skins.js";
-import { generateThemes, DANGER, WARN, contrastRgb, parseCssColor, hexA, compositeOver } from "./colors.js";
+import { DANGER, WARN, contrastRgb, parseCssColor, hexA, compositeOver } from "./colors.js";
+import { generateThemes } from "./brandGenerator.js";
 
 // ─── The audit that was narrower than the gate ───────────────────────────────
 //

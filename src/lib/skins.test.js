@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PRESET_SKINS, DEFAULT_SKIN_ID, baseSkin, resolveSkinTokens,
          isFallbackGeneratedSkin, FALLBACK_GENERATED_TOKEN_SETS } from "./skins.js";
-import { generateThemes, generateSkinFromPalette } from "./colors.js";
+import { generateThemes, generateSkinFromPalette } from "./brandGenerator.js";
 
 // ─── "What palette is this gym running?" — one answer ────────────────────────
 //

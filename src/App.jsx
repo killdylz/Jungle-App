@@ -47,9 +47,14 @@ import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib
 // their ~45 call sites was inside a function that moved, so App.jsx no longer
 // converts colour spaces itself. That is the shape a good extraction leaves
 // behind — the caller keeps the vocabulary it actually speaks.
-import { hexA, wcagContrast, nudgeContrast,
-         extractPalette, extractDominantColor, DEFAULT_PROGRAMS,
-         generateSkinFromPalette, generateThemes, applySkinCSS, inkOn, hueInk } from "./lib/colors.js";
+// ⚠️ TWO SYMBOLS, NOT ELEVEN. This imported `hexA`, `wcagContrast`,
+// `nudgeContrast`, `extractPalette`, `extractDominantColor`, `DEFAULT_PROGRAMS`,
+// `generateSkinFromPalette`, `generateThemes` and `inkOn` as well — every one of
+// them dead since session 28 lifted Brand Studio out of this file. Rollup was
+// tree-shaking them so they cost no bytes; what they cost was the next reader,
+// who had to assume App.jsx still generated palettes. Found by §2.6's audit of
+// what is actually in the entry chunk.
+import { applySkinCSS, hueInk } from "./lib/colors.js";
 // src/lib/qr.js is intentionally kept but unimported: the N4 member link (Day 5)
 // is the QR's first honest destination.
 import { ThemeContext, useWindowWidth, Input, Select, SpBadge, JungleLogo, BrandLogo } from "./ui/primitives.jsx";

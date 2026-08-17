@@ -12,7 +12,8 @@
 import React, { useState, useRef } from "react";
 import { Check, LogOut, User } from "lucide-react";
 import { SCFG } from "../data/stageConfig.js";
-import { extractDominantColor, hueInk } from "../lib/colors.js";
+import { hueInk } from "../lib/colors.js";
+import { extractDominantColor } from "../lib/brandGenerator.js";
 import { Input, Select, useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
 

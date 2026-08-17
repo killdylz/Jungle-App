@@ -39,8 +39,9 @@
 // card scores 8.62:1 and passes. Composited it is the plate that matters, and
 // the ink is not the hue at all: `hueInk` anchors it to `--text` at 65%. Both
 // halves have to be right or the row is theatre.
-import { hexA, inkOn, hueInk, DEFAULT_PROGRAMS, DANGER, WARN,
+import { hexA, inkOn, hueInk, DANGER, WARN,
          parseCssColor, compositeOver, contrastRgb, mixSrgb } from "./colors.js";
+import { DEFAULT_PROGRAMS } from "./brandGenerator.js";
 
 // `hueInk` emits `color-mix(in srgb, var(--text) 65%, <hue>)`. This is that
 // string's VALUE, computed the way the browser computes it. The 0.65 is not

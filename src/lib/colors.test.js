@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   hexToRgb, rgbToHex, rgbToHsl, hslToRgb, hexA,
-  wcagContrast, nudgeContrast, relativeLuminance,
-  generateSkinFromPalette, generateThemes, DEFAULT_PROGRAMS,
+  wcagContrast, relativeLuminance,
   inkOn, borderOn, hueInk,
   parseCssColor, compositeOver, luminanceRgb, contrastRgb, mixSrgb, DANGER, WARN,
 } from "./colors.js";
+// The generator moved to its own module in session 29 — it is owner-only, and
+// `colors.js` is eager. These tests did not move: what they pin is the same.
+import { generateSkinFromPalette, generateThemes, DEFAULT_PROGRAMS,
+         nudgeContrast } from "./brandGenerator.js";
 
 // These arrived with decomposition stage 1 (AUDIT-FINDINGS §3.1). The extraction
 // itself was mechanical, but it made this module testable in isolation for the

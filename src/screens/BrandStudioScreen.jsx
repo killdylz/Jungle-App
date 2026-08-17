@@ -5,11 +5,22 @@
 // ceiling, and that ceiling is what the next feature has to fit inside.
 //
 // This screen is the right one to move first and the argument is not its size.
-// It is OWNER-ONLY and opened rarely — a coach running classes never sees it —
-// and it is the ONLY caller of `colors.js`'s generator machinery
-// (`extractPalette`, `generateSkinFromPalette`, `generateThemes`,
-// `nudgeContrast`), so the chunk takes that with it. Everything a class needs at
-// 6am stays in the eager bundle.
+// It is OWNER-ONLY and opened rarely — a coach running classes never sees it.
+//
+// 🔴 THE SECOND HALF OF THAT ARGUMENT WAS FALSE FOR A WHOLE SESSION, and it is
+// left here corrected rather than deleted because the mistake is easy to repeat.
+// It read: "it is the ONLY caller of colors.js's generator machinery, so the
+// chunk takes that with it." It did not. `main.jsx` imports `bootColours` from
+// `colors.js` for the pre-hydration splash, and **rollup places whole modules**
+// — so that one eager edge kept the entire file, generator included, in the
+// chunk a MEMBER downloads to look at one class. Verified by grepping the built
+// output: `generateThemes`' theme names were in `index.js` and absent from this
+// screen's chunk.
+//
+// Session 29 §2.6 split the generator into `lib/brandGenerator.js`, which this
+// screen and ProfileModal import and nothing eager does. 2.84 KB off the entry
+// chunk, measured. Being the only caller of something is not what moves it;
+// nothing eager importing its MODULE is.
 //
 // ⚠️ `applySkinCSS` and `resolveSkinTokens` are NOT owner-only and stay eager —
 // App calls them on every skin change. Importing them here shares them; it does
@@ -23,8 +34,9 @@ import { TEMPLATES } from "../data/templates.js";
 import { PRESET_SKINS, baseSkin, resolveSkinTokens, isFallbackGeneratedSkin } from "../lib/skins.js";
 import { auditPairs, textFailures } from "../lib/brandAudit.js";
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "../lib/revenueAtRisk.js";
-import { hexA, wcagContrast, nudgeContrast, extractPalette, DEFAULT_PROGRAMS,
-         generateSkinFromPalette, generateThemes, applySkinCSS, inkOn, hueInk } from "../lib/colors.js";
+import { hexA, wcagContrast, applySkinCSS, inkOn, hueInk } from "../lib/colors.js";
+import { nudgeContrast, extractPalette, DEFAULT_PROGRAMS,
+         generateSkinFromPalette, generateThemes } from "../lib/brandGenerator.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 
 function ProgramChip({ name, tint }) {
