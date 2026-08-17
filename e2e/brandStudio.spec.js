@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { freshApp, nav, stored, waitForApp, watchConsole, expectNoConsoleErrors } from "./helpers.js";
-import { PRESET_SKINS } from "../src/lib/skins.js";
+import { PRESET_SKINS, FALLBACK_GENERATED_TOKEN_SETS, isFallbackGeneratedSkin } from "../src/lib/skins.js";
 
 // ─── What Brand Studio writes, and whether the app wears it ──────────────────
 //
@@ -411,5 +411,145 @@ test.describe("Smart Recommendation says what it actually does", () => {
     await page.getByRole("button", { name: /type & finish, keep this palette/ }).click();
     await page.getByRole("button", { name: /HYROX \/ Functional/ }).click();
     await expect(page.getByRole("button", { name: /type & finish, keep this palette/ })).toHaveCount(0);
+  });
+});
+
+// ─── The gyms the generator fix arrived too late for ─────────────────────────
+//
+// Session 28 fixed `runAnalysis`. **The fix is not retroactive.** A studio that
+// pressed "Apply to all surfaces" before it has Canopy-derived tokens sitting in
+// `jungle_custom_skin`, those tokens are the source of truth, and the app will
+// paint them forever. Nothing in the product mentioned it, and Brand Studio went
+// on showing the stored palette as if the gym had chosen it.
+//
+// 🔴 What these actually guard is the RESTRAINT. The easy build here rewrites the
+// stored palette on open, and this repo's rule is that a destructive change a
+// coach cannot see does not get made for them. So the load-bearing assertions
+// below are the ones that read `jungle_custom_skin` and find it UNCHANGED — after
+// the offer renders, after the analysis runs, and after the coach declines.
+test.describe("a gym wearing the palette every studio got", () => {
+  // The two token sets the broken path could produce, imported rather than
+  // retyped: a fixture that drifts from the detector would test nothing.
+  const SIGNATURE = FALLBACK_GENERATED_TOKEN_SETS[0];
+  const STEEL     = FALLBACK_GENERATED_TOKEN_SETS[1];
+
+  const logoOf = (page, hex) => page.evaluate((c) => {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const x = cv.getContext("2d"); x.fillStyle = c; x.fillRect(0, 0, 64, 64);
+    return cv.toDataURL("image/png");
+  }, hex);
+
+  // Seeds the state a real affected gym is in: canopy as the base id (which is
+  // what `applyGenerated` writes), generated tokens over it, and the logo it
+  // uploaded — crimson, so a re-read has somewhere different to land.
+  async function seedGym(page, { tokens, logo = true } = {}) {
+    await freshApp(page);
+    const png = logo ? await logoOf(page, "#B5122C") : null;
+    await page.evaluate(({ tk, lg }) => {
+      localStorage.setItem("jungle_skin", "canopy");
+      localStorage.setItem("jungle_custom_skin", JSON.stringify(tk));
+      localStorage.setItem("jungle_gym_branding", JSON.stringify(lg ? { logo: lg } : {}));
+    }, { tk: tokens, lg: png });
+    await page.reload();
+    await waitForApp(page);
+    await nav(page, "Brand Studio");
+  }
+
+  const offer = (page) => page.locator("[data-regen-offer]");
+  // The screen is a lazy chunk. Asserting a panel that is always present has
+  // rendered is what makes a later "the offer is absent" mean absent rather than
+  // not-yet — `toHaveCount(0)` is satisfied by a screen that has not arrived.
+  const brandStudioReady = (page) =>
+    expect(page.getByText("GENERATE FROM YOUR BRAND")).toBeVisible();
+
+  test("is offered a re-read it did not have to go looking for", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedGym(page, { tokens: SIGNATURE });
+    await brandStudioReady(page);
+    await expect(offer(page)).toBeVisible();
+    await expect(page.getByText("This palette may not have come from your logo")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Re-read my logo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Keep these colours" })).toBeVisible();
+
+    // Rendering the offer must not itself have touched the palette.
+    expect(await stored(page, "jungle_custom_skin")).toEqual(SIGNATURE);
+    expectNoConsoleErrors(errors);
+  });
+
+  // 🔴 The theme an accent check cannot see. "Steel" derives its own desaturated
+  // accent (#aeccba), so a detector keyed on Canopy's mint leaves this third of
+  // the affected gyms wearing the wrong brand with nothing offered.
+  test("is offered it on Steel, whose accent is not Canopy's mint", async ({ page }) => {
+    await seedGym(page, { tokens: STEEL });
+    await brandStudioReady(page);
+    expect(STEEL.accent).not.toBe(PRESET_SKINS.canopy.tokens.accent);   // precondition
+    await expect(offer(page)).toBeVisible();
+  });
+
+  // 🔴 THE CONTROL. A boutique studio whose mark really is this green must not be
+  // told its brand is a bug. It sits on Canopy's own surfaces, not the
+  // generator's derived ones, and that is what keeps this screen quiet.
+  test("says nothing to a gym that deliberately chose Canopy's mint", async ({ page }) => {
+    await seedGym(page, { tokens: PRESET_SKINS.canopy.tokens });
+    await brandStudioReady(page);
+    await expect(offer(page)).toHaveCount(0);
+  });
+
+  // No logo means nothing to re-read, and `runAnalysis` early-returns on it — the
+  // offer would be a button that does nothing.
+  test("says nothing when there is no logo to re-read", async ({ page }) => {
+    await seedGym(page, { tokens: SIGNATURE, logo: false });
+    await brandStudioReady(page);
+    await expect(offer(page)).toHaveCount(0);
+  });
+
+  test("declining leaves the palette exactly as it was, and stays declined", async ({ page }) => {
+    await seedGym(page, { tokens: SIGNATURE });
+    await expect(offer(page)).toBeVisible();
+    await page.getByRole("button", { name: "Keep these colours" }).click();
+    await expect(offer(page)).toHaveCount(0);
+
+    // The whole point: declining is not a repair deferred, it is a decision kept.
+    expect(await stored(page, "jungle_custom_skin")).toEqual(SIGNATURE);
+    expect((await stored(page, "jungle_gym_branding"))?.brandRegenDismissed).toBe(true);
+
+    // …and it survives the reload, or it is a dismissal that re-nags every visit.
+    await page.reload();
+    await waitForApp(page);
+    await nav(page, "Brand Studio");
+    await brandStudioReady(page);
+    await expect(offer(page)).toHaveCount(0);
+    expect(await stored(page, "jungle_custom_skin")).toEqual(SIGNATURE);
+  });
+
+  // 🔴 THE ONE THE FEATURE IS BUILT AROUND. Accepting is two steps, and the first
+  // one writes nothing. If this ever regresses to a one-click repair, a gym that
+  // opened Brand Studio to look at something else loses a stored palette.
+  test("re-reading shows the result and still writes nothing until Apply", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedGym(page, { tokens: SIGNATURE });
+    await page.getByRole("button", { name: "Re-read my logo" }).click();
+    await expect(page.getByText("GENERATED IDENTITY")).toBeVisible({ timeout: 15_000 });
+
+    // The analysis has demonstrably run — the panel is on screen — and the stored
+    // palette is still the old one.
+    expect(await stored(page, "jungle_custom_skin"),
+      "the re-read wrote to storage before the coach applied anything").toEqual(SIGNATURE);
+
+    await page.getByRole("button", { name: "Apply to all surfaces" }).click();
+    const after = await stored(page, "jungle_custom_skin");
+    expect(after).not.toEqual(SIGNATURE);
+    expect(isFallbackGeneratedSkin(after),
+      `the re-read produced the fallback palette again: ${JSON.stringify(after)}`).toBe(false);
+
+    // The offer clears itself off the back of the stored tokens — nothing has to
+    // remember it was shown.
+    await expect(offer(page)).toHaveCount(0);
+    await page.reload();
+    await waitForApp(page);
+    await nav(page, "Brand Studio");
+    await brandStudioReady(page);
+    await expect(offer(page)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
   });
 });

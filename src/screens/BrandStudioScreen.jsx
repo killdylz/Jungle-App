@@ -20,7 +20,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Check } from "lucide-react";
 import { supabase, supabaseEnabled } from "../supabase.js";
 import { TEMPLATES } from "../data/templates.js";
-import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "../lib/skins.js";
+import { PRESET_SKINS, baseSkin, resolveSkinTokens, isFallbackGeneratedSkin } from "../lib/skins.js";
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "../lib/revenueAtRisk.js";
 import { hexA, wcagContrast, nudgeContrast, extractPalette, DEFAULT_PROGRAMS,
          generateSkinFromPalette, generateThemes, applySkinCSS, inkOn, hueInk } from "../lib/colors.js";
@@ -297,6 +297,40 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
   };
   const displayFont = (_baseSkin.fonts?.display || "Space Grotesk");
 
+  // ── The gyms the generator fix arrived too late for (§2.1) ──────────────────
+  //
+  // Fixing `runAnalysis` does nothing for a studio that already pressed "Apply to
+  // all surfaces": their `jungle_custom_skin` holds tokens derived from Canopy's
+  // mint, those tokens ARE the source of truth, and nothing in the product would
+  // ever mention it. The Brand Studio would go on showing the stored palette as
+  // if the gym had chosen it.
+  //
+  // 🔴 AN OFFER, NEVER A REWRITE. Pressing "Re-read my logo" runs the same
+  // analysis the upload path runs and writes NOTHING — it fills `generatedSkin`
+  // and `generatedThemes`, which are local state. The only thing that touches
+  // `jungle_custom_skin` is "Apply to all surfaces", which the coach presses
+  // themselves after seeing the result. That is the same rule the rest of this
+  // product follows about changes that are destructive and invisible, and it is
+  // the reason "regenerate on next open" was not built.
+  //
+  // Gated on a STORED LOGO as well as the tokens. Without one there is nothing to
+  // re-read and the offer would be a dead end — and `runAnalysis` early-returns
+  // on `!logoSrc` anyway, so the button would do nothing at all.
+  //
+  // The dismissal lives in `branding`, which is a free-form blob that already
+  // round-trips to `brand_profiles` — no migration, and it follows the gym to
+  // its other devices rather than being a per-browser decision.
+  //
+  // It hides itself once the coach engages (`analyzing || generatedSkin`),
+  // because from that point the generated-identity panel IS the offer, and it
+  // disappears for good once they apply: the new tokens come from their logo, so
+  // `isFallbackGeneratedSkin` stops matching. Nothing has to remember it was
+  // shown.
+  const wearingFallbackBrand =
+    isFallbackGeneratedSkin(customSkinTokens) && !!gymBranding.logo && !gymBranding.brandRegenDismissed;
+  const showRegenOffer = wearingFallbackBrand && !analyzing && !generatedSkin;
+  const dismissRegenOffer = () => onBrandingChange({ ...gymBranding, brandRegenDismissed: true });
+
   return (
     <div style={{flex:1,overflowY:"auto",padding:isMobile?"14px":"28px",boxSizing:"border-box"}}>
       {/* Header */}
@@ -309,6 +343,48 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
           <div style={{fontSize:"12px",color:"var(--muted)",marginTop:"2px"}}>Upload your brand — Jungle designs the identity, then reskins every surface</div>
         </div>
       </div>
+
+      {/* Re-read offer — see `showRegenOffer` above for why this is an offer and
+          not a repair. Above the grid rather than inside the generator panel: on
+          mobile that panel is a scroll below the templates, and a studio wearing
+          the wrong brand should not have to find this. */}
+      {showRegenOffer && (
+        <div data-regen-offer style={{
+          background:"var(--card)", border:`1px solid var(--accent)`, borderRadius:"16px",
+          padding:isMobile?"14px":"18px", marginBottom:"18px",
+          boxShadow:`0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)`}}>
+          <div style={{fontSize:"10px",fontWeight:"700",color:"var(--accent)",textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"8px"}}>CHECK YOUR PALETTE</div>
+          {/* ⚠️ The copy states what was MEASURED — that these tokens match the
+              ones Jungle handed every studio — and stops there. It does not tell
+              a gym its brand is wrong, because the detector cannot know that: a
+              studio whose mark genuinely is this green would read this too, and
+              for them "Keep these colours" is the correct answer rather than a
+              dismissed warning. */}
+          <div style={{fontSize:isMobile?"13px":"14px",fontWeight:"700",color:"var(--text)",marginBottom:"6px",fontFamily:`'${displayFont}',sans-serif`}}>
+            This palette may not have come from your logo
+          </div>
+          <div style={{fontSize:"12px",color:"var(--muted)",lineHeight:"1.55",marginBottom:"12px",maxWidth:"62ch"}}>
+            It matches the colours Jungle generated before a fix to the logo reader — which
+            gave every studio the same identity. Re-reading your logo shows what it produces
+            now. Nothing changes until you press Apply.
+          </div>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            {/* 44px, not the 36px this padding gives: these carry `data-tap`, and
+                the mobile sweep hit-tests a real 44px square at eight compass
+                points rather than measuring the box. A marked control that does
+                not meet it reports dead N/S points — correctly, because a thumb
+                would miss it too. */}
+            <button onClick={runAnalysis} data-tap
+              style={{padding:"10px 14px",minHeight:"44px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:"var(--on-accent)",fontFamily:`'${displayFont}',sans-serif`}}>
+              Re-read my logo
+            </button>
+            <button onClick={dismissRegenOffer} data-tap
+              style={{padding:"10px 14px",minHeight:"44px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"600",color:"var(--text)"}}>
+              Keep these colours
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":isTablet?"1fr":"1fr 1fr",gap:"18px"}}>
 

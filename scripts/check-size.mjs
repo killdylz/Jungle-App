@@ -64,9 +64,27 @@ const KB = 1000;
 // own because it is the SAME route (`analytics`) and the same screen: two lazy
 // chunks for one screen would mean two fetches to render it, which is worse than
 // four KB.
+// 🔴 BrandStudioScreen 28 → 30 credential-less, 30 → 32 prod (session 29 §2.1).
+// What bought the bytes: the re-read offer for gyms whose stored palette came
+// from the generator's fallback rather than their logo — the detector's two
+// frozen token sets and comparison in `skins.js`, plus the banner's markup and
+// copy. Measured 28.20 KB, up from 26.55.
+//
+// ⚠️ THE BYTES DID NOT ALL LAND WHERE THE FEATURE DID, and it is worth naming
+// because guessing gets it wrong. Measured across the three chunks:
+//
+//   BrandStudioScreen.js  26.55 → 28.20  the banner's markup and copy
+//   StaffApp.js          292.32 → 292.89  the detector itself
+//   index.js             204.72 → 204.72  unchanged
+//
+// The detector lives in `lib/skins.js`, which App.jsx imports — so it is placed
+// in `StaffApp.js`, the chunk both readers share, not in the lazy screen that
+// asked for it. Nothing eager reaches `skins.js`, which is why the entry chunk
+// is untouched. A future caller in `main.jsx` or its imports WOULD move it into
+// `index.js`, the chunk with the least headroom in the build.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 30, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 28, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 30, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }
