@@ -14,8 +14,18 @@
 // src/music/, not deleted, pending the post-pilot decision.
 
 export const FLAGS = {
-  // AnalyticsScreen's hardcoded KPIs. Kept — the audit wants the screen retained
-  // as the layout target for real N2 analytics, so this one earns its flag.
+  // 🔴 THE SCREEN THIS WAS NAMED FOR IS GONE (session 29). It gated
+  // `AnalyticsScreen.jsx`, kept as the layout target for real N2 analytics —
+  // and that target was hit: `RetentionScreen` shipped on the route in session
+  // 27 and grew a second panel in session 28, so the reason to retain 284 lines
+  // of invented KPIs expired. Deleted, per this file's own rule that a flag is a
+  // holding pen and git history is the archive.
+  //
+  // The flag STAYS because it still has a reader: `CalendarScreen.jsx` gates
+  // three mock panels on it (`suggested`, `trainers`, `aiTips`) plus the block
+  // that renders them. Deleting the flag would ship those. Renaming it is a
+  // separate change from deleting a screen, and doing both at once is how a
+  // rename gets blamed for a deletion's breakage.
   mockAnalytics: false,
 
   // The music / Auto-DJ subsystem (audit 2.1). Cut from the sellable product:
@@ -51,9 +61,9 @@ export const FLAGS = {
 // live and unreachable: nothing in the product could navigate to it.
 //
 // It is gone from this map rather than flipped on, and the distinction matters.
-// `FLAGS.mockAnalytics` is still false and `AnalyticsScreen`'s invented KPIs are
-// still dead code — flipping it would ship "1,284 active members" and "£412 per
-// class" to a paying gym. What is now behind the route is `RetentionScreen`,
+// `FLAGS.mockAnalytics` is still false, and as of session 29 `AnalyticsScreen` is
+// deleted rather than merely dead — flipping the flag used to ship "1,284 active
+// members" and "£412 per class" to a paying gym, and now cannot. What is now behind the route is `RetentionScreen`,
 // computed from the gym's own rows, so it needs no flag: the honesty gate lives in
 // `cohortModel`, which states what data is missing instead of drawing a shape.
 //

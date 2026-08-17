@@ -13,8 +13,11 @@ const ANALYTICS = ALL_SCREENS.find(s => s.key === "analytics");
 //   1. the nav entry is REACHABLE. It was not — `isViewEnabled("analytics")`
 //      returned false because flags.js mapped `analytics` to `mockAnalytics`, so
 //      all three nav arrays filtered it out. The route was live and unreachable.
-//   2. the MOCK stays dead. `FLAGS.mockAnalytics` is still false, and none of
-//      AnalyticsScreen's invented figures may appear on any screen.
+//   2. the MOCK stays dead. `AnalyticsScreen.jsx` was DELETED in session 29 once
+//      this screen had replaced it, so the test below has changed job: it was a
+//      guard against the flag being flipped, and it is now a guard against the
+//      invented figures being reintroduced anywhere. Kept for that reason —
+//      deleting the source makes the assertion cheap, not pointless.
 
 const NAMES = ["Larry Tan","Gina Lim","Rita Chua","Wei Ng","Ana Rodrigues","Marcus Lee","Priya Nair",
   "Jun Hao","Siti Rahman","Ben Koh","Chloe Wong","Dinesh Kumar","Emma Teo","Farid Hassan","Grace Lim",
@@ -197,10 +200,12 @@ test.describe("studio analytics", () => {
     await expect(firstRow).toContainText("—");
   });
 
-  test("the fabricated analytics screen stays dead", async ({ page }) => {
-    // FLAGS.mockAnalytics is still false. Flipping it would ship "1,284 active
-    // members" and "£412 revenue per class" to a paying gym — this asserts the
-    // route did not accidentally become the mock.
+  test("the fabricated analytics screen stays deleted", async ({ page }) => {
+    // `AnalyticsScreen.jsx` is gone as of session 29 — this used to assert that
+    // `FLAGS.mockAnalytics` had not been flipped, and now asserts the figures
+    // themselves have not come back. The strings are the point, not the file:
+    // "1,284 active members" and "£412 revenue per class" on a paying gym's
+    // screen is the outcome being prevented, whichever component would draw it.
     const errors = watchConsole(page);
     await seed(page, build());
     await nav(page, "Analytics");

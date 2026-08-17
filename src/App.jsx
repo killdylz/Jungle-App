@@ -69,13 +69,6 @@ import { LiveScreen, RoomTV, useClassRunner } from "./screens/runner/index.js";
 // `.then` because the module exports a NAMED symbol and `lazy` wants a default.
 const PersonasScreen = React.lazy(() =>
   import("./screens/personas/PersonasScreen.jsx").then(m => ({ default: m.PersonasScreen })));
-// NOT lazy, on purpose. FLAGS.mockAnalytics is false and FLAGS is a const of
-// literals, so rollup already folds the branch away and this screen is absent
-// from the bundle entirely — React.lazy would defeat that folding and emit a
-// 13 KB chunk into the SW precache that nothing ever fetches. The header of
-// AnalyticsScreen.jsx carries the measurements. It is still the layout target
-// for the real screen below, which is the only reason it is kept at all.
-import AnalyticsScreen from "./screens/AnalyticsScreen.jsx";
 // The REAL analytics (N2), replacing the coming-soon stub on the same route.
 // LAZY for the opposite reason to the line above: this branch is live, so its
 // bytes are real bytes, and StaffApp had 12.65 kB of budget left.
@@ -2331,9 +2324,13 @@ export default function App() {
         {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {/* The mock branch is kept, and stays folded away while the flag is false
             — its layout is what this screen was built against. What changed is
-            the FALSE arm: it used to be a coming-soon panel, and is now the real
-            thing computed from the gym's own attendance rows. */}
-        {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<RetentionScreen onBack={()=>setView("dashboard")} onNavigate={setView}/>)}
+            no longer a branch at all. It was `FLAGS.mockAnalytics ? <AnalyticsScreen/>
+            : <RetentionScreen/>`, kept so the mock could serve as the layout target
+            for the real screen. The real screen shipped in session 27 and grew a
+            second panel in session 28, so the target was hit and the mock was
+            deleted in session 29 — git history is its archive, which is what
+            flags.js says a holding pen is for. */}
+        {view==="analytics"&&<RetentionScreen onBack={()=>setView("dashboard")} onNavigate={setView}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")} onStartClass={handleStartScheduled}/>}
         {view==="music"&&(!FLAGS.music
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>

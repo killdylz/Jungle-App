@@ -3,11 +3,12 @@
 // Replaces `MockDisabledScreen` on the `analytics` route. NOT a new surface: the
 // route, the nav entries and the `analytics:view` capability all predate this.
 //
-// ⚠️ `FLAGS.mockAnalytics` stays FALSE and `AnalyticsScreen.jsx` stays dead. That
-// screen's KPIs are invented — "1,284 active members", "£412 revenue per class",
-// four fabricated churn-risk names — and flipping the flag would ship 24 kB of
-// fiction to a paying customer. The flag's own comment keeps it as the layout
-// target for this build, which is what it has been used as.
+// ⚠️ `AnalyticsScreen.jsx` WAS the layout target for this file and is gone as of
+// session 29. Its KPIs were invented — "1,284 active members", "£412 revenue per
+// class", four fabricated churn-risk names — and it sat one flag away from a
+// paying customer's screen for the sole reason that this build had not landed
+// yet. It had. `FLAGS.mockAnalytics` survives it, gating CalendarScreen's mock
+// panels; see flags.js.
 //
 // LAZY, and it has to be: `npm run size` had 12.65 kB of StaffApp headroom when
 // this was written. Everything numeric lives in `lib/cohorts.js` so this file is
