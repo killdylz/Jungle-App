@@ -1,3 +1,5 @@
+import { parseCssColor, compositeOver, luminanceRgb, contrastRgb } from "../src/lib/colors.js";
+
 // ─── Contrast, with the alpha actually composited ────────────────────────────
 //
 // `UI-UX-DIRECTION` §1's white-label rule — tokens only, no raw hex — exists so
@@ -41,52 +43,30 @@
 // here is therefore CONFIRMED on a second read taken after the transition has
 // had time to land, and only the intersection is reported.
 
-// The page-side half. Injected rather than passed as a function so the same
-// definitions are available to the positive control below.
+// The page-side half. The colour ARITHMETIC is not defined here — it is imported
+// from `src/lib/colors.js` and serialised into the page with
+// `Function.prototype.toString()`, so the sweep and Brand Studio's in-app AA
+// audit cannot drift apart.
+//
+// 🔴 WHY THAT MATTERS MORE THAN THE DUPLICATION IT REMOVES. Before session 29
+// the panel carried five opaque token pairs and this file carried the real
+// compositing. The panel told an owner "Member-visible text meets WCAG AA" about
+// palettes this sweep failed in nine places. A compliance feature that
+// under-reports is worse than none, because the owner stops looking. One
+// implementation means a mutation to the maths turns BOTH red.
+//
+// ⚠️ The functions must stay self-contained — arguments and each other, nothing
+// else — or they arrive in the page referencing bindings that are not there.
+// `colors.test.js` asserts that property by evaluating them in an empty scope.
+const SHARED = [parseCssColor, compositeOver, luminanceRgb, contrastRgb]
+  .map((f) => f.toString()).join("\n");
+
 const SCANNER = `(() => {
-  // 🔴 NOT EVERY COMPUTED COLOUR IS \`rgb()\`.
-  //
-  // \`color-mix(in srgb, …)\` — which is how this product makes a decorative hue
-  // readable on any skin — computes to \`color(srgb 0.927 0.826 0.609)\`, with
-  // channels in 0–1 rather than 0–255. A scanner that scrapes the numbers out
-  // and treats them as bytes reads that as \`rgb(1, 1, 1)\`: near-black.
-  //
-  // That is not a harmless imprecision, it is a scanner that INVENTS failures
-  // and hides real ones. Pointed at Canopy it reported eleven violations on the
-  // Brand Studio, every one of them a chip that had just been fixed; pointed at
-  // a light skin the same misreading scored those chips as near-black on white
-  // and passed them. Both wrong, in opposite directions, from one missing
-  // branch — and the light run's PASS is the more dangerous of the two.
-  const parse = (c) => {
-    const s = String(c || "");
-    const m = s.match(/[-\\d.]+(?=[\\s,)/])|[-\\d.]+/g);
-    if (!m) return null;
-    const n = m.map(Number);
-    // \`color(srgb r g b [/ a])\` and \`color(display-p3 …)\`: 0–1 channels.
-    if (/^color\\(/.test(s)) {
-      const [r, g, b] = n.slice(0, 3);
-      return { r: r * 255, g: g * 255, b: b * 255, a: n.length > 3 ? n[3] : 1 };
-    }
-    const [r, g, b] = n.slice(0, 3);
-    return { r, g, b, a: n.length > 3 ? n[3] : 1 };
-  };
-  // Source-over. \`top\` carries the alpha; \`bottom\` is assumed opaque.
-  const over = (top, bottom) => ({
-    r: top.r * top.a + bottom.r * (1 - top.a),
-    g: top.g * top.a + bottom.g * (1 - top.a),
-    b: top.b * top.a + bottom.b * (1 - top.a),
-    a: 1,
-  });
-  const lum = ({ r, g, b }) => {
-    const p = [r, g, b].map((v) => {
-      v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
-  };
-  window.__ratio = (fg, bg) => {
-    const s = [lum(fg), lum(bg)].sort((x, y) => y - x);
-    return (s[0] + 0.05) / (s[1] + 0.05);
-  };
+  ${SHARED}
+  const parse = parseCssColor;
+  const over = compositeOver;
+
+  window.__ratio = (fg, bg) => contrastRgb(fg, bg);
   window.__rgbStr = (c) => \`rgb(\${Math.round(c.r)}, \${Math.round(c.g)}, \${Math.round(c.b)})\`;
 
   // The opaque colour a glyph in \`el\` is actually painted onto, and the text

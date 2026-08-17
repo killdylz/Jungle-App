@@ -44,6 +44,7 @@ undo it. Nothing in Part A needs me.
 | A11 | The live-verification queue (7 checks) | ~2 h | none |
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
+| **A14** | **A yes/no: does Jungle bend a gym's accent to make it legible?** | 10 min read | none — a decision, no work |
 
 ---
 
@@ -749,3 +750,54 @@ not be started until you have said you want it.
 
 **What I need from you:** yes / no / "yes but only in the slot-matched shape". Nothing is blocked
 on this — the class-type ranking is shipped and stands alone.
+
+
+---
+
+## A14 · A yes/no: does Jungle bend a gym's accent to make it legible?
+
+**Nothing is blocked on this.** The product now MEASURES and REPORTS both cases below; the
+question is only whether it should also fix them, which it cannot do without changing a colour the
+gym chose.
+
+Session 29 widened Brand Studio's accessibility audit from five token pairs to fourteen, sharing
+its arithmetic with the sweep CI runs. Three things fell out. One was ours and is fixed: the
+generator clamped `muted` against `bg` alone, so on a light identity it cleared 4.5:1 against the
+lightest surface in the palette and sat at ~4.0:1 on the two darker ones. It now clamps against
+every surface, and no generated identity has an unreadable one.
+
+The other two are not ours to fix, because the only repair is to alter the gym's own accent.
+
+**1 · A dark logo produces an accent that cannot be used as a graphic on its own background.**
+WCAG 1.4.11 wants 3:1 for a non-text mark. Measured on the generator's own output:
+
+| logo | generated accent on its background |
+|---|---|
+| navy `#12224A` | **1.25:1** |
+| crimson `#B5122C` | **2.86:1** |
+| blue `#1D4ED8` | **2.90:1** |
+
+**2 · On a LIGHT identity, a mid-luminance accent has no readable label.** `inkOn` picks whichever
+of background/text contrasts more against the fill — the right question, and it cannot invert — but
+"more" is not "enough". Violet `#A855F7` gives 3.70:1 against one candidate and 4.13:1 against the
+other, so the button label fails AA whichever wins. The blue "Steel" derivation lands at 3.91:1.
+
+**Why I did not just fix them.** `colors.js` already carries the rule, for `--danger`: a colour the
+gym chose is not ours to change, because a gym whose accent is red must not get a delete button
+that matches its primary action. Nudging a studio's brand accent until it clears 3:1 is the same
+move — it makes the app compliant by making it not their brand. And it would be invisible: they
+upload a logo, and the colour that comes back is not the one they gave us.
+
+**What the product does today.** Both are reported, in the coach's own words, on the panel where
+the palette is chosen. The generated-identity badge used to read "✓ Passes WCAG AA" over the
+1.25:1 case — it was reading `contrast.passesAA`, which is `textOnBg >= 4.5` and nothing else. It
+now reads the full audit and names the failing pairs.
+
+**What I need from you, pick one:**
+
+- **(a) Leave it.** Report and let the studio decide. Cheapest, and defensible: it is their brand.
+- **(b) Offer a nudged accent as a SUGGESTION** the coach can take or decline — the shape §2.1's
+  re-read offer uses, and the one I would pick. It never rewrites, and it gives a studio with a
+  navy mark a way out that does not involve them knowing what 3:1 means.
+- **(c) Clamp it silently.** I would not: it is the invisible-change failure mode this product has
+  a standing rule against.

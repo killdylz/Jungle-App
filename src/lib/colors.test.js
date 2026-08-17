@@ -4,6 +4,7 @@ import {
   wcagContrast, nudgeContrast, relativeLuminance,
   generateSkinFromPalette, generateThemes, DEFAULT_PROGRAMS,
   inkOn, borderOn, hueInk,
+  parseCssColor, compositeOver, luminanceRgb, contrastRgb, mixSrgb, DANGER, WARN,
 } from "./colors.js";
 
 // These arrived with decomposition stage 1 (AUDIT-FINDINGS §3.1). The extraction
@@ -344,5 +345,102 @@ describe("hueInk — a decorative hue made readable on any skin", () => {
   it("emits a color-mix the browser can resolve, with the hue intact", () => {
     expect(hueInk("#F59E0B")).toBe("color-mix(in srgb, var(--text) 65%, #F59E0B)");
     expect(hueInk("var(--green)")).toBe("color-mix(in srgb, var(--text) 65%, var(--green))");
+  });
+});
+
+// ─── The compositing arithmetic the sweep and the panel now share ────────────
+//
+// These functions have two readers that cannot see each other: `e2e/contrastScan
+// .js` serialises them into a browser, and `lib/brandAudit.js` calls them in the
+// app. Before session 29 there were two implementations and the panel's was the
+// narrower one — it told owners "Member-visible text meets WCAG AA" about
+// palettes the sweep failed in nine places.
+describe("compositing — one implementation, two readers", () => {
+  // 🔴 THE PROPERTY THE SCANNER DEPENDS ON. `contrastScan.js` injects these into
+  // a page as SOURCE TEXT. A reference to any module-scope binding — an import,
+  // a constant, another helper in this file — would arrive in the page as a
+  // ReferenceError at scan time, and the sweep's own controls would be the only
+  // thing standing between that and a silently empty result.
+  //
+  // `new Function` gives exactly the scope the page gives: globals and nothing
+  // else. If this passes, the injection cannot fail for that reason.
+  it("survives being evaluated with no module scope at all", () => {
+    const src = [parseCssColor, compositeOver, luminanceRgb, contrastRgb, mixSrgb]
+      .map((f) => f.toString()).join("\n");
+    const isolated = new Function(`${src}
+      return {
+        ratio: contrastRgb(parseCssColor("#ffffff"), parseCssColor("#000000")),
+        chip:  compositeOver({ ...parseCssColor("#7BE3A4"), a: 0.14 }, parseCssColor("#0F1611")),
+        mixed: mixSrgb(parseCssColor("#ffffff"), parseCssColor("#000000"), 0.5),
+        space: parseCssColor("color(srgb 0.95 0.95 0.95)"),
+      };`)();
+    expect(isolated.ratio).toBeCloseTo(21, 6);
+    expect(isolated.space.r).toBeCloseTo(242.25, 6);
+    expect(isolated.mixed.r).toBeCloseTo(127.5, 6);
+    expect(isolated.chip.a).toBe(1);
+  });
+
+  // The new maths must not disagree with the hex implementation this repo has
+  // been shipping — a silent divergence would move every ratio in the product.
+  it("agrees with wcagContrast on opaque pairs", () => {
+    for (const a of ["#7BE3A4", "#12224A", "#EF4444", "#0A0F0C", "#F4F6F2", "#C8A86A"]) {
+      for (const b of ["#0A0F0C", "#FFFFFF", "#12181B", "#D6FF3D"]) {
+        expect(contrastRgb(parseCssColor(a), parseCssColor(b)), `${a} on ${b}`)
+          .toBeCloseTo(wcagContrast(a, b), 10);
+      }
+    }
+  });
+
+  // 🔴 The colour-space branch, which the scanner got wrong and looked right
+  // doing it. `color-mix()` computes to `color(srgb …)` with 0–1 channels;
+  // scraped as bytes that reads as near-black and PASSES on white.
+  it("reads color(srgb …) as 0–1 channels, not as bytes", () => {
+    const c = parseCssColor("color(srgb 0.927 0.826 0.609)");
+    expect(c.r).toBeCloseTo(236.385, 3);
+    expect(c.g).toBeCloseTo(210.63, 3);
+    expect(c.b).toBeCloseTo(155.295, 3);
+    // The failure mode in one assertion: bytes would make this near-black.
+    expect(luminanceRgb(c)).toBeGreaterThan(0.5);
+    expect(parseCssColor("color(srgb 0.1 0.2 0.3 / 0.5)").a).toBe(0.5);
+  });
+
+  it("parses every colour form the product can produce", () => {
+    expect(parseCssColor("#7BE3A4")).toEqual({ r: 123, g: 227, b: 164, a: 1 });
+    expect(parseCssColor("#fff")).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(parseCssColor("rgb(10, 20, 30)")).toEqual({ r: 10, g: 20, b: 30, a: 1 });
+    expect(parseCssColor("rgba(123,227,164,0.14)").a).toBeCloseTo(0.14, 10);
+    expect(parseCssColor("#EF444440").a).toBeCloseTo(0.25098, 4);
+    for (const junk of ["none", "", null, undefined, "transparent-ish"]) {
+      expect(parseCssColor(junk), String(junk)).toBeNull();
+    }
+  });
+
+  it("composites source-over, and a fully opaque top wins outright", () => {
+    expect(compositeOver({ r: 255, g: 255, b: 255, a: 1 }, { r: 0, g: 0, b: 0, a: 1 }))
+      .toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(compositeOver({ r: 255, g: 255, b: 255, a: 0 }, { r: 0, g: 0, b: 0, a: 1 }))
+      .toEqual({ r: 0, g: 0, b: 0, a: 1 });
+    const half = compositeOver({ r: 255, g: 255, b: 255, a: 0.5 }, { r: 0, g: 0, b: 0, a: 1 });
+    expect(half.r).toBeCloseTo(127.5, 10);
+    // A missing alpha is opaque, not transparent — the safer way round for a
+    // scanner reading a computed style that omitted it.
+    expect(compositeOver({ r: 9, g: 9, b: 9 }, { r: 0, g: 0, b: 0, a: 1 }).r).toBe(9);
+  });
+
+  // `color-mix(in srgb, …)` interpolates GAMMA-ENCODED channels. A linear-light
+  // blend would put 50% white/black at 188, not 127.5, and every chip row in the
+  // panel would disagree with the browser.
+  it("mixes in sRGB the way color-mix does, not in linear light", () => {
+    const mid = mixSrgb(parseCssColor("#FFFFFF"), parseCssColor("#000000"), 0.5);
+    expect(mid.r).toBeCloseTo(127.5, 10);
+    expect(mixSrgb(parseCssColor("#FFFFFF"), parseCssColor("#000000"), 1).r).toBe(255);
+    expect(mixSrgb(parseCssColor("#FFFFFF"), parseCssColor("#000000"), 0).r).toBe(0);
+  });
+
+  // The two colours that are deliberately not the gym's. Named so Brand Studio's
+  // audit and applySkinCSS cannot report on different reds.
+  it("names the danger and warning colours once", () => {
+    expect(DANGER).toBe("#EF4444");
+    expect(WARN).toBe("#F59E0B");
   });
 });

@@ -82,9 +82,22 @@ const KB = 1000;
 // asked for it. Nothing eager reaches `skins.js`, which is why the entry chunk
 // is untouched. A future caller in `main.jsx` or its imports WOULD move it into
 // `index.js`, the chunk with the least headroom in the build.
+// BrandStudioScreen 30 → 32 credential-less, 32 → 34 prod (session 29 §2.2).
+// What bought the bytes: the AA audit widened from five opaque token pairs to
+// fourteen, including the composited chip, danger and warning plates — the rows
+// `e2e/brandTokens.spec.js` was already failing palettes on while the panel
+// called them accessible. Measured 29.98 KB, which is 0.1% of headroom and the
+// reason this line moves rather than shipping on the edge of the ceiling.
+//
+// ⚠️ `index.js` 204.72 → 205.97, and this one IS the entry chunk. The shared
+// compositing (`parseCssColor`, `compositeOver`, `luminanceRgb`, `contrastRgb`,
+// `mixSrgb`) lives in `colors.js`, which `main.jsx` already pulls in eagerly for
+// `bootColours` — so anything added to that module is added to what a member
+// downloads to look at one class. 1.25 KB for one implementation instead of two
+// is worth it; the module being eager AT ALL is §2.6's problem, not this one's.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 30, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }

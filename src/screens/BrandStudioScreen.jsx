@@ -21,6 +21,7 @@ import { ArrowLeft, Check } from "lucide-react";
 import { supabase, supabaseEnabled } from "../supabase.js";
 import { TEMPLATES } from "../data/templates.js";
 import { PRESET_SKINS, baseSkin, resolveSkinTokens, isFallbackGeneratedSkin } from "../lib/skins.js";
+import { auditPairs, textFailures } from "../lib/brandAudit.js";
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "../lib/revenueAtRisk.js";
 import { hexA, wcagContrast, nudgeContrast, extractPalette, DEFAULT_PROGRAMS,
          generateSkinFromPalette, generateThemes, applySkinCSS, inkOn, hueInk } from "../lib/colors.js";
@@ -260,30 +261,23 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
     } catch(_){ return null; }
   };
 
-  // ── WCAG-AA contrast audit of member-visible token pairs (Fable F6 · P2 10-foot rule).
-  //    Checked live against the draft tokens the coach is editing. Button-label colour
-  //    (--on-accent) is auto-derived, so we mirror that derivation here rather than
-  //    treating it as an editable token.
+  // ── WCAG-AA contrast audit of member-visible pairs (Fable F6 · P2 10-foot rule).
   //
-  //    `inkOn` IS that derivation, imported rather than re-implemented: this audit
-  //    used to carry its own copy of the luminance rule, so the runtime and the
-  //    badge the coach reads could disagree about what colour the button label
-  //    would actually be.
-  const onAccentFor = (tk) => {
-    try { return inkOn(tk.accent, tk.bg, tk.text); }
-    catch(_){ return tk.text; }
-  };
-  const a11yChecks = [
-    { id:"text-bg",   fgKey:"text",   fg:draftTokens.text,          bg:draftTokens.bg,     label:"Body text on background",     min:4.5, big:false },
-    { id:"text-card", fgKey:"text",   fg:draftTokens.text,          bg:draftTokens.card,   label:"Text on card surface",        min:4.5, big:false },
-    { id:"muted-bg",  fgKey:"muted",  fg:draftTokens.muted,         bg:draftTokens.bg,     label:"Secondary text on background",min:4.5, big:false },
-    { id:"onacc-acc", fgKey:null,     fg:onAccentFor(draftTokens),  bg:draftTokens.accent, label:"Button label on accent",      min:4.5, big:false },
-    { id:"accent-bg", fgKey:"accent", fg:draftTokens.accent,        bg:draftTokens.bg,     label:"Accent as text / graphics",   min:3.0, big:true  },
-  ].map(c => {
-    let ratio = 0; try { ratio = wcagContrast(c.fg, c.bg); } catch(_){}
-    return { ...c, ratio, pass: ratio >= c.min };
-  });
-  const a11yTextFails = a11yChecks.filter(c => !c.big && !c.pass).length;
+  // 🔴 THE LIST MOVED OUT, and the reason is that it was WRONG BY OMISSION. This
+  // was five opaque token pairs presented to an owner as "Member-visible text
+  // meets WCAG AA", while `e2e/brandTokens.spec.js` — pointed at the same palette
+  // — found nine defects it called passing. The product was telling a paying
+  // customer their palette was accessible using a narrower test than the one CI
+  // runs against that same palette.
+  //
+  // `lib/brandAudit.js` holds the pairs and the reasoning, and shares its
+  // arithmetic with the sweep through `colors.js` so the two cannot drift.
+  // Measured: on Canopy with `--navy` nudged to #6E8478 — ONE editable token,
+  // moved to a plausible value — all five old rows passed while secondary text on
+  // the inset surface sat at 1.47:1.
+  const programTints = (generatedSkin&&generatedSkin.programs)||_baseSkin.programs||DEFAULT_PROGRAMS;
+  const a11yChecks = auditPairs(draftTokens, programTints);
+  const a11yTextFails = textFailures(a11yChecks);
   const fixablePair  = (c) => c.fgKey && c.fgKey !== "accent" && !c.pass;   // never auto-mangle the brand accent
   const fixPair = (c) => { if (fixablePair(c)) setDraftTokens(d => ({ ...d, [c.fgKey]: nudgeContrast(c.fg, c.bg, c.min) })); };
   const fixAllText = () => setDraftTokens(d => {
@@ -557,7 +551,21 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
                   <div>
                     <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)"}}>{generatedSkin.fonts.display} · {generatedSkin.fonts.body}</div>
-                    <div style={{fontSize:"10px",color:"var(--muted)"}}>Vibe: {generatedSkin.vibe} · {generatedSkin.contrast?.passesAA?"✓ Passes WCAG AA":"⚠ Low contrast"}</div>
+                    {/* 🔴 THIS BADGE WAS READING A TEXT-ONLY MEASUREMENT AND MAKING AN
+                        UNQUALIFIED CLAIM. `contrast.passesAA` is `textOnBg >= 4.5` and
+                        nothing else — colors.test.js pins that meaning deliberately — so
+                        a studio whose logo is DARK saw "✓ Passes WCAG AA" over a generated
+                        accent measuring 1.25:1 on its own background (navy #12224A; blue
+                        and crimson land at 2.90 and 2.86, under 1.4.11's 3:1).
+                        It now reads the same audit as the panel below, so the screen
+                        cannot hold two verdicts about one palette. Named counts rather
+                        than a tick, because "2 pairs below AA" is actionable and a cross
+                        is not. */}
+                    <div style={{fontSize:"10px",color:"var(--muted)"}}>Vibe: {generatedSkin.vibe} · {(() => {
+                      const gen = auditPairs(generatedSkin.tokens, generatedSkin.programs);
+                      const bad = gen.filter(g=>!g.pass);
+                      return bad.length===0 ? "✓ Passes WCAG AA" : `⚠ ${bad.length} pair${bad.length>1?"s":""} below AA: ${bad.map(g=>g.label.toLowerCase()).join(", ")}`;
+                    })()}</div>
                   </div>
                 </div>
                 <div style={{display:"flex",gap:"8px"}}>
@@ -728,6 +736,10 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
 
             <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"11px",lineHeight:1.5}}>
               Live against your draft tokens. AA needs 4.5:1 for body text, 3:1 for large/graphic marks. Passing keeps every branded member surface — including the room TV read at 8&nbsp;m — legible.
+              {/* Says which rows have no Fix and why. A derived row without an
+                  explanation reads as a control that is broken rather than one
+                  that would have to rewrite a token the row does not name. */}
+              {" "}Chip, label and warning rows are measured with their transparency composited onto the surface beneath, the way the app paints them. They follow from the tokens above rather than being separately editable, so they have no Fix of their own.
             </div>
           </div>
 

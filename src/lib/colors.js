@@ -53,6 +53,115 @@ export function wcagContrast(hex1,hex2){
   return(lighter+0.05)/(darker+0.05);
 }
 
+// ── Compositing, shared with the e2e sweep ──────────────────────────────────
+//
+// 🔴 ONE HOME, TWO READERS, AND THAT IS THE POINT. `e2e/contrastScan.js` walks a
+// live DOM and measures what a member actually sees; Brand Studio's AA audit has
+// draft TOKENS and no DOM at all. Until session 29 they shared nothing, and the
+// consequence was not academic: the panel checked five opaque token pairs and
+// told an owner "Member-visible text meets WCAG AA", while the sweep — pointed
+// at the same palette — found nine real defects the panel called passing. **A
+// compliance feature that under-reports is worse than none**, because the owner
+// stops looking.
+//
+// So the arithmetic lives HERE and the scanner is built from these exact
+// functions: `contrastScan.js` serialises them with `Function.prototype
+// .toString()` and injects them into the page. A mutation to the maths turns
+// both the panel's unit tests and the sweep red, which is the property that
+// makes "shared" mean something.
+//
+// ⚠️ WHAT DID NOT MOVE, and must not. The scanner's DOM walk — the ancestor
+// chain, the gradient rule, the opacity suffix products, the disabled-control
+// exemption — stays in `contrastScan.js`. It is knowledge about a rendered page,
+// and a panel holding eight hex strings has no use for it. What transfers is the
+// pure colour maths plus the list of PAIRS this product actually paints.
+//
+// 🔴 SELF-CONTAINED BY CONSTRUCTION. These are injected into a browser as source
+// text, so they may reference their own arguments and each other AND NOTHING
+// ELSE — no module-scope constant, no import, no other helper in this file.
+// `colors.test.js` asserts that property directly rather than trusting review.
+
+/**
+ * Any CSS colour this product can produce, as `{r,g,b,a}` with 0–255 channels.
+ *
+ * 🔴 NOT EVERY COMPUTED COLOUR IS `rgb()`. `color-mix(in srgb, …)` — which is
+ * how `hueInk` makes a decorative hue readable on any skin — computes to
+ * `color(srgb 0.927 0.826 0.609)`, channels in 0–1. Scraping the numbers and
+ * treating them as bytes reads that as `rgb(1,1,1)`: near-black. That is not a
+ * harmless imprecision. Pointed at Canopy it invented eleven violations on chips
+ * that had just been fixed; pointed at a light skin it scored the same chips as
+ * near-black on white and PASSED them. Both wrong, opposite directions, one
+ * missing branch — and the passing run is the dangerous one.
+ */
+export function parseCssColor(c) {
+  const s = String(c == null ? "" : c).trim();
+  if (!s) return null;
+  if (s[0] === "#") {
+    const h = s.slice(1);
+    const full = h.length === 3 || h.length === 4
+      ? h.split("").map((ch) => ch + ch).join("")
+      : h;
+    if (full.length !== 6 && full.length !== 8) return null;
+    const n = parseInt(full.slice(0, 6), 16);
+    if (!Number.isFinite(n)) return null;
+    const a = full.length === 8 ? parseInt(full.slice(6, 8), 16) / 255 : 1;
+    return { r: n >> 16 & 255, g: n >> 8 & 255, b: n & 255, a };
+  }
+  const m = s.match(/[-\d.]+(?=[\s,)/])|[-\d.]+/g);
+  if (!m) return null;
+  const n = m.map(Number);
+  if (n.length < 3 || n.slice(0, 3).some((v) => !Number.isFinite(v))) return null;
+  // `color(srgb r g b [/ a])` and `color(display-p3 …)`: 0–1 channels.
+  if (/^color\(/.test(s)) {
+    return { r: n[0] * 255, g: n[1] * 255, b: n[2] * 255, a: n.length > 3 ? n[3] : 1 };
+  }
+  return { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 };
+}
+
+/** Source-over. `top` carries the alpha; `bottom` is assumed opaque. */
+export function compositeOver(top, bottom) {
+  const a = Math.max(0, Math.min(1, top.a == null ? 1 : top.a));
+  return {
+    r: top.r * a + bottom.r * (1 - a),
+    g: top.g * a + bottom.g * (1 - a),
+    b: top.b * a + bottom.b * (1 - a),
+    a: 1,
+  };
+}
+
+/** WCAG relative luminance of an `{r,g,b}` in 0–255. */
+export function luminanceRgb(c) {
+  const p = [c.r, c.g, c.b].map((v) => {
+    v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+}
+
+/** WCAG contrast between two OPAQUE `{r,g,b}` colours. Composite first. */
+export function contrastRgb(fg, bg) {
+  const lf = luminanceRgb(fg), lb = luminanceRgb(bg);
+  const hi = Math.max(lf, lb), lo = Math.min(lf, lb);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * `color-mix(in srgb, A w%, B)`, which is what `hueInk` emits.
+ *
+ * sRGB mixing interpolates the GAMMA-ENCODED channels directly — it is not a
+ * linear-light blend — so this is a straight lerp on the 0–255 values, which is
+ * what the browser does for `in srgb`. Getting that wrong would make the panel
+ * disagree with the sweep on exactly the chips the sweep was built to catch.
+ */
+export function mixSrgb(a, b, weightA) {
+  const w = Math.max(0, Math.min(1, weightA));
+  return {
+    r: a.r * w + b.r * (1 - w),
+    g: a.g * w + b.g * (1 - w),
+    b: a.b * w + b.b * (1 - w),
+    a: (a.a == null ? 1 : a.a) * w + (b.a == null ? 1 : b.a) * (1 - w),
+  };
+}
+
 // `nudgeForContrast` lived here unreferenced from decomposition stage 1 until
 // session 18, when Dylan answered the yes/no it had been waiting on since
 // session 7. It only ever LIGHTENED, so it could not fix dark ink on a light
@@ -161,8 +270,35 @@ export function generateSkinFromPalette(swatches, vibe="natural", mode="dark") {
   // is accessible) rather than either mechanism, so it fails only if both break.
   // That is the correct thing to pin: a gym uploads a logo and must get a usable
   // room, whichever layer delivers it.
-  text  = nudgeContrast(text,  bg, 7.0);
-  muted = nudgeContrast(muted, bg, 4.5);
+  // 🔴 CLAMPED AGAINST EVERY SURFACE, NOT JUST `bg` — session 29.
+  //
+  // Clamping on `bg` alone is right only if `bg` is the hardest surface to read
+  // on, and on a LIGHT identity it is the easiest: `bg` sits at l=0.97 while
+  // `card` is 0.93 and `navy` 0.88. So the nudge stopped the moment `muted`
+  // cleared 4.5:1 against the lightest thing in the palette and left it below AA
+  // on the two darker ones — which is where most secondary text in this product
+  // actually sits.
+  //
+  // Measured across the generator's own output at avgLuma 0.7: nine of the
+  // light-mode themes tried landed muted at 4.85–4.98:1 on `bg` and 3.95–4.08:1
+  // on `navy`. A gold logo (#D4A017) gave 4.93 / 4.52 / 4.05. Brand Studio's
+  // widened audit is what surfaced it; nothing before measured `muted` anywhere
+  // but on `bg`.
+  //
+  // ⚠️ This does NOT bend the gym's brand. `text` and `muted` are DERIVED text
+  // colours the generator already clamps — the accent and the hues are untouched,
+  // for `--danger`'s reason. Applying the nudge per surface is the same safety
+  // net doing what it already claimed to do.
+  //
+  // Sequential rather than "pick the worst surface once": each call moves the ink
+  // away from one surface, which can change which surface is now closest, so
+  // taking them in turn converges where a single pass does not. On DARK themes
+  // every call after the first is a no-op — `bg` is the hardest surface there —
+  // so no dark identity, including the three shipped presets, moves by a byte.
+  for (const surface of [bg, card, navy]) {
+    text  = nudgeContrast(text,  surface, 7.0);
+    muted = nudgeContrast(muted, surface, 4.5);
+  }
 
   // Font pair by vibe
   const fontPairs = {
@@ -312,6 +448,19 @@ export function borderOn(borderToken, bgHex) {
   return `rgba(${want},${a})`;
 }
 
+// ── The two colours that are NOT the gym's ──────────────────────────────────
+//
+// Named here rather than spelled at each use because they now have a SECOND
+// reader: Brand Studio's AA audit checks the plates they paint, and an audit
+// measuring a different red from the one `applySkinCSS` writes would be a
+// compliance panel reporting on a colour the product does not use.
+//
+// Both are deliberately not skin-derived — see the notes at their `setProperty`
+// calls below. A gym whose accent is red must not get a delete button that
+// matches its primary action.
+export const DANGER = "#EF4444";
+export const WARN   = "#F59E0B";
+
 // ── Applying a skin to the document ─────────────────────────────────────────
 // Writes CSS custom properties onto :root. The one genuinely stateful function
 // in this module; kept here because every token it writes is computed above.
@@ -348,8 +497,8 @@ export function applySkinCSS(tokens, meta={}) {
   // matches its primary action — which is the exact confusion this exists to
   // remove. Danger is the one colour in the product that must not be branded.
   // It is not in PRESET_SKINS for the same reason: there is nothing to choose.
-  r.setProperty("--danger", "#EF4444");
-  r.setProperty("--danger-border", "#EF444440");
+  r.setProperty("--danger", DANGER);
+  r.setProperty("--danger-border", DANGER + "40");
   // ── Warning ─────────────────────────────────────────────────────────────────
   // The same argument as `--danger`, one step down in severity, and the same
   // evidence: `#F59E0B` was already the app's de-facto warning amber in a dozen
@@ -364,8 +513,8 @@ export function applySkinCSS(tokens, meta={}) {
   // Amber on a light identity's background measured 1.97:1 — a warning nobody
   // can read is worse than no warning, and that is not something a token fixes
   // on its own.
-  r.setProperty("--warn", "#F59E0B");
-  r.setProperty("--warn-border", "#F59E0B55");
+  r.setProperty("--warn", WARN);
+  r.setProperty("--warn-border", WARN + "55");
   // Alpha variant shortcuts for CSS-only colour transitions
   r.setProperty("--accent-10", tokens.accent + "1A");
   r.setProperty("--accent-20", tokens.accent + "33");
