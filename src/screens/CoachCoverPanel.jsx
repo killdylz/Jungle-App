@@ -152,7 +152,13 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     const st = availabilityState(c, nowMs);
     const n = Object.values(c.availability || {}).reduce((a, s) => a + s.length, 0);
     if (st.state === "never") return "Availability not set";
-    const when = st.state === "stale" ? `stated ${st.days} days ago` : `stated ${st.days === 0 ? "today" : `${st.days}d ago`}`;
+    // ONE unit for both branches. This read "3 slots · stated 4d ago" directly
+    // above "1 slot · stated 204 days ago" — the same fact in two notations, in
+    // one column, which makes a reader stop and work out whether they mean the
+    // same thing. Found by rendering the panel and reading it, not by a test.
+    const when = st.days === 0 ? "stated today"
+               : st.days === 1 ? "stated yesterday"
+               : `stated ${st.days} days ago`;
     return `${n === 0 ? "No slots" : `${n} slot${n === 1 ? "" : "s"}`} · ${when}`;
   };
 
@@ -200,8 +206,12 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
 
               {editing === c.id && (
                 <div style={{ marginTop: "10px", overflowX: "auto" }}>
-                  <table style={{ borderCollapse: "collapse", fontSize: "10px" }}>
+                  <table aria-label={`${c.name}\u2019s availability`}
+                         style={{ borderCollapse: "collapse", fontSize: "10px" }}>
                     <thead><tr>
+                      {/* The corner cell has no heading to give, and an empty <th>
+                          is read out as one. `scope="col"` with an explicit empty
+                          name would be worse; the TABLE carries the name instead. */}
                       <th style={{ padding: "3px 6px" }} />
                       {SLOTS.map(s => <th key={s} style={{ padding: "3px 6px", color: "var(--muted)", fontWeight: "700" }}>{s}</th>)}
                     </tr></thead>
@@ -318,6 +328,18 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
       {openAsks.length > 0 && (
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "14px" }}>
           <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Open cover requests</div>
+          {/* 🔴 SAYING THE QUIET PART. The panel shows "Mara asked Dev" and then
+              offers Approve to whoever is looking at it. That is not a bug that
+              can be fixed here: with no server there is no signed-in user, so the
+              product genuinely cannot tell who is holding the phone. Scoping the
+              buttons would require inventing an identity we do not have. So it
+              says so, in the same spirit as the notice at the top — a control
+              that looks like it knows who you are, and does not, is the failure
+              this panel exists to avoid. */}
+          <div style={{ ...sub, marginBottom: "10px" }}>
+            Anyone using this device can answer these &mdash; Jungle cannot tell which coach you are
+            until the gym is online.
+          </div>
           {openAsks.map(r => (
             <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px", marginBottom: "8px" }}>
               <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
