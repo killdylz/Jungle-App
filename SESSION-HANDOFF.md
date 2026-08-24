@@ -18,6 +18,10 @@ _Last updated: 2026-08-24 (session 30)_
 > 203.06 kB — nothing leaked into the entry chunk.
 > ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only.
 > The local suite is the only gate and every number above is from it.
+> ⚠️ **478 is 477 + one re-run.** Both full runs failed exactly one test in `syncBanner.spec.js`
+> — **a different one each time**, on a `waitForApp` timeout with no page snapshot, and all seven
+> passed when the spec ran alone. It is load flake on this container, not a regression; the tell
+> and the rule are now in `CLAUDE.md`.
 
 **The brief was right that this item is different in kind, and right about why.** It is the
 first feature in this product that is two people on two devices, so it is the first with no

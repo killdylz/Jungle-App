@@ -38,10 +38,12 @@ chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no
 - ⚠️ **e2e can fail broadly on a stale dev server holding port 5191.** Symptoms are
   `ERR_CONNECTION_REFUSED` or `Failed to fetch dynamically imported module` across many specs.
   **Re-run once before investigating.**
-- 🔴 **A single spec can fail with the app never mounting** — `waitForApp` times out and the
-  error context has no page snapshot at all. That is the machine being slow, not a defect.
-  Same rule: **re-run that spec once** before reading anything into it. Session 30 had exactly
-  one, in `syncBanner.spec.js`, and it passed alone.
+- 🔴 **`syncBanner.spec.js` IS FLAKY UNDER FULL-SUITE LOAD, and it is not a defect.** Session 30
+  ran the full suite twice and each run failed **one** test in this file — **a different one each
+  time** (line 34, then line 124) — and all seven passed when the spec was run alone. The tell is
+  that the failure is a `waitForApp` timeout with **no page snapshot in the error context at all**:
+  the app never mounted, so nothing about the banner was ever exercised. A real regression fails
+  the SAME test twice. **Re-run the spec alone before reading anything into it.**
 - ⚠️ **A REVERTED MUTATION ON AN UNTRACKED FILE DOES NOT SHOW IN `git diff`.** The standing rule
   is to mutate, confirm red, revert, and `git diff` before stopping — but a NEW file is
   untracked, so a failed revert leaves the source mutated and the diff clean. Session 30's
