@@ -28,6 +28,10 @@ import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
 import { resolveClassType } from "../lib/libraryStore.js";
 import { hueInk } from "../lib/colors.js";
+// Not lazy: this screen is already in the StaffApp chunk and a `lazy()` here
+// would add a chunk that needs its own line in check-size.mjs to have a
+// ceiling at all. It is a panel on this screen, not a destination.
+import { CoachCoverPanel } from "./CoachCoverPanel.jsx";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
@@ -245,6 +249,14 @@ export function CalendarScreen({onBack, onStartClass}) {
     });
     setEditingId(id);
     setShowAddClass(true);
+  };
+
+  // Reassign one rule's coach. The class keeps carrying a NAME — there is no
+  // `coachId` on a rule and deliberately so (see coachRoster.js and migration
+  // 0010) — so an approved cover writes the new coach's name exactly as a coach
+  // typing it would, and nothing about the sync path changes.
+  const assignCoach = (clientId, coachName) => {
+    setUserClasses(list => list.map(c => (c.id === clientId ? { ...c, coach: coachName } : c)));
   };
 
   const addClass = () => {
@@ -603,6 +615,13 @@ export function CalendarScreen({onBack, onStartClass}) {
           </div>
         ))}
       </div>
+
+      {/* S30 §2.1–§2.3 · the roster, availability and cover. It sits under the
+          grid rather than in a nav entry of its own: the names it is about are
+          typed into the dialog on THIS screen, and the product already has two
+          other things called "Coaches". See CoachCoverPanel.jsx's header. */}
+      <CoachCoverPanel userClasses={userClasses} isMobile={isMobile}
+                       onAssignCoach={assignCoach} />
 
       {/* Bottom: AI tips + Trainer load */}
       {/* ─── UI-POLISH §3.5 · two panels that could never fill ────────────────
