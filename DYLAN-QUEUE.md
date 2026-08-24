@@ -849,6 +849,18 @@ cosmetic one.
   your size), a domain to send from, and about a day. **It is not built and I have not assumed
   you want it.**
 
+### ⚠️ One thing that is now READY and was not before (session 31)
+The settle needs a **conditional** update — `set status='approved' where id=$1 and status='open'`
+— or two coaches both approving both succeed, last writer wins, and one of them is shown an
+approval that did not happen. There was no compare-and-set anywhere in this product; there is
+now one (`src/lib/compareAndSet.js`), unit-tested including the losing branch.
+
+**It has never made a real request**, because there is no table to make it against. So the first
+time 0010 runs, the person wiring the settle should use that function rather than the ordinary
+sync path, and should check the two PostgREST assumptions written at the top of it. **Nothing
+for you to do here** — this is a note for whoever does the wiring, so they do not reach for
+`_bgUpsertDelta` and get last-writer-wins silently.
+
 ### Undo
 `drop table public.cover_requests; drop table public.coach_roster;` — nothing else references
 them, and the app keeps working exactly as it does today.
