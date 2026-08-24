@@ -15,7 +15,7 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `18e1439` (session 31): **`lint:crash` 0 · 1064 unit (39 files) · 483 e2e (47 spec
+Green as of `852550c` (session 31): **`lint:crash` 0 · 1069 unit (39 files) · 483 e2e (47 spec
 files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
 ⚠️ **`syncBanner.spec.js` flakes under FULL-SUITE load, and has for three sessions running.**
@@ -214,6 +214,11 @@ not. **Assert the STORED object, not only what was rendered.**
   count is a **one-shot read that races a reload**. Follow `page.reload()` with
   `waitForAppAnyWidth` or a 1280px test silently takes the phone branch and hunts for a "More"
   button that is not there — the failure names "More", which reads as a nav defect and is not one.
+- 🔴 **`new Date("2026-08-22")` is UTC MIDNIGHT**, so `.getDate()` is **21** anywhere west of
+  UTC. Never parse a stored `YYYY-MM-DD` that way — build `new Date(y, m-1, d)`, which is local
+  by construction. `fmtSessionDay` in `format.js` does, and its test demonstrates the trap next
+  to the fix. This is the same bug as a UTC write, one layer further out and harder to see,
+  because the STORED value is right and only the render is wrong.
 - ⚠️ **A test that needs a TIMEZONE must set one, and prove it took.** The suite runs in UTC,
   where local and UTC dates are identical, so any assertion about local-date handling passes
   against the bug. Use `vi.stubEnv("TZ", …)` — **not** `process.env.TZ =`, which is 3 crash-lint

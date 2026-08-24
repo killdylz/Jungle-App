@@ -12,10 +12,10 @@ _Last updated: 2026-08-24 (session 31)_
 
 ## Session 31 — a field nothing can write is not a feature, and the check that finds the next one
 
-> **Gates green at `18e1439`.** `lint:crash` **0** · **1064 unit** (39 files) ·
+> **Gates green at `852550c`.** `lint:crash` **0** · **1069 unit** (39 files) ·
 > **483 e2e** (47 spec files) · 12-chunk build · **0 over budget**.
 > `StaffApp.js` **310.73 / 360 kB** (13.7%), `index.js` **203.06 / 215 kB** (5.6%, still the
-> tightest). Five commits, each pushed after its own green run.
+> tightest). Seven commits, each pushed after its own green run.
 > ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
 > `gh run list` shows nothing for this work. The local suite is the only gate and every number
 > above is from it.
@@ -186,6 +186,21 @@ the ask flow changes the request shape whose denormalisation has a deliberate co
 itself. That is its own piece of work and should be its own item.
 
 ---
+
+### Found by looking, and fixed (`852550c`)
+
+**The Dashboard header said "Monday 24 Aug" and "Recent sessions", three cards below it, said
+"2026-08-24".** The same day in two notations on one screen — the shape session 30 found in the
+availability column — and machine notation shown to a coach besides. No test failed and none
+would have: both strings were correct, and correctness was not the complaint. `fmtSessionDay`
+now says "today" / "yesterday" / "Sat 22 Aug", used by the only two renderers of a stored
+session date (`App.jsx:666`, `ProfileModal.jsx:184`).
+
+🔴 **And it is parsed BY PARTS.** `new Date("2026-08-22").getDate()` is **21** in New York,
+because a date-only string is UTC midnight by specification. Formatting this the obvious way
+would have reintroduced §2.4's bug **in the renderer** — one layer further out and harder to
+see, because the stored value would have been right. The test demonstrates the trap next to the
+fix.
 
 ### Found and not fixed
 
