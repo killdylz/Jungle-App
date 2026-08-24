@@ -1,0 +1,247 @@
+// ─── The gym's coach roster: a typed name, resolved to a person ──────────────
+//
+// 🔴 THE PROBLEM THIS EXISTS FOR. `class_schedule_rules.coach` is `text`
+// (0003_phase1_domain_tables.sql) and the Schedule's add/edit dialog renders it
+// as a free-text input. So "Mara", "mara" and " Mara " are three coaches to
+// every surface that counts them, and none of them is anything a message could
+// be sent to. Trainer load cannot balance across a set it cannot deduplicate.
+//
+// ⚠️ WHY THE LINK IS NOT A COLUMN ON THE CLASS. The obvious shape — a `coach_id`
+// on `class_schedule_rules` — is the shape this repo has been burned by four
+// times (`persona_plans.source`, `attendance.source`, both retention ledgers).
+// `_classToRow` maps a fixed column set, and PostgREST rejects an upsert naming
+// a column the migration has not created: not for that row, for the WHOLE batch.
+// So a `coach_id` added before migration 0010 lands would not degrade — it would
+// stop every class in the gym from syncing, and the ledger would just say
+// "class_schedule_rules failed". A local-only field is no better: hydrate is
+// server-wins, so the link would be silently dropped on the next load.
+//
+// So the class keeps carrying TEXT, exactly as it does today, and the roster
+// carries the identity. Resolution is by name, which means:
+//   · nothing new is written to a class → nothing can be dropped on sync
+//   · no migration is needed for the link itself → it works today, unblocked
+//   · a gym that has typed names for a year loses nothing and rewrites nothing
+//
+// ── What is and is not guessed ──────────────────────────────────────────────
+// 🔴 NAMES ARE NEVER AUTO-MERGED. `coachKey` folds only differences that are
+// the SAME STRING TYPED DIFFERENTLY — case, surrounding and repeated whitespace,
+// and Unicode composition. It does NOT decide that "Mara" and "Mara K." are one
+// person, because that is a judgement about a gym's staff and this module does
+// not have the standing to make it. A gym says so explicitly, by adding the
+// second spelling as an ALIAS. A confident wrong merge here silently reassigns
+// somebody's classes.
+
+// `RULE_DAYS` and `parseSlot` rather than a second day/slot list: availability
+// that cannot be compared to a class without a translation step is availability
+// that will eventually disagree with the schedule. `daysBetween` is imported for
+// the same reason — one definition of "how long ago", not two.
+import { RULE_DAYS, parseSlot } from "./scheduleInstances.js";
+import { daysBetween } from "./retention.js";
+
+// Canonical match key for a typed coach name.
+//
+// NFC first, then case-fold, then collapse whitespace: an accented name typed on
+// two keyboards (composed vs decomposed) is one person, and the difference is
+// invisible on screen — exactly the kind that would otherwise split a roster.
+// `toLowerCase` rather than `toLocaleLowerCase`: the key is compared against
+// other keys from the same build, never displayed, so locale-dependent folding
+// would only make the key depend on the reader's device.
+export function coachKey(name) {
+  return String(name ?? "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Every key an entry answers to: its display name plus its aliases.
+// Blank keys are dropped — an empty alias would otherwise match every class
+// whose coach field was never filled in, and quietly claim all of them.
+export function coachKeys(entry) {
+  const all = [entry?.name, ...(entry?.aliases || [])].map(coachKey).filter(Boolean);
+  return [...new Set(all)];
+}
+
+export function makeCoach(name, extra = {}) {
+  return {
+    id: extra.id || undefined,          // caller supplies (store mints via newId)
+    name: String(name ?? "").trim(),
+    aliases: [],
+    // The account link. "" is the NORMAL state, not an error: a gym with no
+    // server has no accounts to link to, and a roster entry is useful without
+    // one — it deduplicates the schedule and carries availability. What it
+    // cannot do without a userId is RECEIVE anything, and `coachReach` below is
+    // the single place that says so.
+    userId: "",
+    active: true,
+    // Present from the start, and matching the row shape in migration 0010
+    // (`availability jsonb not null default '{}'`). A field that only appears
+    // once it has been written is a field every reader has to guard against.
+    availability: {},
+    // "" rather than absent, for the same reason — and it is what makes
+    // `availabilityState` able to tell "never asked" from "said none of these".
+    availabilityAt: "",
+    ...extra,
+  };
+}
+
+// Resolve a typed coach name to a roster entry, or null.
+// Null is a normal answer — an unlinked typed name is a supported state.
+export function resolveCoach(roster, typedName) {
+  const k = coachKey(typedName);
+  if (!k) return null;
+  return (roster || []).find(e => e && coachKeys(e).includes(k)) || null;
+}
+
+// The distinct coach names actually typed on the schedule, with how many rules
+// carry each, most-used first. This is the roster's INPUT: a gym does not build
+// a roster from nothing, it names the people already on its own schedule.
+//
+// Keyed by `coachKey` so the count is per PERSON-AS-TYPED and not per spelling;
+// the label shown is the first spelling encountered, and `spellings` carries the
+// rest so the UI can say "also typed as…" rather than pretending they are one.
+export function coachNamesOnSchedule(classes) {
+  const by = new Map();
+  for (const c of classes || []) {
+    const raw = String(c?.coach ?? "").trim();
+    const k = coachKey(raw);
+    if (!k) continue;
+    const cur = by.get(k) || { key: k, name: raw, count: 0, spellings: [] };
+    cur.count += 1;
+    if (!cur.spellings.includes(raw)) cur.spellings.push(raw);
+    by.set(k, cur);
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+// 🔴 THE THREE STATES, and the reason they are three and not two.
+//
+//   "unknown"  — a typed name no roster entry answers to. Just text.
+//   "roster"   — a person the gym has named. Deduplicated, can hold
+//                availability, and CANNOT BE SENT ANYTHING.
+//   "account"  — a roster entry linked to a real user (`userId`), which is the
+//                only state in which a message could ever reach a human.
+//
+// Collapsing "roster" and "account" into one "linked" state is the tempting
+// simplification and it is the dishonest one: it would let a sub-request screen
+// offer a coach it has no way to reach. The distinction is the whole point.
+export function coachReach(entry) {
+  if (!entry) return "unknown";
+  return entry.userId ? "account" : "roster";
+}
+
+// Coverage of a gym's schedule by its roster — what the Schedule panel states.
+// `unknown` is NOT an error list: it is the normal state of a gym that has typed
+// names for a year, and the UI is required to show it without nagging.
+export function rosterCoverage(roster, classes) {
+  const named = coachNamesOnSchedule(classes);
+  const out = { known: [], unknown: [], accounts: 0 };
+  for (const n of named) {
+    const entry = resolveCoach(roster, n.name);
+    if (entry) {
+      out.known.push({ ...n, entry, reach: coachReach(entry) });
+      if (entry.userId) out.accounts += 1;
+    } else {
+      out.unknown.push(n);
+    }
+  }
+  return out;
+}
+
+// ─── Availability (S30 §2.2) ─────────────────────────────────────────────────
+//
+// A WEEKLY RECURRING GRID, in the schedule's own day and slot vocabulary:
+//
+//     { Mon: ["06:00", "18:00"], Wed: ["06:00"] }
+//
+// ⚠️ WHY A GRID AND NOT DATES. The three candidate shapes are a recurring grid,
+// a grid plus dated exceptions, and dates only. Dates-only is honest and
+// unusable — nobody re-enters their week every week, so the data would be empty
+// within a fortnight and an empty availability screen is worse than none.
+// Exceptions ("away this Thursday") are the layer a grid genuinely cannot
+// express, and they are a real second layer rather than a field: a dated
+// override needs a calendar, a timezone answer and a DST answer. The grid is
+// what makes the first useful version exist, and `awayDates` is deliberately NOT
+// invented here as a half-version of the second — a half-built exception list
+// that silently fails to suppress one Thursday is worse than an absent one,
+// because a coach would rely on it.
+//
+// The vocabulary is `RULE_DAYS` and `parseSlot` from scheduleInstances.js, NOT a
+// second list. A rule says `day:"Mon", slot:"06:00"`; availability answers in the
+// same words, so matching a coach to a class is a lookup rather than a parse.
+
+// A stated availability goes stale after eight weeks.
+//
+// 🔴 THE NUMBER IS ARBITRARY AND THE BEHAVIOUR IS NOT. Any threshold is a
+// judgement; what matters is that a claim carries its date and that an old one
+// stops reading as a current fact. Eight weeks is longer than any single block
+// of a gym's schedule and short enough that a coach who left mid-term shows as
+// stale within the same term.
+export const COACH_AVAIL_STALE_DAYS = 56;
+
+// Drop anything that is not a real day and a real time. A slot that `parseSlot`
+// rejects would sort itself to the end of time in the grid and match no class.
+export function normaliseAvailability(raw) {
+  const out = {};
+  for (const day of RULE_DAYS) {
+    const slots = raw?.[day];
+    if (!Array.isArray(slots)) continue;
+    const keep = [...new Set(slots.map(s => String(s ?? "").trim()).filter(s => parseSlot(s)))];
+    keep.sort((a, b) => { const A = parseSlot(a), B = parseSlot(b); return A.h - B.h || A.m - B.m; });
+    if (keep.length) out[day] = keep;
+  }
+  return out;
+}
+
+// 🔴 "NEVER STATED" AND "STATED NOTHING" ARE DIFFERENT ANSWERS, and collapsing
+// them is how a screen implies a whole gym is free. A roster entry with no
+// `availabilityAt` has never been asked; one with a date and an empty grid has
+// answered "none of these". The first is a gap in what we know, the second is
+// information.
+export function availabilityState(entry, now = Date.now()) {
+  const at = String(entry?.availabilityAt || "");
+  // Parsed WITHOUT a "Z": a date a coach typed is a local calendar date, and
+  // anchoring it at UTC midnight would make it a day older for every reader east
+  // of Greenwich — the exact bug `daysBetween`'s comment in retention.js was
+  // written for.
+  const ms = at ? Date.parse(`${at}T00:00:00`) : NaN;
+  if (Number.isNaN(ms)) return { state: "never", at: "", days: null };
+  const days = daysBetween(now, ms);
+  return { state: days > COACH_AVAIL_STALE_DAYS ? "stale" : "fresh", at, days };
+}
+
+// Does this entry claim to be free at a given day and slot?
+export function claimsFree(entry, day, slot) {
+  const slots = entry?.availability?.[day];
+  return Array.isArray(slots) && slots.includes(slot);
+}
+
+// Who could cover a class at `day`/`slot`.
+//
+// 🔴 THREE THINGS THIS DELIBERATELY DOES NOT DO.
+//
+// 1. It does not hide a STALE claim. The prompt's rule — a coach who stated
+//    availability in March and left in June must not surface as available in
+//    July — is satisfied by never calling a stale claim "available", not by
+//    deleting it from the screen. A gym whose whole roster is stale would
+//    otherwise see an empty list and no reason for it, and would conclude
+//    nobody is free rather than that nobody has been asked lately. The caller
+//    gets `state` and is required to show it.
+// 2. It does not rank by who is "best". It sorts fresh claims above stale ones
+//    and leaves the rest alone — any further ordering would be a judgement about
+//    a gym's staff dressed as a computation.
+// 3. It does not filter by whether the coach can be REACHED. `reach` is
+//    returned so the caller can say so; a coach with no account is still the
+//    right person to ask, they just have to be asked some other way.
+//
+// `active === false` DOES exclude: that is the gym saying this person no longer
+// coaches here, which is a fact about employment and not a stale claim.
+export function coachesFreeAt(roster, { day, slot } = {}, now = Date.now()) {
+  if (!day || !slot) return [];
+  return (roster || [])
+    .filter(e => e && e.active !== false && claimsFree(e, day, slot))
+    .map(e => ({ coach: e, reach: coachReach(e), ...availabilityState(e, now) }))
+    .sort((a, b) => (a.state === "stale") - (b.state === "stale")
+                 || (a.days ?? 0) - (b.days ?? 0)
+                 || String(a.coach.name).localeCompare(String(b.coach.name)));
+}

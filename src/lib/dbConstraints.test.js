@@ -3,6 +3,8 @@ import fs from "node:fs";
 import { ATTENDANCE_SOURCES, RETENTION_ACTIONS, MEMBER_STATUSES,
          PERSONA_PLAN_SOURCES, PERSONA_KINDS, SCHEDULE_REPEATS } from "./store.js";
 import { RETENTION_RULES } from "./retention.js";
+import { COVER_STATUSES } from "./coverRequests.js";
+import { _classToRow, _memberToRow } from "./store.js";
 import { TEAM_ROLES } from "../screens/AdminTeamScreen.jsx";
 
 // ─── The recurring data-loss bug, guarded in one place ───────────────────────
@@ -67,6 +69,15 @@ const GUARDED = [
   ["persona_plans.source",    PERSONA_PLAN_SOURCES, () => checkValues("0005_coach_personas.sql", "source")],
   ["coach_personas.kind",     PERSONA_KINDS,       () => checkValues("0005_coach_personas.sql", "kind")],
   ["class_schedule_rules.repeat", SCHEDULE_REPEATS, () => checkValues("0003_phase1_domain_tables.sql", "repeat")],
+  // ⚠️ AN EXCEPTION TO THIS FILE'S OWN RULE, made deliberately. The rule above
+  // says a guard on a column the client does not write is noise, and the client
+  // does not write `cover_requests.status` — migration 0010 is unapplied and
+  // `saveCoverRequests` is localStorage-only. The rule is about columns with no
+  // client constant to compare against; this one HAS a constant, `settleCover`
+  // reads it, and both halves live in this repo right now. Drift between them
+  // would be silent until the day 0010 runs, which is precisely the day it
+  // starts costing data. Guarding it costs one row and one migration read.
+  ["cover_requests.status",   COVER_STATUSES,      () => checkValues("0010_coach_cover.sql", "status")],
 ];
 
 describe("client value sets match the database constraints", () => {
@@ -115,5 +126,89 @@ describe("columns the client does not yet write", () => {
     ["consent_records.method",      () => checkValues("0007_attendance_spine.sql", "method")],
   ])("%s still has a CHECK worth respecting", (_label, read) => {
     expect(read().length).toBeGreaterThan(0);
+  });
+});
+
+// ─── The same bug class, one step earlier: a COLUMN the database has not got ──
+//
+// Everything above guards constrained VALUES. This guards constrained COLUMNS,
+// which is the same failure arriving from the other side and is currently how it
+// would arrive next.
+//
+// `store.js`'s row mappers turn a local object into a Postgres row. `updateMember`
+// already carries a comment saying unknown keys are dropped "because an extra key
+// would ride into _memberToRow and be rejected by Postgres" — correct, and
+// nothing enforced it. PostgREST rejects an upsert naming a column that does not
+// exist, and it rejects THE WHOLE BATCH: one unknown key would stop every class
+// (or every member) in the gym from syncing, and the ledger would only report
+// that the table failed.
+//
+// 🔴 THIS IS THE GUARD FOR SESSION 30'S CENTRAL DECISION. The obvious way to
+// link a class to a coach is a `coach_id` on `class_schedule_rules`. Migration
+// 0010 is written and UNAPPLIED, so adding that field to `_classToRow` today
+// would break class sync for every gym that has a server. The link is resolved
+// by NAME instead (`lib/coachRoster.js`) and the class row is untouched — and
+// this test is what stops the next session from "finishing the job" by adding
+// the column to the mapper before the migration has run.
+//
+// The sample objects are deliberately OVER-populated: every optional field set,
+// so a mapper that only emits a key when its input is present is still caught.
+const MAPPER_SAMPLES = [
+  ["class_schedule_rules", "0003_phase1_domain_tables.sql", _classToRow,
+   { id: "uc1", name: "Strength Lab", type: "S360", coach: "Mara", day: "Mon",
+     slot: "06:00", dur: "45m", repeat: "weekly", weekKey: "2026-7-3", fill: 12 }],
+  ["members", "0007_attendance_spine.sql", _memberToRow,
+   { id: "m1", name: "Ana", email: "a@b.co", status: "active",
+     joinedAt: "2026-01-02", externalRef: "ext-1" }],
+];
+
+// Column names from a `create table` block. A continuation line (`check (...)`,
+// `on delete ...`) and a table constraint (`unique (...)`) are not columns, so a
+// line only counts when its second token is a TYPE — which is also what stops
+// this parser from inventing a column called "unique" and passing vacuously.
+const COLUMN_LINE = /^([a-z_][a-z0-9_]*)\s+(uuid|text|int|integer|bigint|boolean|jsonb|json|date|timestamptz|numeric|real|text\[\])\b/i;
+function tableColumns(file, table) {
+  const m = sqlOf(file).match(new RegExp(`create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${table}\\s*\\(([\\s\\S]*?)\\n\\);`, "i"));
+  if (!m) throw new Error(`no create table for ${table} in ${file}`);
+  const cols = new Set();
+  for (const raw of m[1].split("\n")) {
+    const line = raw.replace(/--.*$/, "").trim();
+    const hit = line.match(COLUMN_LINE);
+    if (hit) cols.add(hit[1].toLowerCase());
+  }
+  return cols;
+}
+
+describe("🔴 row mappers only name columns the database actually has", () => {
+  it.each(MAPPER_SAMPLES)("%s", (table, file, mapper) => {
+    const cols = tableColumns(file, table);
+
+    // Guards the parser twice over: a restructured migration that matched
+    // nothing, or matched only junk, would make the real assertion vacuous.
+    expect(cols.size, `parsed no columns for ${table} — the parser, not the code, is wrong`).toBeGreaterThan(3);
+    expect(cols.has("gym_id"), `parsed columns for ${table} look wrong: ${[...cols].join(", ")}`).toBe(true);
+
+    const sample = MAPPER_SAMPLES.find(r => r[0] === table)[3];
+    const emitted = Object.keys(mapper(sample));
+    expect(emitted.length, "the mapper emitted nothing — it cannot be judged").toBeGreaterThan(3);
+
+    const unknown = emitted.filter(k => !cols.has(k.toLowerCase()));
+    expect(unknown,
+      `${table}: the mapper would send column(s) the migration has not created: ${unknown.join(", ")}. `
+      + `PostgREST rejects the WHOLE batch, so this stops the entire table syncing.`).toEqual([]);
+  });
+
+  // POSITIVE CONTROL. Without it, a parser that returned every identifier in the
+  // file would pass every assertion above while guarding nothing — and the
+  // specific thing it must catch is `coach_id`, the column migration 0010
+  // defines and has not created.
+  it("catches the coach_id that session 30 deliberately did not add", () => {
+    const cols = tableColumns("0003_phase1_domain_tables.sql", "class_schedule_rules");
+    expect(cols.has("coach")).toBe(true);        // the text column that IS there
+    expect(cols.has("coach_id")).toBe(false);    // and the link that is not
+
+    const wouldBreakSync = { ..._classToRow({ id: "uc1", name: "x", type: "t" }), coach_id: "abc" };
+    const unknown = Object.keys(wouldBreakSync).filter(k => !cols.has(k));
+    expect(unknown).toEqual(["coach_id"]);
   });
 });

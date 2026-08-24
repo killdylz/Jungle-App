@@ -17,6 +17,11 @@ import { occurrenceKeyOf } from "./csvImport.js";
 // libraryStore.js has no imports of its own, so this cannot close a cycle back
 // through libraryAccess.js (which imports THIS file).
 import { resolveClassType } from "./libraryStore.js";
+// coachRoster.js imports scheduleInstances and retention, both of which this
+// module already pulls in, so the roster costs no new module in the chunk. It
+// does NOT import store.js back — the resolution rules are pure and the
+// persistence is here, which is what keeps the cycle from existing.
+import { makeCoach, coachKey, normaliseAvailability, resolveCoach } from "./coachRoster.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -45,7 +50,19 @@ const KEYS = {
   classInstances:"jungle_class_instances",
   attendance:    "jungle_attendance",
   retentionActions:"jungle_retention_actions",
+  coaches:       "jungle_coaches",
+  coverRequests: "jungle_cover_requests",
 };
+
+// Today, as the reader's CALENDAR says it — not `toISOString().slice(0,10)`,
+// which is UTC and is a different day for most of the world for part of every
+// day. Availability is stamped with this and then read back by `daysBetween`,
+// which counts local calendar days; mixing the two would make a claim stated
+// this evening read as yesterday's in Singapore.
+function localDateStr(ms = Date.now()) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 // Client-generated UUID, used as the row PK on both coach_personas and
 // persona_plans so the persona→plans FK bridges cleanly in the local-first
@@ -469,7 +486,7 @@ function _flushPendingDeletes(table) {
 // ── Classes (F5: user-created recurring classes) ──────────────────────────
 // Local shape: { id:"uc<ts>", name, type, coach, day, slot, dur, repeat, weekKey?, fill? }
 // Postgres:    public.class_schedule_rules, with client_id == the local id.
-function _classToRow(uc) {
+export function _classToRow(uc) {
   return {
     gym_id:     _ctx.gymId,
     client_id:  uc.id,
@@ -1150,7 +1167,7 @@ export function recordRetentionAction({ memberId, rule, action, note = "" }) {
 
 // ── members: roster rows, NOT auth users ────────────────────────────────────
 // Local shape: { id, name, email, status, joinedAt, externalRef }
-function _memberToRow(m) {
+export function _memberToRow(m) {
   return { id: m.id, gym_id: _ctx.gymId, name: m.name, email: m.email || null,
            // Through memberStatus(), not `|| "active"`. The old form passed any
            // string straight into a CHECK-constrained column, so one caller
@@ -1240,10 +1257,34 @@ function _asText(v) {
 }
 // Exported for tests: this mapper is the last line of defence before a value
 // reaches Postgres, so it's worth pinning directly rather than through a proxy.
+// 🔴 `coach_id` USED TO BE `_ctx.userId`, WHICH IS THE PERSON WHO PRESSED PUBLISH.
+//
+// `class_instances.coach_id` is `references public.profiles(id)` — it means "the
+// person who teaches this". `_ctx.userId` means "whoever was signed in when the
+// week was published". Those are the same person only when a coach publishes
+// their own classes and nobody else's, which is not how a schedule gets
+// published: one manager presses **Add to schedule** once and every class in the
+// week — everybody's — was recorded as taught by that manager.
+//
+// It was invisible because `coach_name` sat next to it holding the RIGHT answer,
+// so every screen (all of which read the name) looked correct, and the only
+// reader of the id is analytics that does not exist yet. Per-coach retention is
+// on DYLAN-QUEUE; it would have been built on this and reported one person
+// teaching a gym's entire timetable.
+//
+// ⚠️ AND THE FACT IT WAS CARRYING WAS ALREADY RECORDED. `created_by`, on the very
+// next line, is exactly "who wrote this row" and has always been `_ctx.userId`.
+// So the old value was not merely wrong, it was a duplicate of its neighbour
+// under a name that means something else.
+//
+// Now: resolve the typed coach name against the gym's roster, and use that
+// person's account when there is one. NULL when there is not — a nullable FK
+// whose null means "we do not know who this was" is worth far more than a
+// non-null one that is confidently wrong.
 export function _ciToRow(c) {
   return { id: c.id, gym_id: _ctx.gymId, starts_at: c.startsAt, name: _asText(c.name),
            class_type: _asText(c.classType), coach_name: _asText(c.coachName),
-           coach_id: _ctx.userId || null, duration_min: c.durationMin || null,
+           coach_id: coachAccountFor(c.coachName), duration_min: c.durationMin || null,
            created_by: _ctx.userId || null };
 }
 function _rowToCi(r) {
@@ -1742,3 +1783,123 @@ export async function hydrateAll() {
   ]);
   return { brand, prefs, history };
 }
+
+// ── Coach roster (S30 §2.1) → localStorage ONLY ─────────────────────────────
+// Local shape: { id, name, aliases:[], userId, active, availability:{}, availabilityAt }
+//
+// 🔴 THIS DOMAIN DOES NOT SYNC, AND THAT IS A STATEMENT ABOUT THE PRODUCT.
+// Every other `save*` in this file mirrors to Postgres. This one cannot: there
+// is no `coach_roster` table. `supabase/migrations/0010_coach_cover.sql` is
+// written and is DYLAN-QUEUE A15 — unapplied, like 0005 and 0006 before it.
+//
+// The tempting shortcut is to push the roster into a jsonb column that already
+// round-trips (`brand_profiles.branding` is right there). Do not. `saveGymBranding`
+// writes that blob whole, so the next Brand Studio save would silently drop the
+// gym's entire staff list — the same data loss this module exists to prevent,
+// arriving from a screen that has nothing to do with coaching.
+//
+// ⚠️ WHAT THIS COSTS, stated plainly because the UI states it too: the roster
+// lives on ONE DEVICE. Coach A's roster is not coach B's roster. Everything
+// built on it that is one-person-one-device — deduplicating the schedule,
+// trainer load, "who is free Monday at six" — works exactly as it reads.
+// Anything that has to REACH a second person does not, and `coachReach()` is
+// the single place that reports it.
+export function getCoaches() { return readJSON(KEYS.coaches, []); }
+
+// The account behind a typed coach name, or null.
+//
+// This is the ONLY bridge from the free text on a class to a real person, and
+// `null` is the honest answer for most gyms most of the time: a name nobody has
+// put on the roster, or a roster entry with no account, is not a person the
+// database can point at. Returning null keeps `class_instances.coach_id`
+// meaning what its column name says.
+//
+// ⚠️ Reads the roster per call, and `_ciToRow` is used through `.map()`. That is
+// a JSON parse per published class — a week is tens of rows, not thousands — and
+// the alternative (threading a roster argument through the mapper) would put a
+// parameter on the one function that must stay callable from a test with nothing
+// but a row. Revisit if a gym ever publishes a year in one press.
+export function coachAccountFor(name) {
+  const entry = resolveCoach(getCoaches(), name);
+  return entry?.userId || null;
+}
+export function saveCoaches(list) { writeJSON(KEYS.coaches, list || []); }
+
+export function addCoach(name, extra = {}) {
+  const c = { ...makeCoach(name, extra), id: extra.id || newId() };
+  const list = [...getCoaches(), c];
+  saveCoaches(list);
+  return { coach: c, coaches: list };
+}
+
+// Patch-shaped, exactly as updateMember is, and for the same reason: a caller
+// holding a stale copy must not be able to blank a field it never meant to
+// touch. Unknown keys are dropped.
+export function updateCoach(id, patch = {}) {
+  const list = getCoaches();
+  const i = list.findIndex(c => c && c.id === id);
+  if (i < 0) return { coach: null, coaches: list };
+
+  const cur = list[i];
+  const next = { ...cur };
+  if ("name" in patch)    next.name = String(patch.name || "").trim();
+  if ("userId" in patch)  next.userId = String(patch.userId || "").trim();
+  if ("active" in patch)  next.active = !!patch.active;
+  if ("aliases" in patch) {
+    // Deduplicated by match key, blanks dropped, and an alias that merely
+    // restates the entry's own name is dropped too — it would be a second way of
+    // saying the same thing, and it would survive a rename as a stale duplicate.
+    const seen = new Set([coachKey(next.name)]);
+    next.aliases = (patch.aliases || []).map(a => String(a || "").trim()).filter(a => {
+      const k = coachKey(a);
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  if ("availability" in patch) {
+    next.availability = normaliseAvailability(patch.availability);
+    // 🔴 STAMPED HERE, not by the caller. Availability whose date the UI supplies
+    // is availability whose date a UI can forget to supply, and a grid with no
+    // date is exactly the "claim from March" this stamp exists to expose. Local
+    // calendar date, matching `daysBetween`'s reasoning: the reader is a human
+    // with a wall calendar, not a clock.
+    next.availabilityAt = localDateStr();
+  }
+
+  // A coach with no name cannot be resolved from a class or picked from a list,
+  // and an empty row in a roster is worse than a missing one.
+  if (!next.name) return { coach: cur, coaches: list };
+
+  const out = list.slice();
+  out[i] = next;
+  saveCoaches(out);
+  return { coach: next, coaches: out };
+}
+
+// Returns the PRIOR LIST, not the removed row: position is part of what was
+// lost, and an undo that appends the coach back at the end has not undone
+// anything the person looking at the screen would recognise.
+export function removeCoach(id) {
+  const before = getCoaches();
+  const after = before.filter(c => c && c.id !== id);
+  saveCoaches(after);
+  return { coaches: after, before };
+}
+
+// ── Cover requests (S30 §2.3) → localStorage ONLY ───────────────────────────
+//
+// 🔴 THE ONE DOMAIN WHERE "LOCAL ONLY" IS NOT A DEGRADATION BUT A FAILURE.
+// A roster that lives on one device still does useful work there. A cover
+// request that lives on one device does NOTHING AT ALL — its entire purpose is
+// to reach a second person. `coverRequests.js`'s header is the long version and
+// it should be read before this is extended.
+//
+// It is stored anyway, and that is deliberate rather than resigned: a coach can
+// raise, withdraw and settle asks locally, the flow is real and exercised, and
+// the day migration 0010 runs the only thing that changes is where the rows
+// live. What must never happen in the meantime is the UI implying delivery —
+// `deliveryTruth()` is the single place allowed to describe what happened, and
+// `CoachCoverPanel` prints it.
+export function getCoverRequests() { return readJSON(KEYS.coverRequests, []); }
+export function saveCoverRequests(list) { writeJSON(KEYS.coverRequests, list || []); }
