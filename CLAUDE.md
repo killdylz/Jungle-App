@@ -19,8 +19,8 @@ Green as of `852550c` (session 31): **`lint:crash` 0 · 1069 unit (39 files) · 
 files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
 ⚠️ **`syncBanner.spec.js` flakes under FULL-SUITE load, and has for three sessions running.**
-One test fails per full run — a different one each time — and all 7 pass when the spec runs
-alone. The tell is a `waitForApp*` timeout whose error context has **zero page snapshots**: the
+It is INTERMITTENT, not one-per-run: session 31 did two full runs and got one failure and one
+clean sweep. When it does fail it is a different test each time, and all 7 pass alone. The tell is a `waitForApp*` timeout whose error context has **zero page snapshots**: the
 app never mounted, so nothing about the banner was exercised. **A real regression fails the same
 test twice.** Re-run the spec alone before investigating.
 

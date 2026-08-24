@@ -19,11 +19,13 @@ _Last updated: 2026-08-24 (session 31)_
 > ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
 > `gh run list` shows nothing for this work. The local suite is the only gate and every number
 > above is from it.
-> ⚠️ **483 is 482 + one re-run, and the flake is the SAME one session 30 documented.** The full
-> run failed one `syncBanner.spec.js` test; all 7 pass when that spec runs alone, and the tell
-> the prompt named held exactly — a `waitForAppAnyWidth` timeout whose error context contains
-> **zero page snapshots**, meaning the app never mounted and nothing about the banner was
-> exercised. The other six in that spec passed in the same run.
+> ✅ **483 is a CLEAN full run — 483 passed, 0 failed, `syncBanner` included.** Two full runs were
+> done. The first failed one `syncBanner.spec.js` test and the tell the prompt named held exactly:
+> a `waitForAppAnyWidth` timeout whose error context contained **zero page snapshots**, meaning
+> the app never mounted and nothing about the banner was exercised; the other six in that spec
+> passed in the same run, and all 7 passed alone. **The second full run passed it outright.** So
+> the flake is intermittent rather than one-per-run, and it is not a regression — a real one
+> fails the same test twice.
 > 🔴 **And the run printed `exit code 0` with a failing test**, exactly as warned. Read the
 > count, never the exit code.
 
