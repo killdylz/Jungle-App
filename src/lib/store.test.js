@@ -793,6 +793,24 @@ Sarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm,S360
 Tom Reed,tom@example.com,2026-03-04,Tuesday 6pm,S360
 Sarah Chen,sarah@example.com,2026-03-06,Thursday 6pm,GC`;
 
+  // S31 §2.2. The end of the one path that can fill `externalRef`: the reader
+  // (`csvExport`'s "Reference" column) existed for months with nothing able to
+  // write it, so a gym's export promised a reference it always left blank.
+  it("🔴 the imported reference reaches the STORED member, not just the analysis", () => {
+    const withRef = `Member Name,Email,Date,Class,Client ID
+Sarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm,MB-4471`;
+    const r = applyAttendanceImport(analyzeAttendanceCsv(withRef, []));
+    expect(r.ok).toBe(true);
+    const stored = getMembers();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].externalRef).toBe("MB-4471");
+  });
+
+  it("stores an empty reference when the file carried none, never undefined", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
+    expect(getMembers().every(m => m.externalRef === "")).toBe(true);
+  });
+
   it("creates members, classes and check-ins from an empty roster", () => {
     const r = applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
     expect(r).toMatchObject({ ok: true, members: 2, classes: 2, attendance: 3 });

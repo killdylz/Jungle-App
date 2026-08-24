@@ -1458,8 +1458,12 @@ export function applyAttendanceImport(analysis, lib = null) {
   const memberIdFor = new Map();
   const members = getMembers();
   const newRows = (analysis.newMembers || []).map(nm => {
+    // `externalRef` from the import (S31 §2.2), not "". This is the field's only
+    // writer: it holds the member's id in the system the gym is migrating FROM,
+    // and the export of that system is the one place it appears. Still "" when
+    // the file had no such column, which is the normal case.
     const m = { id: newId(), name: nm.name, email: nm.email || "", status: "active",
-                joinedAt: "", externalRef: "" };
+                joinedAt: "", externalRef: nm.externalRef || "" };
     memberIdFor.set(nm.key, m.id);
     return m;
   });

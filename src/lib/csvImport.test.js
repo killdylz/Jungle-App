@@ -211,3 +211,36 @@ Tom Reed,nope,Tuesday 6pm`, ROSTER);
     expect(s).toContain("1 row that couldn't be read");
   });
 });
+
+// ─── S31 §2.2 · the reference to the gym's previous system ──────────────────
+describe("externalRef — the field that had a reader and no writer", () => {
+  it("recognises the columns an old system actually names", () => {
+    expect(mapHeaders(["Client ID", "Member", "Date"]).externalRef).toBe(0);
+    expect(mapHeaders(["Member", "Date", "Customer ID"]).externalRef).toBe(2);
+    expect(mapHeaders(["Member", "Date", "Member Ref"]).externalRef).toBe(2);
+  });
+
+  it("🔴 does NOT claim a bare “ID” column — that is as likely to be a row number", () => {
+    expect(mapHeaders(["ID", "Member", "Date"]).externalRef).toBeUndefined();
+  });
+
+  it("🔴 never takes a header an earlier column already answers to", () => {
+    // "Client Name" belongs to `member`, and adding externalRef must not move it.
+    const m = mapHeaders(["Client Name", "Date", "Client ID"]);
+    expect(m.member).toBe(0);
+    expect(m.externalRef).toBe(2);
+  });
+
+  it("carries the reference onto a new member the import creates", () => {
+    const csv = "Member,Date,Client ID\nAsha,2026-03-04,MB-4471\n";
+    const a = analyzeAttendanceCsv(csv, []);
+    expect(a.ok).toBe(true);
+    expect(a.newMembers).toHaveLength(1);
+    expect(a.newMembers[0].externalRef).toBe("MB-4471");
+  });
+
+  it("is empty, not undefined, when the file has no such column", () => {
+    const a = analyzeAttendanceCsv("Member,Date\nAsha,2026-03-04\n", []);
+    expect(a.newMembers[0].externalRef).toBe("");
+  });
+});
