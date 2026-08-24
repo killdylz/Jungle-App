@@ -39,7 +39,7 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence, fmtAgo } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay } from "./lib/format.js";
 // Only the field names and the currency table — the arithmetic that reads them
 // lives on the Members screen, which is the only surface that shows the figure.
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
@@ -663,7 +663,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
                 {recent.map((s,i)=>(
                   <div key={i} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 0",borderBottom:i<recent.length-1?"1px solid var(--border)":"none"}}>
                     <div style={{width:"7px",height:"7px",borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>
-                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name||"Session"}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{s.date} · {s.durMin||0} min</div></div>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name||"Session"}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{fmtSessionDay(s.date)} · {s.durMin||0} min</div></div>
                   </div>
                 ))}
               </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr } from "./format.js";
+import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr, fmtSessionDay } from "./format.js";
 
 // These three became a SHARED module in I6 stage 5. Before that they were
 // module-scope consts in App.jsx, read by the Builder and the Runner alike, and
@@ -162,5 +162,43 @@ describe("localDateStr", () => {
     const seen = [];
     for (let i = 0; i < 3; i++) { seen.push(localDateStr(d.getTime())); d.setDate(d.getDate() - 1); }
     expect(seen).toEqual(["2026-03-04", "2026-03-03", "2026-03-02"]);
+  });
+});
+
+// ─── S31 · a stored calendar day, said the way a coach would say it ─────────
+describe("fmtSessionDay", () => {
+  const NOW = new Date(2026, 7, 24, 10, 0, 0).getTime();   // Mon 24 Aug 2026, local
+
+  it("says today and yesterday rather than making the reader subtract", () => {
+    expect(fmtSessionDay("2026-08-24", NOW)).toBe("today");
+    expect(fmtSessionDay("2026-08-23", NOW)).toBe("yesterday");
+  });
+
+  it("🔴 uses the same notation as the Dashboard header, not the ISO string", () => {
+    // The header says "Monday 24 Aug"; this panel said "2026-08-22" three cards
+    // below it. Same day, two notations, one screen.
+    expect(fmtSessionDay("2026-08-22", NOW)).toBe("Sat 22 Aug");
+    expect(fmtSessionDay("2026-01-05", NOW)).toBe("Mon 5 Jan");
+  });
+
+  it("🔴 parses by PARTS, so it cannot drift west of UTC", () => {
+    // `new Date("2026-08-22")` is UTC midnight, which reads back as the 21st in
+    // any negative offset. This is the trap §2.4 spent two commits removing.
+    vi.stubEnv("TZ", "America/New_York");
+    try {
+      expect(fmtSessionDay("2026-08-22", NOW)).toBe("Sat 22 Aug");
+      expect(new Date("2026-08-22").getDate()).toBe(21);   // the trap, demonstrated
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it("passes anything that is not a plain calendar date straight through", () => {
+    expect(fmtSessionDay("", NOW)).toBe("");
+    expect(fmtSessionDay(undefined, NOW)).toBe("");
+    expect(fmtSessionDay("last Tuesday", NOW)).toBe("last Tuesday");
+  });
+
+  it("handles a month and year boundary without going off by one", () => {
+    expect(fmtSessionDay("2025-12-31", new Date(2026, 0, 1, 9).getTime())).toBe("yesterday");
+    expect(fmtSessionDay("2025-12-25", new Date(2026, 0, 1, 9).getTime())).toBe("Thu 25 Dec");
   });
 });

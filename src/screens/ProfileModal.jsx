@@ -13,7 +13,7 @@ import React, { useState, useRef } from "react";
 import { Check, LogOut, User } from "lucide-react";
 import { SCFG } from "../data/stageConfig.js";
 import { hueInk } from "../lib/colors.js";
-import { localDateStr } from "../lib/format.js";
+import { localDateStr, fmtSessionDay } from "../lib/format.js";
 import { extractDominantColor } from "../lib/brandGenerator.js";
 import { Input, Select, useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
@@ -195,7 +195,7 @@ export function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gym
                   <div style={{width:"36px",height:"36px",borderRadius:"8px",background:"color-mix(in srgb, var(--accent) 13%, transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:"16px"}}>🏋️</span></div>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||"Workout"}</p>
-                    <p style={{fontSize:"11px",color:"var(--muted)"}}>{s.date} · {s.durMin} min · {s.stages} stage{s.stages!==1?"s":""}</p>
+                    <p style={{fontSize:"11px",color:"var(--muted)"}}>{fmtSessionDay(s.date)} · {s.durMin} min · {s.stages} stage{s.stages!==1?"s":""}</p>
                   </div>
                 </div>
               ))
