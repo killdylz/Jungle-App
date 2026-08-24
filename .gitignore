@@ -40,6 +40,20 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 
+# The remote-container Playwright workaround, and it must NEVER be committed.
+# @playwright/test wants a Chromium build the cloud image does not ship and the
+# download CDN is proxy-blocked, so sessions write a scratch config overriding
+# `executablePath` to an absolute path — /opt/pw-browsers/chromium-<rev>/… — that
+# exists in that image and NOWHERE else. Committed, it would be a config pointing
+# at a missing binary on Dylan's machine and in CI, sitting next to the real
+# `playwright.config.js` that must stay untouched. The directory also collects
+# traces, screenshots and per-run results, which the section above already says
+# do not belong in the history.
+#
+# Sessions 30 and 31 both deleted it by hand before their final push; this is
+# the same decision made once instead of every time.
+/.e2e-scratch/
+
 # Planning docs (kept local, not shipped)
 Jungle - Delta & Backlog Breakdown.md
 Jungle - Work Item Tracker.xlsx
