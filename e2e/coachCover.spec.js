@@ -26,12 +26,12 @@ const CLASSES = [
     day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
 ];
 
-async function seed(page, { coaches = null, requests = null } = {}) {
+async function seed(page, { coaches = null, requests = null, classes = CLASSES } = {}) {
   await page.evaluate(([cls, co, rq]) => {
     localStorage.setItem("jungle_user_classes", JSON.stringify(cls));
     if (co) localStorage.setItem("jungle_coaches", JSON.stringify(co));
     if (rq) localStorage.setItem("jungle_cover_requests", JSON.stringify(rq));
-  }, [CLASSES, coaches, requests]);
+  }, [classes, coaches, requests]);
   await page.reload();
   await nav(page, "Schedule");
 }
@@ -314,4 +314,132 @@ test("🔴 the product never says a cover request was sent anywhere", async ({ p
   expect(after).not.toMatch(/\bclasspass\b/);
   expect(after).not.toMatch(/coming soon/);
   expectNoConsoleErrors(errors);
+});
+
+// ─── S31 §2.1 · the edit path, which did not exist ──────────────────────────
+//
+// 🔴 WHY THIS SUITE IS HERE. Session 30 shipped `updateCoach` accepting five
+// keys, and the app passed exactly one of them. `name`, `aliases`, `userId` and
+// `active` had NO CONTROL — they could only be set by editing localStorage by
+// hand, which is precisely what the tests above did to reach them. A fixture
+// that seeds a field the product cannot write is the tell, and it is why every
+// assertion below drives the UI and then reads the STORED entry.
+
+// "Mara K." is the third spelling — the one `coachKey` deliberately will NOT
+// fold, because deciding that "Mara" and "Mara K." are one person is a
+// judgement about a gym's staff and a wrong merge reassigns somebody's classes.
+const CLASSES_WITH_INITIAL = [
+  ...CLASSES,
+  { id: "uc4", name: "Sunday Long", type: "hyrox", coach: "Mara K.",
+    day: "Sun", slot: "09:00", dur: "45m", repeat: "weekly" },
+];
+
+test.describe("editing a roster entry", () => {
+  test("🔴 an alias makes “Mara K.” the same person as Mara", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: [roster()], classes: CLASSES_WITH_INITIAL });
+
+    // POSITIVE CONTROL, twice. The panel is on screen, AND the schedule really
+    // does count "Mara K." as somebody nobody has claimed — otherwise the
+    // assertion that it stops doing so is passing on an empty screen.
+    await expect(page.getByText("Coach roster", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Put Mara K. on the roster" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit Mara" }).click();
+    await page.getByLabel("Also typed as").fill("Mara K.");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    // ASSERT THE STORED OBJECT. The render is checked below, but the roster
+    // entry is the thing every other reader resolves through.
+    const saved = await stored(page, "jungle_coaches");
+    expect(saved).toHaveLength(1);
+    expect(saved[0].name).toBe("Mara");
+    expect(saved[0].aliases).toEqual(["Mara K."]);
+
+    // And the schedule stops counting them separately — the actual point.
+    await expect(page.getByRole("button", { name: "Put Mara K. on the roster" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Put Dev on the roster" })).toBeVisible();
+    expectNoConsoleErrors(errors);
+  });
+
+  test("🔴 renaming a coach does not orphan the classes typed under the old name", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: [roster()] });
+
+    await expect(page.getByRole("button", { name: "Edit Mara" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit Mara" }).click();
+    await page.getByLabel("Name", { exact: true }).fill("Mara Kelly");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    const saved = await stored(page, "jungle_coaches");
+    expect(saved[0].name).toBe("Mara Kelly");
+    // The old name was carried, so "Mara" on uc1/uc2 still resolves to her.
+    expect(saved[0].aliases).toContain("Mara");
+
+    // Proof at the product level: the two classes typed "Mara"/"mara" are still
+    // hers, so nothing re-appears as an unclaimed name.
+    await expect(page.getByRole("button", { name: "Put Mara on the roster" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit Mara Kelly" })).toBeVisible();
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a coach who no longer works here stays on the roster and stops being offered cover", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: [
+      roster({ id: "c-dev", name: "Dev", availability: { Mon: ["06:00"] }, availabilityAt: "2099-01-01" }),
+    ] });
+
+    // POSITIVE CONTROL: Dev IS offered before the change. Without this the
+    // assertion below is satisfied by a screen that never had the button.
+    await page.getByLabel("Class that needs cover").selectOption("uc1");
+    await expect(page.getByRole("button", { name: /^Ask Dev to cover / })).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit Dev" }).click();
+    await page.getByLabel("Dev still coaches here").uncheck();
+    await page.getByRole("button", { name: "Save" }).click();
+
+    expect((await stored(page, "jungle_coaches"))[0].active).toBe(false);
+
+    // Still on the roster — this is not a delete.
+    await expect(page.getByRole("button", { name: "Edit Dev" })).toBeVisible();
+    // But no longer offered for cover.
+    await page.getByLabel("Class that needs cover").selectOption("uc1");
+    await expect(page.getByRole("button", { name: /^Ask Dev to cover / })).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("🔴 with no server the account link says why, instead of an empty picker", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: [roster()] });
+
+    await page.getByRole("button", { name: "Edit Mara" }).click();
+
+    // POSITIVE CONTROL: the form really opened, so "no picker" is not passing
+    // because nothing rendered.
+    await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
+    await expect(page.getByText("Jungle account", { exact: true })).toBeVisible();
+
+    // The honest sentence, and NO control that pretends to work.
+    await expect(page.getByText(/needs the gym to be online/i)).toBeVisible();
+    await expect(page.getByLabel("Jungle account")).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a blank name is refused rather than silently discarded", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: [roster()] });
+
+    await page.getByRole("button", { name: "Edit Mara" }).click();
+    await page.getByLabel("Name", { exact: true }).fill("   ");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await expect(page.getByTestId("toast")).toContainText(/needs a name/i);
+    expect((await stored(page, "jungle_coaches"))[0].name).toBe("Mara");
+    expectNoConsoleErrors(errors);
+  });
 });

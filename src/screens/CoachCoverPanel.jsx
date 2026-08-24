@@ -19,8 +19,10 @@
 import React from "react";
 import { X } from "lucide-react";
 import * as store from "../lib/store.js";
-import { supabaseEnabled } from "../supabase.js";
+import { supabase, supabaseEnabled } from "../supabase.js";
+import { useJungleAuth } from "../AuthGate.jsx";
 import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
+         formatAliases, coachEditPatch, linkableAccounts,
          COACH_AVAIL_STALE_DAYS } from "../lib/coachRoster.js";
 import { makeCoverRequest, settleCover, isOpen, openRequestForClass,
          deliveryTruth } from "../lib/coverRequests.js";
@@ -57,6 +59,9 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   const [requests, setRequests] = React.useState(() => store.getCoverRequests());
   const [newName, setNewName] = React.useState("");
   const [editing, setEditing] = React.useState(null);      // roster id whose grid is open
+  const [detailsFor, setDetailsFor] = React.useState(null); // roster id whose edit form is open
+  const [draft, setDraft] = React.useState(null);           // { name, aliasText, active, userId }
+  const [accounts, setAccounts] = React.useState(null);     // null = not loaded / no server
   const [askClassId, setAskClassId] = React.useState("");
   const [pendingRemove, setPendingRemove] = React.useState(null);
 
@@ -88,6 +93,48 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     // The PRIOR LIST, not the row: position is part of what was lost, and an undo
     // that appends the coach at the end has not restored what was on screen.
     toast(`Removed ${label}`, { undo: () => { store.saveCoaches(before); setCoaches(before); toast(`${label} restored`); } });
+  };
+
+  // ── The account list, and why it is loaded rather than held ──────────────
+  //
+  // ⚠️ `memberships` is the ONLY list of a gym's people and it lives on the
+  // server. There is no local copy and there should not be one: it is the
+  // gym's account roster, it changes without this device, and a cached copy
+  // would let the picker offer somebody who left. When there is no server
+  // there is nobody to pick from, and the form says so instead of rendering
+  // an empty select — see `linkNote` below.
+  //
+  // Loaded once when the first edit form opens, not on mount: most sessions
+  // never open one, and this is a network round-trip on a panel that renders
+  // on every visit to the Schedule.
+  const auth = useJungleAuth();
+  const gymId = auth?.gym?.id;
+  React.useEffect(() => {
+    if (!detailsFor || accounts !== null || !supabaseEnabled || !supabase || !gymId) return;
+    let alive = true;
+    supabase.from("memberships").select("user_id,profiles(email,name)").eq("gym_id", gymId).eq("status", "active")
+      .then(({ data }) => { if (alive) setAccounts(data || []); });
+    return () => { alive = false; };
+  }, [detailsFor, accounts, gymId]);
+
+  const openDetails = (c) => {
+    setDetailsFor(c.id);
+    setDraft({ name: c.name, aliasText: formatAliases(c.aliases), active: c.active !== false, userId: c.userId || "" });
+  };
+
+  const saveDetails = (c) => {
+    const patch = coachEditPatch(c, draft);
+    // `updateCoach` refuses a blank name and returns the row unchanged. Saying
+    // so beats a Save button that silently does nothing.
+    if (!patch.name) { toast("A coach needs a name"); return; }
+    const r = store.updateCoach(c.id, patch);
+    setCoaches(r.coaches);
+    setDetailsFor(null);
+    setDraft(null);
+    const added = patch.aliases.length;
+    toast(added
+      ? `Saved ${r.coach.name} — also answers to ${patch.aliases.join(", ")}`
+      : `Saved ${r.coach.name}`);
   };
 
   const toggleSlot = (id, day, slot) => {
@@ -190,6 +237,9 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
                   {REACH_LABEL[coachReach(c)]}
                 </span>
                 <span style={{ flex: 1 }} />
+                <button onClick={() => (detailsFor === c.id ? (setDetailsFor(null), setDraft(null)) : openDetails(c))}
+                        aria-label={`Edit ${c.name}`}
+                        style={btn(detailsFor === c.id)}>Edit</button>
                 <button onClick={() => setEditing(editing === c.id ? null : c.id)}
                         aria-label={`Set availability for ${c.name}`}
                         style={btn(editing === c.id)}>Availability</button>
@@ -203,6 +253,90 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
                 {availabilityState(c, nowMs).state === "stale" &&
                   <strong style={{ color: "var(--text)" }}> &mdash; older than {COACH_AVAIL_STALE_DAYS} days, ask again</strong>}
               </div>
+
+              {detailsFor === c.id && draft && (
+                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ ...sub, fontWeight: "700" }} htmlFor={`coach-name-${c.id}`}>Name</label>
+                  <input id={`coach-name-${c.id}`} value={draft.name}
+                         onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                         style={{ ...field, width: "100%", boxSizing: "border-box" }} />
+
+                  <label style={{ ...sub, fontWeight: "700" }} htmlFor={`coach-aliases-${c.id}`}>Also typed as</label>
+                  <input id={`coach-aliases-${c.id}`} value={draft.aliasText}
+                         onChange={e => setDraft(d => ({ ...d, aliasText: e.target.value }))}
+                         placeholder="Other spellings, comma-separated"
+                         style={{ ...field, width: "100%", boxSizing: "border-box" }} />
+                  {/* The sentence that says what this is FOR. Without it an alias
+                      box is a mystery; with it, a gym looking at "Mara" and
+                      "Mara K." counted as two people knows the fix. */}
+                  <div style={sub}>
+                    Classes are matched to a coach by the name typed on them. Capitals and spacing
+                    are already ignored &mdash; add a spelling here when the same person is written a
+                    genuinely different way, like &ldquo;Mara K.&rdquo; for Mara.
+                  </div>
+
+                  <label style={{ ...sub, display: "flex", alignItems: "center", gap: "7px", cursor: "pointer" }}>
+                    {/* `accentColor` so the tick takes the GYM's palette. Without
+                        it a native checkbox renders browser-default blue on a
+                        white-labelled screen — the same defect class as the demo
+                        screen that drew its own controls (commit 8c581d0).
+                        ⚠️ Two OTHER checkboxes in this product still have this
+                        gap (RosterScreen.jsx:343, PersonasScreen.jsx:1009); they
+                        are noted in the handoff rather than fixed here, because
+                        widening a commit is how polish arrives untested. */}
+                    <input type="checkbox" checked={draft.active}
+                           onChange={e => setDraft(d => ({ ...d, active: e.target.checked }))}
+                           style={{ accentColor: "var(--accent)" }}
+                           aria-label={`${c.name} still coaches here`} />
+                    <span>Still coaches here</span>
+                  </label>
+                  {!draft.active && (
+                    <div style={sub}>
+                      They stay on the roster and keep their classes, but they will not be offered
+                      when you look for cover.
+                    </div>
+                  )}
+
+                  {/* ── The account link ─────────────────────────────────────
+                      🔴 SERVER-ONLY, AND IT SAYS SO. `memberships` is the only
+                      list of a gym's people and it is not on this device. A
+                      select with nothing in it would read as "you have no
+                      staff"; a sentence reads as what it is. */}
+                  <label style={{ ...sub, fontWeight: "700" }} htmlFor={`coach-account-${c.id}`}>Jungle account</label>
+                  {supabaseEnabled ? (
+                    <>
+                      <select id={`coach-account-${c.id}`} value={draft.userId}
+                              onChange={e => setDraft(d => ({ ...d, userId: e.target.value }))}
+                              style={{ ...field, width: "100%", cursor: "pointer" }}>
+                        <option value="">Not linked</option>
+                        {linkableAccounts(accounts, coaches, c.id).map(a => (
+                          <option key={a.userId} value={a.userId} disabled={!!a.takenBy}>
+                            {a.label}{a.takenBy ? ` — already linked to ${a.takenBy}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <div style={sub}>
+                        {accounts === null
+                          ? "Loading your team\u2026"
+                          : accounts.length === 0
+                            ? "Nobody on your team has a Jungle account yet. Invite them from Team."
+                            : "Linking a coach to their account is the only thing that lets a cover request reach them."}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={sub}>
+                      Linking a coach to their Jungle account needs the gym to be online. This device
+                      has no server configured, so there are no accounts to link to &mdash; the roster,
+                      the availability and the cover requests all stay here.
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
+                    <button onClick={() => saveDetails(c)} style={btn(true)}>Save</button>
+                    <button onClick={() => { setDetailsFor(null); setDraft(null); }} style={btn(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
 
               {editing === c.id && (
                 <div style={{ marginTop: "10px", overflowX: "auto" }}>

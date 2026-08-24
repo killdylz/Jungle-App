@@ -245,3 +245,81 @@ export function coachesFreeAt(roster, { day, slot } = {}, now = Date.now()) {
                  || (a.days ?? 0) - (b.days ?? 0)
                  || String(a.coach.name).localeCompare(String(b.coach.name)));
 }
+
+// ─── Editing a roster entry (S31 §2.1) ──────────────────────────────────────
+//
+// 🔴 WHY THESE EXIST AT ALL. `updateCoach` accepts five keys and, until this
+// commit, the app passed exactly one of them (`availability`). `name`, `aliases`,
+// `userId` and `active` could only be set by editing localStorage by hand — and
+// every gate was green, because a field nothing writes breaks nothing. The
+// audit in `storeWriters.test.js` is the check that would have caught it.
+//
+// The parse/patch split is what makes the rename rule testable without a DOM:
+// the panel owns the text boxes, this owns the decision about what the text
+// means.
+
+// Comma-separated text → a clean alias list. Blanks dropped; ordering kept, so a
+// gym that types them in a deliberate order gets them back that way.
+// (`updateCoach` still deduplicates by match key — this does not second-guess it.)
+export function parseAliases(text) {
+  return String(text ?? "").split(",").map(s => s.trim()).filter(Boolean);
+}
+
+// The inverse, for seeding the input from a stored entry.
+export function formatAliases(list) {
+  return (list || []).join(", ");
+}
+
+// A draft from the edit form → the patch `updateCoach` should receive.
+//
+// 🔴 THE RENAME RULE, and it matters more here than it does for a movement.
+// A class carries the coach's name as TEXT (`class_schedule_rules.coach`), and
+// `resolveCoach` matches it against the entry's name and aliases. So renaming
+// "Mara" to "Mara Kelly" without keeping "Mara" would silently unlink every
+// class she already teaches — the roster entry would still exist, the schedule
+// would still say "Mara", and the two would stop being the same person. The old
+// name is therefore carried into the aliases unless the gym already typed it
+// there. `PersonasScreen` does the same thing for movements (line ~1520) for
+// the weaker version of this reason.
+//
+// A rename that only changes case or spacing is NOT a rename — `coachKey` folds
+// those — so it adds no alias, which is what stops "Mara" → "mara" leaving a
+// duplicate behind.
+export function coachEditPatch(entry, draft = {}) {
+  const name = String(draft.name ?? entry?.name ?? "").trim();
+  const aliases = parseAliases(draft.aliasText);
+  const old = String(entry?.name || "").trim();
+  if (old && coachKey(name) !== coachKey(old) && !aliases.some(a => coachKey(a) === coachKey(old))) {
+    aliases.push(old);
+  }
+  return {
+    name,
+    aliases,
+    active: draft.active !== false,
+    userId: String(draft.userId ?? entry?.userId ?? "").trim(),
+  };
+}
+
+// The gym's accounts, shaped for the link picker.
+//
+// ⚠️ AN ACCOUNT ALREADY LINKED TO ANOTHER ENTRY IS RETURNED, NOT DROPPED, and
+// carries `takenBy`. Omitting it would leave a manager looking for a name that
+// is demonstrably in their Team list with no explanation for its absence; the
+// UI disables it and says who has it. Two roster entries pointing at one account
+// would make `coachAccountFor` answer with whichever came first in the list,
+// which is a coin-flip dressed as an identity.
+export function linkableAccounts(memberships, roster, forCoachId) {
+  const taken = new Map();
+  for (const c of roster || []) {
+    if (c && c.userId && c.id !== forCoachId) taken.set(c.userId, c.name || "another coach");
+  }
+  return (memberships || [])
+    .filter(m => m && m.user_id)
+    .map(m => ({
+      userId: m.user_id,
+      label: m.profiles?.name || m.profiles?.email || "Unnamed account",
+      email: m.profiles?.email || "",
+      takenBy: taken.get(m.user_id) || "",
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}

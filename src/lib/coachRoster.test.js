@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { coachKey, coachKeys, makeCoach, resolveCoach,
          coachNamesOnSchedule, coachReach, rosterCoverage,
          normaliseAvailability, availabilityState, claimsFree, coachesFreeAt,
+         parseAliases, formatAliases, coachEditPatch, linkableAccounts,
          COACH_AVAIL_STALE_DAYS } from "./coachRoster.js";
 
 // A roster entry as the store mints it, minus the id ceremony.
@@ -252,5 +253,94 @@ describe("coachesFreeAt", () => {
     expect(coachesFreeAt(roster, { day: "Mon" }, now)).toEqual([]);
     expect(coachesFreeAt(roster, {}, now)).toEqual([]);
     expect(coachesFreeAt(roster, undefined, now)).toEqual([]);
+  });
+});
+
+// ─── S31 §2.1 — the edit path, which did not exist until this commit ────────
+
+describe("parseAliases / formatAliases", () => {
+  it("splits on commas and drops the blanks a human leaves behind", () => {
+    expect(parseAliases("Mara K., MK ,, ")).toEqual(["Mara K.", "MK"]);
+  });
+
+  it("answers with an empty list rather than [''] for empty text", () => {
+    expect(parseAliases("")).toEqual([]);
+    expect(parseAliases("   ")).toEqual([]);
+    expect(parseAliases(null)).toEqual([]);
+  });
+
+  it("round-trips a stored list back into the input", () => {
+    expect(parseAliases(formatAliases(["Mara K.", "MK"]))).toEqual(["Mara K.", "MK"]);
+  });
+});
+
+describe("🔴 coachEditPatch — a rename must not unlink the classes already taught", () => {
+  const mara = coach("Mara", { id: "c1" });
+
+  it("carries the OLD name into the aliases, so the schedule still resolves", () => {
+    const p = coachEditPatch(mara, { name: "Mara Kelly", aliasText: "", active: true });
+    expect(p.name).toBe("Mara Kelly");
+    expect(p.aliases).toContain("Mara");
+  });
+
+  it("proves it: the patched entry still answers to the name typed on the class", () => {
+    const p = coachEditPatch(mara, { name: "Mara Kelly", aliasText: "", active: true });
+    const after = { ...mara, ...p };
+    expect(resolveCoach([after], "Mara")).toBe(after);
+    expect(resolveCoach([after], "Mara Kelly")).toBe(after);
+  });
+
+  it("does not duplicate an old name the gym already typed as an alias", () => {
+    const p = coachEditPatch(mara, { name: "Mara Kelly", aliasText: "mara", active: true });
+    expect(p.aliases.filter(a => coachKey(a) === "mara")).toHaveLength(1);
+  });
+
+  it("a case- or space-only change is NOT a rename, so it adds no alias", () => {
+    expect(coachEditPatch(mara, { name: "mara", aliasText: "" }).aliases).toEqual([]);
+    expect(coachEditPatch(mara, { name: "  Mara  ", aliasText: "" }).aliases).toEqual([]);
+  });
+
+  it("keeps the aliases the gym typed when the name is unchanged", () => {
+    const p = coachEditPatch(mara, { name: "Mara", aliasText: "Mara K., MK" });
+    expect(p.aliases).toEqual(["Mara K.", "MK"]);
+  });
+
+  it("carries active and userId through, defaulting to the stored values", () => {
+    const linked = coach("Dev", { id: "c2", userId: "u9" });
+    expect(coachEditPatch(linked, { name: "Dev", aliasText: "" }).userId).toBe("u9");
+    expect(coachEditPatch(linked, { name: "Dev", aliasText: "", active: false }).active).toBe(false);
+    expect(coachEditPatch(linked, { name: "Dev", aliasText: "", userId: "" }).userId).toBe("");
+  });
+});
+
+describe("linkableAccounts — the picker's list", () => {
+  const memberships = [
+    { user_id: "u2", profiles: { name: "Dev Rao", email: "dev@studio.com" } },
+    { user_id: "u1", profiles: { name: "Ana Beltran", email: "ana@studio.com" } },
+    { user_id: "u3", profiles: { email: "nameless@studio.com" } },
+    { user_id: "u4", profiles: null },
+    null,
+  ];
+  const roster = [coach("Mara", { id: "c1", userId: "u1" }), coach("Sam", { id: "c2" })];
+
+  it("sorts by the name a human would look for", () => {
+    expect(linkableAccounts(memberships, roster, "c2").map(a => a.label))
+      .toEqual(["Ana Beltran", "Dev Rao", "nameless@studio.com", "Unnamed account"]);
+  });
+
+  it("🔴 marks an account another entry already holds, rather than hiding it", () => {
+    const out = linkableAccounts(memberships, roster, "c2");
+    expect(out.find(a => a.userId === "u1").takenBy).toBe("Mara");
+    expect(out.find(a => a.userId === "u2").takenBy).toBe("");
+  });
+
+  it("does not call an entry's OWN link taken — that would disable the current value", () => {
+    const out = linkableAccounts(memberships, roster, "c1");
+    expect(out.find(a => a.userId === "u1").takenBy).toBe("");
+  });
+
+  it("survives an empty gym and a missing roster", () => {
+    expect(linkableAccounts([], roster, "c1")).toEqual([]);
+    expect(linkableAccounts(memberships, null, "c1").every(a => a.takenBy === "")).toBe(true);
   });
 });
