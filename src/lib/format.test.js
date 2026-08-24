@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { fmt, fmtSec, fmtOccurrence, fmtAgo } from "./format.js";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr } from "./format.js";
 
 // These three became a SHARED module in I6 stage 5. Before that they were
 // module-scope consts in App.jsx, read by the Builder and the Runner alike, and
@@ -129,5 +129,38 @@ describe("fmtAgo", () => {
     expect(fmtAgo(undefined, NOW)).toBe("");
     expect(fmtAgo(null, NOW)).toBe("");
     expect(fmtAgo("nonsense", NOW)).toBe("");
+  });
+});
+
+// ─── S31 §2.4 · localDateStr, shared so a writer and its reader cannot drift ──
+describe("localDateStr", () => {
+  beforeAll(() => { vi.stubEnv("TZ", "Asia/Singapore"); });
+  afterAll(() => { vi.unstubAllEnvs(); });
+
+  // POSITIVE CONTROL on the precondition: in UTC every assertion below is
+  // trivially true and would pass against the bug this helper exists to fix.
+  it("🔴 really is running east of UTC, or this describe proves nothing", () => {
+    expect(new Date("2026-03-03T16:30:00Z").getTimezoneOffset()).toBe(-480);
+  });
+
+  it("🔴 gives the calendar day the reader is living in, not the UTC one", () => {
+    const lateUtc = Date.parse("2026-03-03T16:30:00Z");   // 2026-03-04 00:30 in SG
+    expect(localDateStr(lateUtc)).toBe("2026-03-04");
+    expect(new Date(lateUtc).toISOString().slice(0, 10)).toBe("2026-03-03");
+  });
+
+  it("pads month and day, so the strings sort and compare as dates", () => {
+    expect(localDateStr(Date.parse("2026-01-05T04:00:00Z"))).toBe("2026-01-05");
+    expect(localDateStr(Date.parse("2026-11-30T04:00:00Z"))).toBe("2026-11-30");
+  });
+
+  it("🔴 stepping a local day and formatting agree — the streak loop's contract", () => {
+    // ProfileModal walks back with `d.setDate(d.getDate()-1)` and labels each
+    // step with this. If the two used different calendars the walk would skip or
+    // repeat a day at the boundary, which is what mixing them used to risk.
+    const d = new Date(Date.parse("2026-03-03T16:30:00Z"));  // 04 Mar in SG
+    const seen = [];
+    for (let i = 0; i < 3; i++) { seen.push(localDateStr(d.getTime())); d.setDate(d.getDate() - 1); }
+    expect(seen).toEqual(["2026-03-04", "2026-03-03", "2026-03-02"]);
   });
 });

@@ -5,15 +5,15 @@
 // `addMember` uses `localDateStr()` or `toISOString().slice(0,10)`, and proves
 // nothing. It has to run east (or west) of UTC to tell them apart at all.
 //
-// Set before anything constructs a Date, and RESTORED after, so the rest of the
-// suite is unaffected.
-const REAL_TZ = process.env.TZ;
-process.env.TZ = "Asia/Singapore";
-
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+// ⚠️ Set through `vi.stubEnv`, not a bare `process.env.TZ =`. `process` is not a
+// declared global in `eslint.crash.config.js`, and the crash gate must stay at 0
+// — the config is infra and not this session's to change. `vi.unstubAllEnvs()`
+// restores it, so the rest of the suite is unaffected.
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import { addMember, getMembers } from "./store.js";
 
-afterAll(() => { process.env.TZ = REAL_TZ; });
+beforeAll(() => { vi.stubEnv("TZ", "Asia/Singapore"); });
+afterAll(() => { vi.unstubAllEnvs(); });
 
 // 2026-03-03 16:30 UTC is 2026-03-04 00:30 in Singapore. UTC says the 3rd, the
 // coach's wall calendar says the 4th. That gap is the whole defect.

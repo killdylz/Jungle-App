@@ -19,6 +19,7 @@ import { useState, useEffect, useRef } from "react";
 import { FLAGS } from "../../config/flags.js";
 import * as store from "../../lib/store.js";
 import { onRoomState, sendRoomState } from "../../lib/room.js";
+import { localDateStr } from "../../lib/format.js";
 import { apiPlay, rampVolume } from "../../music/index.js";
 
 // The end-of-stage siren. Three descending tones, because one beep is lost in a
@@ -55,7 +56,12 @@ export function useClassRunner({
   const saveSession = () => {
     const totalElapsed = stages.slice(0, liveState.idx).reduce((a,s)=>a+s.dur,0) + liveState.elapsed;
     if (totalElapsed < 10) return;
-    const record = { date:new Date().toISOString().slice(0,10), name:sessionName, stages:stages.length,
+    // 🔴 LOCAL calendar date (S31 §2.4). This was `toISOString().slice(0,10)`,
+    // and `ProfileModal` DISPLAYS it — so a coach teaching at 7am in Singapore
+    // saw yesterday's date against the session they had just finished. It must
+    // move together with the streak reader in ProfileModal, which compares
+    // against it: changing either alone breaks the count.
+    const record = { date:localDateStr(), name:sessionName, stages:stages.length,
       durMin:Math.round(totalElapsed/60), ts:Date.now(), stageTypes:[...new Set(stages.map(s=>s.type))] };
     const updated = [record, ...sessionHistory].slice(0,100);
     setSessionHistory(updated);

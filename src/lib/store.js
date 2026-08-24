@@ -22,6 +22,7 @@ import { resolveClassType } from "./libraryStore.js";
 // does NOT import store.js back — the resolution rules are pure and the
 // persistence is here, which is what keeps the cycle from existing.
 import { makeCoach, coachKey, normaliseAvailability, resolveCoach } from "./coachRoster.js";
+import { localDateStr } from "./format.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -54,15 +55,9 @@ const KEYS = {
   coverRequests: "jungle_cover_requests",
 };
 
-// Today, as the reader's CALENDAR says it — not `toISOString().slice(0,10)`,
-// which is UTC and is a different day for most of the world for part of every
-// day. Availability is stamped with this and then read back by `daysBetween`,
-// which counts local calendar days; mixing the two would make a claim stated
-// this evening read as yesterday's in Singapore.
-function localDateStr(ms = Date.now()) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+// `localDateStr` now lives in format.js and is imported at the top of this file:
+// `useClassRunner` and `ProfileModal` needed the same rule, and a second copy is
+// exactly how a writer and its reader drift apart. Behaviour is unchanged.
 
 // Client-generated UUID, used as the row PK on both coach_personas and
 // persona_plans so the persona→plans FK bridges cleanly in the local-first

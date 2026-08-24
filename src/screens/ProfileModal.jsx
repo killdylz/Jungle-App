@@ -13,6 +13,7 @@ import React, { useState, useRef } from "react";
 import { Check, LogOut, User } from "lucide-react";
 import { SCFG } from "../data/stageConfig.js";
 import { hueInk } from "../lib/colors.js";
+import { localDateStr } from "../lib/format.js";
 import { extractDominantColor } from "../lib/brandGenerator.js";
 import { Input, Select, useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
@@ -45,11 +46,24 @@ export function ProfileModal({profile, onClose, onLogout, sessionHistory=[], gym
   const totalMinutes  = sessionHistory.reduce((a,s)=>a+(s.durMin||0),0);
   const totalHours    = (totalMinutes/60).toFixed(1);
   const avgDur        = totalSessions ? Math.round(totalMinutes/totalSessions) : 0;
-  const now = new Date(), today = now.toISOString().slice(0,10);
+  // 🔴 LOCAL calendar dates on BOTH sides (S31 §2.4). `d.setDate(d.getDate()-1)`
+  // steps a LOCAL day, and this used to render each step with
+  // `toISOString().slice(0,10)` — UTC — while `useClassRunner` wrote the same
+  // way. The pair was self-consistent, so the streak counted correctly; what was
+  // wrong was the date SHOWN next to each session, which read as yesterday's for
+  // a coach training before 8am in Singapore. Both halves now use the local rule,
+  // so the step and the label finally measure the same thing.
+  //
+  // ⚠️ Sessions recorded BEFORE this change carry a UTC date. There is no
+  // migration, because a stored date string has no time in it and the zone it was
+  // written in cannot be recovered — guessing would be a confident wrong answer.
+  // For a coach east of UTC who trains early, a streak spanning the change can be
+  // one short once; it self-heals as new sessions land.
+  const now = new Date(), today = localDateStr(now.getTime());
   const dates = new Set(sessionHistory.map(s=>s.date));
   let streak = 0;
   for (let d=new Date(now);;d.setDate(d.getDate()-1)) {
-    const ds = d.toISOString().slice(0,10);
+    const ds = localDateStr(d.getTime());
     if (dates.has(ds)) streak++; else if (ds<today) break;
   }
   const typeCounts = {};

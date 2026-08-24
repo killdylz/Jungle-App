@@ -47,3 +47,21 @@ export const fmtAgo = (at, now = Date.now()) => {
   const d = Math.floor(h / 24);
   return `${d} day${d === 1 ? "" : "s"} ago`;
 };
+
+// Today, as the reader's CALENDAR says it — never `toISOString().slice(0,10)`,
+// which is UTC and is a different day from the coach's for part of every day.
+//
+// 🔴 SHARED, because the alternative has already cost this product twice. It
+// lived privately in `store.js` while `useClassRunner` and `ProfileModal` each
+// used the UTC form, and a session taught at 7am in Singapore was written — and
+// DISPLAYED — under yesterday's date. Two copies of a date rule is how a writer
+// and its reader drift apart while both look correct in the timezone the tests
+// happen to run in.
+//
+// ⚠️ Anything that WRITES a date string a human will read, or compares one, uses
+// this. Jungle's first market is Singapore (UTC+8), so "the tests pass in UTC" is
+// not evidence about the shipped product.
+export const localDateStr = (ms = Date.now()) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
