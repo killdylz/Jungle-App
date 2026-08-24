@@ -45,6 +45,8 @@ undo it. Nothing in Part A needs me.
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 | **A14** | **A yes/no: does Jungle bend a gym's accent to make it legible?** | 10 min read | none — a decision, no work |
+| **A15** | **Run migration 0010** — or coach cover stays on one phone | **10 min** | low, fully revertible |
+| **A16** | **A decision, and four facts I cannot look up: Mindbody** | 20 min | none — a decision |
 
 ---
 
@@ -801,3 +803,96 @@ now reads the full audit and names the failing pairs.
   navy mark a way out that does not involve them knowing what 3:1 means.
 - **(c) Clamp it silently.** I would not: it is the invisible-change failure mode this product has
   a standing rule against.
+
+---
+
+## A15 · Run migration 0010 — or coach cover stays on one phone
+
+**This is the one item on this list that a shipped feature is already waiting on.**
+
+Session 30 built the coach roster, availability, and cover requests: a coach says which days
+and slots they can work, and when a class needs covering the app offers the coaches who are
+free and records who agreed to take it.
+
+🔴 **Every other feature in Jungle is one gym, one device, one person.** A coach builds a class
+and the same coach runs it, so the browser's own storage can be the source of truth and the
+server catches up whenever. **A cover request is two people on two phones.** Coach A asks,
+coach B answers, and neither phone can see the other's storage. There is no offline version of
+that — it is the first thing Jungle does that only works if the server does.
+
+**Right now the server has no table for it.** So on the build your gym runs today, a cover
+request is saved on the phone that raised it and **nobody else will ever see it.** The app says
+exactly that on screen rather than showing a hopeful "Sent" — but it is a real limit, not a
+cosmetic one.
+
+### Steps
+1. Go to <https://supabase.com/dashboard>, open your project.
+2. Left sidebar → **SQL Editor** → **New query**.
+3. Paste the whole of `supabase/migrations/0010_coach_cover.sql` → **Run**.
+   Safe to re-run: every statement is `if not exists` or `drop policy … / create policy`.
+4. If you have done **A4** (the restore drill), run it on **staging** first, then prod the
+   same day.
+
+### What "it worked" looks like
+**Table Editor** shows two new tables, `coach_roster` and `cover_requests`, both empty.
+
+### ⚠️ Two things that are still true afterwards, so you are not surprised
+- **0005 and 0006 are still unapplied.** Personas, plans and the movement catalogue remain on
+  one device with no server copy. 0010 does not change that. (⚠️ And when you do run 0005/0006,
+  note that the coach-delete dialog currently *tells* the coach their personas are device-only;
+  that sentence becomes untrue and needs changing in the same session.)
+- **Nobody's phone will ring.** Jungle has no push notifications, no email sending and no SMS —
+  there is no such code anywhere in the product. After 0010, a cover request reaches the other
+  coach **when they next open Jungle**, which is fine for "can you take Thursday" and no use at
+  all for "I am ill, my class is in an hour". If the urgent case matters to you, say so and it
+  becomes a real piece of work: a sender (Resend or Postmark for email, roughly S$0–30/month at
+  your size), a domain to send from, and about a day. **It is not built and I have not assumed
+  you want it.**
+
+### Undo
+`drop table public.cover_requests; drop table public.coach_roster;` — nothing else references
+them, and the app keeps working exactly as it does today.
+
+---
+
+## A16 · A decision, and four facts I cannot look up: Mindbody
+
+**Nothing is blocked on this, and nothing has been built against it.** The ask was that an
+approved cover push through to Mindbody, which propagates to ClassPass. Session 30 built the
+**seam** — one adapter with a pinned payload, and one implementation that does nothing and says
+so. There is no Mindbody code, no endpoint, no key, and no "coming soon" panel.
+
+### Why it stopped there
+- The architecture spec's risk **A6** records that Mindbody's API is a **paid, gated partner
+  program**, and its §347 lists partner-program costs among the facts to re-verify at the point
+  of commitment. Nobody has verified them. There is no account and no sandbox.
+- **"Mindbody pushes it to ClassPass" is an assumption.** They do integrate. Whether an
+  *instructor substitution* propagates, how fast, and whether ClassPass tells members who
+  already booked are three separate questions, and this repo answers none of them. A studio
+  that tells its members "your coach changed" on Jungle's authority and is wrong has a worse
+  problem than one that never claimed it.
+
+### 🔴 First, the decision — this one is yours and it is not technical
+Your own decision doc holds the **"no CRM" line for the first 1–2 years**: *"the moment we bolt
+on scheduling/payments early, we become a worse Mindbody and lose the wedge."*
+
+My reading is that coach availability and finding cover sit **inside** that line — they are
+staff operations, nothing books a member and nothing takes a payment — but that **writing back
+to Mindbody is the part that genuinely crosses it.** It makes Jungle a thing that edits the
+booking system, which is the direction the line was drawn against.
+
+**So: do you want Jungle writing to a gym's booking system at all?** If the answer is no, the
+seam stays a seam, nothing is wasted, and the four questions below do not matter.
+
+### If the answer is yes, these are the four facts
+1. **Partner-program status and cost.** Apply at <https://developers.mindbodyonline.com>. What
+   tier, what monthly cost, what per-call cost, and how long approval takes.
+2. **Which API.** Public API v6 or the newer Platform API — they are different products with
+   different access rules. Which one is a substitution available on?
+3. **What a staff substitution actually is.** Is there an endpoint that changes a class's
+   instructor, or does it require cancel-and-recreate? Cancel-and-recreate would drop existing
+   bookings, which would make this feature actively harmful.
+4. **Sandbox.** Is there a free test site, and does it accept substitution calls?
+
+**Do not sign anything before question 3 has an answer.** If the only way to change an
+instructor is to cancel the class, the honest product decision is not to integrate.

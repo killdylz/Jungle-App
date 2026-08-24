@@ -15,14 +15,14 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `601332b` (session 29): **`lint:crash` 0 · 935 unit (33 files) · 466 e2e (46 spec
+Green as of `b605b13` (session 30): **`lint:crash` 0 · 1019 unit (36 files) · 478 e2e (47 spec
 files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
 **⚠️ `index.js` is the binding constraint — 203.06 / 215 kB, 5.6% headroom — and it is 93%
 REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
 **all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
 **cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
-has 18.6% headroom and is no longer the constraint.
+has 14.6% headroom (307.46 / 360 kB after session 30's coach roster) and is not the constraint.
 
 🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
 and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
@@ -38,6 +38,16 @@ chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no
 - ⚠️ **e2e can fail broadly on a stale dev server holding port 5191.** Symptoms are
   `ERR_CONNECTION_REFUSED` or `Failed to fetch dynamically imported module` across many specs.
   **Re-run once before investigating.**
+- 🔴 **A single spec can fail with the app never mounting** — `waitForApp` times out and the
+  error context has no page snapshot at all. That is the machine being slow, not a defect.
+  Same rule: **re-run that spec once** before reading anything into it. Session 30 had exactly
+  one, in `syncBanner.spec.js`, and it passed alone.
+- ⚠️ **A REVERTED MUTATION ON AN UNTRACKED FILE DOES NOT SHOW IN `git diff`.** The standing rule
+  is to mutate, confirm red, revert, and `git diff` before stopping — but a NEW file is
+  untracked, so a failed revert leaves the source mutated and the diff clean. Session 30's
+  revert script aborted on an empty-string anchor and left `coachKey` without its
+  `.toLowerCase()`. `grep -rn MUTATION src/` does not help either when the mutation is a
+  DELETION. **Re-read the function you mutated**, not the diff.
 - Raise a size ceiling **only** in the commit that needs it, and say what bought the bytes.
 - **No infra changes without asking Dylan.**
 - ⚠️ **Do not edit source while the e2e suite is running.** Vite HMR fires, `main.jsx`
@@ -73,6 +83,22 @@ share a filesystem view.
   `git commit -F msg.txt --only <paths>`.
 - ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing
   a literal escape sequence into source needs a one-shot `.mjs`.
+
+### 🔴 Check what your branch is based on, EVERY time
+
+Three sessions in a row have started behind because the previous session's work was on its own
+`claude/…` branch and **nothing merges those to `main`**. Session 29 started five commits behind;
+session 30 started **fourteen**, and the commit its prompt named as the baseline did not exist in
+the repository at all.
+
+```bash
+git log --oneline -3                      # does the top commit match the prompt?
+git ls-remote --heads origin              # if not, the work is on another branch
+git merge --ff-only <that branch's tip>   # usually a clean fast-forward
+```
+
+**Confirm the fix with a gate, not with the log**: run `npm test` and check the count against the
+prompt's. A tree that merely builds is not proof you are where the prompt thinks you are.
 
 ### More than one session may share this working tree
 
@@ -279,18 +305,40 @@ not. **Assert the STORED object, not only what was rendered.**
 - **A failed DELETE needs a tombstone, not a ledger entry.** `_noteSyncError` alone makes the retry
   lie: the pusher's upsert cannot remove a server row, so it succeeds and clears the error. See
   `PENDING_DEL_KEY` in `store.js`.
+- 🔴 **A COACH ON A CLASS IS A TYPED NAME AND MUST STAY ONE.** `class_schedule_rules.coach` is
+  `text`; there is deliberately no `coach_id` on the rule. Identity lives in the roster
+  (`lib/coachRoster.js`) and is resolved BY NAME, so nothing is added to the class row and nothing
+  can be dropped by a server-wins hydrate. `coachKey` folds case, whitespace and Unicode
+  composition and **never merges two different names** — "Mara" and "Mara K." are one person only
+  if a gym says so with an alias.
+- 🔴 **`_classToRow` MUST NOT NAME A COLUMN THE MIGRATION HAS NOT CREATED.** PostgREST rejects the
+  WHOLE batch, so one unknown key stops every class in the gym syncing while the ledger says only
+  that the table failed. `dbConstraints.test.js` now parses each `create table` and guards every
+  row mapper against exactly this.
+- 🔴 **`class_instances.coach_id` is the person who TEACHES, not the one who published.** It was
+  `_ctx.userId` until session 30 — one manager pressing publish recorded every class in the gym as
+  theirs. `created_by`, one line below, is where "who wrote this row" belongs. It resolves through
+  the roster and is **NULL when unknown**, which is worth more than a non-null value that is wrong.
+- 🔴 **THERE IS NO COMPARE-AND-SET IN THIS PRODUCT.** `store.js` contains zero `.update()` calls —
+  every write is an unconditional `upsert`, `insert` or `delete`. A cover approval needs
+  `set status='approved' where id=$1 and status='open'`; pushed through `_bgUpsertDelta` instead,
+  two coaches both approving both succeed and one is shown an approval that did not happen. Build
+  the primitive before wiring `cover_requests` to a server.
 
 ---
 
 ## Where the rest lives
 
 - `SESSION-HANDOFF.md` — the two most recent sessions in full. Read the top block first.
-- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–23.
+- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–28.
 - `DYLAN-QUEUE.md` — what needs Dylan rather than code.
 - Commit messages carry the reasoning. `git log` is the real design record here.
 
 🔴 **Outstanding and not code:** `DYLAN-QUEUE.md` **A14** is a yes/no on whether Jungle bends a
-gym's accent to make it legible — nothing is blocked on it. Migrations `0005_coach_personas.sql` and
-`0006_persona_generations.sql` have never been applied. Until they are, a gym's personas, plans
+gym's accent to make it legible, and **A16** is a yes/no on whether Jungle should write back to a
+gym's booking system at all — nothing is blocked on either. **A15** is not optional in the same way:
+migration `0010_coach_cover.sql` is what makes a cover request reach a second person, and until it
+runs the request is on one phone. Migrations `0005_coach_personas.sql` and
+`0006_persona_generations.sql` have never been applied either. Until they are, a gym's personas, plans
 and movement catalogue exist on **one device with no server copy**. Also **10 unmerged Dependabot
 PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**
