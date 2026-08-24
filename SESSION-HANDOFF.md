@@ -1,12 +1,261 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-24 (session 30)_
+_Last updated: 2026-08-24 (session 31)_
 
-> 📁 **Sessions 6–28 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–29 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 31 — a field nothing can write is not a feature, and the check that finds the next one
+
+> **Gates green at `18e1439`.** `lint:crash` **0** · **1064 unit** (39 files) ·
+> **483 e2e** (47 spec files) · 12-chunk build · **0 over budget**.
+> `StaffApp.js` **310.73 / 360 kB** (13.7%), `index.js` **203.06 / 215 kB** (5.6%, still the
+> tightest). Five commits, each pushed after its own green run.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
+> `gh run list` shows nothing for this work. The local suite is the only gate and every number
+> above is from it.
+> ⚠️ **483 is 482 + one re-run, and the flake is the SAME one session 30 documented.** The full
+> run failed one `syncBanner.spec.js` test; all 7 pass when that spec runs alone, and the tell
+> the prompt named held exactly — a `waitForAppAnyWidth` timeout whose error context contains
+> **zero page snapshots**, meaning the app never mounted and nothing about the banner was
+> exercised. The other six in that spec passed in the same run.
+> 🔴 **And the run printed `exit code 0` with a failing test**, exactly as warned. Read the
+> count, never the exit code.
+
+**Read this first: the branch was four sessions stale and the prompt's own §0 caught it.**
+This session started on `main` at `30520f2`, not on session 30's `fa54c4a` — the third session
+in a row to start on the wrong base. Session 30's branch was 20 commits ahead of `main` and a
+clean fast-forward, and the fix was confirmed **by a gate, not by the log**: `npm test` returned
+**1019 passing, 36 files**, matching the prompt's table exactly. A tree that merely builds is not
+proof of where you are; a matching unit count is. **`main` is still four sessions stale and
+nothing merges to it** — see standing risks.
+
+---
+
+### What this session was
+
+Session 30 shipped a coach roster whose `updateCoach` accepted five keys while the app passed
+exactly one. §2.1 was to finish it; **§2.2 was to build the check that would have caught it**,
+and to answer the larger question: what else in this product exists in the model with no way in?
+
+**The answer is: almost nothing.** That is the session's most useful finding and it is a negative
+one. Session 30's roster was an outlier, not a pattern, so the next several sessions do **not**
+need to be about unreachability.
+
+---
+
+### §2.1 — four fields with no control, and one of them was read (`c42b740`)
+
+**The prompt named two. It is four.** `aliases` and `userId` were the known pair. `name` could be
+set at creation and never corrected, so a typo could only be fixed by deleting the coach and
+losing their availability with them. And **`active` is the one worth stopping on**: it is not
+merely unwritten, it is **read** — `coachesFreeAt` (`coachRoster.js:242`) excludes
+`active === false`, with a comment explaining that this is the gym saying a person no longer
+coaches here. A documented behaviour, with a live reader, that the product could not reach.
+
+**The `userId` decision went to option (a), and option (b) is the one that had to be argued
+down.** Deleting an unsettable field is defensible on its face, but deleting `userId` means
+deleting `coachAccountFor`, and `coachAccountFor` is what makes `class_instances.coach_id`
+resolve to the coach rather than to whoever pressed publish. That was a real defect fixed in
+`2bb2263` that **no test covered**; reverting it to tidy the surface would trade a working
+correction for a smaller API.
+
+So both controls exist, and **the account picker is server-only and says so**. `memberships` is
+the only list of a gym's people, read live from Supabase, with no local copy — nor should there
+be one, since a cached copy would offer somebody who has left. With no server the form says
+*"linking a coach to their Jungle account needs the gym to be online"* rather than rendering an
+empty select, which would read as *"you have no staff"* — a different and false claim. That is
+how `AdminTeamScreen` already behaves under `NEEDS_SERVER`.
+
+🔴 **The rename rule is the part that could have shipped broken.** A class carries its coach as
+TEXT and `resolveCoach` matches that text against the entry's name and aliases. Renaming "Mara"
+to "Mara Kelly" without keeping "Mara" would **silently unlink every class she already teaches**:
+the entry still exists, the schedule still says "Mara", and the two quietly stop being the same
+person. The old name is carried into the aliases unless the gym already typed it. A change that
+only alters case or spacing is not a rename — `coachKey` folds those — so it adds no alias.
+
+An account another entry already holds is **returned and disabled, not filtered out**: a manager
+looking for a name that is demonstrably in their Team list needs to be told who has it.
+
+---
+
+### §2.2 — the check, and the one field it found (`b952f81`)
+
+`scripts/audit-store-writers.mjs` parses `store.js` for patch-shaped writers, reads the keys each
+ACCEPTS, then parses every non-test file under `src/` for the keys any call site PASSES.
+`docs/STORE-WRITER-AUDIT.md` carries the full classified list.
+
+🔴 **The tool caught its own bug on the first run, and that is the whole argument for a positive
+control.** A call almost never passes a literal — `updateCoach(id, patch)` builds `patch` two
+lines up from `coachEditPatch()` in another file — so the first run read "no keys passed" and
+reported §2.1's **brand-new edit form** as four fields with no control. The known-good answer
+failing loudly is the only reason it was not believed. Keys now resolve through a local `const`,
+a `useState` initial value, and one level of "the object this function returns"; anything deeper
+is reported as **opaque**, never as missing.
+
+**The one real finding: `externalRef`.** Never written by anything, always `""`, and **read** —
+`csvExport.js:224` emits it as a **"Reference"** column in the members CSV, so every gym's export
+carried a blank column promising a reference to their previous system. Given its writer on the
+one path where the value exists: a column in the file the old system exported. Aliases
+deliberately exclude a bare **"ID"** — a spreadsheet's "ID" is as likely to be a row number, and
+a row number in `external_ref` is a confident wrong answer where a blank was merely empty.
+**Not** hand-editable (another system's key is not something a human should type), and **not
+deleted** (that would pre-empt A16).
+
+⚠️ **The sweep's own false positive is in the doc on purpose.** A crude field-level grep flagged
+`weekKey` as unwritten; it is written at `CalendarScreen.jsx:275` in the `obj.field = value` form
+the grep could not see. Caught by reading the result, not by trusting the count.
+
+**The rule pinned is narrow on purpose.** `storeWriters.test.js` covers patch-shaped writers
+only. Widening it to every field of every stored object was tried and produced noise, and a check
+that has to be argued with every time it runs gets deleted. **The allowlist IS the positive
+control**: the known seams must still be *found*, every writer must resolve at least one accepted
+key, and at least four writers must be located — so a broken parser fails rather than going green
+on a scan reading nothing. Verified end to end: run against `fa54c4a` it reports exactly
+`active, aliases, name, userId`; at HEAD, none. Re-introducing session 30's defect fails the test
+and **names the four fields**.
+
+---
+
+### §2.4 — two timezone defects, and one that was not (`fec9a75`, `63e9e43`)
+
+`addMember` stamped `joinedAt` with `toISOString().slice(0,10)` — UTC. ⚠️ **The prompt's
+illustration is off by the size of the bug**: Singapore is UTC+8, so 8am local is exactly
+midnight UTC and lands on the right day. The window is **before** 8am, which is when a gym signs
+people up.
+
+**Blast radius, measured.** `joinedAt` has four readers: `retention.js:157` (rule 1's tenure
+gate), both CSV exports, and RosterScreen's date input. `cohorts.js` deliberately does not read
+it, and `applyAttendanceImport` writes `""` — so an importing gym is unaffected and the gyms this
+reaches are the ones adding members by hand, which is the shipped path. **[unverified] in the
+prompt, now settled: no test pinned the UTC behaviour** — `store.test.js:87` asserts only the
+format, which is why it survived 1019 tests.
+
+🔴 **The test had to change timezone to mean anything.** The suite runs in UTC, where the two are
+identical, so the obvious test passes against the bug. Both new describes assert the offset is
+`-480` **first** — a positive control on their own precondition, because otherwise every
+assertion becomes trivially true.
+
+**Found while measuring the blast radius:** `useClassRunner.js` wrote a session's `date` in UTC
+and `ProfileModal.jsx:184` **displays** it, so a coach teaching at 7am in Singapore saw yesterday
+against the class they had just finished. ⚠️ **The streak above it was NOT broken** — I probed it
+in a non-UTC zone across three scenarios and it counted correctly, because writer and reader
+shared the convention. Reporting it as broken would have been a defect manufactured by my own
+fixture. Both halves moved together (changing either alone breaks the count), and `localDateStr`
+moved to `format.js` rather than being copied a third time. **No migration**: a stored date string
+has no time in it, so the zone it was written in cannot be recovered, and guessing would be a
+confident wrong answer.
+
+---
+
+### §2.3 — the compare-and-set primitive, built with its status made undeniable (`18e1439`)
+
+Verified first: **`store.js` contains zero `.update()` calls**, and the only three in the app are
+unconditional. **The argument against building was taken seriously** — the repo already carries
+two never-run pieces of code, and a wrong primitive is worse than an absent one. What tips it is
+that the alternative is not "no primitive": it is `_bgUpsertDelta`, which is what the next person
+will reach for, and which is wrong in the worst way available — two coaches both approving both
+succeed, last writer wins, and one is shown an approval that did not happen, with nothing logged.
+
+It is **not imported by anything** (confirmed absent from every built chunk), its header opens by
+saying it has never made a real request, and the two PostgREST behaviours it depends on are
+written down **as assumptions**. Three outcomes, not a boolean: losing a race is a normal outcome
+a coach must be told about; a failed request is not. Two refusals are the point of it — an
+**empty guard** (an unconditional update wearing this function's name) and **more than one
+matched row** (a schema fault, not a win). Mutation-checked by dropping the guard: 6 of 13 fail.
+
+---
+
+### §2.5 — dated availability exceptions: NOT shipped, and the reason is structural
+
+§2.5 says not to ship half of it. **It cannot be shipped at all yet, and the blocker is one level
+down from the calendar UI.** `coachesFreeAt` takes a weekday NAME and a slot. A cover request
+carries `classDay: "Thu"` and `classSlot` and **no date anywhere** — deliberately denormalised
+from a weekly rule, which has no single date to carry. So "away this Thursday" has nothing to
+match against: a coach could mark themselves away on a date and `coachesFreeAt`, receiving only
+"Thu", could not suppress it. That is exactly the silent half-feature §2.5 warns about.
+
+**The prerequisite is that cover requests target a dated occurrence rather than a rule.**
+`occurrencesForWeek` already produces dated occurrences, so the machinery exists, but rewiring
+the ask flow changes the request shape whose denormalisation has a deliberate comment explaining
+itself. That is its own piece of work and should be its own item.
+
+---
+
+### Found and not fixed
+
+- **Two checkboxes still render browser-default blue on a gym's own palette** —
+  `RosterScreen.jsx:343` and `PersonasScreen.jsx:1009` lack `accentColor: "var(--accent)"`. The
+  new one in `CoachCoverPanel.jsx:287` has it. Same defect class as `8c581d0` (the demo screen
+  drawing its own controls on a gym's palette). Left out of this session's commits because
+  widening a commit is how polish arrives untested — it wants its own change with a token test.
+- **`+ Mara K. (1)` sits directly below the alias box while editing Mara**, and the obvious click
+  adds her as a SECOND coach — which is the wrong action if they are the same person. Nothing
+  connects the offer to the control that merges them. Noticed by rendering the panel and reading
+  it; not a test failure.
+
+### Traps paid for this session
+
+- ⚠️ **I shipped `fec9a75` with `lint:crash` at 3 and had to fix it in the next commit.** The
+  §2.4 test set `process.env.TZ` directly and `process` is not a declared global in
+  `eslint.crash.config.js`. Caught by *running* the gate rather than assuming the earlier green
+  still held. Now via `vi.stubEnv`, since the eslint config is infra.
+- ⚠️ **`navAnyWidth` takes a screen OBJECT from `ALL_SCREENS`, not a string**, and its
+  `aside` count is a **one-shot read that races a reload** — follow `page.reload()` with
+  `waitForAppAnyWidth` or a 1280px test goes down the phone branch and hunts for a "More" button
+  that is not there.
+- ⚠️ **`localeCompare` puts "nameless@…" before "Unnamed account"** — an ICU collation, not a
+  bug. My expectation was wrong, not the code.
+- The Playwright scratch config had to be rewritten again (image ships Chromium r1194, the CDN is
+  proxy-blocked). It lives in `.e2e-scratch/` and is **not committed**, so session 32 will need
+  it once more.
+
+---
+
+### What is genuinely left
+
+1. **§2.5 needs its prerequisite first** — cover requests on a dated occurrence, not a rule.
+2. **The two un-skinned checkboxes**, with a token test.
+3. **The alias/offer adjacency** in the roster panel.
+4. **`updateMember.externalRef` stays deliberately unwritten** — recorded in
+   `storeWriters.test.js`'s allowlist with its reason. Revisit only if A16 is answered yes.
+
+### Standing risks — carried forward, with what MOVED marked
+
+- 🔴 **`main` is four sessions stale and nothing merges to it.** Sessions 28–31 all live only on
+  their own branches. **This is now the oldest unaddressed process risk in the repo** and it has
+  cost four sessions the same twenty minutes. A prompt can only tell the next session to work
+  around it; it cannot merge the branches. **This one is Dylan's or it is nobody's.**
+- 🔴 **A15 — migration `0010_coach_cover.sql` is unapplied.** A cover request reaches one phone.
+  The product says so on screen. ✅ **MOVED in part:** the compare-and-set primitive A15 needs
+  now exists (`src/lib/compareAndSet.js`) and A15 carries a note for whoever wires it. **It has
+  never made a real request** — that gap does not close until 0010 runs.
+- 🔴 **A16 is open and is a decision, not work.** Should Jungle write back to a gym's booking
+  system at all? Nothing is blocked; nothing should be built until it is answered. §2.2
+  deliberately did **not** delete `externalRef` for this reason.
+- 🔴 **Migrations `0005` and `0006` have never been applied.** Personas, plans and the movement
+  catalogue exist on one device with no server copy. ⚠️ The coach-delete dialog *tells* the coach
+  that and `e2e/destructive.spec.js` asserts the string — applying them makes a shipped sentence
+  a lie, in the same session.
+- 🔴 **N4 member links are built and undeployed — twelve sessions.** A12/A13, 35 minutes.
+- 🔴 **Nobody's phone rings.** No push, email or SMS anywhere in the product. Cover is in-app
+  only, which is no use for the case it exists for — a coach ill at 5am.
+- ⚠️ **A14 is open and is a yes/no**: does Jungle bend a gym's accent to make it legible?
+- ⚠️ **A1 — the Supabase region has never been confirmed.** Five-minute read-only check, and the
+  only item that gets dramatically more expensive with age.
+- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps. Ask Dylan first.
+- ✅ **MOVED: `addMember`'s UTC `joinedAt`** — fixed this session, with a test that needs a
+  non-UTC timezone to mean anything.
+- ⚠️ **The container is ~4× slower than the one these prompts are written on.** A full e2e run is
+  **33 minutes**. Budget three or four, and lean on `npm test` (4s) and single-spec runs (20–30s).
+  A **foreground blocking wait** advances real time properly; a backgrounded sleep loop does not.
+- ⚠️ **`.e2e-scratch/` is not committed**, so the Playwright launch workaround needs rewriting
+  again next session. `playwright.config.js` is untouched, as it must be.
 
 ---
 
@@ -198,164 +447,5 @@ should ship until Dylan answers A16.
   different calendar day from the coach's for part of every day. Not touched — it is a different
   field on a different path — but it is the same bug `daysBetween`'s comment exists for, and
   `localDateStr` in `store.js` is now the correct helper sitting right next to it.
-
----
-
-## Session 29 — the consequences of one defect, and a chunk that was 93% React
-
-> **Gates green at `601332b`.** `lint:crash` **0** · **935 unit** (33 files) · **466 e2e**
-> (46 spec files) · 12-chunk build · **0 over budget**. `index.js` **203.06 / 215 kB**
-> (5.6% headroom, up from 4.2%). Six commits, each pushed after its own green run.
-> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
-> there is no run to judge and `gh run list` shows nothing for this work. The local suite is
-> the only gate, and every number above is from it.
-
-**The brief led with the consequences of session 28's generator defect rather than with
-features, and that was the right shape.** Six items, all worked. Two turned out to be
-measurement tasks whose measurement changed the answer, and the queue was wrong in three
-places — one of which reversed what I was about to build.
-
-### What shipped
-
-**§2.1 — the gyms the generator fix arrived too late for.** Session 28 fixed `runAnalysis`;
-it does nothing for a studio that had already pressed **Apply to all surfaces**. Their
-`jungle_custom_skin` holds Canopy-derived tokens and those tokens are the source of truth.
-Brand Studio now offers a re-read, and the restraint is the feature: pressing it writes
-NOTHING — only **Apply** does, as the coach's own second click.
-
-🔴 **The queue's suggested heuristic — "accent is exactly `#7BE3A4`" — is wrong in both
-directions, and finding that out is most of the value of the item.** The broken path produced
-three themes and the coach picked one. Signature and Charge land on mint, but **Steel's accent
-is `#aeccba`**, so an accent test never sees that third of the affected gyms. The detector is
-the whole eight-token set against two frozen historical sets, and the value that makes it safe
-is the derived background: the fallback generates `#0b130e` where Canopy's own preset is
-`#0A0F0C`. A studio that hand-picked mint sits on Canopy's surfaces and is never told its brand
-is a bug.
-
-**§2.2 — the AA panel was narrower than the gate that judges it.** Five opaque token pairs,
-presented to an owner as *"Member-visible text meets WCAG AA"*, while the sweep failed the same
-palettes in nine places. Now fourteen rows in `lib/brandAudit.js`, sharing its compositing with
-`e2e/contrastScan.js` through `colors.js` — the scanner serialises those exact functions into
-the page with `Function.prototype.toString()`, so **one mutation to `compositeOver` turns 5 unit
-tests and 4 sweep tests red together**.
-
-**§2.3 — the 350ms transition STAYS, which is the opposite of what I expected.** Of the
-elements carrying it, 17–41 per screen are CONTROLS, and outside Brand Studio not one control
-declares a transition of its own. It is not a reskin detail that leaked — it is the product's
-entire interaction feel, and scoping it would have made every selection and toggle in the app
-snap. What was wrong is narrower and not a taste call: it never consulted
-`prefers-reduced-motion`, so 145 elements animated for a user who had asked their OS for none.
-Now gated behind a media query.
-
-**§2.4 — `AnalyticsScreen.jsx` deleted**, 284 lines of invented KPIs kept as a layout target
-that the real screen hit two sessions ago. `FLAGS.mockAnalytics` **stays**: `CalendarScreen`
-still gates three mock panels on it, which is exactly what "check whether the flag itself still
-has a reader" was asking.
-
-**§2.5 — no keyboard user could see which text field they were in.** `outline:"none"` inline on
-the shared `Input`/`Select` primitives and ~16 more fields, beating any stylesheet rule. One
-`:focus-visible` rule with `!important` — the one case it is the right tool.
-
-**§2.6 — `index.js` is 93% React.** Attributed by decoding the sourcemap's VLQ mappings:
-react-dom alone is 172.40 kB of 201, and **all of our own code in the entry chunk is 11.19 kB**.
-The chunk is not tight because app code crept in; the budget was set close to React's floor.
-
-### What was false
-
-**The queue's `#7BE3A4` heuristic** (§2.1) — above. It would have left the Steel gyms wearing
-the wrong brand with nothing offered.
-
-**"25 raw hex literals that every white-label sweep has to be told to ignore"** (§2.4). No sweep
-names that file — not `rawValueScan`, not `brandTokens`, not `check-size`. They all measure a
-rendered DOM and the screen never rendered. The hexes cost the sweeps nothing, and **the deletion
-buys no bytes either**: `StaffApp.js` is byte-identical afterwards, because rollup had already
-folded the branch away. The case for deleting it is the one `flags.js` makes — read during every
-refactor, one flag from a customer's screen — not size.
-
-**`BrandStudioScreen.jsx`'s header, in writing, for a whole session** (§2.6): "it is the ONLY
-caller of `colors.js`'s generator machinery, so the chunk takes that with it." It did not.
-`main.jsx` imports ONE function from `colors.js` — `bootColours` — and **rollup places whole
-modules**, so that single eager edge kept the generator in the chunk a member downloads.
-Corrected in place rather than deleted, because the mistake is easy to repeat. Splitting it out
-bought 2.84 kB and is the only app-code lever that exists there.
-
-**Also:** App.jsx imported eleven symbols from `colors.js` and used two. The other nine, the
-generator included, had been dead since session 28.
-
-### Three defects the widened audit found immediately
-
-**Fixed.** The generator clamped `muted` against `bg` alone, and on a LIGHT identity `bg` is the
-*lightest* surface — so the nudge stopped at 4.5:1 against the easiest thing in the palette and
-left secondary text at 3.95–4.08:1 on `card` and `navy`, where most of it sits. Nine light-mode
-themes affected. Now clamped against every surface; 60 themes checked, 0 failures. ⚠️ Dark output
-is byte-identical, so no shipped preset moved and §2.1's frozen sets are untouched.
-
-**Reported, not fixed — `DYLAN-QUEUE.md` A14, a yes/no.** A dark logo generates an accent that
-cannot be used as a graphic on its own background (navy `#12224A` → **1.25:1**, blue 2.90,
-crimson 2.86, against 1.4.11's 3:1). And on a light identity a mid-luminance accent has no
-readable label: `inkOn` picks the better of bg/text, but violet `#A855F7` gives 3.70 and 4.13, so
-both lose. Neither is fixable without bending a colour the gym chose, which is the rule
-`--danger` already states. **The generated-identity badge was reading `contrast.passesAA` —
-`textOnBg >= 4.5` and nothing else — so it rendered "✓ Passes WCAG AA" over the 1.25:1 accent.**
-It now reads the full audit.
-
-### Traps paid for
-
-⚠️ **Editing source during an e2e run costs you the run.** Three specs failed on
-`createRoot() on a container that has already been passed to createRoot()` — Vite HMR firing
-because I touched `colors.js` mid-suite. Not a code defect; 7 minutes to re-run and confirm.
-
-⚠️ **`el.focus()` does not trigger `:focus-visible`.** A programmatic sweep reported 35 of 40
-controls on the Builder as ringless. All false. Press Tab.
-
-⚠️ **Chrome reports `outline-style: auto` with a computed width of `0px`.** A check for
-`outlineWidth > 0` calls every default-ringed button a failure and buries the real hits in
-invented ones. The signal is the STYLE being `none`.
-
-⚠️ **A control that opts out cannot measure the rule it opted out of.** The first attempt at
-§2.3 measured the Brand Studio's vibe pill and found no difference — that pill is one of nine
-elements declaring `transition:all .15s` inline, and inline beats a stylesheet.
-
-⚠️ **`test.use({ reducedMotion })` did not apply through the scratch Playwright config** the
-cloud container needs, and it failed OPEN. Only the explicit precondition assertion caught it.
-`page.emulateMedia` instead.
-
-⚠️ **A score computed from a rounded display string is not the same number.** Rows in the audit
-carry unrounded colours for scoring and the CSS string only for painting — the difference is
-~0.03, invisible until a pair sits on 4.50.
-
-### Environment
-
-**Playwright cannot launch out of the box** — @playwright/test 1.61.1 wants Chromium r1228, the
-image ships r1194 at `/opt/pw-browsers`, and the CDN is proxy-blocked. A five-line scratch config
-importing the repo config and overriding `projects[].use.launchOptions.executablePath`,
-`testDir`, `outputDir` and `webServer[].cwd` works; **`playwright.config.js` was not touched**.
-🔴 The trap underneath it is real: a piped `playwright test … | tail` **exits 0 when nothing
-launched**. Read the count. Every count in this block was read from the run.
-
-⚠️ **The branch started 5 commits behind.** Session 28's work is on
-`claude/gracious-hopper-quifam`, not `main`, and this branch pointed at `main`. The prompt's
-baseline `0ed2811` did not exist here until it was fast-forwarded. Worth checking first: every
-number in the brief was correct once the branch was on the right base, and all six matched.
-
-### What is genuinely left
-
-Nothing on this queue. The remaining items need Dylan, not code:
-
-- 🔴 **A14 is new and it is a yes/no**, not work — does Jungle bend a gym's accent to make it
-  legible? My recommendation is (b), offer a nudge the coach can decline, the shape §2.1 uses.
-- 🔴 **Migrations `0005` / `0006` still unapplied.** Personas, plans and the movement catalogue
-  exist on ONE DEVICE with no server copy. ⚠️ The coach-delete dialog tells the coach that, and
-  `e2e/destructive.spec.js` asserts the string — so applying them makes a shipped sentence a lie.
-- 🔴 **N4 member links built and undeployed — ten sessions.** A12/A13, 35 minutes of Dylan's
-  time. It is the only member-facing surface, and the only place the white-label story can be
-  proven on an actual member.
-- ⚠️ **A1, the Supabase region, still unconfirmed.** Five-minute read-only check, and the only
-  item that gets dramatically more expensive with age.
-- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps.
-
-**If `index.js` ever has to shrink again, it is not a refactor.** It is React itself — a
-preact/compat swap, which is infra and Dylan's — or raising the ceiling and saying so. The
-measurement is in `check-size.mjs`'s header so the next session does not re-derive it.
 
 ---

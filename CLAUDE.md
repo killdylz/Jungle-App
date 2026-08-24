@@ -15,14 +15,23 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `b605b13` (session 30): **`lint:crash` 0 · 1019 unit (36 files) · 478 e2e (47 spec
+Green as of `18e1439` (session 31): **`lint:crash` 0 · 1064 unit (39 files) · 483 e2e (47 spec
 files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
+
+⚠️ **`syncBanner.spec.js` flakes under FULL-SUITE load, and has for three sessions running.**
+One test fails per full run — a different one each time — and all 7 pass when the spec runs
+alone. The tell is a `waitForApp*` timeout whose error context has **zero page snapshots**: the
+app never mounted, so nothing about the banner was exercised. **A real regression fails the same
+test twice.** Re-run the spec alone before investigating.
+
+🔴 **`npx playwright test` EXITS 0 WITH FAILING TESTS.** Confirmed again in session 31: exit code
+0 under a run reporting `1 failed`. **Read the count, never the exit code.**
 
 **⚠️ `index.js` is the binding constraint — 203.06 / 215 kB, 5.6% headroom — and it is 93%
 REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
 **all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
 **cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
-has 14.6% headroom (307.46 / 360 kB after session 30's coach roster) and is not the constraint.
+has 13.7% headroom (310.73 / 360 kB after session 31's coach edit form) and is not the constraint.
 
 🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
 and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
@@ -201,6 +210,15 @@ not. **Assert the STORED object, not only what was rendered.**
   tab order, starts halfway down. `blur()` does **not** reset it — Chromium keeps a sequential
   focus navigation starting point. Use
   `document.body.setAttribute("tabindex","-1"); document.body.focus();`.
+- ⚠️ **`navAnyWidth` takes a screen OBJECT from `ALL_SCREENS`, not a string**, and its `aside`
+  count is a **one-shot read that races a reload**. Follow `page.reload()` with
+  `waitForAppAnyWidth` or a 1280px test silently takes the phone branch and hunts for a "More"
+  button that is not there — the failure names "More", which reads as a nav defect and is not one.
+- ⚠️ **A test that needs a TIMEZONE must set one, and prove it took.** The suite runs in UTC,
+  where local and UTC dates are identical, so any assertion about local-date handling passes
+  against the bug. Use `vi.stubEnv("TZ", …)` — **not** `process.env.TZ =`, which is 3 crash-lint
+  errors because `process` is not a declared global — and assert the offset FIRST, so a zone that
+  did not take fails loudly instead of proving nothing. `src/lib/joinDate.test.js` has the shape.
 - ⚠️ **Three nav vocabularies**: sidebar "Class Builder" / More sheet "Builder" / bottom bar
   "Build", and below **900px** there is no sidebar. `ALL_SCREENS` and `navAnyWidth` in
   `e2e/helpers.js` hold all three — use them rather than a fourth list.
@@ -336,11 +354,25 @@ not. **Assert the STORED object, not only what was rendered.**
 - `DYLAN-QUEUE.md` — what needs Dylan rather than code.
 - Commit messages carry the reasoning. `git log` is the real design record here.
 
+**A field nothing writes breaks nothing, so no test can notice it.** Session 30 shipped four
+`updateCoach` keys with no control and 1019 tests passed. `node scripts/audit-store-writers.mjs`
+is the check that finds the next one; `docs/STORE-WRITER-AUDIT.md` has the classified list and —
+more usefully — what the sweep **cannot** see. Its allowlist in `storeWriters.test.js` is its
+positive control: adding a line there is a product decision, not a way to green the build.
+
 🔴 **Outstanding and not code:** `DYLAN-QUEUE.md` **A14** is a yes/no on whether Jungle bends a
 gym's accent to make it legible, and **A16** is a yes/no on whether Jungle should write back to a
 gym's booking system at all — nothing is blocked on either. **A15** is not optional in the same way:
 migration `0010_coach_cover.sql` is what makes a cover request reach a second person, and until it
-runs the request is on one phone. Migrations `0005_coach_personas.sql` and
+runs the request is on one phone. ⚠️ The compare-and-set the settle needs now EXISTS
+(`src/lib/compareAndSet.js`, session 31) and A15 carries a note for whoever wires it — use it
+rather than `_bgUpsertDelta`, which would let two approvals both succeed silently. It has never
+made a real request. Migrations `0005_coach_personas.sql` and
 `0006_persona_generations.sql` have never been applied either. Until they are, a gym's personas, plans
 and movement catalogue exist on **one device with no server copy**. Also **10 unmerged Dependabot
 PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**
+
+🔴 **`main` is FOUR sessions stale and nothing merges to it.** Sessions 28–31 live only on their
+own `claude/…` branches, and each new session has started on `main` and had to fast-forward.
+Check `git log --oneline -3` against the prompt's baseline **and confirm with `npm test`, not the
+log** — a matching unit count is proof of position; a tree that merely builds is not.
