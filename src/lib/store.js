@@ -1192,9 +1192,16 @@ export function saveMembers(list) {
 // Quick-add during check-in: a name is all that's required, because anything
 // more is a form a coach won't fill in mid-class and P6 gives us <5 seconds.
 export function addMember(name, extra = {}) {
+  // 🔴 `localDateStr`, NOT `toISOString().slice(0,10)` (S31 §2.4). The latter is
+  // UTC, which is a different calendar day from the coach's for part of every
+  // day: in Singapore a member added before 8am was recorded as joining
+  // YESTERDAY. The datum is a date and the reader is a human with a wall
+  // calendar — the same reasoning `daysBetween` carries in retention.js, and
+  // `joinedAt` is read by exactly that code (retention.js:157, rule 1's tenure
+  // gate) as well as by both CSV exports.
   const m = { id: newId(), name: String(name || "").trim(),
               email: extra.email || "", status: "active",
-              joinedAt: extra.joinedAt || new Date().toISOString().slice(0, 10),
+              joinedAt: extra.joinedAt || localDateStr(),
               externalRef: extra.externalRef || "" };
   const list = [...getMembers(), m];
   saveMembers(list);
