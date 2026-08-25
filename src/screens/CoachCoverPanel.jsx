@@ -257,7 +257,15 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
       // assume a booking system was updated.
       const out = await bookingAdapter().pushCoverApproved(
         coverApprovedPayload({ request: r.request, fromName: nameOf(r.request.fromCoachId), toName: to?.name || "" }));
-      toast(`${to?.name || "They"} now teaches ${r.request.classLabel}. ${out.reason}`);
+      // 🔴 SAY THAT IT IS PERMANENT, BECAUSE IT IS. `onAssignCoach` rewrites the
+      // RULE's coach field, so approving cover for one ill Monday changes who
+      // teaches Strength Lab EVERY Monday until a human edits it back. A cover
+      // request carries `classDay` and `classSlot` and no date at all, so there
+      // is nowhere else for the assignment to go — see the §2.3 note in
+      // SESSION-HANDOFF.md for why a dated version is a feature and not a field.
+      // "Dev now teaches Strength Lab" was the whole sentence and it reads as
+      // "this Monday" to everyone who has ever asked for cover.
+      toast(`${to?.name || "They"} now teaches ${r.request.classLabel}${recurrenceOf(r.request)}. ${out.reason}`);
     } else {
       // Two different events, and a shared sentence would misreport one of them:
       // a rejection is the ASKED coach saying no, a withdrawal is the ASKER
@@ -267,6 +275,16 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
         ? `${nameOf(r.request.toCoachId)} turned down ${r.request.classLabel} — it still has no cover`
         : `Withdrew the request for ${r.request.classLabel} — it still has no cover`);
     }
+  };
+
+  // How long an approval lasts, in the words of the rule it will rewrite. Empty
+  // for a one-off (the rule IS that one occurrence, so there is nothing extra to
+  // warn about) and empty when the rule has been deleted underneath the request
+  // — claiming a recurrence we can no longer read would be a guess.
+  const recurrenceOf = (req) => {
+    const rule = (userClasses || []).find(c => c.id === req.classClientId);
+    if (!rule || rule.repeat === "once") return "";
+    return ` every ${req.classDay} ${req.classSlot} from now on, until you change it back on the class`;
   };
 
   const availSummary = (c) => {
@@ -604,6 +622,16 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
               </div>
               <div style={{ ...sub, marginBottom: "8px" }}>
                 {nameOf(r.fromCoachId)} asked {nameOf(r.toCoachId)}
+                {/* ⚠️ Said BEFORE the button, not only in the toast after it. A
+                    cover request has no date, so approving one rewrites the
+                    recurring rule — the person deciding has to know that while
+                    they are deciding, not once it has happened. */}
+                {recurrenceOf(r) && (
+                  <div style={{ marginTop: "3px" }}>
+                    Approving moves it to them <strong style={{ color: "var(--text)" }}>every {r.classDay} {r.classSlot} from now on</strong> &mdash;
+                    Jungle cannot cover a single date yet.
+                  </div>
+                )}
               </div>
               {/* 🔴 ANSWERING AND WITHDRAWING ARE DIFFERENT PEOPLE'S ACTIONS.
                   Approve/Turn down belong to the coach who was ASKED — it is

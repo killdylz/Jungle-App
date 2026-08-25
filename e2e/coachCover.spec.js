@@ -212,6 +212,62 @@ test.describe("cover requests", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // ─── S32 §2.3 · what approving actually does, said before and after ────────
+  //
+  // 🔴 THE DEFECT THIS PINS IS NOT IN THE MECHANISM, IT IS IN THE SENTENCE. The
+  // test above proves the approval reaches the stored rule, which is correct and
+  // deliberate. What nothing said is that the rule is RECURRING: approving cover
+  // for one ill Monday moves Strength Lab to Dev every Monday until a human
+  // edits it back. "Dev now teaches Strength Lab" was the entire message, and
+  // everyone who has ever asked for cover reads that as "this Monday".
+  //
+  // A cover request carries `classDay` and `classSlot` and no date, so there is
+  // nowhere else for the assignment to go. Until that changes the product has to
+  // say what it is really doing — which is this repo's standing rule that a
+  // confident ambiguous claim is worse than a plain one.
+  test("🔴 approving a WEEKLY class says it is permanent, before and after the click", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await raise(page);
+
+    // POSITIVE CONTROL: the request is on screen to be decided.
+    await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
+
+    // BEFORE: the person deciding is told while they are deciding.
+    await expect(page.getByText(/every Mon 06:00 from now on/).first()).toBeVisible();
+    await expect(page.getByText(/cannot cover a single date yet/).first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
+
+    // AFTER: and the toast does not quietly drop the qualifier.
+    await expect(page.getByTestId("toast")).toContainText(/every Mon 06:00 from now on/);
+    await expect(page.getByTestId("toast")).toContainText(/until you change it back on the class/);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a ONE-OFF class carries no recurrence warning, because there is nothing to warn about", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    // Same fixture, but uc1 happens exactly once — the rule IS that occurrence,
+    // so "every Mon 06:00 from now on" would be a claim about a week that never
+    // comes. The control for the test above: it proves the warning is derived
+    // from the rule rather than printed unconditionally.
+    await seed(page, {
+      coaches: two,
+      classes: CLASSES.map(c => (c.id === "uc1" ? { ...c, repeat: "once", weekKey: undefined } : c)),
+    });
+    await page.getByLabel("Class that needs cover").selectOption("uc1");
+    await page.getByRole("button", { name: /^Ask Dev to cover / }).click();
+
+    await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
+    await expect(page.getByText(/every Mon 06:00 from now on/)).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
+    await expect(page.getByTestId("toast")).toContainText(/now teaches Strength Lab/);
+    await expect(page.getByTestId("toast")).not.toContainText(/from now on/);
+    expectNoConsoleErrors(errors);
+  });
+
   test("🔴 turning one down leaves the class exactly where it was", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
