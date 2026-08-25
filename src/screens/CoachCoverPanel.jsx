@@ -24,7 +24,12 @@ import { useJungleAuth } from "../AuthGate.jsx";
 import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
          formatAliases, coachEditPatch, linkableAccounts,
          COACH_AVAIL_STALE_DAYS } from "../lib/coachRoster.js";
-import { makeCoverRequest, settleCover, isOpen, openRequestForClass,
+// ⚠️ `settleCover` is deliberately NOT imported here any more. The panel used to
+// call it directly and write the result; it now goes through
+// `store.settleCoverRequest`, which puts the server's conditional update in
+// front of it. Calling the pure version from a screen again would restore
+// exactly the last-writer-wins approval this session removed.
+import { makeCoverRequest, isOpen, openRequestForClass,
          deliveryTruth } from "../lib/coverRequests.js";
 import { coverApprovedPayload, bookingAdapter } from "../lib/bookingAdapter.js";
 import { RULE_DAYS } from "../lib/scheduleInstances.js";
@@ -64,6 +69,27 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   const [accounts, setAccounts] = React.useState(null);     // null = not loaded / no server
   const [askClassId, setAskClassId] = React.useState("");
   const [pendingRemove, setPendingRemove] = React.useState(null);
+  // Whether `cover_requests` actually exists on this gym's server. Starts
+  // optimistic and is corrected by the hydrate below, because a screen that has
+  // not looked cannot claim a table is missing — see `deliveryTruth`.
+  const [storageReady, setStorageReady] = React.useState(true);
+
+  // ── Pulling both tables, once, on mount (S32 §2.1) ──────────────────────
+  //
+  // The same shape PersonasScreen uses, and for the same reason: the roster is
+  // now a shared object, so the copy this device happens to hold is a cache
+  // rather than the truth. `hydrateCoachCover` returns null when there is no
+  // server OR when migration 0010 has not been run — in both cases local stands
+  // and the truth line below says which world we are in.
+  React.useEffect(() => {
+    let alive = true;
+    store.hydrateCoachCover().then(r => {
+      if (!alive) return;
+      if (r) { setCoaches(r.coaches); setRequests(r.requests); }
+      setStorageReady(!store.tableAbsent("cover_requests"));
+    });
+    return () => { alive = false; };
+  }, []);
 
   // One clock read for the whole render, so two rows cannot straddle midnight and
   // disagree about whether the same claim is stale. Same reasoning as the grid's
@@ -150,30 +176,41 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     if (openRequestForClass(requests, askClass.id)) { toast("That class already has an open cover request"); return; }
     const from = coverage.known.find(k => k.name === askClass.coach)?.entry?.id || "";
     const req = makeCoverRequest({ id: store.newId(), classRule: askClass, fromCoachId: from, toCoachId, now: nowMs });
-    const next = [...requests, req];
-    store.saveCoverRequests(next);
+    // `addCoverRequest`, not `saveCoverRequests`: raising one is an INSERT, and
+    // the store keeps those two names apart on purpose — a list upsert here is
+    // what could re-open somebody else's settled request. See store.js.
+    const next = store.addCoverRequest(req);
     setRequests(next);
     setAskClassId("");
     // ⚠️ NOT "Sent". `deliveryTruth` is the only thing allowed to say what
-    // happened, and on the shipped build the answer is "this device".
-    const truth = deliveryTruth({ serverConfigured: supabaseEnabled, toCoach: coaches.find(c => c.id === toCoachId) });
-    toast(truth === "device"
+    // happened, and on a gym whose migration 0010 has not run the answer is
+    // still "this device" however many credentials are configured.
+    const truth = deliveryTruth({ serverConfigured: supabaseEnabled, storageReady,
+                                  toCoach: coaches.find(c => c.id === toCoachId) });
+    toast(truth === "device" || truth === "unstored"
       ? `Recorded on this device — ${nameOf(toCoachId)} will not see it`
+      : truth === "unreached"
+      ? `Recorded — ${nameOf(toCoachId)} has no Jungle account, so ask them yourself`
       : `Waiting for ${nameOf(toCoachId)} to open Jungle`);
   };
 
   const settle = async (id, next) => {
-    const r = settleCover(requests, id, next, { now: nowMs });
+    // 🔴 THE SERVER DECIDES THIS ONE. `settleCoverRequest` runs the conditional
+    // update and only writes locally once Postgres has agreed — so the losing
+    // branch below is now a real answer from a real race, not just this device
+    // noticing its own double-tap. It falls back to the S30 device-only path
+    // when there is no server or no table.
+    const r = await store.settleCoverRequest(id, next, { now: nowMs });
+    setRequests(store.getCoverRequests());
     if (!r.changed) {
       // Losing the race is REPORTED. This is the branch that stops the product
       // showing an approval that did not happen.
-      setRequests(store.getCoverRequests());
       toast(r.reason === "gone" ? "That request is no longer there"
-                                : `Already ${r.reason} — nothing changed`);
+          : r.reason === "unconfirmed"
+            ? "Could not reach the server, so nothing was changed — try again"
+            : `Already ${r.reason} — nothing changed`);
       return;
     }
-    store.saveCoverRequests(r.list);
-    setRequests(r.list);
 
     if (next === "approved") {
       const to = coaches.find(c => c.id === r.request.toCoachId);
@@ -221,9 +258,17 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
           See SESSION-HANDOFF.md §2.5 and migration 0010. */}
       <div style={{ ...sub, marginBottom: "14px", padding: "9px 11px", background: "var(--navy)",
                     border: "1px solid var(--border)", borderRadius: "8px" }}>
-        {supabaseEnabled
-          ? <>Cover requests reach a coach when they next open Jungle. There is no push, email or text &mdash; nobody&rsquo;s phone will ring.</>
-          : <>This roster and every cover request are stored <strong style={{ color: "var(--text)" }}>on this device only</strong>. No one else&rsquo;s Jungle can see them.</>}
+        {!supabaseEnabled
+          ? <>This roster and every cover request are stored <strong style={{ color: "var(--text)" }}>on this device only</strong>. No one else&rsquo;s Jungle can see them.</>
+          : !storageReady
+          /* 🔴 CREDENTIALS ARE NOT STORAGE. This gym has a Jungle server and its
+             cover tables are not on it (migration 0010). Before S32 this branch
+             did not exist and the panel told these gyms their requests were
+             waiting for someone — about rows that never left the phone. Present
+             tense, and no promise of a date, which is the rule for anything that
+             cannot arrive from inside the app. */
+          ? <>This roster and every cover request are stored <strong style={{ color: "var(--text)" }}>on this device only</strong>. Your Jungle server is connected but has no coach storage set up, so no one else&rsquo;s Jungle can see them.</>
+          : <>Cover requests reach a coach when they next open Jungle. There is no push, email or text &mdash; nobody&rsquo;s phone will ring.</>}
       </div>
 
       {/* ── The roster ──────────────────────────────────────────────────────── */}

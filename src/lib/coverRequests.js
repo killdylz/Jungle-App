@@ -64,6 +64,14 @@ export function makeCoverRequest({ id, classRule, fromCoachId = "", toCoachId = 
     status: "open",
     createdAt: new Date(now).toISOString(),
     settledAt: "",
+    // WHO settled it, once somebody has. Present from the start and "" until
+    // then, for the same reason `availabilityAt` is: a field that only appears
+    // once it has been written is a field every reader has to guard against.
+    // It carries a PROFILE id (migration 0010: `settled_by uuid references
+    // profiles`), not a roster id — the roster says which coach was asked, this
+    // says which account pressed the button, and on a shared tablet those are
+    // genuinely different questions.
+    settledBy: "",
   };
 }
 
@@ -72,7 +80,7 @@ export function makeCoverRequest({ id, classRule, fromCoachId = "", toCoachId = 
 // `changed:false` is a normal outcome and callers must handle it — it is what
 // losing the race looks like, and the whole point is that it is reported rather
 // than swallowed.
-export function settleCover(list, id, next, { now = Date.now() } = {}) {
+export function settleCover(list, id, next, { now = Date.now(), by = "" } = {}) {
   const rows = list || [];
   const i = rows.findIndex(r => r && r.id === id);
   if (i < 0) return { list: rows, request: null, changed: false, reason: "gone" };
@@ -82,7 +90,10 @@ export function settleCover(list, id, next, { now = Date.now() } = {}) {
   // Already settled — by the other device, or by this one twice.
   if (cur.status !== "open") return { list: rows, request: cur, changed: false, reason: cur.status };
 
-  const updated = { ...cur, status: next, settledAt: new Date(now).toISOString() };
+  const updated = { ...cur, status: next, settledAt: new Date(now).toISOString(),
+                    // Only ever set alongside a real transition, so a row that
+                    // says who settled it is a row that was settled.
+                    settledBy: String(by || "") };
   const out = rows.slice();
   out[i] = updated;
   return { list: out, request: updated, changed: true, reason: "" };
@@ -117,19 +128,41 @@ export function openRequestForClass(list, classClientId) {
 //   "device"   — no server is configured. The request exists on this phone and
 //                nowhere else. Nobody will ever see it. This is the SHIPPED
 //                state today and it is the default answer.
-//   "unreached"— a server is configured, but the coach being asked has no
-//                account, so there is no person for the row to reach.
-//   "waiting"  — a server is configured and the coach has an account. The row
-//                can reach their device WHEN THEY NEXT OPEN JUNGLE. There is no
+//   "unstored" — a server is configured, but `cover_requests` is not there:
+//                migration 0010 has never been run (DYLAN-QUEUE A15). Added in
+//                S32, and it is a CORRECTION rather than a new case. Before the
+//                sync layer landed, this function answered "waiting" for any
+//                gym with credentials — and "the row can reach their device"
+//                was false for every one of them, because nothing pushed the
+//                row anywhere. The comment below described a push that did not
+//                exist. Same outcome as "device", different cause, and the
+//                cause is the half a gym can act on.
+//   "unreached"— a server is configured and the table is there, but the coach
+//                being asked has no account, so there is no person for the row
+//                to reach.
+//   "waiting"  — all of the above are satisfied. The row IS on the server and
+//                reaches their device WHEN THEY NEXT OPEN JUNGLE. There is no
 //                push, no email and no SMS anywhere in this product, so even
 //                this is not a notification — it is a message in a bottle that
 //                happens to have an addressee.
+//
+// ⚠️ THE ORDER OF THE TESTS IS THE MEANING. Storage is checked before reach
+// because a coach's account is irrelevant when the row has nowhere to live: a
+// screen saying "they have no account" about a request that could not have been
+// stored either way sends the gym off to fix the wrong thing.
+//
+// ⚠️ `storageReady` DEFAULTS TO TRUE, and that is the honest default rather than
+// a lenient one: a caller that has not probed the server cannot claim the table
+// is missing, and every caller that HAS probed passes the answer. `store.js`'s
+// `tableAbsent("cover_requests")` is that answer, written by the hydrate and by
+// any failed push.
 //
 // ⚠️ "waiting" IS STILL NOT GOOD ENOUGH FOR THE CASE THIS FEATURE EXISTS FOR.
 // A coach who is ill at 5am and needs cover for a 6am class needs the other
 // person's phone to make a noise. Nothing here makes a noise. The UI says that
 // in words rather than implying otherwise with a hopeful tick.
-export function deliveryTruth({ serverConfigured, toCoach } = {}) {
+export function deliveryTruth({ serverConfigured, toCoach, storageReady = true } = {}) {
   if (!serverConfigured) return "device";
+  if (!storageReady) return "unstored";
   return coachReach(toCoach) === "account" ? "waiting" : "unreached";
 }

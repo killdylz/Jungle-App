@@ -4,7 +4,7 @@ import { ATTENDANCE_SOURCES, RETENTION_ACTIONS, MEMBER_STATUSES,
          PERSONA_PLAN_SOURCES, PERSONA_KINDS, SCHEDULE_REPEATS } from "./store.js";
 import { RETENTION_RULES } from "./retention.js";
 import { COVER_STATUSES } from "./coverRequests.js";
-import { _classToRow, _memberToRow } from "./store.js";
+import { _classToRow, _memberToRow, _coachToRow, _coverToRow } from "./store.js";
 import { TEAM_ROLES } from "../screens/AdminTeamScreen.jsx";
 
 // ─── The recurring data-loss bug, guarded in one place ───────────────────────
@@ -69,14 +69,12 @@ const GUARDED = [
   ["persona_plans.source",    PERSONA_PLAN_SOURCES, () => checkValues("0005_coach_personas.sql", "source")],
   ["coach_personas.kind",     PERSONA_KINDS,       () => checkValues("0005_coach_personas.sql", "kind")],
   ["class_schedule_rules.repeat", SCHEDULE_REPEATS, () => checkValues("0003_phase1_domain_tables.sql", "repeat")],
-  // ⚠️ AN EXCEPTION TO THIS FILE'S OWN RULE, made deliberately. The rule above
-  // says a guard on a column the client does not write is noise, and the client
-  // does not write `cover_requests.status` — migration 0010 is unapplied and
-  // `saveCoverRequests` is localStorage-only. The rule is about columns with no
-  // client constant to compare against; this one HAS a constant, `settleCover`
-  // reads it, and both halves live in this repo right now. Drift between them
-  // would be silent until the day 0010 runs, which is precisely the day it
-  // starts costing data. Guarding it costs one row and one migration read.
+  // ⚠️ WAS AN EXCEPTION TO THIS FILE'S OWN RULE AND IS NO LONGER ONE (S32). It
+  // was added while `saveCoverRequests` was localStorage-only, on the argument
+  // that a constant and a CHECK living in the same repo can drift silently until
+  // the day the migration runs. `settleCoverRequest` now writes this column for
+  // real, through `_coverToRow`, so it is an ordinary member of this list — the
+  // exception was simply early rather than wrong.
   ["cover_requests.status",   COVER_STATUSES,      () => checkValues("0010_coach_cover.sql", "status")],
 ];
 
@@ -160,6 +158,20 @@ const MAPPER_SAMPLES = [
   ["members", "0007_attendance_spine.sql", _memberToRow,
    { id: "m1", name: "Ana", email: "a@b.co", status: "active",
      joinedAt: "2026-01-02", externalRef: "ext-1" }],
+  // ⚠️ ADDED IN S32, IN THE COMMIT THAT MADE THE CLIENT WRITE THESE TABLES.
+  // Both are guarded against a migration that HAS NOT RUN, which is the point:
+  // 0010 is unapplied (DYLAN-QUEUE A15), so the file below is the only statement
+  // of what these tables will look like, and a mapper that drifts from it would
+  // fail every push on the day it is applied — with a message naming only the
+  // table. The samples are over-populated for the same reason the two above are.
+  ["coach_roster", "0010_coach_cover.sql", _coachToRow,
+   { id: "c1", name: "Mara", aliases: ["Mara K."], userId: "u1", active: true,
+     availability: { Mon: ["06:00"] }, availabilityAt: "2026-08-24" }],
+  ["cover_requests", "0010_coach_cover.sql", _coverToRow,
+   { id: "r1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon",
+     classSlot: "06:00", fromCoachId: "c1", toCoachId: "c2", note: "flu",
+     status: "approved", createdAt: "2026-08-24T05:00:00.000Z",
+     settledAt: "2026-08-24T05:04:00.000Z", settledBy: "u2" }],
 ];
 
 // Column names from a `create table` block. A continuation line (`check (...)`,
@@ -196,6 +208,30 @@ describe("🔴 row mappers only name columns the database actually has", () => {
     expect(unknown,
       `${table}: the mapper would send column(s) the migration has not created: ${unknown.join(", ")}. `
       + `PostgREST rejects the WHOLE batch, so this stops the entire table syncing.`).toEqual([]);
+  });
+
+  // POSITIVE CONTROL 2 (S32). The mappers above are the first two written
+  // against a migration that has never run, so "the parser read 0010 at all" is
+  // load-bearing in a way it was not for 0003 and 0007 — a typo'd filename or a
+  // restructured `create table` would throw rather than pass vacuously, but a
+  // parser that matched a DIFFERENT table would not. This pins that the columns
+  // being compared are really the roster's, and that a plausible wrong key is
+  // caught rather than shrugged at.
+  it("the 0010 mappers are judged against 0010's own columns", () => {
+    const roster = tableColumns("0010_coach_cover.sql", "coach_roster");
+    const cover  = tableColumns("0010_coach_cover.sql", "cover_requests");
+
+    // Columns only this table has, so the two cannot be silently swapped.
+    expect(roster.has("availability_at")).toBe(true);
+    expect(roster.has("class_label")).toBe(false);
+    expect(cover.has("class_label")).toBe(true);
+    expect(cover.has("availability_at")).toBe(false);
+
+    // 🔴 The one that would actually be written by mistake. A roster row carries
+    // the LOCAL field name `availabilityAt`; emitting it unconverted is a single
+    // slip and would stop the whole roster syncing.
+    const slip = { ..._coachToRow({ id: "c1", name: "Mara" }), availabilityAt: "2026-08-24" };
+    expect(Object.keys(slip).filter(k => !roster.has(k))).toEqual(["availabilityAt"]);
   });
 
   // POSITIVE CONTROL. Without it, a parser that returned every identifier in the
