@@ -2360,11 +2360,18 @@ export async function cancelAbsence(id, { now = Date.now() } = {}) {
  * turn up. A CANCELLED request does not count as one: a coach who withdrew an
  * ask and then genuinely does need cover has to be able to raise it again.
  *
+ * 🔴 SKIPS A CLASS THAT HAS ALREADY STARTED. Found by rendering the panel on a
+ * Tuesday: a coach marking themselves away Mon–Fri got Monday's 06:00 put on the
+ * board, asking somebody to cover a class that had already been taught. An ask
+ * nobody can act on is worse than no ask — it sits there, counts against the
+ * absence, and teaches people to ignore the board. The absence still RECORDS
+ * Monday, because they were away on Monday; only the ask is skipped.
+ *
  * The inserts go in ONE batch rather than through `addCoverRequest` per class:
  * a week's absence is six requests and six fire-and-forget round trips would be
  * six chances to half-land.
  */
-export function raiseCoversForAbsence(absence, occurrences) {
+export function raiseCoversForAbsence(absence, occurrences, { now = Date.now() } = {}) {
   const existing = getCoverRequests();
   if (!absence?.id) return { created: [], requests: existing };
 
@@ -2373,6 +2380,10 @@ export function raiseCoversForAbsence(absence, occurrences) {
   for (const o of occurrences || []) {
     const date = o?.date || occurrenceDate(o);
     if (!date || !o.ruleId) continue;
+    // Already taught. `startsAt` is the moment the class begins, so a class
+    // running right now is still coverable for the few minutes that matters.
+    const at = new Date(o.startsAt || 0).getTime();
+    if (Number.isFinite(at) && at !== 0 && at < now) continue;
     const key = `${o.ruleId}@${date}`;
     if (seen.has(key)) continue;                 // two rules onto one cell
     seen.add(key);

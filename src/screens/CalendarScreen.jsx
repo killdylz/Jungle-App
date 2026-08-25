@@ -21,6 +21,7 @@ import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
          startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
+import { applyCovers } from "../lib/coverRequests.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useToast } from "../ui/toast.jsx";
 import { useDialog } from "../ui/dialog.js";
@@ -255,9 +256,20 @@ export function CalendarScreen({onBack, onStartClass}) {
   // `coachId` on a rule and deliberately so (see coachRoster.js and migration
   // 0010) — so an approved cover writes the new coach's name exactly as a coach
   // typing it would, and nothing about the sync path changes.
-  const assignCoach = (clientId, coachName) => {
-    setUserClasses(list => list.map(c => (c.id === clientId ? { ...c, coach: coachName } : c)));
-  };
+  // 🔴 `assignCoach` IS GONE (S33), AND ITS ABSENCE IS THE FEATURE. Approving a
+  // cover used to call this, which rewrote the RULE's coach field — permanent,
+  // because a rule has no dates, so covering one ill Monday moved the class
+  // every Monday until a human edited it back. A cover is now a dated row that
+  // `applyCovers` overlays onto the derived occurrences, so it lasts exactly as
+  // long as the day it names and the schedule is never written to at all.
+  //
+  // The panel bumps this instead, and the covers are re-read. A counter rather
+  // than lifting the whole cover state up: the panel owns that state and this
+  // screen only needs to know it changed.
+  const [coverTick, setCoverTick] = React.useState(0);
+  const covers = React.useMemo(
+    () => ({ requests: store.getCoverRequests(), roster: store.getCoaches() }),
+    [coverTick]);
 
   const addClass = () => {
     if (!addForm.name.trim()) return;
@@ -334,7 +346,12 @@ export function CalendarScreen({onBack, onStartClass}) {
   // must see the normalised type. Driving the UI and reading the stored row back
   // is what caught this: the grid above was already showing the healed value
   // while the published occurrence still carried `"HIIT"`.
-  const weekOccurrences = occurrencesForWeek(rules, startOfWeek, { days: DAYS });
+  // ⚠️ COVERS ARE APPLIED BEFORE ANYTHING READS THIS, including `publishWeek`.
+  // A published `class_instances` row carries `coach_name`, so a week published
+  // after a cover was agreed has to name the coach who is actually teaching —
+  // otherwise attendance and every analysis over it credit the wrong person.
+  const weekOccurrences = applyCovers(
+    occurrencesForWeek(rules, startOfWeek, { days: DAYS }), covers.requests, covers.roster);
   const pending = diffOccurrences(weekOccurrences, instances);
   const publishWeek = () => {
     const r = store.publishOccurrences(weekOccurrences);
@@ -540,7 +557,18 @@ export function CalendarScreen({onBack, onStartClass}) {
                         </button>
                       )}
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"28px"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {/* 🔴 THE OCCURRENCE'S COACH, NOT THE RULE'S. They are the
+                          same name on every ordinary day; on a day somebody is
+                          covering, the occurrence carries who is actually
+                          teaching and the rule still carries whose class it is.
+                          Showing the rule's name here would make an agreed cover
+                          invisible on the one screen the gym looks at most. */}
+                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[occ?.coachName || cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {occ?.coveringFor && (
+                        <div style={{fontSize:"10px",color:"var(--text)",marginTop:"2px",fontWeight:"700"}}>
+                          covering for {occ.coveringFor}
+                        </div>
+                      )}
                       {/* The fill bar and its "%" are gone. Nothing in the
                           product ever SETS `fill` — no capacity field, no
                           booking integration — so every cell on every gym's
@@ -621,7 +649,7 @@ export function CalendarScreen({onBack, onStartClass}) {
           typed into the dialog on THIS screen, and the product already has two
           other things called "Coaches". See CoachCoverPanel.jsx's header. */}
       <CoachCoverPanel userClasses={userClasses} isMobile={isMobile}
-                       onAssignCoach={assignCoach} />
+                       onCoversChanged={() => setCoverTick(n => n + 1)} />
 
       {/* Bottom: AI tips + Trainer load */}
       {/* ─── UI-POLISH §3.5 · two panels that could never fill ────────────────

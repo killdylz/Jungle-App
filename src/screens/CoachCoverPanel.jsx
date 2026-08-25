@@ -23,18 +23,19 @@ import { supabase, supabaseEnabled } from "../supabase.js";
 import { useJungleAuth } from "../AuthGate.jsx";
 import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
          formatAliases, coachEditPatch, linkableAccounts, rosterViewerMode,
-         selfCoach, askableClasses,
+         selfCoach,
          COACH_AVAIL_STALE_DAYS } from "../lib/coachRoster.js";
 // ⚠️ `settleCover` is deliberately NOT imported here any more. The panel used to
 // call it directly and write the result; it now goes through
 // `store.settleCoverRequest`, which puts the server's conditional update in
 // front of it. Calling the pure version from a screen again would restore
 // exactly the last-writer-wins approval this session removed.
-import { makeCoverRequest, isOpen, openRequestForClass,
-         deliveryTruth } from "../lib/coverRequests.js";
+import { openCovers, deliveryTruth, reachableCoaches } from "../lib/coverRequests.js";
+import { absenceError, classesAffectedBy, absencesFor, isAwayOn } from "../lib/coachAbsence.js";
 import { coverApprovedPayload, pushCoverApproved } from "../lib/bookingAdapter.js";
 import { RULE_DAYS } from "../lib/scheduleInstances.js";
 import { useToast } from "../ui/toast.jsx";
+import { localDateStr } from "../lib/format.js";
 
 const SLOTS = ["06:00", "09:00", "12:00", "18:00", "19:30"];
 
@@ -59,7 +60,7 @@ const REACH_LABEL = {
   roster:  "No account — ask them yourself",
 };
 
-export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
+export function CoachCoverPanel({ userClasses, onCoversChanged, isMobile }) {
   const { toast } = useToast();
   const [coaches, setCoaches] = React.useState(() => store.getCoaches());
   const [requests, setRequests] = React.useState(() => store.getCoverRequests());
@@ -68,8 +69,14 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   const [detailsFor, setDetailsFor] = React.useState(null); // roster id whose edit form is open
   const [draft, setDraft] = React.useState(null);           // { name, aliasText, active, userId }
   const [accounts, setAccounts] = React.useState(null);     // null = not loaded / no server
-  const [askClassId, setAskClassId] = React.useState("");
   const [pendingRemove, setPendingRemove] = React.useState(null);
+  const [absences, setAbsences] = React.useState(() => store.getAbsences());
+  // `coachId` only matters in manager mode; a coach records their own.
+  const [absForm, setAbsForm] = React.useState({ coachId: "", from: "", to: "", note: "" });
+  const [absError, setAbsError] = React.useState("");
+  // Manager mode has no identity to claim on behalf of, so it picks. Keyed by
+  // request id so two rows cannot share one selection.
+  const [assignTo, setAssignTo] = React.useState({});
   // Whether `cover_requests` actually exists on this gym's server. Starts
   // optimistic and is corrected by the hydrate below, because a screen that has
   // not looked cannot claim a table is missing — see `deliveryTruth`.
@@ -86,7 +93,7 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     let alive = true;
     store.hydrateCoachCover().then(r => {
       if (!alive) return;
-      if (r) { setCoaches(r.coaches); setRequests(r.requests); }
+      if (r) { setCoaches(r.coaches); setRequests(r.requests); setAbsences(r.absences || []); }
       setStorageReady(!store.tableAbsent("cover_requests"));
     });
     return () => { alive = false; };
@@ -121,13 +128,23 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   const isManager = mode === "manage";
   const visibleCoaches = isManager ? coaches : (me ? [me] : []);
 
-  const openAsks = (requests || []).filter(isOpen);
-  // A coach sees the asks that are ABOUT them — aimed at them to answer, or
-  // raised by them to withdraw. A manager sees the gym's.
-  const myAsks = isManager ? openAsks
-               : openAsks.filter(r => me && (r.toCoachId === me.id || r.fromCoachId === me.id));
-  const askable = askableClasses(userClasses, mode, me);
-  const askClass = (askable || []).find(c => c.id === askClassId) || null;
+  // ⚠️ THE BOARD IS THE SAME FOR EVERYONE, which is the whole point of a
+  // broadcast. It is NOT filtered to who claims to be free — an availability
+  // grid is a claim somebody typed weeks ago, not a rota, and hiding a class
+  // from a coach who could have taken it is how it goes uncovered. What the
+  // rows carry instead is whether YOU said you were free then, so the ones you
+  // can take stand out without the rest disappearing.
+  // ⚠️ FROM TODAY ONWARDS. A request whose day has passed without anyone taking
+  // it is a fact about the past, not a job — leaving it on the board means the
+  // list only ever grows and stops being read. It stays in the absence's count,
+  // where "that class went uncovered" is exactly the right thing to record.
+  const board = openCovers(requests, { from: localDateStr(nowMs) });
+  const myAbsences = me ? absencesFor(absences, me.id) : [];
+  // A manager sees the gym's; a coach sees their own.
+  const shownAbsences = isManager
+    ? (absences || []).filter(a => a && !a.cancelledAt)
+        .sort((a, b) => String(b.from).localeCompare(String(a.from)))
+    : myAbsences;
   // ⚠️ A CLASS'S OWN COACH IS STILL OFFERED AS COVER FOR IT, AND THAT IS A REAL
   // DEFECT THIS SESSION DECIDED NOT TO FIX HERE. `ask()` takes `fromCoachId`
   // from the class's typed coach, so asking that same person produces a request
@@ -137,8 +154,23 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   // class's own coach to prove a stale claim is offered WITH its age). Changing
   // that fixture to accommodate an unrequested change is how a test stops
   // proving what it was written for. Written up for its own commit instead.
-  const free = askClass ? coachesFreeAt(coaches, { day: askClass.day, slot: askClass.slot }, nowMs) : [];
   const nameOf = id => (coaches.find(c => c.id === id)?.name) || "someone";
+
+  // Who could take one board row: free at that slot, and not themselves away
+  // that day. ⚠️ The away check is the one place the two halves of this feature
+  // have to know about each other — offering a class to somebody whose own
+  // absence covers it is how a gym ends up with two people missing.
+  const candidatesFor = (req) => coachesFreeAt(coaches, { day: req.classDay, slot: req.classSlot }, nowMs)
+    .filter(f => !isAwayOn(absences, f.coach.id, req.classDate));
+
+  // How much of one absence still has nobody. Counted from the live requests
+  // rather than stored on the absence, so withdrawing or claiming one is
+  // reflected without a second write that could disagree.
+  const absenceProgress = (a) => {
+    const mine = (requests || []).filter(r => r && r.absenceId === a.id && r.status !== "cancelled");
+    const covered = mine.filter(r => r.status === "approved").length;
+    return { total: mine.length, covered };
+  };
 
   const addCoach = (name) => {
     const n = String(name || "").trim();
@@ -208,85 +240,109 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     setCoaches(r.coaches);
   };
 
-  const ask = (toCoachId) => {
-    if (!askClass) return;
-    if (openRequestForClass(requests, askClass.id)) { toast("That class already has an open cover request"); return; }
-    const from = coverage.known.find(k => k.name === askClass.coach)?.entry?.id || "";
-    const req = makeCoverRequest({ id: store.newId(), classRule: askClass, fromCoachId: from, toCoachId, now: nowMs });
-    // `addCoverRequest`, not `saveCoverRequests`: raising one is an INSERT, and
-    // the store keeps those two names apart on purpose — a list upsert here is
-    // what could re-open somebody else's settled request. See store.js.
-    const next = store.addCoverRequest(req);
-    setRequests(next);
-    setAskClassId("");
-    // ⚠️ NOT "Sent". `deliveryTruth` is the only thing allowed to say what
-    // happened, and on a gym whose migration 0010 has not run the answer is
-    // still "this device" however many credentials are configured.
-    const truth = deliveryTruth({ serverConfigured: supabaseEnabled, storageReady,
-                                  toCoach: coaches.find(c => c.id === toCoachId) });
-    toast(truth === "device" || truth === "unstored"
-      ? `Recorded on this device — ${nameOf(toCoachId)} will not see it`
-      : truth === "unreached"
-      ? `Recorded — ${nameOf(toCoachId)} has no Jungle account, so ask them yourself`
-      : `Waiting for ${nameOf(toCoachId)} to open Jungle`);
+  // A local YYYY-MM-DD rendered for a human. ⚠️ Built with `new Date(y, m-1, d)`,
+  // NOT `new Date(str)` — the latter is UTC midnight and prints the day before
+  // anywhere west of Greenwich, which is the trap CLAUDE.md records and the one
+  // this whole feature would be most embarrassed by.
+  const fmtDay = (d) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return "";
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString(undefined,
+      { weekday: "short", day: "numeric", month: "short" });
   };
 
-  const settle = async (id, next) => {
-    // 🔴 THE SERVER DECIDES THIS ONE. `settleCoverRequest` runs the conditional
-    // update and only writes locally once Postgres has agreed — so the losing
-    // branch below is now a real answer from a real race, not just this device
-    // noticing its own double-tap. It falls back to the S30 device-only path
-    // when there is no server or no table.
-    const r = await store.settleCoverRequest(id, next, { now: nowMs });
+  // What the product is allowed to claim about anything raised here.
+  const truth = deliveryTruth({ serverConfigured: supabaseEnabled, storageReady,
+                                reachableCoaches: reachableCoaches(coaches) });
+  const truthTail = truth === "waiting" ? ""
+    : truth === "unreached"
+      ? " Nobody on the roster has a Jungle account yet, so tell them yourself."
+      : " It is on this device only \u2014 no one else\u2019s Jungle can see it.";
+
+  const recordAbsence = async () => {
+    const coachId = isManager ? absForm.coachId : me?.id;
+    if (!coachId) { setAbsError("Pick which coach is away."); return; }
+    const err = absenceError(absForm);
+    if (err) { setAbsError(err); return; }
+    setAbsError("");
+
+    const { absence, absences: nextAbs } = store.addAbsence({ coachId, from: absForm.from,
+                                                              to: absForm.to, note: absForm.note });
+    // `addAbsence` refuses the same ranges `absenceError` does; this is the
+    // belt for that brace rather than a second opinion about what is legal.
+    if (!absence) { setAbsError("That absence could not be recorded."); return; }
+    setAbsences(nextAbs);
+
+    // Which classes it takes them away from is DERIVED, never stored — see
+    // coachAbsence.js. The roster entry is passed rather than the id because
+    // matching is by name and alias, which only the entry knows.
+    const coach = coaches.find(c => c.id === coachId);
+    const affected = classesAffectedBy(userClasses, coach, absence);
+    const r = store.raiseCoversForAbsence(absence, affected);
+    setRequests(r.requests);
+    if (onCoversChanged) onCoversChanged();
+    setAbsForm(f => ({ ...f, from: "", to: "", note: "" }));
+
+    const n = r.created.length;
+    toast(n === 0
+      ? `Recorded \u2014 ${coach?.name || "they"} teach nothing those days, so there is nothing to cover.`
+      : `Recorded. ${n} class${n === 1 ? "" : "es"} ${n === 1 ? "is" : "are"} on the cover board.${truthTail}`);
+  };
+
+  const withdrawAbsence = async (id) => {
+    const r = await store.cancelAbsence(id);
+    setAbsences(r.absences);
     setRequests(store.getCoverRequests());
+    if (onCoversChanged) onCoversChanged();
+    // 🔴 SAYS WHAT SURVIVED. A cover somebody already agreed to take is NOT
+    // withdrawn — they planned their week around it — and a coach who thinks
+    // cancelling their leave un-asked everything would turn up to a class
+    // somebody else is teaching.
+    toast(r.kept
+      ? `Back on the schedule. ${r.withdrawn} ask${r.withdrawn === 1 ? "" : "s"} withdrawn; `
+        + `${r.kept} already taken and left in place \u2014 talk to them.`
+      : `Back on the schedule. ${r.withdrawn} ask${r.withdrawn === 1 ? "" : "s"} withdrawn.`);
+  };
+
+  const claim = async (id, coachId) => {
+    if (!coachId) { toast("Pick which coach is taking it"); return; }
+    // 🔴 THE SERVER DECIDES THIS ONE. `settleCoverRequest` runs the conditional
+    // update and only writes locally once Postgres has agreed, so the losing
+    // branch is a real answer from a real race rather than this device noticing
+    // its own double-tap. It falls back to the device-only path when there is
+    // no server or no table.
+    const r = await store.settleCoverRequest(id, "approved", { now: nowMs, coachId });
+    setRequests(store.getCoverRequests());
+    if (onCoversChanged) onCoversChanged();
     if (!r.changed) {
-      // Losing the race is REPORTED. This is the branch that stops the product
-      // showing an approval that did not happen.
-      toast(r.reason === "gone" ? "That request is no longer there"
+      toast(r.reason === "gone" ? "That class is no longer on the board"
           : r.reason === "unconfirmed"
-            ? "Could not reach the server, so nothing was changed — try again"
-            : `Already ${r.reason} — nothing changed`);
+            ? "Could not reach the server, so nothing was changed \u2014 try again"
+            : `Somebody got there first \u2014 ${nameOf(r.request?.toCoachId)} is taking it`);
       return;
     }
-
-    if (next === "approved") {
-      const to = coaches.find(c => c.id === r.request.toCoachId);
-      if (to && onAssignCoach) onAssignCoach(r.request.classClientId, to.name);
-      // The seam. The no-op is still the only adapter, so this always reports
-      // that nothing left Jungle — and the coach is told, rather than left to
-      // assume a booking system was updated. What is new is that the payload is
-      // RECORDED, keyed so the same approval can never be handed over twice.
-      const out = await pushCoverApproved(
-        coverApprovedPayload({ request: r.request, fromName: nameOf(r.request.fromCoachId), toName: to?.name || "" }),
-        { read: store.getBookingOutbox, write: store.saveBookingOutbox });
-      // 🔴 SAY THAT IT IS PERMANENT, BECAUSE IT IS. `onAssignCoach` rewrites the
-      // RULE's coach field, so approving cover for one ill Monday changes who
-      // teaches Strength Lab EVERY Monday until a human edits it back. A cover
-      // request carries `classDay` and `classSlot` and no date at all, so there
-      // is nowhere else for the assignment to go — see the §2.3 note in
-      // SESSION-HANDOFF.md for why a dated version is a feature and not a field.
-      // "Dev now teaches Strength Lab" was the whole sentence and it reads as
-      // "this Monday" to everyone who has ever asked for cover.
-      toast(`${to?.name || "They"} now teaches ${r.request.classLabel}${recurrenceOf(r.request)}. ${out.reason}`);
-    } else {
-      // Two different events, and a shared sentence would misreport one of them:
-      // a rejection is the ASKED coach saying no, a withdrawal is the ASKER
-      // taking it back. Both leave the class uncovered, which is the part the
-      // coach has to act on, so both say so.
-      toast(next === "rejected"
-        ? `${nameOf(r.request.toCoachId)} turned down ${r.request.classLabel} — it still has no cover`
-        : `Withdrew the request for ${r.request.classLabel} — it still has no cover`);
-    }
+    const to = coaches.find(c => c.id === coachId);
+    // The seam. The no-op is still the only adapter, so this always reports that
+    // nothing left Jungle. The payload is RECORDED, keyed so the same
+    // substitution can never be handed over twice.
+    const out = await pushCoverApproved(
+      coverApprovedPayload({ request: r.request, fromName: nameOf(r.request.fromCoachId),
+                             toName: to?.name || "" }),
+      { read: store.getBookingOutbox, write: store.saveBookingOutbox });
+    // ⚠️ "JUST THAT DAY" IS THE SENTENCE THAT CHANGED. It used to say the class
+    // moved every Monday from now on, because it did. Nothing writes to the
+    // schedule any more.
+    toast(`${to?.name || "They"} teach ${r.request.classLabel} on ${fmtDay(r.request.classDate)} `
+        + `\u2014 just that day. ${out.reason}`);
   };
 
-  // How long an approval lasts, in the words of the rule it will rewrite. Empty
-  // for a one-off (the rule IS that one occurrence, so there is nothing extra to
-  // warn about) and empty when the rule has been deleted underneath the request
-  // — claiming a recurrence we can no longer read would be a guess.
-  const recurrenceOf = (req) => {
-    const rule = (userClasses || []).find(c => c.id === req.classClientId);
-    if (!rule || rule.repeat === "once") return "";
-    return ` every ${req.classDay} ${req.classSlot} from now on, until you change it back on the class`;
+  const withdrawCover = async (id) => {
+    const r = await store.settleCoverRequest(id, "cancelled", { now: nowMs });
+    setRequests(store.getCoverRequests());
+    if (onCoversChanged) onCoversChanged();
+    toast(r.changed
+      ? `Taken off the board \u2014 ${r.request.classLabel} on ${fmtDay(r.request.classDate)} still needs its usual coach`
+      : "That class is no longer on the board");
   };
 
   const availSummary = (c) => {
@@ -547,125 +603,196 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
         </div>
       )}
 
-      {/* ── Ask for cover ──────────────────────────────────────────────────── */}
-      {/* ⚠️ HIDDEN OUTRIGHT FOR AN UNLINKED COACH, not left to fall through to
-          its own empty state. `askableClasses` returns [] for them, so the
-          section would say "none of the classes are typed under your name" —
-          which is a true sentence about the wrong cause, two inches under a
-          note giving the right one. Found by rendering the panel and reading
-          it, which is the only way this kind of defect turns up. */}
+      {/* ── "I'm away" ─────────────────────────────────────────────────────── */}
+      {/* 🔴 THE ENTRY POINT CHANGED IN S33 AND THIS IS IT. It used to be "pick a
+          class that needs cover", which is class-first: a coach away for a week
+          had six separate asks to raise and the gym had nothing that said "Mara
+          is away Mon-Fri and two of hers still have nobody". Being away is a
+          fact about a PERSON OVER DATES, so that is what gets recorded, and the
+          classes are derived from the schedule. */}
       {mode !== "unlinked" && (
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
-        <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Need cover?</div>
+        <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>
+          {isManager ? "Record an absence" : "When you’re away"}
+        </div>
         {coaches.length === 0 ? (
-          <div style={sub}>Put a coach on the roster first &mdash; a cover request has to go to somebody.</div>
-        ) : askable.length === 0 ? (
-          // A coach with no classes on the schedule. Saying so beats a picker
-          // that opens onto nothing.
-          <div style={sub}>
-            None of the classes on the schedule are typed under your name, so there is nothing here to ask cover for.
-          </div>
+          <div style={sub}>Put a coach on the roster first &mdash; an absence has to belong to somebody.</div>
         ) : (
-          <>
-            <select value={askClassId} onChange={e => setAskClassId(e.target.value)}
-                    aria-label="Class that needs cover"
-                    style={{ ...field, width: isMobile ? "100%" : "auto", maxWidth: "100%", marginBottom: "8px" }}>
-              <option value="">Pick a class&hellip;</option>
-              {(askable || []).map(c => (
-                <option key={c.id} value={c.id}>{c.day} {c.slot} · {c.name}{c.coach ? ` · ${c.coach}` : ""}</option>
-              ))}
-            </select>
-            {askClass && (
-              <div>
-                {free.length === 0 ? (
-                  <div style={sub}>
-                    Nobody has said they are free {askClass.day} at {askClass.slot}. Set availability above, or ask around
-                    &mdash; Jungle will not find someone you have not told it about.
-                  </div>
-                ) : free.map(f => (
-                  <div key={f.coach.id} style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "7px 0" }}>
-                    <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>{f.coach.name}</span>
-                    <span style={sub}>
-                      {f.state === "stale" ? `said so ${f.days} days ago` : "free then"} · {REACH_LABEL[f.reach]}
-                    </span>
-                    <span style={{ flex: 1 }} />
-                    <button onClick={() => ask(f.coach.id)} aria-label={`Ask ${f.coach.name} to cover ${askClass.name}`}
-                            style={btn(true)}>Ask</button>
-                  </div>
-                ))}
-              </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {isManager && (
+              <select value={absForm.coachId} onChange={e => setAbsForm(f => ({ ...f, coachId: e.target.value }))}
+                      aria-label="Coach who is away" style={{ ...field, maxWidth: "100%" }}>
+                <option value="">Which coach&hellip;</option>
+                {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             )}
-          </>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {/* `type="date"` hands back a local YYYY-MM-DD, which is exactly
+                  the vocabulary coachAbsence.js works in. No parsing anywhere. */}
+              <label style={{ ...sub, display: "flex", flexDirection: "column", gap: "3px" }}>
+                First day away
+                <input type="date" value={absForm.from} aria-label="First day away"
+                       onChange={e => setAbsForm(f => ({ ...f, from: e.target.value }))}
+                       style={{ ...field, colorScheme: "dark" }} />
+              </label>
+              <label style={{ ...sub, display: "flex", flexDirection: "column", gap: "3px" }}>
+                Last day away
+                <input type="date" value={absForm.to} aria-label="Last day away"
+                       onChange={e => setAbsForm(f => ({ ...f, to: e.target.value }))}
+                       style={{ ...field, colorScheme: "dark" }} />
+              </label>
+            </div>
+            <input value={absForm.note} onChange={e => setAbsForm(f => ({ ...f, note: e.target.value }))}
+                   placeholder="Why, if it helps (optional)" aria-label="Reason for the absence"
+                   style={{ ...field, width: "100%", boxSizing: "border-box" }} />
+            {/* The refusal, printed verbatim. `absenceError` returns a sentence
+                precisely so this does not have to translate a code. */}
+            {absError && (
+              <div data-testid="absence-error" style={{ ...sub, color: "var(--warn)" }}>{absError}</div>
+            )}
+            <div>
+              <button onClick={recordAbsence} style={btn(true)}>
+                {isManager ? "Record absence and ask for cover" : "I’m away — ask for cover"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
-
       )}
 
-      {/* ── Open requests ──────────────────────────────────────────────────── */}
-      {myAsks.length > 0 && (
+      {/* ── Who is away, and how much of it has nobody ─────────────────────── */}
+      {shownAbsences.length > 0 && (
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "14px" }}>
-          <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Open cover requests</div>
-          {/* 🔴 SAYING THE QUIET PART. The panel shows "Mara asked Dev" and then
-              offers Approve to whoever is looking at it. That is not a bug that
-              can be fixed here: with no server there is no signed-in user, so the
-              product genuinely cannot tell who is holding the phone. Scoping the
-              buttons would require inventing an identity we do not have. So it
-              says so, in the same spirit as the notice at the top — a control
-              that looks like it knows who you are, and does not, is the failure
-              this panel exists to avoid. */}
-          {/* The sentence below used to be unconditional, and it was true: with
-              no server there is no signed-in user. It is now the ELSE branch,
-              because for a signed-in coach it would be false — and a product
-              that keeps apologising for a limitation it no longer has is as
-              inaccurate as one that hides a limitation it does have. */}
+          <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Away</div>
+          {shownAbsences.map(a => {
+            const p = absenceProgress(a);
+            return (
+              <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: "10px",
+                                       padding: "10px 12px", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
+                    {nameOf(a.coachId)}
+                  </span>
+                  <span style={sub}>
+                    {fmtDay(a.from)}{a.to !== a.from ? ` – ${fmtDay(a.to)}` : ""}
+                    {a.note ? ` · ${a.note}` : ""}
+                  </span>
+                </div>
+                <div style={{ ...sub, marginTop: "3px" }}>
+                  {/* Counted from the live requests, so it cannot disagree with
+                      the board two inches below it. */}
+                  {/* ⚠️ ONE STATEMENT OF ONE FACT. This read "0 of 2 covered —
+                      2 still have nobody", which is the same number twice in one
+                      sentence and makes a reader stop to check they mean the
+                      same thing. Same defect `availSummary` above was fixed for,
+                      and found the same way: by rendering the panel and reading
+                      it rather than by a test. */}
+                  {p.total === 0
+                    ? <>No classes still to come those days.</>
+                    : p.covered === 0
+                      ? <><strong style={{ color: "var(--text)" }}>{p.total} class{p.total === 1 ? "" : "es"}</strong>, nobody yet.</>
+                      : p.covered === p.total
+                        ? <strong style={{ color: "var(--text)" }}>All {p.total} covered.</strong>
+                        : <>{p.covered} of {p.total} covered &mdash;{" "}
+                           <strong style={{ color: "var(--text)" }}>{p.total - p.covered} still {p.total - p.covered === 1 ? "has" : "have"} nobody</strong>.</>}
+                </div>
+                <div style={{ marginTop: "8px" }}>
+                  <button onClick={() => withdrawAbsence(a.id)}
+                          aria-label={`${nameOf(a.coachId)} is back — withdraw this absence`}
+                          style={btn(false)}>I&rsquo;m back</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── The board ──────────────────────────────────────────────────────── */}
+      {/* 🔴 EVERY OPEN CLASS, TO EVERYONE. There is no addressee any more: the
+          first coach to claim one takes it, and the race is decided by Postgres
+          rather than by whoever's screen refreshed last. */}
+      {board.length > 0 && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "14px" }}>
+          <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Classes needing cover</div>
           <div style={{ ...sub, marginBottom: "10px" }}>
             {mode === "self"
-              ? <>You can answer the requests aimed at you, and withdraw the ones you raised.</>
+              ? <>Anyone free can take these. The first to claim one gets it.</>
               : userId
-              ? <>You are signed in as a manager, so you can answer any of these on the studio&rsquo;s behalf.</>
-              : <>Anyone using this device can answer these &mdash; Jungle cannot tell which coach you are
+              ? <>You can assign any of these on the studio&rsquo;s behalf.</>
+              : <>Anyone using this device can assign these &mdash; Jungle cannot tell which coach you are
                  until the gym is online.</>}
           </div>
-          {myAsks.map(r => (
-            <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px", marginBottom: "8px" }}>
-              <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
-                {r.classDay} {r.classSlot} · {r.classLabel}
-              </div>
-              <div style={{ ...sub, marginBottom: "8px" }}>
-                {nameOf(r.fromCoachId)} asked {nameOf(r.toCoachId)}
-                {/* ⚠️ Said BEFORE the button, not only in the toast after it. A
-                    cover request has no date, so approving one rewrites the
-                    recurring rule — the person deciding has to know that while
-                    they are deciding, not once it has happened. */}
-                {recurrenceOf(r) && (
-                  <div style={{ marginTop: "3px" }}>
-                    Approving moves it to them <strong style={{ color: "var(--text)" }}>every {r.classDay} {r.classSlot} from now on</strong> &mdash;
-                    Jungle cannot cover a single date yet.
+          {board.map(r => {
+            const cands = candidatesFor(r);
+            const iAmFree = !!me && cands.some(f => f.coach.id === me.id);
+            const iAmAway = !!me && isAwayOn(absences, me.id, r.classDate);
+            return (
+              <div key={r.id} data-testid="cover-row"
+                   style={{ border: "1px solid var(--border)", borderRadius: "10px",
+                            padding: "10px 12px", marginBottom: "8px" }}>
+                <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
+                  {fmtDay(r.classDate)} {r.classSlot} &middot; {r.classLabel}
+                </div>
+                <div style={{ ...sub, marginBottom: "8px" }}>
+                  {nameOf(r.fromCoachId)} is away
+                  {/* ⚠️ ONE DAY. The sentence this replaced said the class moved
+                      every Monday from now on, because it did. */}
+                  {" "}&mdash; this covers <strong style={{ color: "var(--text)" }}>that day only</strong>.
+                  {cands.length === 0 && <> Nobody has said they are free then.</>}
+                </div>
+                {mode === "self" ? (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                    <button onClick={() => claim(r.id, me.id)} disabled={iAmAway}
+                            aria-label={`Take ${r.classLabel} on ${fmtDay(r.classDate)}`}
+                            style={{ ...btn(!iAmAway), cursor: iAmAway ? "default" : "pointer",
+                                     opacity: iAmAway ? 0.55 : 1 }}>
+                      I&rsquo;ll take it
+                    </button>
+                    {/* Never hidden, only labelled: see `board` above. */}
+                    <span style={sub}>
+                      {iAmAway ? "You are away that day too"
+                               : iAmFree ? "You said you are free then"
+                                         : "You have not said you are free then"}
+                    </span>
+                    {r.fromCoachId === me?.id && (
+                      <button onClick={() => withdrawCover(r.id)}
+                              aria-label={`Take ${r.classLabel} on ${fmtDay(r.classDate)} off the board`}
+                              style={btn(false)}>Not needed</button>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={assignTo[r.id] || ""} aria-label={`Coach to cover ${r.classLabel} on ${fmtDay(r.classDate)}`}
+                            onChange={e => setAssignTo(m => ({ ...m, [r.id]: e.target.value }))}
+                            style={{ ...field, maxWidth: "100%" }}>
+                      <option value="">Who is taking it&hellip;</option>
+                      {/* Free coaches first and labelled as such; everyone else
+                          still selectable, because a stale grid is not a rota. */}
+                      {cands.map(f => (
+                        <option key={f.coach.id} value={f.coach.id}>
+                          {f.coach.name} &mdash; {f.state === "stale" ? `said so ${f.days} days ago` : "free then"}
+                        </option>
+                      ))}
+                      {coaches.filter(c => c.active !== false
+                                        && !cands.some(f => f.coach.id === c.id)
+                                        && !isAwayOn(absences, c.id, r.classDate)).map(c => (
+                        <option key={c.id} value={c.id}>{c.name} &mdash; has not said</option>
+                      ))}
+                    </select>
+                    <button onClick={() => claim(r.id, assignTo[r.id])}
+                            aria-label={`Assign cover for ${r.classLabel} on ${fmtDay(r.classDate)}`}
+                            style={btn(true)}>Assign</button>
+                    <button onClick={() => withdrawCover(r.id)}
+                            aria-label={`Take ${r.classLabel} on ${fmtDay(r.classDate)} off the board`}
+                            style={btn(false)}>Not needed</button>
                   </div>
                 )}
               </div>
-              {/* 🔴 ANSWERING AND WITHDRAWING ARE DIFFERENT PEOPLE'S ACTIONS.
-                  Approve/Turn down belong to the coach who was ASKED — it is
-                  their yes or no. Withdraw belongs to the one who RAISED it.
-                  A manager gets both because they act for the studio; before
-                  S32 everyone got both, because the panel could not tell
-                  anybody apart. */}
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                {(isManager || (me && r.toCoachId === me.id)) && (<>
-                  <button onClick={() => settle(r.id, "approved")}
-                          aria-label={`Approve cover for ${r.classLabel}`} style={btn(true)}>Approve</button>
-                  <button onClick={() => settle(r.id, "rejected")}
-                          aria-label={`Turn down cover for ${r.classLabel}`} style={btn(false)}>Turn it down</button>
-                </>)}
-                {(isManager || (me && r.fromCoachId === me.id)) && (
-                  <button onClick={() => settle(r.id, "cancelled")}
-                          aria-label={`Withdraw the cover request for ${r.classLabel}`} style={btn(false)}>Withdraw</button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
 
       {/* Confirm, in-app. A window.confirm is auto-dismissed by Playwright, so a
           test clicking delete and asserting the row is gone would be exercising

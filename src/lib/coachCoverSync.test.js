@@ -276,13 +276,19 @@ describe("🔴 an absence raises the covers, and withdrawing it takes them back"
     { id: "uc3", name: "Barbell Club", coach: "Dev",  day: "Mon", slot: "06:00", repeat: "weekly" },
   ];
   const AWAY = { from: "2026-08-24", to: "2026-08-28" };
+  // ⚠️ A CLOCK BEFORE THE FIXTURE'S DATES. `raiseCoversForAbsence` skips a class
+  // that has already started, so with the real clock these fixtures would raise
+  // nothing at all and every assertion here would be about an empty list. Passed
+  // explicitly rather than faked globally: a fixed `Date.now()` collides the ids
+  // minted from it, which is the documented trap.
+  const BEFORE = Date.parse("2026-08-20T00:00:00Z");
 
   async function awayWeek() {
     const mara = store.addCoach("Mara").coach;
     store.addCoach("Dev");
     const { absence } = store.addAbsence({ coachId: mara.id, ...AWAY });
     const hit = classesAffectedBy(RULES, store.getCoaches().find(c => c.id === mara.id), absence);
-    const r = store.raiseCoversForAbsence(absence, hit);
+    const r = store.raiseCoversForAbsence(absence, hit, { now: BEFORE });
     await flush();
     return { mara, absence, hit, created: r.created };
   }
@@ -298,7 +304,7 @@ describe("🔴 an absence raises the covers, and withdrawing it takes them back"
 
   it("is idempotent — running it again puts nothing on the board twice", async () => {
     const { absence, hit } = await awayWeek();
-    const again = store.raiseCoversForAbsence(absence, hit);
+    const again = store.raiseCoversForAbsence(absence, hit, { now: BEFORE });
     expect(again.created).toEqual([]);
     expect(store.getCoverRequests()).toHaveLength(2);
   });
@@ -333,8 +339,24 @@ describe("🔴 an absence raises the covers, and withdrawing it takes them back"
     const { absence, hit } = await awayWeek();
     const mon = store.getCoverRequests().find(q => q.classLabel === "Strength Lab");
     await store.settleCoverRequest(mon.id, "cancelled");
-    const again = store.raiseCoversForAbsence(absence, hit);
+    const again = store.raiseCoversForAbsence(absence, hit, { now: BEFORE });
     expect(again.created.map(r => r.classLabel)).toEqual(["Strength Lab"]);
+  });
+
+  it("🔴 does not ask anyone to cover a class that has already been taught", async () => {
+    // Found by rendering the panel on a Tuesday: a coach marking themselves away
+    // Mon–Fri got MONDAY's 06:00 put on the board. An ask nobody can act on is
+    // worse than no ask — it sits there, counts against the absence, and teaches
+    // people to ignore the board.
+    const { absence, hit } = await awayWeek();
+    store.saveCoverRequests([]);                       // clear what awayWeek raised
+
+    // Wednesday lunchtime: Monday is gone, Wednesday 18:00 has not started.
+    const wedNoon = Date.parse("2026-08-26T12:00:00Z");
+    const r = store.raiseCoversForAbsence(absence, hit, { now: wedNoon });
+    expect(r.created.map(q => q.classLabel)).toEqual(["Engine Room"]);
+    // The absence itself still records the whole week — they WERE away Monday.
+    expect(store.getAbsences()[0]).toMatchObject({ from: "2026-08-24", to: "2026-08-28" });
   });
 });
 

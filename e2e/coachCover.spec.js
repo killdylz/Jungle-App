@@ -26,18 +26,38 @@ const CLASSES = [
     day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
 ];
 
-async function seed(page, { coaches = null, requests = null, classes = CLASSES } = {}) {
-  await page.evaluate(([cls, co, rq]) => {
+async function seed(page, { coaches = null, requests = null, absences = null, classes = CLASSES } = {}) {
+  await page.evaluate(([cls, co, rq, ab]) => {
     localStorage.setItem("jungle_user_classes", JSON.stringify(cls));
     if (co) localStorage.setItem("jungle_coaches", JSON.stringify(co));
     if (rq) localStorage.setItem("jungle_cover_requests", JSON.stringify(rq));
-  }, [classes, coaches, requests]);
+    if (ab) localStorage.setItem("jungle_coach_absences", JSON.stringify(ab));
+  }, [classes, coaches, requests, absences]);
   await page.reload();
   await nav(page, "Schedule");
 }
 
 const roster = (over = {}) => ({ id: "c-mara", name: "Mara", aliases: [], userId: "",
                                  active: true, availability: {}, ...over });
+
+// ⚠️ NEXT WEEK, DERIVED FROM TODAY, AND BOTH HALVES OF THAT ARE DELIBERATE.
+//
+// Deriving from `new Date()` is what this repo normally refuses to do, and it is
+// unavoidable here: the grid draws real weeks, so an absence has to land in one.
+// Monday is computed explicitly rather than offset from whatever `getDay()` says
+// today is, so the answer does not depend on which day the suite runs — the
+// property the rule actually protects.
+//
+// 🔴 NEXT week rather than this one, and the first draft used this one and broke.
+// `raiseCoversForAbsence` skips a class that has already been taught, so on any
+// day but Monday half of this week is in the past and the fixture silently
+// raised fewer asks than the test expected. Next week is entirely ahead
+// whenever the suite runs, which makes the whole file deterministic.
+function nextMonday(offsetDays = 0) {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 7 + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 test.describe("the roster", () => {
   test("names typed on the schedule are offered as roster entries, deduplicated", async ({ page }) => {
@@ -149,10 +169,23 @@ test.describe("availability", () => {
     await seed(page, { coaches: [roster({ availability: { Mon: ["06:00"] }, availabilityAt: "2026-01-05" })] });
 
     await expect(page.getByText(/older than 56 days, ask again/).first()).toBeVisible();
-    // It is still offered for cover — hiding it would leave a gym with an empty
-    // list and no reason for it — but it is never called simply "free then".
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await expect(page.getByText(/said so \d+ days ago/).first()).toBeVisible();
+
+    // It is still OFFERED as cover — hiding a stale claim leaves a gym with an
+    // empty list and no reason for it — but it is never called simply "free
+    // then". As of S33 that qualifier rides the assign dropdown's option text,
+    // which is where a manager actually reads it.
+    await seed(page, { coaches: [
+      roster({ availability: { Mon: ["06:00"] }, availabilityAt: "2026-01-05" }),
+      roster({ id: "c-dev", name: "Dev", availability: {} }),
+    ] });
+    await page.getByLabel("Coach who is away").selectOption("c-dev");
+    await page.getByLabel("First day away").fill(nextMonday());
+    await page.getByLabel("Last day away").fill(nextMonday());
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+
+    const opts = await page.getByLabel(/^Coach to cover Barbell Club/).locator("option").allTextContents();
+    expect(opts.some(o => /Mara/.test(o) && /said so \d+ days ago/.test(o))).toBe(true);
+    expect(opts.some(o => /Mara/.test(o) && /free then/.test(o) && !/said so/.test(o))).toBe(false);
     expectNoConsoleErrors(errors);
   });
 
@@ -166,309 +199,223 @@ test.describe("availability", () => {
   });
 });
 
-test.describe("cover requests", () => {
+test.describe("being away, and the board that comes from it", () => {
   const two = [roster(), roster({ id: "c-dev", name: "Dev",
-                                  availability: { Mon: ["06:00"] }, availabilityAt: "2099-01-01" })];
+                                  availability: { Mon: ["06:00"], Wed: ["18:00"] },
+                                  availabilityAt: "2099-01-01" })];
 
   // `availabilityAt` in the future keeps `daysBetween` negative, so the claim is
   // fresh whenever this suite runs. A fixed clock would freeze `Date.now()` and
   // collide the ids minted from it — the documented trap.
-  async function raise(page) {
+
+  // ⚠️ THE DATES ARE DERIVED FROM TODAY, WHICH THIS REPO NORMALLY REFUSES TO DO.
+  // It is unavoidable and safe here: the grid shows THIS week, so an absence has
+  // to fall in it or there is nothing to cover. Monday is computed explicitly
+  // (not `getDay()`-relative on the fly), so the result does not depend on which
+  // day the suite runs — which is the property the rule actually protects.
+  const MON = nextMonday(), WED = nextMonday(2);
+
+  async function markAway(page, { from = MON, to = WED, coach = "Mara" } = {}) {
     await seed(page, { coaches: two });
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await page.getByRole("button", { name: /^Ask Dev to cover / }).click();
+    await page.getByLabel("Coach who is away").selectOption({ label: coach });
+    await page.getByLabel("First day away").fill(from);
+    await page.getByLabel("Last day away").fill(to);
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
   }
 
-  test("🔴 approving reassigns the class; the STORED rule carries the new coach", async ({ page }) => {
+  test("🔴 one absence puts every class that coach teaches on the board, dated", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    await raise(page);
+    await markAway(page);
 
-    let reqs = await stored(page, "jungle_cover_requests");
-    expect(reqs).toHaveLength(1);
-    expect(reqs[0]).toMatchObject({ classClientId: "uc1", status: "open",
-                                    classLabel: "Strength Lab", classDay: "Mon", classSlot: "06:00" });
+    // POSITIVE CONTROL: the board rendered at all.
+    await expect(page.getByText("Classes needing cover")).toBeVisible();
+    await expect(page.getByTestId("cover-row")).toHaveCount(2);
+    await expect(page.getByTestId("cover-row").filter({ hasText: "Strength Lab" })).toBeVisible();
+    await expect(page.getByTestId("cover-row").filter({ hasText: "Engine Room" })).toBeVisible();
+    // 🔴 THE CONTROL: Dev's class is on the same day and slot as Mara's and must
+    // not be swept up. A derivation ignoring the coach would pass everything above.
+    await expect(page.getByTestId("cover-row").filter({ hasText: "Barbell Club" })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
+    // ASSERT THE STORED OBJECTS, not only the render.
+    const reqs = await stored(page, "jungle_cover_requests");
+    expect(reqs).toHaveLength(2);
+    expect(reqs.map(r => r.classDate).sort()).toEqual([MON, WED]);
+    for (const r of reqs) {
+      expect(r.status).toBe("open");
+      // 🔴 Nobody is covering it yet — it is on a board, not addressed to anyone.
+      expect(r.toCoachId).toBe("");
+      expect(r.absenceId).toBeTruthy();
+    }
+    const abs = await stored(page, "jungle_coach_absences");
+    expect(abs).toHaveLength(1);
+    expect(abs[0]).toMatchObject({ coachId: "c-mara", from: MON, to: WED });
+    expectNoConsoleErrors(errors);
+  });
 
-    reqs = await stored(page, "jungle_cover_requests");
-    expect(reqs[0].status).toBe("approved");
-    expect(reqs[0].settledAt).not.toBe("");
+  test("🔴 claiming one covers THAT DAY and leaves the recurring class alone", async ({ page }) => {
+    // The single most important test in this file. Before S33 approving a cover
+    // rewrote the RULE, so covering one ill Monday moved the class every Monday
+    // for ever. Nothing writes to the schedule now.
+    // ⚠️ THE ASSERTION IS ON ENGINE ROOM (Wed 18:00), NOT STRENGTH LAB, and the
+    // reason is a grid limitation this test rediscovered: `uc1` and `uc3` are
+    // both Mon 06:00, `effSchedule` is keyed on day-and-slot, and the LAST rule
+    // wins — so the Monday cell shows Barbell Club and Strength Lab is not
+    // rendered at all. That is documented behaviour, older than this feature,
+    // and not something a cover test should be the one to trip over.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await markAway(page);
 
-    // ⚠️ POLLED, not read once. The reassignment goes through React state and
-    // CalendarScreen's `useAfterMount` persist effect, so a straight read can
-    // win the race against the write and report the OLD coach — a failure that
-    // would look like the feature not working.
-    await expect.poll(async () =>
-      (await stored(page, "jungle_user_classes")).find(c => c.id === "uc1").coach,
-      { message: "the approved cover must reach the stored rule, not only the screen" })
-      .toBe("Dev");
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
 
-    // And ONLY that class. `uc2` is the same person under a different spelling
-    // and must be untouched — reassigning by NAME could plausibly have caught it.
+    // That class now has somebody; Strength Lab still does not.
+    await expect(page.getByTestId("cover-row")).toHaveCount(1);
+    await expect(page.getByTestId("cover-row").filter({ hasText: "Engine Room" })).toHaveCount(0);
+
+    // 🔴 THE STORED RULE IS UNTOUCHED. This is the assertion the whole feature
+    // exists for: `jungle_user_classes` still says Mara teaches Strength Lab.
     const classes = await stored(page, "jungle_user_classes");
+    expect(classes.find(c => c.id === "uc1").coach).toBe("Mara");
     expect(classes.find(c => c.id === "uc2").coach).toBe("mara");
-    expect(classes.find(c => c.id === "uc3").coach).toBe("Dev");   // unchanged: it was already Dev
+
+    // ...and the cover is a dated row instead.
+    const reqs = await stored(page, "jungle_cover_requests");
+    const taken = reqs.find(r => r.classLabel === "Engine Room");
+    expect(taken).toMatchObject({ status: "approved", toCoachId: "c-dev", classDate: WED });
+
+    // The covered week's grid shows Dev covering.
+    await page.getByRole("button", { name: "Next week" }).click();
+    await expect(page.getByText("Next week", { exact: true })).toBeVisible();
+    await expect(page.getByText("covering for Mara").first()).toBeVisible();
+
+    // 🔴 AND THE WEEK AFTER DOES NOT. The other half of "just that day", and the
+    // half a rule-rewriting implementation would fail.
+    await page.getByRole("button", { name: "Next week" }).click();
+    await expect(page.getByText("Week +2")).toBeVisible();
+    await expect(page.getByText("covering for Mara")).toHaveCount(0);
     expectNoConsoleErrors(errors);
   });
 
-  // ─── S32 §2.3 · what approving actually does, said before and after ────────
-  //
-  // 🔴 THE DEFECT THIS PINS IS NOT IN THE MECHANISM, IT IS IN THE SENTENCE. The
-  // test above proves the approval reaches the stored rule, which is correct and
-  // deliberate. What nothing said is that the rule is RECURRING: approving cover
-  // for one ill Monday moves Strength Lab to Dev every Monday until a human
-  // edits it back. "Dev now teaches Strength Lab" was the entire message, and
-  // everyone who has ever asked for cover reads that as "this Monday".
-  //
-  // A cover request carries `classDay` and `classSlot` and no date, so there is
-  // nowhere else for the assignment to go. Until that changes the product has to
-  // say what it is really doing — which is this repo's standing rule that a
-  // confident ambiguous claim is worse than a plain one.
-  test("🔴 approving a WEEKLY class says it is permanent, before and after the click", async ({ page }) => {
+  test("🔴 the board says that day only — never 'from now on'", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    await raise(page);
+    await markAway(page, { to: MON });
 
-    // POSITIVE CONTROL: the request is on screen to be decided.
-    await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
-
-    // BEFORE: the person deciding is told while they are deciding.
-    await expect(page.getByText(/every Mon 06:00 from now on/).first()).toBeVisible();
-    await expect(page.getByText(/cannot cover a single date yet/).first()).toBeVisible();
-
-    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
-
-    // AFTER: and the toast does not quietly drop the qualifier.
-    await expect(page.getByTestId("toast")).toContainText(/every Mon 06:00 from now on/);
-    await expect(page.getByTestId("toast")).toContainText(/until you change it back on the class/);
+    await expect(page.getByText(/that day only/).first()).toBeVisible();
+    // The sentence S32 had to add because approval WAS permanent. It must not
+    // survive the change that made it untrue.
+    await expect(page.getByText(/from now on/)).toHaveCount(0);
+    await expect(page.getByText(/every Mon/)).toHaveCount(0);
     expectNoConsoleErrors(errors);
   });
 
-  test("a ONE-OFF class carries no recurrence warning, because there is nothing to warn about", async ({ page }) => {
+  test("a range that runs backwards is refused with a sentence, not a code", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    // Same fixture, but uc1 happens exactly once — the rule IS that occurrence,
-    // so "every Mon 06:00 from now on" would be a claim about a week that never
-    // comes. The control for the test above: it proves the warning is derived
-    // from the rule rather than printed unconditionally.
-    await seed(page, {
-      coaches: two,
-      classes: CLASSES.map(c => (c.id === "uc1" ? { ...c, repeat: "once", weekKey: undefined } : c)),
-    });
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await page.getByRole("button", { name: /^Ask Dev to cover / }).click();
+    await seed(page, { coaches: two });
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(WED);
+    await page.getByLabel("Last day away").fill(MON);   // backwards on purpose
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
 
-    await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
-    await expect(page.getByText(/every Mon 06:00 from now on/)).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
-    await expect(page.getByTestId("toast")).toContainText(/now teaches Strength Lab/);
-    await expect(page.getByTestId("toast")).not.toContainText(/from now on/);
+    await expect(page.getByTestId("absence-error")).toContainText(/last day is before the first/i);
+    // Nothing was written on the way to being refused.
+    expect(await stored(page, "jungle_coach_absences")).toBe(null);
+    expect(await stored(page, "jungle_cover_requests")).toBe(null);
     expectNoConsoleErrors(errors);
   });
 
-  // ─── S32 §2.4 · the booking outbox ────────────────────────────────────────
-  //
-  // 🔴 THE POINT IS THAT THIS RUNS AGAINST A REAL APPROVAL. `bookingAdapter.test.js`
-  // pins the payload against a hand-built request; this drives two coaches, a
-  // schedule and a button, and asserts what the product ACTUALLY handed to the
-  // seam. A contract test cannot notice that the call site assembled the payload
-  // from the wrong request.
-  test("🔴 an approval leaves the exact payload on record, and still claims nothing", async ({ page }) => {
+  test("🔴 withdrawing an absence takes back what nobody took, and keeps what somebody did", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    await raise(page);
+    await markAway(page);
+    await expect(page.getByTestId("cover-row")).toHaveCount(2);
 
-    // POSITIVE CONTROL: nothing is recorded before the approval, so a passing
-    // assertion below cannot be a leftover from the fixture.
+    // Somebody takes the Wednesday. (Engine Room rather than Strength Lab for
+    // the grid-collision reason documented in the test above.)
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
+    await expect(page.getByTestId("cover-row")).toHaveCount(1);
+
+    await page.getByRole("button", { name: /Mara is back/ }).click();
+
+    // 🔴 The open one is withdrawn; the TAKEN one is not. Dev planned their week
+    // around it, and un-asking that is a conversation, not a side effect.
+    await expect(page.getByTestId("cover-row")).toHaveCount(0);
+    await expect(page.getByTestId("toast")).toContainText(/already taken and left in place/);
+
+    const reqs = await stored(page, "jungle_cover_requests");
+    expect(reqs.find(r => r.classLabel === "Engine Room").status).toBe("approved");
+    expect(reqs.find(r => r.classLabel === "Strength Lab").status).toBe("cancelled");
+    // And the covered day still shows Dev, one week forward.
+    await page.getByRole("button", { name: "Next week" }).click();
+    await expect(page.getByText("covering for Mara").first()).toBeVisible();
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the same absence recorded twice does not double-book the board", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await markAway(page, { to: MON });
+    await expect(page.getByTestId("cover-row")).toHaveCount(1);
+
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(MON);
+    await page.getByLabel("Last day away").fill(MON);
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+
+    // Two open asks for one class is how two coaches both turn up.
+    await expect(page.getByTestId("cover-row")).toHaveCount(1);
+    expect((await stored(page, "jungle_cover_requests")).filter(r => r.status === "open")).toHaveLength(1);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("🔴 a claim leaves the exact payload on record, dated, and still claims nothing", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await markAway(page, { to: MON });
+
+    // POSITIVE CONTROL: nothing recorded before the claim.
     expect(await stored(page, "jungle_booking_outbox")).toBe(null);
 
-    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
+    const row = page.getByTestId("cover-row").filter({ hasText: "Strength Lab" });
+    await row.getByLabel(/^Coach to cover Strength Lab/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Strength Lab/).click();
 
     await expect.poll(async () => (await stored(page, "jungle_booking_outbox") || []).length,
-      { message: "an approved cover must leave a record of what a booking system would have been handed" })
+      { message: "a claimed cover must leave a record of what a booking system would have been handed" })
       .toBe(1);
 
     const [entry] = await stored(page, "jungle_booking_outbox");
     expect(entry.payload).toMatchObject({
       kind: "cover.approved", classRef: "uc1", classLabel: "Strength Lab",
-      day: "Mon", slot: "06:00", previousCoach: "Mara", newCoach: "Dev",
+      date: MON, day: "Mon", slot: "06:00", previousCoach: "Mara", newCoach: "Dev",
     });
-    expect(entry.payload.approvedAt).not.toBe("");
-    expect(entry.key).toContain("cover.approved");
     // 🔴 RECORDED IS NOT SENT, and the record says so itself.
     expect(entry.pushed).toBe(false);
     expect(entry.system).toBe("none");
-
-    // And nothing anywhere claims otherwise.
     await expect(page.getByTestId("toast")).toContainText(/nothing was sent outside Jungle/i);
     await expect(page.getByText(/mindbody/i)).toHaveCount(0);
-    await expect(page.getByText(/classpass/i)).toHaveCount(0);
     expectNoConsoleErrors(errors);
   });
 
-  test("🔴 turning one down leaves the class exactly where it was", async ({ page }) => {
+  test("the board and the absence survive a reload", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
-    await raise(page);
-
-    await page.getByRole("button", { name: "Turn down cover for Strength Lab" }).click();
-
-    await expect.poll(async () => (await stored(page, "jungle_cover_requests"))[0].status)
-      .toBe("rejected");
-    // The class is NOT reassigned — the half a test that only drives approve
-    // would never see. Asserted AFTER the settle has demonstrably landed, so
-    // "still Mara" cannot pass merely because nothing has happened yet.
-    expect((await stored(page, "jungle_user_classes")).find(c => c.id === "uc1").coach).toBe("Mara");
-    // ⚠️ NOT `toHaveCount(0)` on its own — that is satisfied the instant the
-    // count is zero, which includes "has not rendered yet". The polled status
-    // above is what proves the settle actually ran first, so this now means
-    // "the section went away", not "the section has not arrived".
-    await expect(page.getByText("Open cover requests")).toHaveCount(0);
-    await expect(page.getByTestId("toast")).toContainText(/turned down .*still has no cover/i);
-    expectNoConsoleErrors(errors);
-  });
-
-  test("both settle paths survive a reload", async ({ page }) => {
-    const errors = watchConsole(page);
-    await freshApp(page);
-    await raise(page);
-    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
-
-    await expect.poll(async () =>
-      (await stored(page, "jungle_user_classes")).find(c => c.id === "uc1").coach).toBe("Dev");
-
+    await markAway(page);
     await page.reload();
     await nav(page, "Schedule");
-    expect((await stored(page, "jungle_cover_requests"))[0].status).toBe("approved");
-    expect((await stored(page, "jungle_user_classes")).find(c => c.id === "uc1").coach).toBe("Dev");
-    expectNoConsoleErrors(errors);
-  });
 
-  test("a class cannot collect two open asks", async ({ page }) => {
-    const errors = watchConsole(page);
-    await freshApp(page);
-    await raise(page);
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await page.getByRole("button", { name: /^Ask Dev to cover / }).click();
-    expect(await stored(page, "jungle_cover_requests")).toHaveLength(1);
-    await expect(page.getByTestId("toast")).toContainText(/already has an open cover request/);
+    await expect(page.getByTestId("cover-row")).toHaveCount(2);
+    await expect(page.getByText(/2 classes, nobody yet/)).toBeVisible();
     expectNoConsoleErrors(errors);
   });
 });
 
-// ─── 🔴 §2.5 · the assertion this whole feature is judged by ─────────────────
-//
-// Everything above proves one device behaves. This proves the product does not
-// CLAIM anything more than that. The failure it guards is not a crash — it is a
-// screen that says "Sent" over a row nobody will ever read, which is the same
-// defect class as the AA panel that reported "passes" on a palette it had not
-// checked, and this repo has shipped that once already.
-// ─── S32 §2.2 · the half of the viewer rule this harness CAN see ────────────
-//
-// 🔴 THE OTHER TWO MODES CANNOT BE DRIVEN FROM HERE AT ALL, and that is a
-// property of the target rather than an omission. This suite runs the
-// CREDENTIAL-LESS build, so `AuthGate` never mounts, `useJungleAuth()` is
-// undefined and there is no signed-in user to be. `rosterViewerMode`'s "self"
-// and "unlinked" branches are pinned exhaustively as a pure function in
-// src/lib/coachRoster.test.js; what belongs HERE is the branch that ships today.
-//
-// It is worth a test of its own precisely because it is the one a lockdown
-// would break silently: scope the panel by identity, get the "no identity" case
-// slightly wrong, and every single-device gym loses its roster to a permission
-// check protecting it from a second person who does not exist.
-test("🔴 with no server the panel is the manager's, because there is nobody to scope it to", async ({ page }) => {
-  const errors = watchConsole(page);
-  await freshApp(page);
-  await seed(page, { coaches: [roster()] });
-
-  // POSITIVE CONTROL: the panel and the fixture are really on screen.
-  await expect(page.getByText("Coach roster", { exact: true })).toBeVisible();
-
-  // Every manager-only control is present.
-  await expect(page.getByRole("button", { name: "Edit Mara" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remove Mara from the roster" })).toBeVisible();
-  await expect(page.getByLabel("Add a coach by name")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Put Dev on the roster" })).toBeVisible();
-
-  // And the whole schedule is askable, not just one coach's classes.
-  const options = await page.getByLabel("Class that needs cover").locator("option").allTextContents();
-  expect(options.filter(o => !/Pick a class/.test(o))).toHaveLength(3);
-
-  expectNoConsoleErrors(errors);
-});
-
-test("🔴 with no server the panel still says it cannot tell which coach you are", async ({ page }) => {
-  const errors = watchConsole(page);
-  await freshApp(page);
-  await seed(page, {
-    coaches: [roster(), { id: "c-dev", name: "Dev", aliases: [], userId: "", active: true, availability: {} }],
-    requests: [{ id: "r1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon", classSlot: "06:00",
-                 fromCoachId: "c-mara", toCoachId: "c-dev", note: "", status: "open",
-                 createdAt: "2026-08-24T05:00:00.000Z", settledAt: "", settledBy: "" }],
-  });
-
-  await expect(page.getByText("Open cover requests")).toBeVisible();   // positive control
-  // The disclaimer became a conditional branch in S32. On this build it must
-  // still be the one that renders — it is true here, and only here.
-  await expect(page.getByText(/Jungle cannot tell which coach you are/)).toBeVisible();
-  await expect(page.getByText(/You can answer the requests aimed at you/)).toHaveCount(0);
-  await expect(page.getByText(/signed in as a manager/)).toHaveCount(0);
-
-  // All three settle buttons, because nobody can be told apart.
-  await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Turn down cover for Strength Lab" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Withdraw the cover request for Strength Lab" })).toBeVisible();
-  expectNoConsoleErrors(errors);
-});
-
-test("🔴 the product never says a cover request was sent anywhere", async ({ page }) => {
-  const errors = watchConsole(page);
-  await freshApp(page);
-  await page.evaluate((cls) => {
-    localStorage.setItem("jungle_user_classes", JSON.stringify(cls));
-    localStorage.setItem("jungle_coaches", JSON.stringify([
-      { id: "c-dev", name: "Dev", aliases: [], userId: "", active: true,
-        availability: { Mon: ["06:00"] }, availabilityAt: "2099-01-01" },
-    ]));
-  }, CLASSES);
-  await page.reload();
-  await nav(page, "Schedule");
-
-  // The panel states the truth BEFORE anything is raised.
-  await expect(page.getByText(/stored .*on this device only/i).first()).toBeVisible();
-
-  await page.getByLabel("Class that needs cover").selectOption("uc1");
-  await page.getByRole("button", { name: /^Ask Dev to cover / }).click();
-
-  // POSITIVE CONTROL: a request really was raised, so "no false claim" is not
-  // passing because nothing happened.
-  expect(await stored(page, "jungle_cover_requests")).toHaveLength(1);
-
-  // What the coach is told is that it reached this device and no further.
-  await expect(page.getByTestId("toast")).toContainText(/Dev will not see it/);
-
-  // 🔴 And nowhere on the screen does the product claim delivery. Read from the
-  // rendered text rather than asserted per-element: a count of zero on a
-  // selector is satisfied by "has not rendered yet", which is the trap
-  // CLAUDE.md names — this reads the text that IS there.
-  const body = (await page.locator("body").innerText()).toLowerCase();
-  expect(body).toContain("cover");                      // positive control
-  expect(body).not.toMatch(/\bsent\b/);
-  expect(body).not.toMatch(/\bnotified\b/);
-  expect(body).not.toMatch(/\bdelivered\b/);
-
-  await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
-  // The booking seam reports, in words, that nothing left Jungle.
-  await expect(page.getByTestId("toast")).toContainText(/No booking system is connected/);
-
-  const after = (await page.locator("body").innerText()).toLowerCase();
-  expect(after).not.toMatch(/\bmindbody\b/);
-  expect(after).not.toMatch(/\bclasspass\b/);
-  expect(after).not.toMatch(/coming soon/);
-  expectNoConsoleErrors(errors);
-});
 
 // ─── S31 §2.1 · the edit path, which did not exist ──────────────────────────
 //
@@ -543,25 +490,32 @@ test.describe("editing a roster entry", () => {
     const errors = watchConsole(page);
     await freshApp(page);
     await seed(page, { coaches: [
+      roster(),
       roster({ id: "c-dev", name: "Dev", availability: { Mon: ["06:00"] }, availabilityAt: "2099-01-01" }),
     ] });
 
+    // Mara goes away so uc1 lands on the board and Dev can be offered it.
+    await page.getByLabel("Coach who is away").selectOption("c-mara");
+    await page.getByLabel("First day away").fill(nextMonday());
+    await page.getByLabel("Last day away").fill(nextMonday());
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+
     // POSITIVE CONTROL: Dev IS offered before the change. Without this the
-    // assertion below is satisfied by a screen that never had the button.
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await expect(page.getByRole("button", { name: /^Ask Dev to cover / })).toBeVisible();
+    // assertion below is satisfied by a dropdown that never had the option.
+    const before = await page.getByLabel(/^Coach to cover Strength Lab/).locator("option").allTextContents();
+    expect(before.some(o => /Dev/.test(o))).toBe(true);
 
     await page.getByRole("button", { name: "Edit Dev" }).click();
     await page.getByLabel("Dev still coaches here").uncheck();
     await page.getByRole("button", { name: "Save" }).click();
 
-    expect((await stored(page, "jungle_coaches"))[0].active).toBe(false);
+    expect((await stored(page, "jungle_coaches")).find(c => c.id === "c-dev").active).toBe(false);
 
     // Still on the roster — this is not a delete.
     await expect(page.getByRole("button", { name: "Edit Dev" })).toBeVisible();
-    // But no longer offered for cover.
-    await page.getByLabel("Class that needs cover").selectOption("uc1");
-    await expect(page.getByRole("button", { name: /^Ask Dev to cover / })).toHaveCount(0);
+    // But no longer offered as cover.
+    const after = await page.getByLabel(/^Coach to cover Strength Lab/).locator("option").allTextContents();
+    expect(after.some(o => /Dev/.test(o))).toBe(false);
     expectNoConsoleErrors(errors);
   });
 
