@@ -88,3 +88,131 @@ export const NO_BOOKING_SYSTEM = {
 // When there is a real adapter there will be something to choose between; until
 // then there is one implementation and this is it.
 export function bookingAdapter() { return NO_BOOKING_SYSTEM; }
+
+
+// ─── The outbox: what WOULD have been pushed (S32 §2.4) ──────────────────────
+//
+// Dylan has said he wants Mindbody updated when a cover is approved. That answers
+// the first half of DYLAN-QUEUE A16 — yes, Jungle should write back to a booking
+// system — and it does not answer the four facts that decide whether it is safe
+// to build, of which question 3 is the one that could make the feature actively
+// HARMFUL: if changing a class's instructor requires cancel-and-recreate, then
+// pushing a cover approval DELETES THE MEMBERS' EXISTING BOOKINGS for that class.
+// Nobody has confirmed an instructor-substitution endpoint exists. So there is
+// still no endpoint, no credential and no `fetch` in this file.
+//
+// What can be built without answering any of that is the RECORD. Every approval
+// now leaves a durable, inspectable copy of the exact payload a booking system
+// would have been handed, which does two things a contract test cannot: it
+// exercises the pinned shape against real approvals made by real people, and it
+// means the day an adapter exists there is a queue to drain rather than a
+// standing start.
+//
+// 🔴 WHY THIS IS NOT "A SECOND ADAPTER IMPLEMENTATION", which is how §2.4 asked
+// for it. This file's own test suite says the reason, and it is right: "shipping
+// a fake adapter in the bundle would put a second implementation one import away
+// from being wired up by accident". A second implementation also forces
+// `bookingAdapter()` to CHOOSE between two, which needs the registry or flag the
+// header above bans in capitals. Recording is not an alternative way of pushing
+// — it is a ledger of pushes — so it wraps the call instead of competing with
+// it. When a real adapter lands, this keeps working unchanged and starts
+// recording real pushes, which is exactly where a double-post must be stopped.
+//
+// ⚠️ AND THERE IS DELIBERATELY NO SCREEN FOR IT. A panel headed "3 changes
+// waiting to reach Mindbody" is the "coming soon" panel this repo bans: it would
+// promise a drain that cannot happen, on a queue that may never be sent at all
+// if A16 question 3 comes back the wrong way. The record is for the next
+// implementer and for anyone auditing what Jungle would have said. The coach is
+// told what actually happened, in the toast, in present tense.
+export const OUTBOX_CAP = 200;
+
+// 🔴 THE IDEMPOTENCY KEY, and it is derived rather than minted. A retry that
+// double-posts an instructor substitution is the first thing a real integration
+// will get wrong, and it must be impossible BEFORE there is a real integration
+// to get it wrong with — a key added later would have to be back-filled onto
+// records written without one.
+//
+// Every field comes from the pinned payload. `approvedAt` is what makes two
+// approvals of the same class distinct, and `settleCover` guarantees it: a
+// request only ever acquires `settledAt` alongside a real transition, so the
+// same approval retried carries the same stamp and a later approval of the same
+// class carries a different one.
+//
+// ⚠️ THE REQUEST ID IS DELIBERATELY NOT IN THE PAYLOAD AND IS NOT ADDED HERE.
+// It would be a tidier key. It would also mean widening a contract that is
+// pinned as a decision, for the benefit of our own bookkeeping rather than
+// anything the receiving system needs — and `classRef` plus a timestamp already
+// identifies the event uniquely.
+export function coverPushKey(payload) {
+  if (!payload || !payload.kind) return "";
+  return [payload.kind, payload.classRef, payload.day, payload.slot,
+          payload.newCoach, payload.approvedAt].join("|");
+}
+
+// Hand a payload to whatever adapter is installed, and record the attempt.
+//
+// `read` and `write` are INJECTED rather than imported. This module has zero
+// imports by design — the same reasoning as `csvExport.js` — and pulling in the
+// localStorage seam would drag the whole store into a file whose entire job is
+// to describe an event. With no seam supplied it still calls the adapter and
+// still returns its answer; it simply keeps no record, which is what every
+// existing caller and every contract test does today.
+export async function pushCoverApproved(payload, { read, write, now = Date.now, adapter } = {}) {
+  const impl = adapter || bookingAdapter();
+  const key = coverPushKey(payload);
+  const canRecord = !!key && typeof read === "function" && typeof write === "function";
+
+  let list = [];
+  if (canRecord) {
+    try { list = read() || []; }
+    catch (_) {
+      // An unreadable outbox means we cannot tell whether this is a retry, so we
+      // must not claim it was recorded — but the push itself still happens and
+      // is still reported. A bookkeeping failure never becomes a product failure.
+      const out = await _attempt(impl, payload);
+      return { ...out, duplicate: false, recorded: false };
+    }
+    const prior = list.find(e => e && e.key === key);
+    // 🔴 THE ADAPTER IS NOT CALLED AGAIN, which is the entire point. Returning
+    // the PRIOR outcome rather than a fresh one is deliberate too: re-reporting
+    // what happened the first time is the truth, and inventing a new answer for
+    // a call that was never made would be a confident wrong number.
+    if (prior) {
+      return { pushed: !!prior.pushed, system: prior.system || impl.system,
+               reason: prior.pushed
+                 ? "This cover was already sent, and has not been sent again."
+                 : "This cover was already recorded here, and nothing was sent outside Jungle.",
+               duplicate: true, recorded: false };
+    }
+  }
+
+  const out = await _attempt(impl, payload);
+  if (!canRecord) return { ...out, duplicate: false, recorded: false };
+
+  try {
+    const entry = { key, payload, at: new Date(now()).toISOString(),
+                    system: out.system, pushed: !!out.pushed };
+    // Bounded, oldest-first: an outbox that grows for ever is a localStorage
+    // quota bug that only shows up for the gym that has used this the most.
+    write([...list, entry].slice(-OUTBOX_CAP));
+  } catch (_) { return { ...out, duplicate: false, recorded: false }; }
+
+  return { ...out, duplicate: false, recorded: true };
+}
+
+// The contract says an implementation never throws. This is the belt for that
+// brace: a booking push failing must never be able to prevent a cover approval
+// from being recorded in Jungle, because the approval is what the two coaches
+// actually agreed — and a third-party adapter is exactly the code most likely
+// to break the rule it was told about in a comment.
+async function _attempt(impl, payload) {
+  try {
+    const out = await impl.pushCoverApproved(payload);
+    return out && typeof out === "object"
+      ? { pushed: !!out.pushed, system: out.system || impl.system || "unknown", reason: out.reason || "" }
+      : { pushed: false, system: impl.system || "unknown", reason: "" };
+  } catch (e) {
+    return { pushed: false, system: impl.system || "unknown",
+             reason: "The booking system could not be reached, so nothing was sent outside Jungle." };
+  }
+}

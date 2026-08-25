@@ -58,6 +58,7 @@ const KEYS = {
   retentionActions:"jungle_retention_actions",
   coaches:       "jungle_coaches",
   coverRequests: "jungle_cover_requests",
+  bookingOutbox: "jungle_booking_outbox",
 };
 
 // `localDateStr` now lives in format.js and is imported at the top of this file:
@@ -2246,6 +2247,21 @@ export async function settleCoverRequest(id, next, { now = Date.now() } = {}) {
   _noteSyncError("cover_requests", res.error || "settle failed");
   return { list, request: local.request, changed: false, reason: "unconfirmed", where: "server" };
 }
+
+// ── The booking outbox (S32 §2.4) → localStorage ONLY, and staying that way ──
+//
+// A record of what each approval handed to the booking seam. `bookingAdapter.js`
+// owns the shape, the idempotency key and the cap; this is only the seam that
+// lets it reach localStorage without that module growing an import.
+//
+// 🔴 LOCAL ON PURPOSE, AND NOT AS A STAGING POST. It is a log of what THIS
+// DEVICE handed over, and syncing it would need a third table in a migration
+// nobody has run — for a queue that may never be drained at all, depending on
+// how A16 question 3 comes back. A cover approval settles on exactly one device
+// (the compare-and-set has one winner), so the device that recorded it is the
+// device that did it, and per-device idempotency is per-event idempotency.
+export function getBookingOutbox() { return readJSON(KEYS.bookingOutbox, []); }
+export function saveBookingOutbox(list) { writeJSON(KEYS.bookingOutbox, list || []); }
 
 // ── One hydrate for both tables (S32 §2.1) ──────────────────────────────────
 //

@@ -46,7 +46,7 @@ undo it. Nothing in Part A needs me.
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 | **A14** | **A yes/no: does Jungle bend a gym's accent to make it legible?** | 10 min read | none — a decision, no work |
 | **A15** | **Run migration 0010** — or coach cover stays on one phone | **10 min** | low, fully revertible |
-| **A16** | **A decision, and four facts I cannot look up: Mindbody** | 20 min | none — a decision |
+| **A16** | **You said yes. Four facts before anyone signs anything: Mindbody** | 20 min | none — a decision |
 
 ---
 
@@ -810,6 +810,14 @@ now reads the full audit and names the failing pairs.
 
 **This is the one item on this list that a shipped feature is already waiting on.**
 
+> ⚠️ **Corrected, session 32 (2026-08-25).** This item used to be a 10-minute migration with a
+> note at the bottom saying the settle still needed wiring. That undersold it badly: the client
+> did not write to these tables **at all** — `coach_roster` and `cover_requests` appeared in
+> zero save calls and zero load calls anywhere in the app, so running this migration would have
+> created two empty tables that nothing ever touched, and the roster would have stayed on one
+> phone with the ✅ next to it. **That half is now built** (session 32). Running this migration
+> now genuinely does what the line above says it does, and the 10 minutes is the whole job.
+
 Session 30 built the coach roster, availability, and cover requests: a coach says which days
 and slots they can work, and when a class needs covering the app offers the coaches who are
 free and records who agreed to take it.
@@ -836,6 +844,13 @@ cosmetic one.
 ### What "it worked" looks like
 **Table Editor** shows two new tables, `coach_roster` and `cover_requests`, both empty.
 
+Then, on your own phone or laptop, open **Schedule**. The notice at the top of the Coach roster
+panel changes. Before you run this it says the roster is *"stored on this device only — your
+Jungle server is connected but has no coach storage set up"*; afterwards it says cover requests
+*"reach a coach when they next open Jungle"*. **That sentence is the real test**, not the empty
+tables — it is the app telling you it can see the storage. Add a coach on one device and open
+Jungle on another; they should both show the same roster.
+
 ### ⚠️ Two things that are still true afterwards, so you are not surprised
 - **0005 and 0006 are still unapplied.** Personas, plans and the movement catalogue remain on
   one device with no server copy. 0010 does not change that. (⚠️ And when you do run 0005/0006,
@@ -849,17 +864,19 @@ cosmetic one.
   your size), a domain to send from, and about a day. **It is not built and I have not assumed
   you want it.**
 
-### ⚠️ One thing that is now READY and was not before (session 31)
-The settle needs a **conditional** update — `set status='approved' where id=$1 and status='open'`
-— or two coaches both approving both succeed, last writer wins, and one of them is shown an
-approval that did not happen. There was no compare-and-set anywhere in this product; there is
-now one (`src/lib/compareAndSet.js`), unit-tested including the losing branch.
+### ⚠️ One thing to watch the first time it runs (session 32)
+Two coaches both pressing **Approve** on the same 5am request is the normal case, not an edge
+case, and it is decided by a **conditional** update — `set status='approved' where id=$1 and
+status='open'` — so that one of them wins and the other is told who got it. That is wired now
+(`src/lib/compareAndSet.js`, used by `settleCoverRequest`), and it is tested hard.
 
-**It has never made a real request**, because there is no table to make it against. So the first
-time 0010 runs, the person wiring the settle should use that function rather than the ordinary
-sync path, and should check the two PostgREST assumptions written at the top of it. **Nothing
-for you to do here** — this is a note for whoever does the wiring, so they do not reach for
-`_bgUpsertDelta` and get last-writer-wins silently.
+🔴 **But it has still never made a real request against a real Postgres, because there is no
+table to make it against yet — this migration is that table.** Everything asserted about it is
+asserted against a fake that models what PostgREST is documented to do. So the first time two
+people race a real request, that is genuinely the first run. If a settle ever behaves oddly —
+both sides shown a success, or a success reported as a loss — the two assumptions to check are
+written at the top of `compareAndSet.js`. **Nothing for you to do here**; it is a note about
+where the one remaining unknown lives.
 
 ### Undo
 `drop table public.cover_requests; drop table public.coach_roster;` — nothing else references
@@ -873,6 +890,28 @@ them, and the app keeps working exactly as it does today.
 approved cover push through to Mindbody, which propagates to ClassPass. Session 30 built the
 **seam** — one adapter with a pinned payload, and one implementation that does nothing and says
 so. There is no Mindbody code, no endpoint, no key, and no "coming soon" panel.
+
+> ### 🔴 Session 32: you have answered the decision, and it does not unblock the build
+>
+> You said you want Mindbody updated when a cover is approved. **That answers the decision
+> below — the "no CRM" question — and it is recorded as a yes.** It does not answer questions
+> 1–4, and question 3 is the one that could make this feature *actively harmful* rather than
+> merely absent: **if the only way to change a class's instructor is cancel-and-recreate, then
+> approving a cover would delete your members' existing bookings for that class.** Losing real
+> bookings is worse than never integrating. So nothing calls Mindbody, and nothing will until
+> question 3 has an answer.
+>
+> **What session 32 did build, because it needs none of those answers:** every approved cover
+> now leaves a durable record of the exact payload a booking system would have been handed,
+> with an idempotency key so the same substitution can never be posted twice. It exercises the
+> payload shape against real approvals instead of only against a test, and the day an adapter
+> exists there is a queue rather than a standing start. **It is not a queue that will drain on
+> its own and there is deliberately no screen showing it as pending** — that would promise a
+> send that may never happen. Nothing about it claims anything reached Mindbody.
+>
+> **Question 3 is free to answer** and it is the whole decision:
+> <https://developers.mindbodyonline.com> — is there an endpoint that substitutes a class's
+> instructor, or is cancel-and-recreate the only route?
 
 ### Why it stopped there
 - The architecture spec's risk **A6** records that Mindbody's API is a **paid, gated partner

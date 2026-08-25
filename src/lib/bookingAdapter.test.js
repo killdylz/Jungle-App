@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { coverApprovedPayload, bookingAdapter, NO_BOOKING_SYSTEM } from "./bookingAdapter.js";
+import { coverApprovedPayload, bookingAdapter, NO_BOOKING_SYSTEM,
+         coverPushKey, pushCoverApproved, OUTBOX_CAP } from "./bookingAdapter.js";
 import { makeCoverRequest, settleCover } from "./coverRequests.js";
 
 const now = Date.parse("2026-08-24T05:00:00Z");
@@ -85,5 +86,156 @@ describe("the contract is implementable — a fake satisfies it", () => {
     const r = await fake.pushCoverApproved(payload);
     expect(r).toEqual({ pushed: true, system: "fake", reason: "" });
     expect(fake.sent).toEqual([payload]);
+  });
+});
+
+// ─── S32 §2.4 · the outbox, and the double-post it exists to prevent ─────────
+describe("coverPushKey", () => {
+  const p = () => coverApprovedPayload({ request: approved(), fromName: "Mara", toName: "Dev" });
+
+  it("is stable: the same approval always keys the same", () => {
+    expect(coverPushKey(p())).toBe(coverPushKey(p()));
+    expect(coverPushKey(p())).toContain("cover.approved");
+    expect(coverPushKey(p())).toContain("uc1");
+  });
+
+  it("🔴 a LATER approval of the same class is a different event", () => {
+    // The whole reason `approvedAt` is in the key. Without it, a class that
+    // needed cover twice in a term would look like one event and the second
+    // substitution would silently never be recorded.
+    const later = { ...p(), approvedAt: "2026-09-01T05:00:00.000Z" };
+    expect(coverPushKey(later)).not.toBe(coverPushKey(p()));
+  });
+
+  it("a different coach covering the same slot is a different event", () => {
+    expect(coverPushKey({ ...p(), newCoach: "Sam" })).not.toBe(coverPushKey(p()));
+  });
+
+  it("has no key for something that is not a payload", () => {
+    // No key means no record, and no record is better than a record that
+    // collides with an unrelated one.
+    expect(coverPushKey(null)).toBe("");
+    expect(coverPushKey(undefined)).toBe("");
+    expect(coverPushKey({ junk: true })).toBe("");
+  });
+});
+
+describe("🔴 pushing an approval records it, exactly once", () => {
+  // A seam standing in for localStorage, plus a COUNTING adapter — the count is
+  // the assertion that matters, because "recorded once" and "sent once" are
+  // different claims and only the second one costs a gym anything.
+  function harness(impl) {
+    let box = [];
+    let calls = 0;
+    const adapter = impl || {
+      system: "none",
+      async pushCoverApproved() {
+        calls += 1;
+        return { pushed: false, system: "none", reason: "No booking system is connected, so nothing was sent outside Jungle." };
+      },
+    };
+    return {
+      adapter,
+      opts: () => ({ read: () => box, write: (l) => { box = l; }, adapter }),
+      box: () => box,
+      calls: () => calls,
+    };
+  }
+  const payload = () => coverApprovedPayload({ request: approved(), fromName: "Mara", toName: "Dev" });
+
+  it("keeps the exact pinned payload, not a summary of it", async () => {
+    const h = harness();
+    const r = await pushCoverApproved(payload(), h.opts());
+    expect(r.recorded).toBe(true);
+    expect(r.pushed).toBe(false);
+    expect(h.box()).toHaveLength(1);
+    expect(h.box()[0].payload).toEqual(payload());
+    expect(h.box()[0].key).toBe(coverPushKey(payload()));
+    expect(h.box()[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("🔴 a retry does not reach the adapter a second time", async () => {
+    const h = harness();
+    await pushCoverApproved(payload(), h.opts());
+    expect(h.calls()).toBe(1);
+
+    const again = await pushCoverApproved(payload(), h.opts());
+    // THE ASSERTION. A double-posted instructor substitution is the first thing
+    // a real integration gets wrong, and it is impossible before there is one.
+    expect(h.calls()).toBe(1);
+    expect(again.duplicate).toBe(true);
+    expect(again.recorded).toBe(false);
+    expect(h.box()).toHaveLength(1);
+  });
+
+  it("re-reports what happened the first time rather than inventing an answer", async () => {
+    const h = harness();
+    await pushCoverApproved(payload(), h.opts());
+    const again = await pushCoverApproved(payload(), h.opts());
+    expect(again.pushed).toBe(false);
+    expect(again.reason).toMatch(/already recorded here/i);
+    expect(again.reason).toMatch(/nothing was sent outside Jungle/i);
+    // The standing rule, applied to every new string: no promise of a future.
+    expect(again.reason).not.toMatch(/soon|coming|will be|shortly/i);
+  });
+
+  it("a SECOND cover for the same class is a second record, not a duplicate", async () => {
+    // The control for the test above. Without it, "does not reach the adapter
+    // twice" is equally satisfied by an outbox that never records anything new.
+    const h = harness();
+    await pushCoverApproved(payload(), h.opts());
+    const second = await pushCoverApproved({ ...payload(), approvedAt: "2026-09-01T05:00:00.000Z" }, h.opts());
+    expect(second.duplicate).toBe(false);
+    expect(h.calls()).toBe(2);
+    expect(h.box()).toHaveLength(2);
+  });
+
+  it("stays bounded, oldest first", async () => {
+    const h = harness();
+    for (let i = 0; i < OUTBOX_CAP + 5; i++) {
+      await pushCoverApproved({ ...payload(), approvedAt: `2026-09-01T05:00:0${i % 10}.${String(i).padStart(3, "0")}Z` }, h.opts());
+    }
+    expect(h.box()).toHaveLength(OUTBOX_CAP);
+    // The newest survived; the oldest did not.
+    expect(h.box()[h.box().length - 1].payload.approvedAt).toContain("204");
+  });
+
+  it("🔴 an adapter that throws still leaves the approval intact", async () => {
+    // The contract says an implementation never throws. This is what happens
+    // when one does anyway, which is the case a third-party adapter will bring.
+    const h = harness({ system: "explodes", async pushCoverApproved() { throw new Error("boom"); } });
+    const r = await pushCoverApproved(payload(), h.opts());
+    expect(r.pushed).toBe(false);
+    expect(r.reason).toMatch(/could not be reached/i);
+    expect(h.box()).toHaveLength(1);
+    expect(h.box()[0].pushed).toBe(false);
+  });
+
+  it("🔴 a broken storage seam cannot break a push either", async () => {
+    const boom = () => { throw new Error("localStorage is full"); };
+    await expect(pushCoverApproved(payload(), { read: boom, write: boom }))
+      .resolves.toMatchObject({ pushed: false, recorded: false });
+    await expect(pushCoverApproved(payload(), { read: () => [], write: boom }))
+      .resolves.toMatchObject({ pushed: false, recorded: false });
+  });
+
+  it("with no seam at all it behaves exactly as the bare adapter did", async () => {
+    const r = await pushCoverApproved(payload());
+    expect(r).toMatchObject({ pushed: false, system: "none", recorded: false });
+    expect(r.reason).toMatch(/nothing was sent outside Jungle/i);
+    await expect(pushCoverApproved(null)).resolves.toMatchObject({ pushed: false });
+  });
+
+  it("records that a REAL push was sent, so the next one is not re-sent", async () => {
+    // The shape this has to hold in the world where A16 is answered and an
+    // adapter exists. Nothing here can be exercised by the no-op.
+    const h = harness({ system: "mindbody", async pushCoverApproved() { return { pushed: true, system: "mindbody", reason: "" }; } });
+    const first = await pushCoverApproved(payload(), h.opts());
+    expect(first).toMatchObject({ pushed: true, system: "mindbody", recorded: true });
+
+    const again = await pushCoverApproved(payload(), h.opts());
+    expect(again.pushed).toBe(true);
+    expect(again.duplicate).toBe(true);
+    expect(again.reason).toMatch(/already sent, and has not been sent again/i);
   });
 });

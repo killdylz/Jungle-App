@@ -32,7 +32,7 @@ import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
 // exactly the last-writer-wins approval this session removed.
 import { makeCoverRequest, isOpen, openRequestForClass,
          deliveryTruth } from "../lib/coverRequests.js";
-import { coverApprovedPayload, bookingAdapter } from "../lib/bookingAdapter.js";
+import { coverApprovedPayload, pushCoverApproved } from "../lib/bookingAdapter.js";
 import { RULE_DAYS } from "../lib/scheduleInstances.js";
 import { useToast } from "../ui/toast.jsx";
 
@@ -252,11 +252,13 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
     if (next === "approved") {
       const to = coaches.find(c => c.id === r.request.toCoachId);
       if (to && onAssignCoach) onAssignCoach(r.request.classClientId, to.name);
-      // The seam. The no-op is the only implementation, so this always reports
+      // The seam. The no-op is still the only adapter, so this always reports
       // that nothing left Jungle — and the coach is told, rather than left to
-      // assume a booking system was updated.
-      const out = await bookingAdapter().pushCoverApproved(
-        coverApprovedPayload({ request: r.request, fromName: nameOf(r.request.fromCoachId), toName: to?.name || "" }));
+      // assume a booking system was updated. What is new is that the payload is
+      // RECORDED, keyed so the same approval can never be handed over twice.
+      const out = await pushCoverApproved(
+        coverApprovedPayload({ request: r.request, fromName: nameOf(r.request.fromCoachId), toName: to?.name || "" }),
+        { read: store.getBookingOutbox, write: store.saveBookingOutbox });
       // 🔴 SAY THAT IT IS PERMANENT, BECAUSE IT IS. `onAssignCoach` rewrites the
       // RULE's coach field, so approving cover for one ill Monday changes who
       // teaches Strength Lab EVERY Monday until a human edits it back. A cover

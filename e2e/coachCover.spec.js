@@ -268,6 +268,46 @@ test.describe("cover requests", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // ─── S32 §2.4 · the booking outbox ────────────────────────────────────────
+  //
+  // 🔴 THE POINT IS THAT THIS RUNS AGAINST A REAL APPROVAL. `bookingAdapter.test.js`
+  // pins the payload against a hand-built request; this drives two coaches, a
+  // schedule and a button, and asserts what the product ACTUALLY handed to the
+  // seam. A contract test cannot notice that the call site assembled the payload
+  // from the wrong request.
+  test("🔴 an approval leaves the exact payload on record, and still claims nothing", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await raise(page);
+
+    // POSITIVE CONTROL: nothing is recorded before the approval, so a passing
+    // assertion below cannot be a leftover from the fixture.
+    expect(await stored(page, "jungle_booking_outbox")).toBe(null);
+
+    await page.getByRole("button", { name: "Approve cover for Strength Lab" }).click();
+
+    await expect.poll(async () => (await stored(page, "jungle_booking_outbox") || []).length,
+      { message: "an approved cover must leave a record of what a booking system would have been handed" })
+      .toBe(1);
+
+    const [entry] = await stored(page, "jungle_booking_outbox");
+    expect(entry.payload).toMatchObject({
+      kind: "cover.approved", classRef: "uc1", classLabel: "Strength Lab",
+      day: "Mon", slot: "06:00", previousCoach: "Mara", newCoach: "Dev",
+    });
+    expect(entry.payload.approvedAt).not.toBe("");
+    expect(entry.key).toContain("cover.approved");
+    // 🔴 RECORDED IS NOT SENT, and the record says so itself.
+    expect(entry.pushed).toBe(false);
+    expect(entry.system).toBe("none");
+
+    // And nothing anywhere claims otherwise.
+    await expect(page.getByTestId("toast")).toContainText(/nothing was sent outside Jungle/i);
+    await expect(page.getByText(/mindbody/i)).toHaveCount(0);
+    await expect(page.getByText(/classpass/i)).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
   test("🔴 turning one down leaves the class exactly where it was", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
