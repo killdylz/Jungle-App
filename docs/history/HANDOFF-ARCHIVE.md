@@ -1,7 +1,8 @@
-# Jungle — Session Handoff ARCHIVE (sessions 6–29)
+# Jungle — Session Handoff ARCHIVE (sessions 6–30)
 
 _Split out of `SESSION-HANDOFF.md` in session 20, at commit `e81e793`. Sessions 24 and 25 moved
-here in session 27; session 26 in session 28; session 27 in session 29; session 28 in session 30; session 29 in session 31. The live file keeps the two most recent blocks, and
+here in session 27; session 26 in session 28; session 27 in session 29; session 28 in session 30;
+session 29 in session 31; session 30 in session 32. The live file keeps the two most recent blocks, and
 they are filed here **newest-first**, which is not where a naive append puts them._
 
 **Why this file exists.** `SESSION-HANDOFF.md` had reached **165 KB** — larger than every
@@ -27,6 +28,200 @@ without checking it still exists. The same caveat the trust ranking puts on
 
 ---
 
+---
+
+## Session 30 — the first feature that cannot be local-first, and the link that named the wrong person
+
+> **Gates green at `HEAD`.** `lint:crash` **0** · **1019 unit** (36 files, was 935/33) ·
+> **478 e2e** (47 spec files, was 466/46) · 12-chunk build · **0 over budget**.
+> `StaffApp.js` **307.46 / 360 kB** (14.6% headroom, was 18.6%); `index.js` **unchanged** at
+> 203.06 kB — nothing leaked into the entry chunk.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only.
+> The local suite is the only gate and every number above is from it.
+> ⚠️ **478 is 477 + one re-run.** Both full runs failed exactly one test in `syncBanner.spec.js`
+> — **a different one each time**, on a `waitForApp` timeout with no page snapshot, and all seven
+> passed when the spec ran alone. It is load flake on this container, not a regression; the tell
+> and the rule are now in `CLAUDE.md`.
+
+**The brief was right that this item is different in kind, and right about why.** It is the
+first feature in this product that is two people on two devices, so it is the first with no
+local-first version at all. What the brief did not know is that the product already contains a
+class→person link, that it has been pointing at the wrong person since it was written, and that
+nothing could see it.
+
+### 🔴 Before anything else: this branch started 14 commits behind
+
+`git log` showed `30520f2`, not the `3a6e4a0` the prompt names — **`3a6e4a0` was not in the
+repository at all.** Session 29's work sat on `claude/jungle-session-29-build-pleym6` and was
+never merged to `main`, and this branch was cut from `main`. My branch was a strict ancestor of
+session 29's tip (14 behind, 0 ahead), so `git merge --ff-only 31f4aaa` fixed it cleanly.
+
+**This is the third session in a row to hit this**, and session 29's own prompt warns about it
+in the same words. It is not a warning problem, it is a process one: **nothing merges these
+branches to `main`.** `main` is now four sessions stale. Confirmed the fix took by re-running
+the unit gate — 935 tests over 33 files, matching the prompt exactly, which is what proves the
+tree is the one the prompt describes rather than something that merely builds.
+
+### What shipped
+
+**§2.1 — a coach becomes a person, without touching the class row.** `class_schedule_rules.coach`
+is `text` and the Schedule renders it as a free-text input, so "Mara", "mara" and " Mara " are
+three coaches to everything that counts them.
+
+The obvious fix — a `coach_id` on the rule — is the shape this repo has been burned by four
+times. `_classToRow` maps a fixed column set, PostgREST rejects an upsert naming a column the
+migration has not created, and it rejects **the whole batch**: a `coach_id` added before 0010
+runs would not degrade, it would stop every class in the gym from syncing while the ledger said
+only "class_schedule_rules failed". A local-only field is no better, because hydrate is
+server-wins.
+
+So **the class keeps carrying text, unchanged, and the roster carries identity.** Resolution is
+by name. Nothing new is written to a class, no migration is needed for the link itself, and a
+gym that has typed names for a year has nothing rewritten. `coachKey` folds only what is the
+same string typed differently — case, whitespace, Unicode composition — and **never merges two
+different names**, because deciding "Mara" and "Mara K." are one person is a judgement about a
+gym's staff and a wrong merge silently reassigns somebody's classes. Aliases are how a gym says
+so explicitly.
+
+**🔴 §2.1's real find: `class_instances.coach_id` has been naming the publisher.** That column
+already exists — a real FK to `profiles` — and `_ciToRow` was setting it to `_ctx.userId`. One
+manager pressing **Add to schedule** once recorded every class in the week, everybody's, as
+taught by that manager.
+
+It survived because `coach_name` sits next to it holding the right answer, and every screen
+reads the name. The only reader of the id is per-coach analytics, **which is on `DYLAN-QUEUE`
+waiting to be built on it.** And the fact it was carrying was already recorded one line below in
+`created_by` — so the old value was not merely wrong, it was a duplicate of its neighbour under a
+name meaning something else. It now resolves the typed name against the roster and is **NULL
+when we do not know**: a nullable FK whose null means "unknown" is worth more than a non-null one
+that is confidently wrong.
+
+⚠️ **Note how invisible it was.** 1006 tests passed with the old value in place. Reproducing it
+needed a **connected** publisher — `_ctx.userId` is undefined in a bare test, so `|| null` made
+the old code look correct. A test that did not call `connect()` would have pinned the bug.
+
+**§2.2 — availability is a weekly grid in the schedule's own vocabulary.** `RULE_DAYS` and
+`parseSlot` from `scheduleInstances.js`, not a second list, so matching a coach to a class is a
+lookup and not a parse. Dated exceptions ("away this Thursday") are deliberately **not** half-built:
+a grid is what makes the first useful version exist, and an exception list that silently fails to
+suppress one Thursday is worse than an absent one because a coach would rely on it.
+
+A claim is stamped with the local calendar date it was made on — by the store, not the caller, so
+a grid cannot arrive undated — and goes stale after **56 days**. The number is arbitrary and the
+behaviour is not: **a stale claim is kept and labelled, never hidden.** A gym whose whole roster
+is stale would otherwise see an empty list and conclude nobody is free, rather than that nobody
+has been asked lately. "Never stated" and "stated nothing" stay different answers.
+
+**§2.3 — the loop, and the copy that stops it lying.** A request is raised against a real class,
+offered to the coaches free at that day and slot, and approved or turned down; approval reassigns
+the class and rejection provably does not. The race is **decided rather than discovered**: two
+coaches both pressing Approve is the normal case for a 5am ask, so `settleCover` is
+first-settle-wins and the loser is told which status won.
+
+**§2.4 is a seam.** One adapter, a payload pinned by a contract test, one implementation that does
+nothing and says so. No Mindbody code, no endpoint, no credential, no `fetch`, no coming-soon
+panel, and deliberately no flag — a flag here would be a holding pen with nothing to hold.
+
+### 🔴 §2.5 — the honest answer, which is no
+
+**The round trip cannot be proven in this environment, and it cannot be proven in any environment
+today.** Four independent reasons, each verified against the code:
+
+1. **`playwright.config.js` targets the credential-less build on purpose** — "no network, no auth,
+   a fixed PIN, and sync paths that no-op cleanly". So the entire existing suite, and every test I
+   added, runs where `supabaseEnabled` is false and sync does nothing. A cover-request test in that
+   harness proves the UI and the stored object. It cannot prove delivery.
+2. **There is no table.** `cover_requests` and `coach_roster` do not exist. Migration 0010 is
+   written and unapplied, joining 0005 and 0006.
+3. **There is nothing to notify with.** `notification|web-push|onesignal|sendgrid|resend|twilio`
+   matches the toast component and nothing else in `src/` or `supabase/`. The service worker is
+   offline precaching only.
+4. **🔴 And the finding I did not expect: the store cannot express a safe approval even after
+   0010 runs.** `store.js` contains **zero `.update()` calls** — every write is an unconditional
+   `upsert`, `insert` or `delete`. The only `.update()`s in the whole app are in `AuthGate` and
+   `AdminTeamScreen`, and neither is conditional on a prior value. **There is no compare-and-set
+   anywhere in this product.** An approval needs exactly that: `set status='approved' where
+   id=$1 and status='open'`. Wire cover requests through `_bgUpsertDelta` and two coaches both
+   approving both succeed, last writer wins, and one of them is shown an approval that did not
+   happen.
+
+So the answer to "can two devices agree" is **not yet, and the missing piece is a primitive, not
+a table.** 0010 writes the conditional UPDATE into the schema comments so whoever wires it up
+cannot reach for the upsert by habit.
+
+**What was built anyway, and why that is not theatre.** The flow is real and exercised end to end
+on one device, and the day 0010 runs the only thing that changes is where the rows live. What
+must never happen in the meantime is the UI implying delivery — so `deliveryTruth()` is the only
+thing allowed to describe what happened, it has three states, **none of them is "sent"**, and on
+the shipped build the answer is "this device, and nobody else will see it". The last test in
+`coachCover.spec.js` asserts the product never claims otherwise, and it goes red the moment the
+toast says Sent.
+
+### On §1.2 — the strategy line, answered on the record
+
+The brief asked for a ruling. **I agree with it: this sits inside the "no CRM" line, except the
+Mindbody write-back, which does not.** Coach availability and finding cover are staff operations
+on the daily-frequency side the strategy doc says Jungle should own; nothing here books a member
+or takes a payment. Writing back to the booking system a member booked through is the part that
+makes Jungle a thing that edits Mindbody, which is the direction the line was drawn against —
+and `classTypeRetention.js`'s header cuts both ways: **Mindbody holds the roster and the bookings
+and Jungle does not**, so an approval that changes the coach in Jungle and not in Mindbody leaves
+the two disagreeing about who is teaching. The seam and the queue entry are the whole of what
+should ship until Dylan answers A16.
+
+### What was false in the brief
+
+- **The baseline commit.** `3a6e4a0` was not in this repository. See the top block.
+- **"A migration is Dylan's… either carry the link in an existing blob column that already
+  round-trips."** There is no such column. `class_schedule_rules` has no jsonb at all, and the
+  per-gym blobs that do round-trip (`library_overrides.data`, `brand_profiles.branding`) are
+  written whole by their own screens — putting a staff roster in `branding` means the next Brand
+  Studio save silently drops the gym's entire coaching staff. The third option, resolving by
+  name, is the one that works and the brief did not list it.
+- **"Coaches can already be real users with accounts."** True of the schema, misleading in
+  practice: the roster lives only in `memberships`, which is read live by `AdminTeamScreen`, and
+  that screen is hidden entirely when Supabase is unconfigured — the shipped state. **With no
+  server there is no list of people at all**, which is why the roster had to be local-first with
+  the account link as an optional field rather than the other way round.
+
+### Traps paid for
+
+- ⚠️ **A revert that did not revert, on an untracked file.** A mutation script reverted by
+  string-replacing the new value back to the old; when the "new value" was the empty string it
+  matched 12,451 times and the revert aborted. `coachKey` sat without its `.toLowerCase()` and
+  `git diff --stat` showed nothing, **because the file was new and therefore untracked.** Caught
+  by re-reading the function rather than trusting the diff. `grep -rn MUTATION src/` would not
+  have caught this one either — the mutation was a deletion, not a marker.
+- ⚠️ **`| tail` exits 0 with 8 failing tests.** The brief says read the count not the exit code;
+  worth restating that the failing run *and* the passing run both printed `[exited with code 0]`.
+- ⚠️ **`useToast()` returns `{ toast }`, not `toast`.** Cost one 12-test e2e run.
+- ⚠️ **This container is ~4× slower than the one the brief was written on.** A full e2e run takes
+  **28–32 minutes**, not 7, and it appears to throttle between tool calls. Budget for three or
+  four full runs in a session, not ten, and lean on `npm test` (4 seconds) and single-spec runs.
+- ⚠️ **Playwright launch**, exactly as the brief describes: a five-line scratch config in
+  `.e2e-scratch/` pointing `executablePath` at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
+  `playwright.config.js` is untouched. **The directory is not committed.**
+
+### What is genuinely left
+
+- 🔴 **A15 — run migration 0010.** Until then a cover request reaches one phone. The product says
+  so, but it is a real limit.
+- 🔴 **A16 — the Mindbody decision and the four facts behind it.** Nothing is blocked; nothing
+  should be built until it is answered.
+- 🔴 **A compare-and-set primitive in `store.js`**, which A15 does not provide. This is code, not
+  Dylan, and it is the first thing the next session should build if 0010 has run.
+- ⚠️ **Nobody's phone rings, and the urgent case is the case this feature is for.** In-app only.
+  Email would need a sender, a domain and about a day; it is written up in A15 and deliberately
+  not assumed.
+- ⚠️ **`main` is four sessions stale.** See the top block.
+- ⚠️ **`addMember` stamps `joinedAt` with `toISOString().slice(0,10)`**, which is UTC and is a
+  different calendar day from the coach's for part of every day. Not touched — it is a different
+  field on a different path — but it is the same bug `daysBetween`'s comment exists for, and
+  `localDateStr` in `store.js` is now the correct helper sitting right next to it.
+
+---
+
+---
 
 ## Session 29 — the consequences of one defect, and a chunk that was 93% React
 
@@ -3613,6 +3808,7 @@ placed in order; session 22 moved it up to sit under session 20, where the order
 goes. Nothing was edited on the way._
 
 ---
+
 
 
 

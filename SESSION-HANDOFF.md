@@ -1,12 +1,270 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-24 (session 31)_
+_Last updated: 2026-08-25 (session 32)_
 
 > 📁 **Sessions 6–29 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 32 — the roster leaves the device, and the panel learns who is holding the phone
+
+> **Gates green at `HEAD`.** `lint:crash` **0** · **1108 unit** (40 files) · **488 e2e**
+> (47 spec files) · 12-chunk build · **0 over budget**. `StaffApp.js` **315.22 / 360 kB**
+> (12.4%), `index.js` **203.06 / 215 kB** (5.6%, still the tightest). Six commits, each pushed
+> after its own green run.
+> ⚠️ **The full run was 487 passed / 1 failed, and the failure was the documented mount flake**
+> — but it landed on `responsive.spec.js` › "Analytics fits" @390px, **not** on
+> `syncBanner.spec.js`, which is where CLAUDE.md had recorded it for three sessions. Error
+> context had **zero page snapshots** (the app never mounted) and the spec passed **28/28
+> alone**. CLAUDE.md is corrected: the flake is in the app mount under full-suite load, not in
+> one spec. The run took **30.4 minutes**.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only. The
+> local suite is the only gate and every number here is from it.
+> 🔴 **The branch this session started on was `main` at `30520f2`, 20 commits behind — the
+> fourth session in a row to pay for it.** `git merge --ff-only 2098cc4` was clean, and the
+> position was then confirmed with `npm test` (1069/39, matching the prompt's table) rather
+> than with the log, which is the check that actually proves it.
+
+### What this session was
+
+Dylan asked for three things: coaches enter their own availability, the app matches them to a
+class that needs cover, and Mindbody updates immediately. Two of those are code, one is not,
+and the ordering mattered more than any of them — because everything asked for sat on top of a
+sync layer that did not exist.
+
+---
+
+### 🔴 §2.1 — the roster and cover requests had NO sync path, and the queue said otherwise
+
+**Verified before building, and it was the prompt's central claim: `coach_roster` and
+`cover_requests` appeared in ZERO push calls and ZERO hydrate reads across the whole of `src/`.**
+The only references anywhere were comments. `saveCoaches` and `saveCoverRequests` were plain
+`writeJSON` one-liners. Running migration 0010 would have created two empty tables that nothing
+ever wrote to or read from, and the roster would have stayed on one phone with a tick next to
+it in `DYLAN-QUEUE`.
+
+⚠️ **A15 was less wrong than the prompt said, and wrong in a way that matters more.** It did
+carry a note that the settle still needed wiring — the prompt claims it omitted that. What it
+got wrong was the FRAMING: a 10-minute migration headlined "run this or coach cover stays on
+one phone", with the client half relegated to a footnote about one function. A15 now says what
+actually changes on screen when the migration lands, which is the real test rather than two
+empty tables.
+
+**The client half is built.** The two tables are written differently and the difference IS the
+feature:
+
+- **`coach_roster`** is an ordinary id-keyed list domain on the delta writer every other one
+  uses. `removeCoach` deletes explicitly (an upsert of the remaining list cannot express a
+  removal), and `_bgDelete`'s `_unmark` makes the toast's undo actually reach Postgres for free.
+- **`cover_requests` must NOT use `_bgUpsertDelta`,** and this is the part to read before
+  touching it. Device A holds request R as `open`. Device B approves it. Device A hydrates —
+  writing no delta marks, because nothing does — then raises an unrelated request. The delta is
+  "every row whose fingerprint has no mark", which after a hydrate is ALL OF THEM, so the list
+  upsert re-sends R as `open` and the approval is gone. Nothing fails, nothing logs, the ledger
+  says the table synced. So a cover request has exactly the two writes its RLS policies allow:
+  an INSERT with `ignoreDuplicates` (the append-log shape `attendance` already uses — **the flag
+  is load-bearing, not an optimisation**), and the conditional UPDATE that settles it.
+
+**`compareAndSet` has made its first real call.** The settle is the only write in `store.js`
+that is not local-first, and the justification is the only one that could be: two coaches both
+pressing Approve both read `open` and both are right when they read, so there is no local fact
+to be first about. The server decides and the local write follows. The loser is told WHAT won,
+with a second read on that branch — "somebody beat you" without saying whether the class is
+covered withholds the one fact they came for. A settle that cannot be confirmed writes nothing
+at all. It falls back to the S30 device-only path when there is no server or no table, so a gym
+using this locally today is not regressed into being unable to settle anything.
+
+#### Hydrate is server-wins for one table and not the other, decided rather than inherited
+
+`_guardList` protects a row the server has never heard of and a row the coach deleted. It does
+not protect the third case, which did not exist before coach availability: **a row the server
+HAS, whose local copy is newer.** A coach ticks Thursday on the way to the gym and the push is
+still in flight; server-wins silently restores the older grid.
+
+⚠️ **The obvious fix is wrong here, and `availabilityAt` sits right there looking like a version
+clock.** It is a LOCAL CALENDAR DATE. Two edits on the same day are indistinguishable by it and
+two devices in two timezones do not agree which day it is. The signal used instead was already
+in the file: a delta mark is written only from `_bgUpsert`'s success path, so "fingerprint ≠
+mark" means exactly "the server has never confirmed this content". No clocks, no timezones, no
+new storage. Stated plainly it is last-writer-wins **biased toward the device with unsynced
+work** — two coaches editing between two hydrates still lose one edit. What it removes is the
+case where the losing edit is the one you just typed and watched save.
+
+`cover_requests` stays server-wins with no exception, because a local status is never
+legitimately ahead of the server's.
+
+#### A table the database has not got is not a failed write
+
+Both belong in the ledger and both are there. What differs is what the product may CLAIM
+meanwhile, and this turned up a shipped honesty defect: **`deliveryTruth` answered "waiting" —
+documented as "the row can reach their device when they next open Jungle" — for any gym with
+credentials, and that was false for every one of them**, because nothing pushed the row
+anywhere. The comment described a push that did not exist. There is now a fourth state,
+`unstored`, read from a missing-table observation the hydrate probe records and the first
+successful write clears. **It does not suppress the push**: nothing would ever clear a latch
+that stopped writing, since the only evidence a migration has run is a write that succeeds.
+
+#### Found while testing
+
+The seed-from-local branch pushed **nothing** when the device held marks the server does not
+honour — a gym whose Supabase project was re-provisioned would have kept its roster to itself
+for ever, no request made and no error recorded. It drops the marks first now. That is
+`restorePersonaCascade`'s lesson arriving from the other direction, and **the same latent hole
+exists in `hydratePersonas`' seed branch** (`savePersonas(local)` also goes through the delta
+writer). Not touched this session; noted below.
+
+---
+
+### §2.2 — a coach editing their own availability, and the identity that finally exists
+
+**Verified: `ROLE_DEFAULTS.coach` has `schedule:*`,** the panel lives on the Schedule screen,
+and every roster entry rendered Edit / Availability / Remove for whoever was looking. So the
+moment a gym turns its server on, every coach can edit everyone's availability and delete their
+colleagues.
+
+⚠️ **This could not have been fixed before now, and the panel's own comment said so:** "with no
+server there is no signed-in user, so the product genuinely cannot tell who is holding the
+phone. Scoping the buttons would require inventing an identity we do not have." True — and it
+stopped being true in S31, which built the control that writes `userId`.
+
+`rosterViewerMode` has three answers. **"manage" is also the no-server answer, checked first
+and deliberately:** a panel that locked itself down because it could not tell who you are would
+break the single-device gym to protect it from a second person who does not exist. A bug in the
+identity link therefore fails toward what shipped. **"unlinked" is not folded into "manage"** —
+on day one a manager has linked nobody, so that fold would hand every coach the full roster.
+
+The split is one line: name, aliases, account link and removal are the gym's to set (a coach
+renaming their own entry would silently unlink every class typed under the old name);
+availability is the one thing only the person themselves knows. Approve/Turn down now belong to
+the coach who was ASKED, Withdraw to the one who RAISED it. The capability is `members:manage`,
+reused rather than invented — it already gates the Team screen.
+
+🔴 **THE E2E GAP, and it is real.** `playwright.config.js` targets the credential-less build, so
+`AuthGate` never mounts and there is no signed-in user to be. **The harness can drive "manage"
+and cannot drive "self" or "unlinked" at all.** Inventing an identity for a test to hold would
+be inventing the exact thing the panel spent two sessions refusing to invent. So the decision is
+a pure function pinned exhaustively in unit tests, and what went into e2e is the branch that
+ships. Neither half is sufficient alone. **If a future session gives the e2e target a way to be
+signed in, these two modes are the first thing to point it at.**
+
+---
+
+### §2.3 — the matcher needed nothing, and approval was doing something worse than the prompt said
+
+**`coachesFreeAt` is correct and needs no work.** It matches on the grid, sorts fresh above
+stale, excludes `active === false`, returns `reach`. Read against the code and its tests; the
+three things its header says it deliberately does not do are each right.
+
+🔴 **What I found instead: `onAssignCoach` rewrites the RULE's coach field.** Approving cover
+for one ill Monday moves Strength Lab to Dev **every Monday, for ever**, until a human notices.
+The mechanism is deliberate and correctly tested, and there is nowhere else the assignment could
+go — `class_instances` carries `coach_name` but only exists for a class already published or
+started. **What was wrong is the sentence.** "Dev now teaches Strength Lab" was the whole
+message, and everyone who has ever asked for cover reads that as "this Monday".
+
+The recurrence is now stated on the request card BEFORE the button and in the toast after. A
+one-off rule gets neither, and that control is what proves the warning is derived rather than
+printed unconditionally.
+
+**Dated cover was considered and deliberately not built.** It is a feature, not a field:
+there is no per-occurrence coach override anywhere (future occurrences are DERIVED by
+`occurrencesForWeek`), the column would have to go into the migration this session just made
+the client depend on and Dylan has not yet run, and CLAUDE.md's rule about the sibling feature
+applies with more force — a cover that LOOKS one-off and silently is not is worse than one
+honestly permanent.
+
+---
+
+### §2.4 — the outbox, and why it is not a second adapter
+
+**Nothing calls Mindbody. No endpoint, no credential, no `fetch`, no panel.** Dylan's yes is
+recorded in A16 as answering the decision and not the four facts, with **question 3 marked as
+free to answer and decisive**: if instructor substitution is cancel-and-recreate only, approving
+a cover deletes members' existing bookings, which is worse than never integrating.
+
+Every approval now leaves a durable record of the exact payload, keyed so the same substitution
+can never be posted twice.
+
+🔴 **It is NOT the "second adapter implementation" §2.4 asked for, and `bookingAdapter.test.js`
+already said why:** "shipping a fake adapter in the bundle would put a second implementation one
+import away from being wired up by accident". A second implementation also forces
+`bookingAdapter()` to choose between two, needing the registry its header bans in capitals.
+Recording is a ledger OF pushes, not an alternative way of pushing, so it wraps the call. When a
+real adapter lands it keeps working and starts recording real pushes — which is where a
+double-post has to be stopped anyway.
+
+**Idempotency now rather than later**, because a key added afterwards has to be back-filled onto
+records written without one. It is DERIVED from the pinned payload (`approvedAt` is what makes
+two approvals of the same class distinct, and `settleCover` guarantees it) rather than minted,
+and the request id is deliberately not added to the payload — that would widen a pinned contract
+for our own bookkeeping. On a duplicate the adapter is not called again and the PRIOR outcome is
+re-reported, because a call that was never made has no new answer.
+
+⚠️ **No screen for it, deliberately.** "3 changes waiting to reach Mindbody" is the coming-soon
+panel this repo bans, on a queue that may never be sent at all.
+
+---
+
+### Traps paid for, in the order they cost time
+
+1. 🔴 **`lint:crash` is BLIND to the temporal dead zone.** Reading `auth` above its
+   `useJungleAuth()` declaration put the whole Schedule screen into its error boundary and timed
+   out all 17 coachCover specs looking for a button that never rendered — with `lint:crash` at
+   0 and 1095 unit tests green. It resolves identifiers, and the binding genuinely exists in
+   scope. **A broad e2e failure in ONE spec file, right after a render-order change, is a crash
+   and not the stale-dev-server flake** — the tell is `Something went wrong` / an error-boundary
+   heading in the page snapshot, and the fastest route to the cause is a throwaway spec with
+   `page.on("pageerror")`, not the trace viewer.
+2. 🔴 **A test that could not fail, caught by mutating for it.** "Re-pushing a stale list cannot
+   un-approve a settled request", written the obvious way, passed with `ignoreDuplicates`
+   REMOVED — `_retryNow` only pushes tables in the ledger, the ledger was empty, so nothing was
+   pushed and nothing was asserted, in green. It now fails a write first so the pusher really
+   runs, and carries a positive control that the whole list really was re-sent. **Every one of
+   this session's claims was mutation-checked; this is the one that was hollow.**
+3. ⚠️ **`navAnyWidth` opens with `sidebar.count()`, which does NOT auto-wait.** A scratch probe
+   reading the panel straight after `page.reload()` decided there was no sidebar at 1280px and
+   went looking for a "More" button. Wait for `aside, nav` first.
+4. ⚠️ **A scratch spec needs its own config**, not `--testDir` (not a Playwright flag) and not a
+   path argument against a config whose `testDir` is `e2e/`.
+
+---
+
+### What is genuinely left
+
+- 🔴 **`main` is SIX sessions stale.** 28–32 live only on their own branches. Five sessions have
+  now paid the same twenty minutes at startup. **A session cannot fix this from inside.**
+- 🔴 **A15 is now a real 10-minute unblock** — the client half exists, so running 0010 does what
+  the queue says. Until then a gym with credentials sees "your Jungle server is connected but
+  has no coach storage set up", which is the honest version of what it used to claim.
+- 🔴 **`compareAndSet` still has not run against a real Postgres.** Everything asserted about it
+  — including this session's settle — is against a fake modelling PostgREST's documented
+  contract. The first real race will be the first real run; the two assumptions to check are at
+  the top of the file.
+- 🔴 **A16 question 3 is unanswered and free to answer**, and it decides whether §2.4 ever
+  becomes an integration or stays an outbox permanently.
+- 🔴 **0005 and 0006 have never been applied.** ⚠️ The coach-delete dialog TELLS the coach so and
+  `e2e/destructive.spec.js` asserts the string — applying them makes a shipped sentence a lie in
+  the same session.
+- 🔴 **N4 member links are built and undeployed — thirteen sessions.** A12/A13, 35 minutes.
+- 🔴 **Nobody's phone rings.** After 0010 a cover request reaches the other coach only when they
+  next open Jungle. **This is now the binding limit on the feature**, not the storage.
+- ⚠️ **`hydratePersonas`' seed branch has the same delta hole §2.1 fixed for the roster** —
+  `savePersonas(local)` sends a delta, so a re-provisioned server would not be seeded. One
+  `_unmark` loop, and a test that the seed actually pushes.
+- ⚠️ **A class's own coach is still offered as cover for it**, producing a request whose from
+  and to are one id. The one-line filter was written and REVERTED: it turns a 🔴 e2e assertion
+  red (`coachCover.spec.js` seeds a stale claim on the class's own coach to prove a stale claim
+  is offered WITH its age). It needs its own commit and its own fixture decision.
+- ⚠️ **"self" and "unlinked" have no e2e** and cannot have one against the credential-less build.
+- ⚠️ A14 is open and is a yes/no. **A1 — the Supabase region — has never been confirmed**, and
+  it is the only item that gets dramatically more expensive with age.
+- ⚠️ **10 unmerged Dependabot PRs**, five major GitHub-Actions bumps. Ask Dylan first.
+- ⚠️ **Two checkboxes render browser-default blue on a gym's palette** — `RosterScreen.jsx:343`,
+  `PersonasScreen.jsx:1009`. Wants its own change with a token test.
 
 ---
 
@@ -273,196 +531,3 @@ fix.
   A **foreground blocking wait** advances real time properly; a backgrounded sleep loop does not.
 - ⚠️ **`.e2e-scratch/` is not committed**, so the Playwright launch workaround needs rewriting
   again next session. `playwright.config.js` is untouched, as it must be.
-
----
-
-## Session 30 — the first feature that cannot be local-first, and the link that named the wrong person
-
-> **Gates green at `HEAD`.** `lint:crash` **0** · **1019 unit** (36 files, was 935/33) ·
-> **478 e2e** (47 spec files, was 466/46) · 12-chunk build · **0 over budget**.
-> `StaffApp.js` **307.46 / 360 kB** (14.6% headroom, was 18.6%); `index.js` **unchanged** at
-> 203.06 kB — nothing leaked into the entry chunk.
-> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only.
-> The local suite is the only gate and every number above is from it.
-> ⚠️ **478 is 477 + one re-run.** Both full runs failed exactly one test in `syncBanner.spec.js`
-> — **a different one each time**, on a `waitForApp` timeout with no page snapshot, and all seven
-> passed when the spec ran alone. It is load flake on this container, not a regression; the tell
-> and the rule are now in `CLAUDE.md`.
-
-**The brief was right that this item is different in kind, and right about why.** It is the
-first feature in this product that is two people on two devices, so it is the first with no
-local-first version at all. What the brief did not know is that the product already contains a
-class→person link, that it has been pointing at the wrong person since it was written, and that
-nothing could see it.
-
-### 🔴 Before anything else: this branch started 14 commits behind
-
-`git log` showed `30520f2`, not the `3a6e4a0` the prompt names — **`3a6e4a0` was not in the
-repository at all.** Session 29's work sat on `claude/jungle-session-29-build-pleym6` and was
-never merged to `main`, and this branch was cut from `main`. My branch was a strict ancestor of
-session 29's tip (14 behind, 0 ahead), so `git merge --ff-only 31f4aaa` fixed it cleanly.
-
-**This is the third session in a row to hit this**, and session 29's own prompt warns about it
-in the same words. It is not a warning problem, it is a process one: **nothing merges these
-branches to `main`.** `main` is now four sessions stale. Confirmed the fix took by re-running
-the unit gate — 935 tests over 33 files, matching the prompt exactly, which is what proves the
-tree is the one the prompt describes rather than something that merely builds.
-
-### What shipped
-
-**§2.1 — a coach becomes a person, without touching the class row.** `class_schedule_rules.coach`
-is `text` and the Schedule renders it as a free-text input, so "Mara", "mara" and " Mara " are
-three coaches to everything that counts them.
-
-The obvious fix — a `coach_id` on the rule — is the shape this repo has been burned by four
-times. `_classToRow` maps a fixed column set, PostgREST rejects an upsert naming a column the
-migration has not created, and it rejects **the whole batch**: a `coach_id` added before 0010
-runs would not degrade, it would stop every class in the gym from syncing while the ledger said
-only "class_schedule_rules failed". A local-only field is no better, because hydrate is
-server-wins.
-
-So **the class keeps carrying text, unchanged, and the roster carries identity.** Resolution is
-by name. Nothing new is written to a class, no migration is needed for the link itself, and a
-gym that has typed names for a year has nothing rewritten. `coachKey` folds only what is the
-same string typed differently — case, whitespace, Unicode composition — and **never merges two
-different names**, because deciding "Mara" and "Mara K." are one person is a judgement about a
-gym's staff and a wrong merge silently reassigns somebody's classes. Aliases are how a gym says
-so explicitly.
-
-**🔴 §2.1's real find: `class_instances.coach_id` has been naming the publisher.** That column
-already exists — a real FK to `profiles` — and `_ciToRow` was setting it to `_ctx.userId`. One
-manager pressing **Add to schedule** once recorded every class in the week, everybody's, as
-taught by that manager.
-
-It survived because `coach_name` sits next to it holding the right answer, and every screen
-reads the name. The only reader of the id is per-coach analytics, **which is on `DYLAN-QUEUE`
-waiting to be built on it.** And the fact it was carrying was already recorded one line below in
-`created_by` — so the old value was not merely wrong, it was a duplicate of its neighbour under a
-name meaning something else. It now resolves the typed name against the roster and is **NULL
-when we do not know**: a nullable FK whose null means "unknown" is worth more than a non-null one
-that is confidently wrong.
-
-⚠️ **Note how invisible it was.** 1006 tests passed with the old value in place. Reproducing it
-needed a **connected** publisher — `_ctx.userId` is undefined in a bare test, so `|| null` made
-the old code look correct. A test that did not call `connect()` would have pinned the bug.
-
-**§2.2 — availability is a weekly grid in the schedule's own vocabulary.** `RULE_DAYS` and
-`parseSlot` from `scheduleInstances.js`, not a second list, so matching a coach to a class is a
-lookup and not a parse. Dated exceptions ("away this Thursday") are deliberately **not** half-built:
-a grid is what makes the first useful version exist, and an exception list that silently fails to
-suppress one Thursday is worse than an absent one because a coach would rely on it.
-
-A claim is stamped with the local calendar date it was made on — by the store, not the caller, so
-a grid cannot arrive undated — and goes stale after **56 days**. The number is arbitrary and the
-behaviour is not: **a stale claim is kept and labelled, never hidden.** A gym whose whole roster
-is stale would otherwise see an empty list and conclude nobody is free, rather than that nobody
-has been asked lately. "Never stated" and "stated nothing" stay different answers.
-
-**§2.3 — the loop, and the copy that stops it lying.** A request is raised against a real class,
-offered to the coaches free at that day and slot, and approved or turned down; approval reassigns
-the class and rejection provably does not. The race is **decided rather than discovered**: two
-coaches both pressing Approve is the normal case for a 5am ask, so `settleCover` is
-first-settle-wins and the loser is told which status won.
-
-**§2.4 is a seam.** One adapter, a payload pinned by a contract test, one implementation that does
-nothing and says so. No Mindbody code, no endpoint, no credential, no `fetch`, no coming-soon
-panel, and deliberately no flag — a flag here would be a holding pen with nothing to hold.
-
-### 🔴 §2.5 — the honest answer, which is no
-
-**The round trip cannot be proven in this environment, and it cannot be proven in any environment
-today.** Four independent reasons, each verified against the code:
-
-1. **`playwright.config.js` targets the credential-less build on purpose** — "no network, no auth,
-   a fixed PIN, and sync paths that no-op cleanly". So the entire existing suite, and every test I
-   added, runs where `supabaseEnabled` is false and sync does nothing. A cover-request test in that
-   harness proves the UI and the stored object. It cannot prove delivery.
-2. **There is no table.** `cover_requests` and `coach_roster` do not exist. Migration 0010 is
-   written and unapplied, joining 0005 and 0006.
-3. **There is nothing to notify with.** `notification|web-push|onesignal|sendgrid|resend|twilio`
-   matches the toast component and nothing else in `src/` or `supabase/`. The service worker is
-   offline precaching only.
-4. **🔴 And the finding I did not expect: the store cannot express a safe approval even after
-   0010 runs.** `store.js` contains **zero `.update()` calls** — every write is an unconditional
-   `upsert`, `insert` or `delete`. The only `.update()`s in the whole app are in `AuthGate` and
-   `AdminTeamScreen`, and neither is conditional on a prior value. **There is no compare-and-set
-   anywhere in this product.** An approval needs exactly that: `set status='approved' where
-   id=$1 and status='open'`. Wire cover requests through `_bgUpsertDelta` and two coaches both
-   approving both succeed, last writer wins, and one of them is shown an approval that did not
-   happen.
-
-So the answer to "can two devices agree" is **not yet, and the missing piece is a primitive, not
-a table.** 0010 writes the conditional UPDATE into the schema comments so whoever wires it up
-cannot reach for the upsert by habit.
-
-**What was built anyway, and why that is not theatre.** The flow is real and exercised end to end
-on one device, and the day 0010 runs the only thing that changes is where the rows live. What
-must never happen in the meantime is the UI implying delivery — so `deliveryTruth()` is the only
-thing allowed to describe what happened, it has three states, **none of them is "sent"**, and on
-the shipped build the answer is "this device, and nobody else will see it". The last test in
-`coachCover.spec.js` asserts the product never claims otherwise, and it goes red the moment the
-toast says Sent.
-
-### On §1.2 — the strategy line, answered on the record
-
-The brief asked for a ruling. **I agree with it: this sits inside the "no CRM" line, except the
-Mindbody write-back, which does not.** Coach availability and finding cover are staff operations
-on the daily-frequency side the strategy doc says Jungle should own; nothing here books a member
-or takes a payment. Writing back to the booking system a member booked through is the part that
-makes Jungle a thing that edits Mindbody, which is the direction the line was drawn against —
-and `classTypeRetention.js`'s header cuts both ways: **Mindbody holds the roster and the bookings
-and Jungle does not**, so an approval that changes the coach in Jungle and not in Mindbody leaves
-the two disagreeing about who is teaching. The seam and the queue entry are the whole of what
-should ship until Dylan answers A16.
-
-### What was false in the brief
-
-- **The baseline commit.** `3a6e4a0` was not in this repository. See the top block.
-- **"A migration is Dylan's… either carry the link in an existing blob column that already
-  round-trips."** There is no such column. `class_schedule_rules` has no jsonb at all, and the
-  per-gym blobs that do round-trip (`library_overrides.data`, `brand_profiles.branding`) are
-  written whole by their own screens — putting a staff roster in `branding` means the next Brand
-  Studio save silently drops the gym's entire coaching staff. The third option, resolving by
-  name, is the one that works and the brief did not list it.
-- **"Coaches can already be real users with accounts."** True of the schema, misleading in
-  practice: the roster lives only in `memberships`, which is read live by `AdminTeamScreen`, and
-  that screen is hidden entirely when Supabase is unconfigured — the shipped state. **With no
-  server there is no list of people at all**, which is why the roster had to be local-first with
-  the account link as an optional field rather than the other way round.
-
-### Traps paid for
-
-- ⚠️ **A revert that did not revert, on an untracked file.** A mutation script reverted by
-  string-replacing the new value back to the old; when the "new value" was the empty string it
-  matched 12,451 times and the revert aborted. `coachKey` sat without its `.toLowerCase()` and
-  `git diff --stat` showed nothing, **because the file was new and therefore untracked.** Caught
-  by re-reading the function rather than trusting the diff. `grep -rn MUTATION src/` would not
-  have caught this one either — the mutation was a deletion, not a marker.
-- ⚠️ **`| tail` exits 0 with 8 failing tests.** The brief says read the count not the exit code;
-  worth restating that the failing run *and* the passing run both printed `[exited with code 0]`.
-- ⚠️ **`useToast()` returns `{ toast }`, not `toast`.** Cost one 12-test e2e run.
-- ⚠️ **This container is ~4× slower than the one the brief was written on.** A full e2e run takes
-  **28–32 minutes**, not 7, and it appears to throttle between tool calls. Budget for three or
-  four full runs in a session, not ten, and lean on `npm test` (4 seconds) and single-spec runs.
-- ⚠️ **Playwright launch**, exactly as the brief describes: a five-line scratch config in
-  `.e2e-scratch/` pointing `executablePath` at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
-  `playwright.config.js` is untouched. **The directory is not committed.**
-
-### What is genuinely left
-
-- 🔴 **A15 — run migration 0010.** Until then a cover request reaches one phone. The product says
-  so, but it is a real limit.
-- 🔴 **A16 — the Mindbody decision and the four facts behind it.** Nothing is blocked; nothing
-  should be built until it is answered.
-- 🔴 **A compare-and-set primitive in `store.js`**, which A15 does not provide. This is code, not
-  Dylan, and it is the first thing the next session should build if 0010 has run.
-- ⚠️ **Nobody's phone rings, and the urgent case is the case this feature is for.** In-app only.
-  Email would need a sender, a domain and about a day; it is written up in A15 and deliberately
-  not assumed.
-- ⚠️ **`main` is four sessions stale.** See the top block.
-- ⚠️ **`addMember` stamps `joinedAt` with `toISOString().slice(0,10)`**, which is UTC and is a
-  different calendar day from the coach's for part of every day. Not touched — it is a different
-  field on a different path — but it is the same bug `daysBetween`'s comment exists for, and
-  `localDateStr` in `store.js` is now the correct helper sitting right next to it.
-
----

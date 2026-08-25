@@ -548,6 +548,13 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
       )}
 
       {/* ── Ask for cover ──────────────────────────────────────────────────── */}
+      {/* ⚠️ HIDDEN OUTRIGHT FOR AN UNLINKED COACH, not left to fall through to
+          its own empty state. `askableClasses` returns [] for them, so the
+          section would say "none of the classes are typed under your name" —
+          which is a true sentence about the wrong cause, two inches under a
+          note giving the right one. Found by rendering the panel and reading
+          it, which is the only way this kind of defect turns up. */}
+      {mode !== "unlinked" && (
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
         <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Need cover?</div>
         {coaches.length === 0 ? (
@@ -591,6 +598,8 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
           </>
         )}
       </div>
+
+      )}
 
       {/* ── Open requests ──────────────────────────────────────────────────── */}
       {myAsks.length > 0 && (

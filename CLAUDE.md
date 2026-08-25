@@ -15,14 +15,28 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `852550c` (session 31): **`lint:crash` 0 · 1069 unit (39 files) · 483 e2e (47 spec
-files) · 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
+Green as of session 32: **`lint:crash` 0 · 1108 unit (40 files) · 488 e2e (47 spec files) ·
+12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
-⚠️ **`syncBanner.spec.js` flakes under FULL-SUITE load, and has for three sessions running.**
-It is INTERMITTENT, not one-per-run: session 31 did two full runs and got one failure and one
-clean sweep. When it does fail it is a different test each time, and all 7 pass alone. The tell is a `waitForApp*` timeout whose error context has **zero page snapshots**: the
-app never mounted, so nothing about the banner was exercised. **A real regression fails the same
-test twice.** Re-run the spec alone before investigating.
+🔴 **`lint:crash` IS BLIND TO THE TEMPORAL DEAD ZONE.** Session 32 read a `const` above its own
+declaration in a component body: `lint:crash` 0, 1095 unit tests green, and the entire Schedule
+screen fell into its error boundary. It resolves identifiers, and the binding genuinely exists
+in scope. ⚠️ **A broad failure confined to ONE spec file, straight after a render-order change,
+is a crash — not the stale-server flake below.** The tell is an error-boundary heading in the
+page snapshot; the fastest route to the cause is a throwaway spec with `page.on("pageerror")`.
+
+⚠️ **ONE SPEC FLAKES UNDER FULL-SUITE LOAD, and it is not always the same spec.** Recorded here
+for three sessions as a `syncBanner.spec.js` problem; **session 32's full run failed
+`responsive.spec.js` › "Analytics fits" at 390px instead, and passed 28/28 alone.** So the flake
+is in the APP MOUNT under load, not in any one spec — `syncBanner` was simply where it kept
+landing. It is INTERMITTENT, not one-per-run (session 31 got one failure and one clean sweep in
+two full runs).
+
+**The tell is a `waitForApp*` timeout whose error context has ZERO page snapshots** — the app
+never mounted, so nothing the spec is about was exercised. Check it directly:
+`grep -c "ref=" .e2e-scratch/results/<dir>/error-context.md` → `0` means the mount, not your
+change. **A real regression fails the same test twice.** Re-run the spec alone before
+investigating.
 
 🔴 **`npx playwright test` EXITS 0 WITH FAILING TESTS.** Confirmed again in session 31: exit code
 0 under a run reporting `1 failed`. **Read the count, never the exit code.**
@@ -31,7 +45,7 @@ test twice.** Re-run the spec alone before investigating.
 REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
 **all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
 **cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
-has 13.7% headroom (310.73 / 360 kB after session 31's coach edit form) and is not the constraint.
+has 12.4% headroom (315.22 / 360 kB after session 32's coach-cover sync) and is not the constraint.
 
 🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
 and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
