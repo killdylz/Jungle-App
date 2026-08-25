@@ -67,6 +67,38 @@ create index if not exists idx_coach_roster_gym on public.coach_roster(gym_id);
 create unique index if not exists idx_coach_roster_user
   on public.coach_roster(gym_id, user_id) where user_id is not null;
 
+-- ── coach_absences (S33) ─────────────────────────────────────────────────────
+-- "I am away these dates." One row per ABSENCE, not per class.
+--
+-- 🔴 THE CLASSES ARE NOT STORED HERE, AND THAT IS THE DESIGN. A coach away for a
+-- week does not have "a class that needs cover", they have six — and which six
+-- is DERIVED from the schedule (`src/lib/coachAbsence.js`), not copied. Storing
+-- the list would freeze it: a class added, moved or renamed after the absence
+-- was recorded would be missing from a list that looked complete. The cover
+-- requests raised against an absence carry their own denormalised copy of the
+-- class, because those are answers somebody agreed to and must not restate
+-- themselves; the absence itself stays a question.
+create table if not exists public.coach_absences (
+  id         uuid primary key,             -- client-minted
+  gym_id     uuid not null references public.gyms(id) on delete cascade,
+  coach_id   uuid not null references public.coach_roster(id) on delete cascade,
+  -- LOCAL calendar dates, inclusive both ends. `date`, not `timestamptz`: a
+  -- coach away "Monday to Friday" is away for those days on their own wall
+  -- calendar, and storing an instant would make the answer depend on where the
+  -- reader is standing. Same reasoning as coach_roster.availability_at.
+  from_date  date not null,
+  to_date    date not null,
+  note       text,
+  created_at timestamptz not null default now(),
+  -- Withdrawn rather than deleted, for the same reason a cover request is
+  -- `cancelled` rather than removed: the covers already raised against it have
+  -- to stay traceable to something.
+  cancelled_at timestamptz,
+  check (to_date >= from_date)
+);
+create index if not exists idx_coach_absences_gym on public.coach_absences(gym_id, from_date desc);
+create index if not exists idx_coach_absences_coach on public.coach_absences(coach_id, from_date desc);
+
 -- ── cover_requests ───────────────────────────────────────────────────────────
 -- "I cannot teach this class; can someone take it." One row per ASK.
 --
@@ -85,15 +117,41 @@ create table if not exists public.cover_requests (
   class_label   text not null,
   class_day     text,
   class_slot    text,
-  -- Who asked, and who is being asked. Roster ids, not profile ids: the roster
-  -- is the gym's own naming of its staff and an entry may have no account.
+  -- 🔴 WHICH DAY. Added S33 and it is what makes a cover a fact about ONE
+  -- occurrence rather than about a recurring rule. Before it, approving cover
+  -- for a coach who was ill on one Monday moved that class to somebody else
+  -- EVERY Monday, because a rule has no dates and there was nowhere else for the
+  -- answer to go. Nothing rewrites the schedule now; `applyCovers` overlays this
+  -- onto the derived occurrences and it lasts exactly as long as the day it names.
+  --
+  -- NULLABLE, for exactly one reason: requests raised before S33 have no date,
+  -- and one such row in a batch would have PostgREST reject every cover request
+  -- in the gym. A null means "raised before dated cover existed" and the client
+  -- shows it as such rather than guessing a day.
+  class_date    date,
+  -- Which absence raised this, so a gym sees "Mara is away, four of six covered"
+  -- rather than six unrelated rows. Null for a one-off ask, which is normal.
+  absence_id    uuid references public.coach_absences(id) on delete set null,
+  -- Who asked, and WHO IS COVERING. Roster ids, not profile ids: the roster is
+  -- the gym's own naming of its staff and an entry may have no account.
+  --
+  -- ⚠️ `to_coach_id` CHANGED MEANING IN S33 and the column did not. It was "who
+  -- is being asked", set when the request was raised; a cover now goes to
+  -- everyone who is free and is taken by the first to claim it, so it is "who
+  -- is covering" and is NULL until somebody does. One field, one meaning, set at
+  -- the moment it becomes true.
   from_coach_id uuid references public.coach_roster(id) on delete set null,
   to_coach_id   uuid references public.coach_roster(id) on delete set null,
   -- MUST stay in step with COVER_STATUSES in src/lib/coverRequests.js — a CHECK
   -- rejecting a client value is this repo's recurring data-loss bug, guarded in
   -- src/lib/dbConstraints.test.js.
+  -- ⚠️ `rejected` WAS HERE AND WENT IN S33. It belonged to the directed flow,
+  -- where one named coach was asked and could say no. With a board there is no
+  -- addressee to record a refusal against — not claiming something IS declining
+  -- it — and a value the client can never write is one dbConstraints.test.js
+  -- correctly reports as drift.
   status        text not null default 'open'
-                  check (status in ('open','approved','rejected','cancelled')),
+                  check (status in ('open','approved','cancelled')),
   note          text,
   created_at    timestamptz not null default now(),
   -- When it stopped being open, and by whom. Null while open.
@@ -102,6 +160,29 @@ create table if not exists public.cover_requests (
 );
 create index if not exists idx_cover_requests_gym on public.cover_requests(gym_id, status, created_at desc);
 create index if not exists idx_cover_requests_to  on public.cover_requests(to_coach_id, status);
+-- The board's own query: everything still open, soonest first.
+create index if not exists idx_cover_requests_board on public.cover_requests(gym_id, status, class_date);
+
+-- ── If you already ran an EARLIER copy of this file ──────────────────────────
+-- 🔴 `create table if not exists` DOES NOT ADD A COLUMN to a table that already
+-- exists, so a project that ran the S32 version of this migration would silently
+-- keep a `cover_requests` with no `class_date` — and the client would then fail
+-- every cover push with a message naming only the table. These two statements
+-- make re-running this file correct in both worlds. They are no-ops on a fresh
+-- database, where the create above already did the work.
+--
+-- ⚠️ The status CHECK cannot be widened or narrowed by `add column`, so it is
+-- dropped and rebuilt. On a fresh database the constraint name will not exist,
+-- which `if exists` handles.
+alter table public.cover_requests add column if not exists class_date date;
+alter table public.cover_requests add column if not exists absence_id uuid references public.coach_absences(id) on delete set null;
+do $$
+begin
+  alter table public.cover_requests drop constraint if exists cover_requests_status_check;
+  alter table public.cover_requests add constraint cover_requests_status_check
+    check (status in ('open','approved','cancelled'));
+exception when others then null;
+end $$;
 
 -- 🔴 ONE APPROVAL PER REQUEST, decided by the DATABASE and not by the client.
 -- Two coaches opening the same request on two phones and both pressing Approve
@@ -128,6 +209,17 @@ create index if not exists idx_cover_requests_to  on public.cover_requests(to_co
 -- ── Row-Level Security ───────────────────────────────────────────────────────
 alter table public.coach_roster    enable row level security;
 alter table public.cover_requests  enable row level security;
+
+alter table public.coach_absences   enable row level security;
+
+drop policy if exists coach_absences_rw on public.coach_absences;
+-- Same shape as the roster: an absence is gym-scoped staff data, and a coach
+-- recording their own is the ordinary case. Narrowing this to "only your own
+-- row" is tempting and wrong — a manager records an absence for a coach who
+-- phoned in, which is how most of them actually get recorded.
+create policy coach_absences_rw on public.coach_absences for all
+  using      (public.is_platform_admin() or gym_id in (select public.user_gym_ids()))
+  with check (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
 
 drop policy if exists coach_roster_rw on public.coach_roster;
 create policy coach_roster_rw on public.coach_roster for all

@@ -53,6 +53,13 @@ export function coverApprovedPayload({ request, fromName = "", toName = "" } = {
     kind: "cover.approved",
     classRef:   request.classClientId || "",
     classLabel: request.classLabel || "",
+    // 🔴 WHICH DAY, added S33 alongside dated cover. `day` is "Mon" — a property
+    // of the recurring rule — and on its own it told a booking system to change
+    // an instructor on a class that repeats, which is the permanent
+    // reassignment this product spent a session removing. `date` is the one
+    // occurrence that actually changed hands. "" only for a request raised
+    // before dated cover existed.
+    date:       request.classDate || "",
     day:        request.classDay || "",
     slot:       request.classSlot || "",
     previousCoach: String(fromName || ""),
@@ -132,8 +139,11 @@ export const OUTBOX_CAP = 200;
 // to get it wrong with — a key added later would have to be back-filled onto
 // records written without one.
 //
-// Every field comes from the pinned payload. `approvedAt` is what makes two
-// approvals of the same class distinct, and `settleCover` guarantees it: a
+// Every field comes from the pinned payload. `date` is what makes covering the
+// same class on two different days two different events — before S33 the key
+// could not express that at all, because neither could the payload. `approvedAt`
+// is what makes two approvals of the SAME occurrence distinct (raised, withdrawn,
+// raised again), and `settleCover` guarantees it: a
 // request only ever acquires `settledAt` alongside a real transition, so the
 // same approval retried carries the same stamp and a later approval of the same
 // class carries a different one.
@@ -145,7 +155,7 @@ export const OUTBOX_CAP = 200;
 // identifies the event uniquely.
 export function coverPushKey(payload) {
   if (!payload || !payload.kind) return "";
-  return [payload.kind, payload.classRef, payload.day, payload.slot,
+  return [payload.kind, payload.classRef, payload.date, payload.day, payload.slot,
           payload.newCoach, payload.approvedAt].join("|");
 }
 

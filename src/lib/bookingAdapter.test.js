@@ -1,13 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { coverApprovedPayload, bookingAdapter, NO_BOOKING_SYSTEM,
          coverPushKey, pushCoverApproved, OUTBOX_CAP } from "./bookingAdapter.js";
-import { makeCoverRequest, settleCover } from "./coverRequests.js";
+import { makeCoverForOccurrence, settleCover } from "./coverRequests.js";
 
 const now = Date.parse("2026-08-24T05:00:00Z");
+const OCC = { ruleId: "uc1", name: "Strength Lab", coachName: "Mara", day: "Mon",
+              slot: "06:00", date: "2026-08-24", startsAt: "2026-08-24T06:00:00.000Z" };
 const approved = () => settleCover(
-  [makeCoverRequest({ id: "r1", classRule: { id: "uc1", name: "Strength Lab", day: "Mon", slot: "06:00" },
-                      fromCoachId: "a", toCoachId: "b", now })],
-  "r1", "approved", { now }).request;
+  [makeCoverForOccurrence({ id: "r1", occurrence: OCC, fromCoachId: "a", now })],
+  "r1", "approved", { now, coachId: "b" }).request;
 
 describe("coverApprovedPayload — the contract, pinned", () => {
   it("is the shape a booking system would be handed", () => {
@@ -15,6 +16,7 @@ describe("coverApprovedPayload — the contract, pinned", () => {
       kind: "cover.approved",
       classRef: "uc1",
       classLabel: "Strength Lab",
+      date: "2026-08-24",
       day: "Mon",
       slot: "06:00",
       previousCoach: "Mara",
@@ -97,6 +99,13 @@ describe("coverPushKey", () => {
     expect(coverPushKey(p())).toBe(coverPushKey(p()));
     expect(coverPushKey(p())).toContain("cover.approved");
     expect(coverPushKey(p())).toContain("uc1");
+  });
+
+  it("🔴 the SAME class on a different DAY is a different event", () => {
+    // The key S33 added. Covering Strength Lab on the 24th and on the 31st are
+    // two substitutions a booking system has to be told about separately; before
+    // dated cover the payload could not tell them apart at all.
+    expect(coverPushKey({ ...p(), date: "2026-08-31" })).not.toBe(coverPushKey(p()));
   });
 
   it("🔴 a LATER approval of the same class is a different event", () => {

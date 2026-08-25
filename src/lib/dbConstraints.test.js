@@ -4,7 +4,7 @@ import { ATTENDANCE_SOURCES, RETENTION_ACTIONS, MEMBER_STATUSES,
          PERSONA_PLAN_SOURCES, PERSONA_KINDS, SCHEDULE_REPEATS } from "./store.js";
 import { RETENTION_RULES } from "./retention.js";
 import { COVER_STATUSES } from "./coverRequests.js";
-import { _classToRow, _memberToRow, _coachToRow, _coverToRow } from "./store.js";
+import { _classToRow, _memberToRow, _coachToRow, _coverToRow, _absenceToRow } from "./store.js";
 import { TEAM_ROLES } from "../screens/AdminTeamScreen.jsx";
 
 // ─── The recurring data-loss bug, guarded in one place ───────────────────────
@@ -169,9 +169,13 @@ const MAPPER_SAMPLES = [
      availability: { Mon: ["06:00"] }, availabilityAt: "2026-08-24" }],
   ["cover_requests", "0010_coach_cover.sql", _coverToRow,
    { id: "r1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon",
-     classSlot: "06:00", fromCoachId: "c1", toCoachId: "c2", note: "flu",
+     classSlot: "06:00", classDate: "2026-08-24", absenceId: "a1",
+     fromCoachId: "c1", toCoachId: "c2", note: "flu",
      status: "approved", createdAt: "2026-08-24T05:00:00.000Z",
      settledAt: "2026-08-24T05:04:00.000Z", settledBy: "u2" }],
+  ["coach_absences", "0010_coach_cover.sql", _absenceToRow,
+   { id: "a1", coachId: "c1", from: "2026-08-24", to: "2026-08-28", note: "leave",
+     createdAt: "2026-08-20T05:00:00.000Z", cancelledAt: "2026-08-21T05:00:00.000Z" }],
 ];
 
 // Column names from a `create table` block. A continuation line (`check (...)`,
@@ -220,6 +224,16 @@ describe("🔴 row mappers only name columns the database actually has", () => {
   it("the 0010 mappers are judged against 0010's own columns", () => {
     const roster = tableColumns("0010_coach_cover.sql", "coach_roster");
     const cover  = tableColumns("0010_coach_cover.sql", "cover_requests");
+    const absent = tableColumns("0010_coach_cover.sql", "coach_absences");
+
+    // 🔴 S33's two new columns. A cover with no `class_date` is a cover that
+    // means "from now on", which is the defect dated cover exists to remove —
+    // so the column being in the migration is load-bearing, not incidental.
+    expect(cover.has("class_date")).toBe(true);
+    expect(cover.has("absence_id")).toBe(true);
+    expect(absent.has("from_date")).toBe(true);
+    expect(absent.has("to_date")).toBe(true);
+    expect(absent.has("class_label")).toBe(false);   // not a cover request
 
     // Columns only this table has, so the two cannot be silently swapped.
     expect(roster.has("availability_at")).toBe(true);

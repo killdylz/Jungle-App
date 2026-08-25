@@ -25,7 +25,9 @@ import { makeCoach, coachKey, normaliseAvailability, resolveCoach } from "./coac
 // The settle rule lives in coverRequests.js and stays there: this module owns
 // where a row is written, not what a legal transition is. Neither file imports
 // this one back, so the roster/cover pair costs no cycle and no new chunk.
-import { settleCover } from "./coverRequests.js";
+import { settleCover, makeCoverForOccurrence, requestsForOccurrence,
+         isOpen } from "./coverRequests.js";
+import { makeAbsence, occurrenceDate } from "./coachAbsence.js";
 import { compareAndSet, CAS_WON, CAS_LOST } from "./compareAndSet.js";
 import { localDateStr } from "./format.js";
 
@@ -59,6 +61,7 @@ const KEYS = {
   coaches:       "jungle_coaches",
   coverRequests: "jungle_cover_requests",
   bookingOutbox: "jungle_booking_outbox",
+  absences:      "jungle_coach_absences",
 };
 
 // `localDateStr` now lives in format.js and is imported at the top of this file:
@@ -1850,6 +1853,9 @@ const _RETRY_PUSHERS = {
   // roster's own delta is empty when it is already synced, so the extra call
   // costs one localStorage read and no request.
   coach_roster:         () => { _flushPendingDeletes("coach_roster"); saveCoaches(getCoaches()); },
+  // Absences reference the roster, so the roster goes first for the same reason
+  // cover requests do. No tombstone flush: withdrawing an absence is an update.
+  coach_absences:       () => { saveCoaches(getCoaches()); saveAbsences(getAbsences()); },
   cover_requests:       () => { saveCoaches(getCoaches());
                           _pushCoverInserts(getCoverRequests().map(_coverToRow)); },
   members:              () => saveMembers(getMembers()),
@@ -2117,6 +2123,10 @@ export function _coverToRow(r) {
     class_label:     r.classLabel,
     class_day:       r.classDay || null,
     class_slot:      r.classSlot || null,
+    // 🔴 WHICH DAY. Null only for a request raised before S33 — see 0010's own
+    // comment on why the column is nullable rather than `not null`.
+    class_date:      r.classDate || null,
+    absence_id:      r.absenceId || null,
     // Roster ids, and "" is the local "not known". Both are nullable FKs to
     // coach_roster, so "" must become null or Postgres rejects the row.
     from_coach_id:   r.fromCoachId || null,
@@ -2136,6 +2146,7 @@ function _rowToCover(r) {
   return {
     id: r.id, classClientId: r.class_client_id || "", classLabel: r.class_label || "",
     classDay: r.class_day || "", classSlot: r.class_slot || "",
+    classDate: r.class_date || "", absenceId: r.absence_id || "",
     fromCoachId: r.from_coach_id || "", toCoachId: r.to_coach_id || "",
     note: r.note || "", status: r.status || "open",
     createdAt: r.created_at || "", settledAt: r.settled_at || "",
@@ -2188,9 +2199,9 @@ export function addCoverRequest(req) {
 //
 // Returns settleCover's shape plus `where` ("device" | "server") and, on the
 // losing branch, the status that actually won.
-export async function settleCoverRequest(id, next, { now = Date.now() } = {}) {
+export async function settleCoverRequest(id, next, { now = Date.now(), coachId = "" } = {}) {
   const list = getCoverRequests();
-  const local = settleCover(list, id, next, { now, by: _ctx.userId || "" });
+  const local = settleCover(list, id, next, { now, by: _ctx.userId || "", coachId });
 
   // Refused locally — gone, illegal, or already settled on THIS device. No
   // request is worth making; the caller renders the reason.
@@ -2207,7 +2218,11 @@ export async function settleCoverRequest(id, next, { now = Date.now() } = {}) {
     // The guard IS the mutual exclusion. `status: "open"` re-evaluated under the
     // row lock is what the second writer loses against.
     { status: "open" },
-    { status: row.status, settled_at: row.settled_at, settled_by: row.settled_by });
+    // `to_coach_id` rides the same conditional update, so "who is covering" is
+    // written by the transaction that decided the race and cannot disagree with
+    // it. Setting it separately would let a lost claim still stamp its name.
+    { status: row.status, settled_at: row.settled_at, settled_by: row.settled_by,
+      to_coach_id: row.to_coach_id });
 
   if (res.outcome === CAS_WON) {
     saveCoverRequests(local.list);
@@ -2248,6 +2263,134 @@ export async function settleCoverRequest(id, next, { now = Date.now() } = {}) {
   return { list, request: local.request, changed: false, reason: "unconfirmed", where: "server" };
 }
 
+// ── Coach absences (S33) → localStorage + Postgres ──────────────────────────
+//
+// Local shape: { id, coachId, from, to, note, createdAt, cancelledAt }.
+// `coachAbsence.js` owns what an absence MEANS and which classes it takes a
+// coach away from; this owns only where the row lives.
+//
+// ⚠️ NO `_bgDelete` HERE, and that is not an omission. Withdrawing an absence
+// sets `cancelledAt` rather than removing the row — the cover requests already
+// raised against it point at its id, and deleting it would leave them pointing
+// at nothing. So the delta writer alone is enough and there are no tombstones to
+// flush, which is the first id-keyed domain in this file that genuinely needs
+// neither.
+export function _absenceToRow(a) {
+  return {
+    id:           a.id,
+    gym_id:       _ctx.gymId,
+    coach_id:     a.coachId,
+    // Local calendar dates, travelling as the strings they already are. Nothing
+    // here builds a Date — see coachAbsence.js's header for why.
+    from_date:    a.from,
+    to_date:      a.to,
+    note:         a.note || null,
+    created_at:   a.createdAt || new Date().toISOString(),
+    cancelled_at: a.cancelledAt || null,
+  };
+}
+function _rowToAbsence(r) {
+  return {
+    id: r.id, coachId: r.coach_id || "",
+    from: r.from_date || "", to: r.to_date || "",
+    note: r.note || "", createdAt: r.created_at || "",
+    cancelledAt: r.cancelled_at || "",
+  };
+}
+
+export function getAbsences() { return readJSON(KEYS.absences, []); }
+export function saveAbsences(list) {
+  writeJSON(KEYS.absences, list || []);
+  if (!_synced()) return;
+  _bgUpsertDelta("coach_absences", (list || []).map(_absenceToRow));
+}
+
+// Record one. Returns { absence, absences } or { absence: null, ... } when the
+// range was refused — `makeAbsence` is the single judge of that and the caller
+// renders `absenceError`'s sentence rather than re-deciding.
+export function addAbsence({ coachId, from, to, note = "" } = {}) {
+  const list = getAbsences();
+  const a = makeAbsence({ id: newId(), coachId, from, to, note });
+  if (!a) return { absence: null, absences: list };
+  const next = [...list, a];
+  saveAbsences(next);
+  return { absence: a, absences: next };
+}
+
+// Withdraw one, and take back the asks it raised. NOT a delete: see the header.
+//
+// 🔴 A CLAIMED COVER IS LEFT ALONE, and that is the whole judgement in this
+// function. "Mara is back after all" cancels the QUESTION; it does not cancel
+// Dev having already agreed to teach Thursday and planned their week around it.
+// Withdrawing that is a conversation between two people, not a side effect of
+// pressing a button — so the open ones go and the claimed ones stay, and the
+// panel says how many of each.
+// ⚠️ ASYNC, AND THE WITHDRAWALS ARE SEQUENTIAL. Fired in parallel they each read
+// `getCoverRequests()` before any of them writes, so every one of them saves a
+// list containing only its OWN change and the last write wins — a coach
+// withdrawing a week's absence would find one class still on the board and no
+// error anywhere. Found by a test asserting all of them landed, which is the
+// only reason it was found at all: with a server each settle is a round trip, so
+// the race is wide open and completely invisible on a fast one.
+export async function cancelAbsence(id, { now = Date.now() } = {}) {
+  const list = getAbsences();
+  const i = list.findIndex(a => a && a.id === id);
+  if (i < 0 || list[i].cancelledAt) return { absence: null, absences: list, withdrawn: 0, kept: 0 };
+  const next = list.slice();
+  next[i] = { ...list[i], cancelledAt: new Date(now).toISOString() };
+  saveAbsences(next);
+
+  const mine = getCoverRequests().filter(r => r && r.absenceId === id);
+  const open = mine.filter(isOpen);
+  const kept = mine.filter(r => r.status === "approved").length;
+  // Withdrawn one at a time through the ordinary settle so each goes through the
+  // same transition rule — and, when there is a server, the same conditional
+  // update. A coach claiming one of these in the same second must still win it.
+  for (const r of open) await settleCoverRequest(r.id, "cancelled", { now });
+
+  return { absence: next[i], absences: next, withdrawn: open.length, kept };
+}
+
+/**
+ * Raise a cover request for every class an absence takes a coach away from.
+ *
+ * ⚠️ SKIPS AN OCCURRENCE THAT ALREADY HAS ONE. Re-recording an overlapping
+ * absence, or opening the panel twice, must not put the same Thursday on the
+ * board two or three times — two open asks for one class is how two coaches both
+ * turn up. A CANCELLED request does not count as one: a coach who withdrew an
+ * ask and then genuinely does need cover has to be able to raise it again.
+ *
+ * The inserts go in ONE batch rather than through `addCoverRequest` per class:
+ * a week's absence is six requests and six fire-and-forget round trips would be
+ * six chances to half-land.
+ */
+export function raiseCoversForAbsence(absence, occurrences) {
+  const existing = getCoverRequests();
+  if (!absence?.id) return { created: [], requests: existing };
+
+  const made = [];
+  const seen = new Set();
+  for (const o of occurrences || []) {
+    const date = o?.date || occurrenceDate(o);
+    if (!date || !o.ruleId) continue;
+    const key = `${o.ruleId}@${date}`;
+    if (seen.has(key)) continue;                 // two rules onto one cell
+    seen.add(key);
+    const already = requestsForOccurrence(existing, o.ruleId, date)
+      .some(r => r.status !== "cancelled");
+    if (already) continue;
+    const req = makeCoverForOccurrence({ id: newId(), occurrence: o,
+                                         fromCoachId: absence.coachId, absenceId: absence.id });
+    if (req) made.push(req);
+  }
+  if (!made.length) return { created: [], requests: existing };
+
+  const next = [...existing, ...made];
+  saveCoverRequests(next);
+  if (_synced()) _pushCoverInserts(made.map(_coverToRow));
+  return { created: made, requests: next };
+}
+
 // ── The booking outbox (S32 §2.4) → localStorage ONLY, and staying that way ──
 //
 // A record of what each approval handed to the booking seam. `bookingAdapter.js`
@@ -2285,8 +2428,8 @@ export function saveBookingOutbox(list) { writeJSON(KEYS.bookingOutbox, list || 
 //                    that LOST, and preferring it would resurrect exactly the
 //                    approval-that-did-not-happen this design is built around.
 //
-// Returns { coaches, requests } or null when not synced / on error, so the
-// caller keeps whatever it already had.
+// Returns { coaches, requests, absences } or null when not synced / on error,
+// so the caller keeps whatever it already had.
 function _probeTable(table, error) {
   if (!error) _noteAbsent(table, false);
   else if (_isMissingTable(error)) _noteAbsent(table, true);
@@ -2295,9 +2438,10 @@ function _probeTable(table, error) {
 export async function hydrateCoachCover() {
   if (!_synced()) return null;
   try {
-    const [rRes, qRes] = await Promise.all([
+    const [rRes, qRes, aRes] = await Promise.all([
       supabase.from("coach_roster").select("*").eq("gym_id", _ctx.gymId),
       supabase.from("cover_requests").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("coach_absences").select("*").eq("gym_id", _ctx.gymId),
     ]);
 
     // The probe that lets the UI stop claiming delivery. Each table is recorded
@@ -2310,14 +2454,17 @@ export async function hydrateCoachCover() {
     // the wifi is working. Absence is asserted only by the error that means it.
     _probeTable("coach_roster", rRes.error);
     _probeTable("cover_requests", qRes.error);
+    _probeTable("coach_absences", aRes.error);
 
-    if (rRes.error || qRes.error) {
-      console.warn("[store] hydrateCoachCover failed:", (rRes.error || qRes.error).message);
+    if (rRes.error || qRes.error || aRes.error) {
+      console.warn("[store] hydrateCoachCover failed:",
+        (rRes.error || qRes.error || aRes.error).message);
       return null;
     }
 
     const serverCoaches = (rRes.data || []).map(_rowToCoach);
     const serverReqs    = (qRes.data || []).map(_rowToCover);
+    const serverAbs     = (aRes.data || []).map(_rowToAbsence);
     const localCoaches  = getCoaches();
 
     // Seed from local when the server has nothing — the same first-run shape as
@@ -2334,6 +2481,8 @@ export async function hydrateCoachCover() {
       // it is why that function drops marks before re-saving too.
       localCoaches.forEach(c => c && _unmark("coach_roster", c.id));
       saveCoaches(localCoaches);
+      const localAbs = getAbsences();
+      if (localAbs.length) { localAbs.forEach(a => a && _unmark("coach_absences", a.id)); saveAbsences(localAbs); }
       const localReqs = getCoverRequests();
       if (localReqs.length) _pushCoverInserts(localReqs.map(_coverToRow));
       return null;
@@ -2342,6 +2491,18 @@ export async function hydrateCoachCover() {
     const unsynced = _unsyncedIds("coach_roster", localCoaches.map(_coachToRow));
     const preferred = _preferLocalEdits(serverCoaches, localCoaches, unsynced);
     const coaches = _guardList("coach_roster", preferred, getCoaches, saveCoaches);
+    // ⚠️ ABSENCES TAKE THE ROSTER'S RULE, NOT THE COVER REQUESTS'. An absence is
+    // something a coach TYPES on their own device and the push is
+    // fire-and-forget, so the "server has an older copy of a row I just edited"
+    // case is live here exactly as it is for an availability grid. A cover's
+    // status is never legitimately ahead of the server's, because the only path
+    // that changes it while synced waits for Postgres to agree first.
+    const localAbs   = getAbsences();
+    const absUnsynced = _unsyncedIds("coach_absences", localAbs.map(_absenceToRow));
+    const absences   = _guardList("coach_absences",
+                                  _preferLocalEdits(serverAbs, localAbs, absUnsynced),
+                                  getAbsences, saveAbsences);
+
     const requests = _guardList("cover_requests", serverReqs, getCoverRequests,
                                 // ⚠️ The resave for THIS table is the insert, not a
                                 // list upsert — see the section header.
@@ -2350,6 +2511,7 @@ export async function hydrateCoachCover() {
 
     writeJSON(KEYS.coaches, coaches);
     writeJSON(KEYS.coverRequests, requests);
+    writeJSON(KEYS.absences, absences);
 
     // A row we kept because it was newer than the server's is a row the server
     // still has not got. `_guardList` only re-pushes when the LEDGER says the
@@ -2357,8 +2519,9 @@ export async function hydrateCoachCover() {
     // a tab closed mid-request marks nothing and records no failure. Re-saving
     // recomputes the delta and sends exactly those rows.
     if (unsynced.size) saveCoaches(coaches);
+    if (absUnsynced.size) saveAbsences(absences);
 
-    return { coaches, requests };
+    return { coaches, requests, absences };
   } catch (e) {
     console.warn("[store] hydrateCoachCover error:", e?.message || e);
     return null;
