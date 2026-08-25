@@ -12,10 +12,10 @@ _Last updated: 2026-08-25 (session 32)_
 
 ## Session 32 — the roster leaves the device, and the panel learns who is holding the phone
 
-> **Gates green at `HEAD`.** `lint:crash` **0** · **1108 unit** (40 files) · **488 e2e**
+> **Gates green at `HEAD`.** `lint:crash` **0** · **1109 unit** (40 files) · **488 e2e**
 > (47 spec files) · 12-chunk build · **0 over budget**. `StaffApp.js` **315.22 / 360 kB**
 > (12.4%), `index.js` **203.06 / 215 kB** (5.6%, still the tightest). Six commits, each pushed
-> after its own green run.
+> after its own green run (the sixth is this block plus one last fix, below).
 > ⚠️ **The full run was 487 passed / 1 failed, and the failure was the documented mount flake**
 > — but it landed on `responsive.spec.js` › "Analytics fits" @390px, **not** on
 > `syncBanner.spec.js`, which is where CLAUDE.md had recorded it for three sessions. Error
@@ -240,6 +240,10 @@ panel this repo bans, on a queue that may never be sent at all.
 - 🔴 **A15 is now a real 10-minute unblock** — the client half exists, so running 0010 does what
   the queue says. Until then a gym with credentials sees "your Jungle server is connected but
   has no coach storage set up", which is the honest version of what it used to claim.
+- ✅ **One late fix, after the full run:** the hydrate probe cleared a known-missing table on
+  ANY error, so an outage would have put "waiting for Dev to open Jungle" back on screen for a
+  gym that has never run 0010 — a claim that was false either way. Absence is now asserted only
+  by the error that means it, and only a successful read clears it. Mutation-checked.
 - 🔴 **`compareAndSet` still has not run against a real Postgres.** Everything asserted about it
   — including this session's settle — is against a fake modelling PostgREST's documented
   contract. The first real race will be the first real run; the two assumptions to check are at

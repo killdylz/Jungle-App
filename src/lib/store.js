@@ -2287,6 +2287,11 @@ export function saveBookingOutbox(list) { writeJSON(KEYS.bookingOutbox, list || 
 //
 // Returns { coaches, requests } or null when not synced / on error, so the
 // caller keeps whatever it already had.
+function _probeTable(table, error) {
+  if (!error) _noteAbsent(table, false);
+  else if (_isMissingTable(error)) _noteAbsent(table, true);
+}
+
 export async function hydrateCoachCover() {
   if (!_synced()) return null;
   try {
@@ -2295,11 +2300,16 @@ export async function hydrateCoachCover() {
       supabase.from("cover_requests").select("*").eq("gym_id", _ctx.gymId),
     ]);
 
-    // The probe that lets the UI stop claiming delivery. Recorded whether or not
-    // the read succeeded for the other table — they are separate relations and
-    // 0010 could half-apply.
-    _noteAbsent("coach_roster", !!rRes.error && _isMissingTable(rRes.error));
-    _noteAbsent("cover_requests", !!qRes.error && _isMissingTable(qRes.error));
+    // The probe that lets the UI stop claiming delivery. Each table is recorded
+    // on its own — they are separate relations and 0010 could half-apply.
+    //
+    // ⚠️ ONLY A SUCCESSFUL READ CLEARS AN ABSENCE. A network error is not
+    // evidence that the table is there; treating it as such would let a gym that
+    // has never run 0010 go back to being told a cover request is "waiting for
+    // Dev" for the duration of an outage — a claim that is false whether or not
+    // the wifi is working. Absence is asserted only by the error that means it.
+    _probeTable("coach_roster", rRes.error);
+    _probeTable("cover_requests", qRes.error);
 
     if (rRes.error || qRes.error) {
       console.warn("[store] hydrateCoachCover failed:", (rRes.error || qRes.error).message);

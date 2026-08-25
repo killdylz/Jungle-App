@@ -15,7 +15,7 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 32: **`lint:crash` 0 · 1108 unit (40 files) · 488 e2e (47 spec files) ·
+Green as of session 32: **`lint:crash` 0 · 1109 unit (40 files) · 488 e2e (47 spec files) ·
 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
 🔴 **`lint:crash` IS BLIND TO THE TEMPORAL DEAD ZONE.** Session 32 read a `const` above its own

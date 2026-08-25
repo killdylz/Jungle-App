@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ── The fake server ─────────────────────────────────────────────────────────
-const db = { tables: {}, absent: new Set(), calls: [] };
+const db = { tables: {}, absent: new Set(), calls: [], offline: false };
 
 const missingTable = (t) => ({
   code: "PGRST205",
@@ -33,6 +33,9 @@ function matches(row, filters) { return filters.every(([c, v]) => row[c] === v);
 
 function run(q) {
   db.calls.push({ table: q.table, op: q.op });
+  // A dropped request, which is a different thing from a missing relation and
+  // must not be read as one.
+  if (db.offline) return { data: null, error: { code: "PGRST000", message: "TypeError: Failed to fetch" } };
   if (db.absent.has(q.table)) return { data: null, error: missingTable(q.table) };
   const rows = rowsOf(q.table);
 
@@ -97,7 +100,7 @@ function newDevice() {
 const flush = () => new Promise(r => setTimeout(r, 0));
 
 beforeEach(() => {
-  db.tables = {}; db.absent = new Set(); db.calls = [];
+  db.tables = {}; db.absent = new Set(); db.calls = []; db.offline = false;
   newDevice();
 });
 
@@ -340,6 +343,24 @@ describe("a table the database has not got is not claimed as delivery", () => {
     expect(r.changed).toBe(true);
     expect(r.where).toBe("device");                   // exactly the S30 behaviour
     expect(store.getCoverRequests()[0].status).toBe("approved");
+  });
+
+  it("🔴 an outage does not un-learn that the table is missing", async () => {
+    db.absent.add("cover_requests");
+    db.absent.add("coach_roster");
+    await store.hydrateCoachCover();
+    expect(store.tableAbsent("cover_requests")).toBe(true);
+
+    // The gym's wifi drops. A failed request is NOT evidence that Dylan ran the
+    // migration, and treating it as such would put "waiting for Dev to open
+    // Jungle" back on screen for the length of the outage — a claim that was
+    // false either way.
+    db.offline = true;
+    expect(await store.hydrateCoachCover()).toBe(null);
+    db.offline = false;
+
+    expect(store.tableAbsent("cover_requests")).toBe(true);
+    expect(store.tableAbsent("coach_roster")).toBe(true);
   });
 
   it("clears the absence the moment a write succeeds", async () => {
