@@ -3,7 +3,8 @@ import { coachKey, coachKeys, makeCoach, resolveCoach,
          coachNamesOnSchedule, coachReach, rosterCoverage,
          normaliseAvailability, availabilityState, claimsFree, coachesFreeAt,
          parseAliases, formatAliases, coachEditPatch, linkableAccounts,
-         COACH_AVAIL_STALE_DAYS } from "./coachRoster.js";
+         COACH_AVAIL_STALE_DAYS, rosterViewerMode, selfCoach, askableClasses
+} from "./coachRoster.js";
 
 // A roster entry as the store mints it, minus the id ceremony.
 const coach = (name, extra = {}) => ({ ...makeCoach(name, extra), id: extra.id || name });
@@ -342,5 +343,99 @@ describe("linkableAccounts — the picker's list", () => {
   it("survives an empty gym and a missing roster", () => {
     expect(linkableAccounts([], roster, "c1")).toEqual([]);
     expect(linkableAccounts(memberships, null, "c1").every(a => a.takenBy === "")).toBe(true);
+  });
+});
+
+// ─── S32 §2.2 · a coach editing their OWN availability ──────────────────────
+//
+// 🔴 WHY THIS IS TESTED HERE AND NOT IN e2e, stated plainly because it is a real
+// gap rather than a preference. `playwright.config.js` targets the
+// CREDENTIAL-LESS build — no Supabase, so `AuthGate` never mounts and
+// `useJungleAuth()` returns undefined. There is no signed-in user to be, which
+// means the e2e harness can drive the "manage" branch (it does, in
+// coachCover.spec.js) and CANNOT drive the other two at all. Inventing an
+// identity for the test to hold would be inventing exactly the thing the panel
+// spent two sessions refusing to invent.
+//
+// So the decision is extracted to a pure function and pinned exhaustively here,
+// and the part e2e can see — that the no-server panel is unchanged — stays in
+// coachCover.spec.js. Neither half is sufficient alone and the handoff says so.
+describe("rosterViewerMode", () => {
+  const mara = { id: "c1", name: "Mara", userId: "u-mara", aliases: ["Mara K."] };
+  const dev  = { id: "c2", name: "Dev",  userId: "" };
+  const roster = [mara, dev];
+  const canAll = () => true;
+  const canCoach = (cap) => cap !== "members:manage";
+
+  it("🔴 no server means no identity, so the panel stays exactly as it shipped", () => {
+    // The single-device gym. Locking this down would break the build that is
+    // actually in use, to protect it from a second person who does not exist.
+    expect(rosterViewerMode({ roster })).toBe("manage");
+    expect(rosterViewerMode({ can: undefined, userId: "u-mara", roster })).toBe("manage");
+    expect(rosterViewerMode({ can: null, roster })).toBe("manage");
+  });
+
+  it("a manager administers the whole roster", () => {
+    expect(rosterViewerMode({ can: canAll, userId: "u-boss", roster })).toBe("manage");
+    // Including a manager who is also ON the roster — they do not lose the panel
+    // by being a coach as well, which is the normal shape of a boutique studio.
+    expect(rosterViewerMode({ can: canAll, userId: "u-mara", roster })).toBe("manage");
+  });
+
+  it("a coach linked to their entry gets the self view", () => {
+    expect(rosterViewerMode({ can: canCoach, userId: "u-mara", roster })).toBe("self");
+  });
+
+  it("🔴 a coach whose account is not linked gets neither the roster nor a self view", () => {
+    // The dangerous simplification is folding this into "manage": on day one a
+    // manager has linked nobody, so every coach would get the full roster.
+    expect(rosterViewerMode({ can: canCoach, userId: "u-nobody", roster })).toBe("unlinked");
+    expect(rosterViewerMode({ can: canCoach, userId: "", roster })).toBe("unlinked");
+    expect(rosterViewerMode({ can: canCoach, userId: "u-mara", roster: [] })).toBe("unlinked");
+  });
+});
+
+describe("selfCoach", () => {
+  const roster = [{ id: "c1", name: "Mara", userId: "u-mara" },
+                  { id: "c2", name: "Dev", userId: "" }];
+
+  it("finds the entry an account is linked to", () => {
+    expect(selfCoach(roster, "u-mara").id).toBe("c1");
+  });
+
+  it("returns null for the normal cases rather than guessing", () => {
+    expect(selfCoach(roster, "u-other")).toBe(null);
+    expect(selfCoach(roster, "")).toBe(null);
+    expect(selfCoach(roster, null)).toBe(null);
+    // 🔴 An unlinked entry carries userId "". An empty id must not match it, or
+    // every coach without an account would be "you".
+    expect(selfCoach(roster, undefined)).toBe(null);
+    expect(selfCoach([], "u-mara")).toBe(null);
+  });
+});
+
+describe("askableClasses", () => {
+  const mara = { id: "c1", name: "Mara", userId: "u-mara", aliases: ["Mara K."] };
+  const classes = [
+    { id: "uc1", name: "Strength Lab", coach: "Mara" },
+    { id: "uc2", name: "Engine Room",  coach: "mara" },     // same person, typed badly
+    { id: "uc3", name: "Barbell Club", coach: "Mara K." },  // same person, by alias
+    { id: "uc4", name: "Row Club",     coach: "Dev" },
+    { id: "uc5", name: "Open Gym",     coach: "" },
+  ];
+
+  it("a manager may ask for cover on anything on the schedule", () => {
+    expect(askableClasses(classes, "manage", null)).toHaveLength(5);
+  });
+
+  it("a coach may ask for the classes they teach, however the name was typed", () => {
+    expect(askableClasses(classes, "self", mara).map(c => c.id)).toEqual(["uc1", "uc2", "uc3"]);
+  });
+
+  it("🔴 a blank coach field is nobody's class, not everybody's", () => {
+    // `coachKey("")` is "" and `resolveCoach` refuses it — the same rule that
+    // stops a blank alias claiming every unassigned class.
+    expect(askableClasses(classes, "self", mara).map(c => c.id)).not.toContain("uc5");
+    expect(askableClasses(classes, "unlinked", null)).toEqual([]);
   });
 });

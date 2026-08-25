@@ -269,6 +269,64 @@ test.describe("cover requests", () => {
 // screen that says "Sent" over a row nobody will ever read, which is the same
 // defect class as the AA panel that reported "passes" on a palette it had not
 // checked, and this repo has shipped that once already.
+// ─── S32 §2.2 · the half of the viewer rule this harness CAN see ────────────
+//
+// 🔴 THE OTHER TWO MODES CANNOT BE DRIVEN FROM HERE AT ALL, and that is a
+// property of the target rather than an omission. This suite runs the
+// CREDENTIAL-LESS build, so `AuthGate` never mounts, `useJungleAuth()` is
+// undefined and there is no signed-in user to be. `rosterViewerMode`'s "self"
+// and "unlinked" branches are pinned exhaustively as a pure function in
+// src/lib/coachRoster.test.js; what belongs HERE is the branch that ships today.
+//
+// It is worth a test of its own precisely because it is the one a lockdown
+// would break silently: scope the panel by identity, get the "no identity" case
+// slightly wrong, and every single-device gym loses its roster to a permission
+// check protecting it from a second person who does not exist.
+test("🔴 with no server the panel is the manager's, because there is nobody to scope it to", async ({ page }) => {
+  const errors = watchConsole(page);
+  await freshApp(page);
+  await seed(page, { coaches: [roster()] });
+
+  // POSITIVE CONTROL: the panel and the fixture are really on screen.
+  await expect(page.getByText("Coach roster", { exact: true })).toBeVisible();
+
+  // Every manager-only control is present.
+  await expect(page.getByRole("button", { name: "Edit Mara" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove Mara from the roster" })).toBeVisible();
+  await expect(page.getByLabel("Add a coach by name")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Put Dev on the roster" })).toBeVisible();
+
+  // And the whole schedule is askable, not just one coach's classes.
+  const options = await page.getByLabel("Class that needs cover").locator("option").allTextContents();
+  expect(options.filter(o => !/Pick a class/.test(o))).toHaveLength(3);
+
+  expectNoConsoleErrors(errors);
+});
+
+test("🔴 with no server the panel still says it cannot tell which coach you are", async ({ page }) => {
+  const errors = watchConsole(page);
+  await freshApp(page);
+  await seed(page, {
+    coaches: [roster(), { id: "c-dev", name: "Dev", aliases: [], userId: "", active: true, availability: {} }],
+    requests: [{ id: "r1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon", classSlot: "06:00",
+                 fromCoachId: "c-mara", toCoachId: "c-dev", note: "", status: "open",
+                 createdAt: "2026-08-24T05:00:00.000Z", settledAt: "", settledBy: "" }],
+  });
+
+  await expect(page.getByText("Open cover requests")).toBeVisible();   // positive control
+  // The disclaimer became a conditional branch in S32. On this build it must
+  // still be the one that renders — it is true here, and only here.
+  await expect(page.getByText(/Jungle cannot tell which coach you are/)).toBeVisible();
+  await expect(page.getByText(/You can answer the requests aimed at you/)).toHaveCount(0);
+  await expect(page.getByText(/signed in as a manager/)).toHaveCount(0);
+
+  // All three settle buttons, because nobody can be told apart.
+  await expect(page.getByRole("button", { name: "Approve cover for Strength Lab" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Turn down cover for Strength Lab" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Withdraw the cover request for Strength Lab" })).toBeVisible();
+  expectNoConsoleErrors(errors);
+});
+
 test("🔴 the product never says a cover request was sent anywhere", async ({ page }) => {
   const errors = watchConsole(page);
   await freshApp(page);

@@ -22,7 +22,8 @@ import * as store from "../lib/store.js";
 import { supabase, supabaseEnabled } from "../supabase.js";
 import { useJungleAuth } from "../AuthGate.jsx";
 import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
-         formatAliases, coachEditPatch, linkableAccounts,
+         formatAliases, coachEditPatch, linkableAccounts, rosterViewerMode,
+         selfCoach, askableClasses,
          COACH_AVAIL_STALE_DAYS } from "../lib/coachRoster.js";
 // ⚠️ `settleCover` is deliberately NOT imported here any more. The panel used to
 // call it directly and write the result; it now goes through
@@ -96,8 +97,46 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   // `nowMs` above it.
   const nowMs = Date.now();
   const coverage = React.useMemo(() => rosterCoverage(coaches, userClasses), [coaches, userClasses]);
+
+  // ⚠️ DECLARED HERE, ABOVE EVERY READER. It used to sit further down, beside
+  // the account-list effect that was its only consumer; the viewer logic below
+  // reads it during render, and a `const` read before its declaration is a
+  // ReferenceError at runtime that `lint:crash` cannot see — it resolves the
+  // identifier fine, because the binding genuinely exists in scope. The whole
+  // Schedule screen fell into its error boundary and 17 e2e tests timed out
+  // looking for a button that was never rendered.
+  const auth = useJungleAuth();
+  const gymId = auth?.gym?.id;
+
+  // ── Who is looking at this panel (S32 §2.2) ──────────────────────────────
+  //
+  // 🔴 UNTIL S31 THIS QUESTION HAD NO ANSWER, and the comment above the Approve
+  // buttons below said so. `userId` on a roster entry is what changed, so the
+  // panel can finally scope itself to a person instead of trusting whoever is
+  // holding the phone. `rosterViewerMode` carries the rule and the reasoning;
+  // with no server it returns "manage", which is the build in use today.
+  const userId = auth?.user?.id || "";
+  const mode = rosterViewerMode({ can: auth?.can, userId, roster: coaches });
+  const me = selfCoach(coaches, userId);
+  const isManager = mode === "manage";
+  const visibleCoaches = isManager ? coaches : (me ? [me] : []);
+
   const openAsks = (requests || []).filter(isOpen);
-  const askClass = (userClasses || []).find(c => c.id === askClassId) || null;
+  // A coach sees the asks that are ABOUT them — aimed at them to answer, or
+  // raised by them to withdraw. A manager sees the gym's.
+  const myAsks = isManager ? openAsks
+               : openAsks.filter(r => me && (r.toCoachId === me.id || r.fromCoachId === me.id));
+  const askable = askableClasses(userClasses, mode, me);
+  const askClass = (askable || []).find(c => c.id === askClassId) || null;
+  // ⚠️ A CLASS'S OWN COACH IS STILL OFFERED AS COVER FOR IT, AND THAT IS A REAL
+  // DEFECT THIS SESSION DECIDED NOT TO FIX HERE. `ask()` takes `fromCoachId`
+  // from the class's typed coach, so asking that same person produces a request
+  // whose from and to are one id — "Mara asked Mara". The one-line filter was
+  // written and reverted: it is a product change nobody asked for, and it turns
+  // a 🔴 e2e assertion red (coachCover.spec.js:146 seeds a stale claim on the
+  // class's own coach to prove a stale claim is offered WITH its age). Changing
+  // that fixture to accommodate an unrequested change is how a test stops
+  // proving what it was written for. Written up for its own commit instead.
   const free = askClass ? coachesFreeAt(coaches, { day: askClass.day, slot: askClass.slot }, nowMs) : [];
   const nameOf = id => (coaches.find(c => c.id === id)?.name) || "someone";
 
@@ -133,8 +172,6 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
   // Loaded once when the first edit form opens, not on mount: most sessions
   // never open one, and this is a network round-trip on a panel that renders
   // on every visit to the Schedule.
-  const auth = useJungleAuth();
-  const gymId = auth?.gym?.id;
   React.useEffect(() => {
     if (!detailsFor || accounts !== null || !supabaseEnabled || !supabase || !gymId) return;
     let alive = true;
@@ -271,10 +308,24 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
           : <>Cover requests reach a coach when they next open Jungle. There is no push, email or text &mdash; nobody&rsquo;s phone will ring.</>}
       </div>
 
+      {/* ── A coach whose account nobody has linked yet (S32 §2.2) ─────────── */}
+      {/* 🔴 NOT AN ERROR AND NOT AN EMPTY LIST. This is the normal state on the
+          day a gym turns the server on: the manager has linked nobody. The
+          alternative shapes are both worse — showing the whole roster hands
+          every coach the power to delete their colleagues, and showing an empty
+          roster says the gym has no coaches, which is a confident wrong answer.
+          So it says exactly what is true and who can change it. */}
+      {mode === "unlinked" && (
+        <div style={{ ...sub, border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px" }}>
+          Your account isn&rsquo;t linked to anyone on the coach roster yet, so there is no availability here to set.
+          A manager links it from this panel on their own Jungle.
+        </div>
+      )}
+
       {/* ── The roster ──────────────────────────────────────────────────────── */}
-      {coaches.length > 0 && (
+      {visibleCoaches.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
-          {coaches.map(c => (
+          {visibleCoaches.map(c => (
             <div key={c.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "13px", fontWeight: "700", color: "var(--text)" }}>{c.name}</span>
@@ -282,16 +333,26 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
                   {REACH_LABEL[coachReach(c)]}
                 </span>
                 <span style={{ flex: 1 }} />
-                <button onClick={() => (detailsFor === c.id ? (setDetailsFor(null), setDraft(null)) : openDetails(c))}
-                        aria-label={`Edit ${c.name}`}
-                        style={btn(detailsFor === c.id)}>Edit</button>
+                {/* 🔴 NAME, ALIASES, ACCOUNT LINK AND REMOVAL ARE THE GYM'S TO
+                    SET, NOT THE COACH'S. A coach renaming their own entry would
+                    silently unlink every class typed under the old name, and an
+                    account link is the gym deciding who someone is. Availability
+                    is the opposite: it is the one thing only the person
+                    themselves actually knows. */}
+                {isManager && (
+                  <button onClick={() => (detailsFor === c.id ? (setDetailsFor(null), setDraft(null)) : openDetails(c))}
+                          aria-label={`Edit ${c.name}`}
+                          style={btn(detailsFor === c.id)}>Edit</button>
+                )}
                 <button onClick={() => setEditing(editing === c.id ? null : c.id)}
-                        aria-label={`Set availability for ${c.name}`}
+                        aria-label={isManager ? `Set availability for ${c.name}` : "Set my availability"}
                         style={btn(editing === c.id)}>Availability</button>
-                <button onClick={() => setPendingRemove(c.id)} aria-label={`Remove ${c.name} from the roster`}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: "4px" }}>
-                  <X size={14} />
-                </button>
+                {isManager && (
+                  <button onClick={() => setPendingRemove(c.id)} aria-label={`Remove ${c.name} from the roster`}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: "4px" }}>
+                    <X size={14} />
+                  </button>
+                )}
               </div>
               <div style={{ ...sub, marginTop: "3px" }}>
                 {availSummary(c)}
@@ -433,7 +494,7 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
       {/* NOT an error list. A gym that has typed names for a year is in a normal
           state, and this offers the one action that changes it rather than
           nagging about the ones it has not taken. */}
-      {coverage.unknown.length > 0 && (
+      {isManager && coverage.unknown.length > 0 && (
         <div style={{ marginBottom: "14px" }}>
           <div style={{ ...sub, marginBottom: "6px" }}>
             On your schedule, not yet on the roster:
@@ -455,27 +516,35 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "6px", marginBottom: "14px" }}>
-        <input value={newName} onChange={e => setNewName(e.target.value)}
-               onKeyDown={e => { if (e.key === "Enter") addCoach(newName); }}
-               placeholder="Add a coach by name" aria-label="Add a coach by name"
-               style={{ ...field, flex: 1, minWidth: 0 }} />
-        <button onClick={() => addCoach(newName)} disabled={!newName.trim()}
-                style={{ ...btn(!!newName.trim()), cursor: newName.trim() ? "pointer" : "default" }}>Add coach</button>
-      </div>
+      {isManager && (
+        <div style={{ display: "flex", gap: "6px", marginBottom: "14px" }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)}
+                 onKeyDown={e => { if (e.key === "Enter") addCoach(newName); }}
+                 placeholder="Add a coach by name" aria-label="Add a coach by name"
+                 style={{ ...field, flex: 1, minWidth: 0 }} />
+          <button onClick={() => addCoach(newName)} disabled={!newName.trim()}
+                  style={{ ...btn(!!newName.trim()), cursor: newName.trim() ? "pointer" : "default" }}>Add coach</button>
+        </div>
+      )}
 
       {/* ── Ask for cover ──────────────────────────────────────────────────── */}
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
         <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Need cover?</div>
         {coaches.length === 0 ? (
           <div style={sub}>Put a coach on the roster first &mdash; a cover request has to go to somebody.</div>
+        ) : askable.length === 0 ? (
+          // A coach with no classes on the schedule. Saying so beats a picker
+          // that opens onto nothing.
+          <div style={sub}>
+            None of the classes on the schedule are typed under your name, so there is nothing here to ask cover for.
+          </div>
         ) : (
           <>
             <select value={askClassId} onChange={e => setAskClassId(e.target.value)}
                     aria-label="Class that needs cover"
                     style={{ ...field, width: isMobile ? "100%" : "auto", maxWidth: "100%", marginBottom: "8px" }}>
               <option value="">Pick a class&hellip;</option>
-              {(userClasses || []).map(c => (
+              {(askable || []).map(c => (
                 <option key={c.id} value={c.id}>{c.day} {c.slot} · {c.name}{c.coach ? ` · ${c.coach}` : ""}</option>
               ))}
             </select>
@@ -504,7 +573,7 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
       </div>
 
       {/* ── Open requests ──────────────────────────────────────────────────── */}
-      {openAsks.length > 0 && (
+      {myAsks.length > 0 && (
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "14px" }}>
           <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Open cover requests</div>
           {/* 🔴 SAYING THE QUIET PART. The panel shows "Mara asked Dev" and then
@@ -515,11 +584,20 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
               says so, in the same spirit as the notice at the top — a control
               that looks like it knows who you are, and does not, is the failure
               this panel exists to avoid. */}
+          {/* The sentence below used to be unconditional, and it was true: with
+              no server there is no signed-in user. It is now the ELSE branch,
+              because for a signed-in coach it would be false — and a product
+              that keeps apologising for a limitation it no longer has is as
+              inaccurate as one that hides a limitation it does have. */}
           <div style={{ ...sub, marginBottom: "10px" }}>
-            Anyone using this device can answer these &mdash; Jungle cannot tell which coach you are
-            until the gym is online.
+            {mode === "self"
+              ? <>You can answer the requests aimed at you, and withdraw the ones you raised.</>
+              : userId
+              ? <>You are signed in as a manager, so you can answer any of these on the studio&rsquo;s behalf.</>
+              : <>Anyone using this device can answer these &mdash; Jungle cannot tell which coach you are
+                 until the gym is online.</>}
           </div>
-          {openAsks.map(r => (
+          {myAsks.map(r => (
             <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "10px 12px", marginBottom: "8px" }}>
               <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
                 {r.classDay} {r.classSlot} · {r.classLabel}
@@ -527,13 +605,23 @@ export function CoachCoverPanel({ userClasses, onAssignCoach, isMobile }) {
               <div style={{ ...sub, marginBottom: "8px" }}>
                 {nameOf(r.fromCoachId)} asked {nameOf(r.toCoachId)}
               </div>
+              {/* 🔴 ANSWERING AND WITHDRAWING ARE DIFFERENT PEOPLE'S ACTIONS.
+                  Approve/Turn down belong to the coach who was ASKED — it is
+                  their yes or no. Withdraw belongs to the one who RAISED it.
+                  A manager gets both because they act for the studio; before
+                  S32 everyone got both, because the panel could not tell
+                  anybody apart. */}
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                <button onClick={() => settle(r.id, "approved")}
-                        aria-label={`Approve cover for ${r.classLabel}`} style={btn(true)}>Approve</button>
-                <button onClick={() => settle(r.id, "rejected")}
-                        aria-label={`Turn down cover for ${r.classLabel}`} style={btn(false)}>Turn it down</button>
-                <button onClick={() => settle(r.id, "cancelled")}
-                        aria-label={`Withdraw the cover request for ${r.classLabel}`} style={btn(false)}>Withdraw</button>
+                {(isManager || (me && r.toCoachId === me.id)) && (<>
+                  <button onClick={() => settle(r.id, "approved")}
+                          aria-label={`Approve cover for ${r.classLabel}`} style={btn(true)}>Approve</button>
+                  <button onClick={() => settle(r.id, "rejected")}
+                          aria-label={`Turn down cover for ${r.classLabel}`} style={btn(false)}>Turn it down</button>
+                </>)}
+                {(isManager || (me && r.fromCoachId === me.id)) && (
+                  <button onClick={() => settle(r.id, "cancelled")}
+                          aria-label={`Withdraw the cover request for ${r.classLabel}`} style={btn(false)}>Withdraw</button>
+                )}
               </div>
             </div>
           ))}

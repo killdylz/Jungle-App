@@ -300,6 +300,75 @@ export function coachEditPatch(entry, draft = {}) {
   };
 }
 
+// ─── Who is looking at this roster (S32 §2.2) ───────────────────────────────
+//
+// 🔴 THE PROBLEM. `CoachCoverPanel` lives on the Schedule screen and renders
+// every roster entry with Edit, Availability and Remove. A `coach` role has
+// `schedule:*` (supabase.js ROLE_DEFAULTS), so the moment a gym has a server and
+// its coaches sign in, every one of them can edit everybody else's availability
+// and delete anyone from the roster. Nobody chose that; it is what a panel built
+// for one device does when a second person arrives.
+//
+// ⚠️ AND IT COULD NOT HAVE BEEN FIXED BEFORE NOW. The panel's own comment above
+// the Approve buttons says so: "with no server there is no signed-in user, so
+// the product genuinely cannot tell who is holding the phone. Scoping the
+// buttons would require inventing an identity we do not have." That was true and
+// it stopped being true in S31, which built the control that writes `userId` on
+// a roster entry. `selfCoach` is the bridge that answers "which of these is me",
+// and it is the first time the question has had an answer.
+//
+// THE THREE MODES, and why "unlinked" is not folded into either neighbour:
+//
+//   "manage"   — this viewer administers the roster. The panel exactly as it has
+//                always been. THIS IS ALSO THE NO-SERVER ANSWER, which is the
+//                shipped build: with no identity there is nothing to scope by,
+//                and a panel that locked itself down because it could not tell
+//                who you are would break the single-device gym for no gain.
+//   "self"     — a coach, matched to their own entry. Their row, their grid,
+//                their requests. Cannot touch anyone else's.
+//   "unlinked" — a coach whose account is not on the roster. NOT "self" (there
+//                is no row to show) and NOT "manage" (they may not administer
+//                anything). Collapsing it into "manage" is the dangerous
+//                simplification: it would hand the full roster to every coach a
+//                manager has not linked yet, which is most of them on day one.
+//
+// The capability is `members:manage`, reused rather than invented. It is what
+// already gates the Team screen — the gym's staff ACCOUNTS — so "who may
+// administer this gym's people" is a question this product has answered once,
+// and answering it a second way is how the two drift apart.
+
+// The roster entry a signed-in account IS, or null. Null is a normal answer:
+// most roster entries have no account, and an account may be a manager who does
+// not coach. Migration 0010 carries a unique index on (gym_id, user_id), so
+// "the first match" is "the only match" by construction rather than by luck.
+export function selfCoach(roster, userId) {
+  const id = String(userId ?? "").trim();
+  if (!id) return null;
+  return (roster || []).find(e => e && e.userId === id) || null;
+}
+
+// `can` is absent exactly when there is no server to sign in to, and that is
+// checked FIRST and deliberately: this function can only ever narrow the panel
+// for a viewer it has positively identified, never for one it knows nothing
+// about. A bug in the identity link therefore fails toward the behaviour that
+// shipped, not toward locking a gym out of its own roster.
+export function rosterViewerMode({ can, userId, roster } = {}) {
+  if (typeof can !== "function") return "manage";
+  if (can("members:manage")) return "manage";
+  return selfCoach(roster, userId) ? "self" : "unlinked";
+}
+
+// The classes this viewer may raise a cover request FOR. A manager asks on
+// behalf of the whole schedule; a coach asks for the classes they teach, which
+// is resolved through the same name-and-alias rule as everything else rather
+// than a second comparison — "Mara K." teaching a class typed "Mara" is one
+// person here or the roster is lying somewhere.
+export function askableClasses(classes, mode, me) {
+  if (mode === "manage") return classes || [];
+  if (!me) return [];
+  return (classes || []).filter(c => resolveCoach([me], c?.coach));
+}
+
 // The gym's accounts, shaped for the link picker.
 //
 // ⚠️ AN ACCOUNT ALREADY LINKED TO ANOTHER ENTRY IS RETURNED, NOT DROPPED, and
