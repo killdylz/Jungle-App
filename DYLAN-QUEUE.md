@@ -45,7 +45,7 @@ undo it. Nothing in Part A needs me.
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 | **A14** | **A yes/no: does Jungle bend a gym's accent to make it legible?** | 10 min read | none — a decision, no work |
-| **A15** | **Run migration 0010** — or coach cover stays on one phone | **10 min** | low, fully revertible |
+| **A15** | **Run migration 0010** — or the away/cover board stays on one phone | **10 min** | low, fully revertible |
 | **A16** | **You said yes. Four facts before anyone signs anything: Mindbody** | 20 min | none — a decision |
 
 ---
@@ -810,6 +810,19 @@ now reads the full audit and names the failing pairs.
 
 **This is the one item on this list that a shipped feature is already waiting on.**
 
+> ### 🔴 Session 33: the file changed, and you have not run it, so nothing is broken
+>
+> `0010_coach_cover.sql` now also creates **`coach_absences`** and adds two columns to
+> `cover_requests` (`class_date`, `absence_id`), because cover is now recorded as *"I am away
+> these dates"* rather than *"please cover this class"*. **You have never run this file, so
+> there is nothing to undo — just use the current version.**
+>
+> ⚠️ **If you DID run an earlier copy of it at some point**, re-run the current file anyway.
+> `create table if not exists` does not add a column to a table that already exists, so an
+> earlier run would leave `cover_requests` without `class_date` and every cover push would then
+> fail. The file now ends with `alter table … add column if not exists` for exactly that case;
+> it is a no-op on a fresh database and the fix on a stale one. Re-running is safe either way.
+>
 > ⚠️ **Corrected, session 32 (2026-08-25).** This item used to be a 10-minute migration with a
 > note at the bottom saying the settle still needed wiring. That undersold it badly: the client
 > did not write to these tables **at all** — `coach_roster` and `cover_requests` appeared in
@@ -842,7 +855,8 @@ cosmetic one.
    same day.
 
 ### What "it worked" looks like
-**Table Editor** shows two new tables, `coach_roster` and `cover_requests`, both empty.
+**Table Editor** shows three new tables — `coach_roster`, `cover_requests` and
+`coach_absences` — all empty.
 
 Then, on your own phone or laptop, open **Schedule**. The notice at the top of the Coach roster
 panel changes. Before you run this it says the roster is *"stored on this device only — your
@@ -850,6 +864,22 @@ Jungle server is connected but has no coach storage set up"*; afterwards it says
 *"reach a coach when they next open Jungle"*. **That sentence is the real test**, not the empty
 tables — it is the app telling you it can see the storage. Add a coach on one device and open
 Jungle on another; they should both show the same roster.
+
+### What the feature actually does now (session 33)
+A coach records **"I'm away, Monday to Friday"** once. Jungle works out every class of theirs
+in those days and puts each one on a **board** that every coach sees. The first coach to claim
+one takes it, and **the claim covers that day only** — the recurring class goes back to its
+usual coach the following week, and nothing is written to your schedule.
+
+⚠️ **Two things this still does not do**, both unchanged and both worth knowing before you tell
+a coach about it:
+- **Nobody's phone rings.** A coach sees the board when they next open Jungle. Fine for "can
+  somebody take next Thursday", no use at all for "I am ill and my class is in an hour". Adding
+  email is a sender (Resend or Postmark, roughly S$0–30/month at your size), a domain to send
+  from, and about a day. **Not built, and I have not assumed you want it.**
+- **A coach only sees their own availability once their account is linked** to their roster
+  entry — you do that from this panel, per coach. Until then they see a note saying so rather
+  than the whole roster.
 
 ### ⚠️ Two things that are still true afterwards, so you are not surprised
 - **0005 and 0006 are still unapplied.** Personas, plans and the movement catalogue remain on

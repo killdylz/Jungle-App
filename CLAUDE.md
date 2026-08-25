@@ -15,7 +15,7 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 32: **`lint:crash` 0 · 1109 unit (40 files) · 488 e2e (47 spec files) ·
+Green as of session 33: **`lint:crash` 0 · 1162 unit (41 files) · 486 e2e (47 spec files) ·
 12-chunk build · 0 over budget.** App.jsx is **2,373 lines**.
 
 🔴 **`lint:crash` IS BLIND TO THE TEMPORAL DEAD ZONE.** Session 32 read a `const` above its own
@@ -32,11 +32,26 @@ is in the APP MOUNT under load, not in any one spec — `syncBanner` was simply 
 landing. It is INTERMITTENT, not one-per-run (session 31 got one failure and one clean sweep in
 two full runs).
 
-**The tell is a `waitForApp*` timeout whose error context has ZERO page snapshots** — the app
-never mounted, so nothing the spec is about was exercised. Check it directly:
-`grep -c "ref=" .e2e-scratch/results/<dir>/error-context.md` → `0` means the mount, not your
-change. **A real regression fails the same test twice.** Re-run the spec alone before
-investigating.
+**The tell is a `waitForApp*` timeout whose error context has NO PAGE CONTENT** — the app never
+mounted, so nothing the spec is about was exercised. Check it directly:
+
+```bash
+grep -cE 'ref=|- button|- text:' .e2e-scratch/results/<dir>/error-context.md   # 0 ⇒ never mounted
+```
+
+⚠️ **Match on page CONTENT, not on `ref=` alone.** Session 33 used `grep -c "ref="` and misread a
+different failure as this one: snapshots do not always carry `ref=` attributes, so an empty count
+proved nothing. The question is whether the snapshot shows a rendered app at all.
+
+🔴 **AND THERE IS A SECOND, DIFFERENT LOAD FAILURE** — session 33's full run hit both in one pass.
+`schedule.spec.js` › "unpinning takes the scheduled-type notice" timed out on an assertion with a
+**fully rendered page snapshot**: the app was up, the click landed, and a 5-second
+`expect.timeout` was simply not enough for the next screen under two workers on a loaded box. So
+**a populated snapshot means it is NOT the mount flake** — it is either a slow render or a real
+defect, and the spec run is what separates them. Both specs passed on their own (18/18 and
+28/28).
+
+**A real regression fails the same test twice.** Re-run the spec alone before investigating.
 
 🔴 **`npx playwright test` EXITS 0 WITH FAILING TESTS.** Confirmed again in session 31: exit code
 0 under a run reporting `1 failed`. **Read the count, never the exit code.**
@@ -45,7 +60,7 @@ investigating.
 REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
 **all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
 **cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
-has 12.4% headroom (315.22 / 360 kB after session 32's coach-cover sync) and is not the constraint.
+has 10.3% headroom (322.76 / 360 kB after session 33's absence board) and is not the constraint.
 
 🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
 and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
@@ -358,6 +373,27 @@ not. **Assert the STORED object, not only what was rendered.**
   `_ctx.userId` until session 30 — one manager pressing publish recorded every class in the gym as
   theirs. `created_by`, one line below, is where "who wrote this row" belongs. It resolves through
   the roster and is **NULL when unknown**, which is worth more than a non-null value that is wrong.
+- 🔴 **A COVER IS ONE DAY, AND NOTHING WRITES TO THE SCHEDULE TO MAKE IT SO.** A cover request
+  carries `classDate` and `applyCovers` (`coverRequests.js`) overlays approved ones onto the
+  DERIVED occurrences, which are recomputed every render — so a cover lasts exactly as long as
+  the day it names. `assignCoach` was deleted from `CalendarScreen` in session 33 and must not
+  come back: it rewrote the RULE's coach field, and a rule has no dates, so covering one ill
+  Monday moved the class every Monday for ever. ⚠️ The grid, `publishWeek` and anything else
+  reading a week must read the COVERED occurrences, or an agreed cover is invisible on the one
+  screen a gym looks at most and `class_instances` credits the wrong coach.
+- 🔴 **AN ABSENCE'S CLASSES ARE DERIVED, NEVER STORED.** `coachAbsence.js` walks
+  `occurrencesForWeek` week by week rather than re-reading the repeat rules — a second opinion
+  about which classes a rule produces is how the grid and the cover board would disagree about
+  what a coach teaches. Storing the list would also freeze it: a class added after the absence
+  was recorded would be missing from a list that looked complete.
+- ⚠️ **`cover_requests.to_coach_id` MEANS "WHO IS COVERING", NOT "WHO WAS ASKED"** (changed in
+  session 33, column unchanged). It is NULL until somebody claims it. `inboxFor` is gone; the
+  board is `openCovers` and it deliberately does not hide a class from a coach whose grid says
+  they are busy — a grid is a claim somebody typed weeks ago, not a rota.
+- 🔴 **`create table if not exists` DOES NOT ADD A COLUMN** to a table that already exists. A
+  migration edited after somebody may have run it needs an `alter table … add column if not
+  exists` tail, or the client asks for a column the database silently never got and the whole
+  batch is rejected. `0010_coach_cover.sql` carries the shape.
 - 🔴 **THERE IS NO COMPARE-AND-SET IN THIS PRODUCT.** `store.js` contains zero `.update()` calls —
   every write is an unconditional `upsert`, `insert` or `delete`. A cover approval needs
   `set status='approved' where id=$1 and status='open'`; pushed through `_bgUpsertDelta` instead,
@@ -378,6 +414,12 @@ not. **Assert the STORED object, not only what was rendered.**
 is the check that finds the next one; `docs/STORE-WRITER-AUDIT.md` has the classified list and —
 more usefully — what the sweep **cannot** see. Its allowlist in `storeWriters.test.js` is its
 positive control: adding a line there is a product decision, not a way to green the build.
+
+⚠️ **A test that cannot be made to fail is not automatically deletable.** Session 33's DST test
+could not be killed by any single mutation (`Math.round` absorbs the missing hour that the
+local-noon anchor was supposedly there for), and it was KEPT — with its header saying so in
+plain words, and the code comment corrected to name what actually delivers the answer. The rule
+is that a claim must be honest about what pins it, not that unpinnable behaviour goes untested.
 
 🔴 **Outstanding and not code:** `DYLAN-QUEUE.md` **A14** is a yes/no on whether Jungle bends a
 gym's accent to make it legible, and **A16** is a yes/no on whether Jungle should write back to a

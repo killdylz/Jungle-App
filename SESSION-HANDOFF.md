@@ -1,12 +1,170 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-25 (session 32)_
+_Last updated: 2026-08-25 (session 33)_
 
 > 📁 **Sessions 6–29 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 33 — cover stops being permanent, and starts with "I'm away" instead of "cover this class"
+
+> **Gates green at `HEAD`.** `lint:crash` **0** · **1162 unit** (41 files) · **486 e2e**
+> (47 spec files) · 12-chunk build · **0 over budget**. `StaffApp.js` **322.76 / 360 kB**
+> (10.3%), `index.js` **203.06 / 215 kB** (5.6%, still the tightest). Five commits, each pushed
+> after its own green run.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only.
+> ⚠️ **TWO full runs, 484/2 each, and the two pairs of failures share no test between them** —
+> `responsive` + `schedule` in one, `display` + `responsive`-at-a-different-width in the other.
+> Every one passed on its own. That is the load flake, and the fact that it moved between runs
+> is the strongest evidence available that it is not a regression. See trap 5 below: one of the
+> four was NOT the known mount flake and the documented check for it misreads that case.
+> ⚠️ Running two specs together straight after a full run failed **36 of 44** — the stale
+> dev-server pattern CLAUDE.md names. The identical re-run passed 44/44. Re-run once before
+> reading anything into a broad failure.
+
+### What Dylan asked for, and the four decisions that shaped it
+
+"A scheduler all coaches can use to get a sub if they are away." Most of the flow already
+existed after sessions 30–32; what it could not do was the thing the sentence actually
+describes. Four choices, made explicitly:
+
+| | chosen | over |
+|---|---|---|
+| Entry point | **"I'm away these dates"** | pick one class at a time |
+| Who is asked | **everyone free, first to claim** | one named coach |
+| What a cover changes | **that day only** | the recurring class |
+| Notifying | **in-app only for now** | email (needs a domain + sender, ~a day) |
+
+---
+
+### 🔴 The defect underneath all of it: approving a cover was permanent
+
+`onAssignCoach` rewrote the RULE's coach field. A rule has no dates, so covering one ill Monday
+moved that class to somebody else **every** Monday until a human noticed and edited it back.
+S32 found this and could only fix the SENTENCE — there was nowhere else for the assignment to
+go, because a cover request carried `classDay` and `classSlot` and no date at all.
+
+**Now nothing writes to the schedule.** A request is raised against an OCCURRENCE, carries
+`classDate`, and `applyCovers` overlays approved covers onto the derived occurrences. Since
+occurrences are re-derived on every render, a cover lasts exactly as long as the day it names.
+`assignCoach` is gone from `CalendarScreen` and its absence is the feature.
+
+The grid shows the OCCURRENCE's coach rather than the rule's — the same name on every ordinary
+day, and on a covered day the person actually teaching, with "covering for Mara" under it.
+`publishWeek` reads the same covered occurrences, so a week published after a cover was agreed
+writes the right `coach_name` into `class_instances` and attendance credits the right person.
+
+### An absence is a person over dates, not a flag on a class
+
+A coach away next week does not have "a class that needs cover" — they have six, and the gym
+had nothing that said "Mara is away Mon–Fri and two of hers still have nobody". One absence is
+recorded and the affected classes are **derived**, walking `occurrencesForWeek` week by week
+rather than re-reading the repeat rules: a second opinion about which classes a rule produces
+is how the grid and the board would come to disagree about what a coach teaches.
+
+⚠️ **The classes are deliberately NOT stored on the absence.** Storing the list would freeze
+it — a class added or moved afterwards would be missing from a list that looked complete. The
+cover requests carry their own denormalised copy because those are answers somebody agreed to;
+the absence stays a question.
+
+### Broadcast: `to_coach_id` changed meaning and the column did not
+
+It was "who is being asked", set at creation. It is now "who is covering", NULL until somebody
+claims it. One field, one meaning, set at the moment it becomes true. `inboxFor` is gone — an
+inbox needs an addressee — and `openCovers` replaces it with one board everyone sees the same.
+
+⚠️ **The board does not hide classes from coaches whose grid says they are busy.** Same decision
+`coachesFreeAt` documents from the other end: a grid is a claim somebody typed weeks ago, not a
+rota, and hiding a class from someone who could have taken it is how it goes uncovered. Rows
+carry whether *you* said you were free; nothing is filtered out.
+
+`rejected` is gone from `COVER_STATUSES` and from the migration's CHECK — with a board, not
+claiming something IS declining it, and a value the client can never write is exactly what
+`dbConstraints.test.js` reports as drift.
+
+### Migration 0010, amended rather than followed by an 0011
+
+It has never been applied, and a second migration the client depends on is a second thing that
+can be half-run. It gains `coach_absences`, `cover_requests.class_date`, `.absence_id`, the
+narrowed CHECK and a board index.
+
+🔴 **`create table if not exists` DOES NOT ADD A COLUMN** to a table that already exists, so a
+project that ran the S32 copy would silently keep a `cover_requests` with no `class_date` and
+then fail every cover push with a message naming only the table. The file now ends with
+`alter table … add column if not exists` for both columns and a rebuild of the CHECK: a no-op
+on a fresh database, the fix on a stale one.
+
+---
+
+### Four things the tests found that reading the code did not
+
+1. 🔴 **Withdrawing an absence lost withdrawals.** `cancelAbsence` fired a settle per open cover
+   without awaiting them, so each read `getCoverRequests()` before any of them wrote and each
+   saved a list containing only its own change — last write wins, one class silently left on
+   the board, no error anywhere. With a server every settle is a round trip, so the race is
+   wide open and completely invisible on a fast connection. Sequential and awaited now.
+2. 🔴 **The DST test proved nothing, twice over.** Written without a timezone it was vacuous
+   (the suite runs in UTC, which has no DST). Moved into `Europe/London` it *still* could not
+   be made to fail: mutating `daysInclusive`'s local-noon anchor back to midnight leaves it
+   green, because `Math.round` absorbs the missing hour, and so does rewriting the parse as
+   `new Date(str)` since a UTC-parsed pair shifts equally. The comment claiming the anchor was
+   the fix is corrected to name `Math.round`, and the test block says in its own header that it
+   is a regression guard and not mutation-checked. Kept, because the behaviour a coach depends
+   on is worth a guard even when no single edit breaks it.
+3. ⚠️ **My own e2e fixtures broke on my own fix.** Once past classes stopped being asked about,
+   a fixture anchored on *this* Monday raised fewer asks than the test expected on every day but
+   Monday. Moved to next week, which is entirely ahead whenever the suite runs.
+4. ⚠️ **The grid shows only one class per cell**, and the shared fixture has two at Mon 06:00, so
+   Strength Lab is not rendered at all there. Documented behaviour older than this feature; the
+   grid assertions moved to an uncontested slot rather than a cover test being the thing that
+   trips over it.
+5. 🔴 **THE FULL-SUITE FLAKE HAS A SECOND SHAPE, and the documented check for the first one
+   misreads it.** This run failed two specs. `responsive.spec.js` was the known mount flake —
+   error context with no page content at all. `schedule.spec.js` › "unpinning takes the
+   scheduled-type notice" was NOT: its snapshot showed a fully rendered app, the click had
+   landed, and a 5-second `expect.timeout` was simply not enough for the next screen under two
+   workers on a loaded box. **A populated snapshot means it is not the mount flake**, so it is
+   either a slow render or a real defect and only the spec run separates them — both passed
+   alone (28/28 and 18/18). CLAUDE.md's `grep -c "ref="` recipe also had to be corrected: not
+   every snapshot carries `ref=` attributes, so an empty count proved nothing. Match on page
+   content.
+
+### Two defects found by rendering the panel and reading it — the seventh session running
+
+- 🔴 **The board offered cover for a class that had already been taught.** On a Tuesday, a coach
+  marking themselves away Mon–Fri got Monday's 06:00 put on the board. An ask nobody can act on
+  is worse than no ask: it sits there, counts against the absence, and teaches people to ignore
+  the board. Skipped now; the absence still records Monday, because they were away on Monday.
+- The progress line read **"0 of 2 covered — 2 still have nobody"** — the same number twice in
+  one sentence. Exactly the defect `availSummary` was fixed for two sessions ago.
+
+---
+
+### What is genuinely left
+
+- 🔴 **A15 is now a bigger unblock than it was**, and still ten minutes. Until 0010 runs, an
+  absence and its board live on one device and the panel says so.
+- 🔴 **Nobody's phone rings.** After 0010 a coach sees the board when they next open Jungle.
+  **This is now the only thing between the feature and the case it exists for** — a coach ill at
+  5am. Email is a sender, a domain and about a day; it is written up in A15 and not assumed.
+- 🔴 **`compareAndSet` still has not run against a real Postgres** — and it now decides who gets
+  a class, not just a status. The first real race will be the first real run.
+- 🔴 **A16 question 3 is unanswered and free to answer.** The booking payload now carries `date`,
+  so a real adapter would push one occurrence rather than a recurring change — which makes the
+  cancel-and-recreate question *more* answerable, not less.
+- ⚠️ **"self" and "unlinked" panel modes still have no e2e** and cannot, against the
+  credential-less build. The claim path is exercised through manager mode only.
+- ⚠️ **A coach cannot cover part of a day.** An absence is whole days; a coach who can't make
+  their 06:00 but can teach their 18:00 has to withdraw one ask by hand afterwards. The
+  "Not needed" button does that, and it is the honest seam rather than a half-built one.
+- ⚠️ **`hydratePersonas`' seed branch still has the delta hole** §2.1 fixed for the roster.
+- ⚠️ **`main` is SEVEN sessions stale.** 28–33 live only on their own branches.
+- ⚠️ 0005 and 0006 unapplied; N4 member links built and undeployed; A1 region unconfirmed; A14
+  open; 10 Dependabot PRs; two checkboxes still browser-default blue.
 
 ---
 
@@ -269,269 +427,3 @@ panel this repo bans, on a queue that may never be sent at all.
 - ⚠️ **10 unmerged Dependabot PRs**, five major GitHub-Actions bumps. Ask Dylan first.
 - ⚠️ **Two checkboxes render browser-default blue on a gym's palette** — `RosterScreen.jsx:343`,
   `PersonasScreen.jsx:1009`. Wants its own change with a token test.
-
----
-
-## Session 31 — a field nothing can write is not a feature, and the check that finds the next one
-
-> **Gates green at `852550c`.** `lint:crash` **0** · **1069 unit** (39 files) ·
-> **483 e2e** (47 spec files) · 12-chunk build · **0 over budget**.
-> `StaffApp.js` **310.73 / 360 kB** (13.7%), `index.js` **203.06 / 215 kB** (5.6%, still the
-> tightest). Seven commits, each pushed after its own green run.
-> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only, so
-> `gh run list` shows nothing for this work. The local suite is the only gate and every number
-> above is from it.
-> ✅ **483 is a CLEAN full run — 483 passed, 0 failed, `syncBanner` included.** Two full runs were
-> done. The first failed one `syncBanner.spec.js` test and the tell the prompt named held exactly:
-> a `waitForAppAnyWidth` timeout whose error context contained **zero page snapshots**, meaning
-> the app never mounted and nothing about the banner was exercised; the other six in that spec
-> passed in the same run, and all 7 passed alone. **The second full run passed it outright.** So
-> the flake is intermittent rather than one-per-run, and it is not a regression — a real one
-> fails the same test twice.
-> 🔴 **And the run printed `exit code 0` with a failing test**, exactly as warned. Read the
-> count, never the exit code.
-
-**Read this first: the branch was four sessions stale and the prompt's own §0 caught it.**
-This session started on `main` at `30520f2`, not on session 30's `fa54c4a` — the third session
-in a row to start on the wrong base. Session 30's branch was 20 commits ahead of `main` and a
-clean fast-forward, and the fix was confirmed **by a gate, not by the log**: `npm test` returned
-**1019 passing, 36 files**, matching the prompt's table exactly. A tree that merely builds is not
-proof of where you are; a matching unit count is. **`main` is still four sessions stale and
-nothing merges to it** — see standing risks.
-
----
-
-### What this session was
-
-Session 30 shipped a coach roster whose `updateCoach` accepted five keys while the app passed
-exactly one. §2.1 was to finish it; **§2.2 was to build the check that would have caught it**,
-and to answer the larger question: what else in this product exists in the model with no way in?
-
-**The answer is: almost nothing.** That is the session's most useful finding and it is a negative
-one. Session 30's roster was an outlier, not a pattern, so the next several sessions do **not**
-need to be about unreachability.
-
----
-
-### §2.1 — four fields with no control, and one of them was read (`c42b740`)
-
-**The prompt named two. It is four.** `aliases` and `userId` were the known pair. `name` could be
-set at creation and never corrected, so a typo could only be fixed by deleting the coach and
-losing their availability with them. And **`active` is the one worth stopping on**: it is not
-merely unwritten, it is **read** — `coachesFreeAt` (`coachRoster.js:242`) excludes
-`active === false`, with a comment explaining that this is the gym saying a person no longer
-coaches here. A documented behaviour, with a live reader, that the product could not reach.
-
-**The `userId` decision went to option (a), and option (b) is the one that had to be argued
-down.** Deleting an unsettable field is defensible on its face, but deleting `userId` means
-deleting `coachAccountFor`, and `coachAccountFor` is what makes `class_instances.coach_id`
-resolve to the coach rather than to whoever pressed publish. That was a real defect fixed in
-`2bb2263` that **no test covered**; reverting it to tidy the surface would trade a working
-correction for a smaller API.
-
-So both controls exist, and **the account picker is server-only and says so**. `memberships` is
-the only list of a gym's people, read live from Supabase, with no local copy — nor should there
-be one, since a cached copy would offer somebody who has left. With no server the form says
-*"linking a coach to their Jungle account needs the gym to be online"* rather than rendering an
-empty select, which would read as *"you have no staff"* — a different and false claim. That is
-how `AdminTeamScreen` already behaves under `NEEDS_SERVER`.
-
-🔴 **The rename rule is the part that could have shipped broken.** A class carries its coach as
-TEXT and `resolveCoach` matches that text against the entry's name and aliases. Renaming "Mara"
-to "Mara Kelly" without keeping "Mara" would **silently unlink every class she already teaches**:
-the entry still exists, the schedule still says "Mara", and the two quietly stop being the same
-person. The old name is carried into the aliases unless the gym already typed it. A change that
-only alters case or spacing is not a rename — `coachKey` folds those — so it adds no alias.
-
-An account another entry already holds is **returned and disabled, not filtered out**: a manager
-looking for a name that is demonstrably in their Team list needs to be told who has it.
-
----
-
-### §2.2 — the check, and the one field it found (`b952f81`)
-
-`scripts/audit-store-writers.mjs` parses `store.js` for patch-shaped writers, reads the keys each
-ACCEPTS, then parses every non-test file under `src/` for the keys any call site PASSES.
-`docs/STORE-WRITER-AUDIT.md` carries the full classified list.
-
-🔴 **The tool caught its own bug on the first run, and that is the whole argument for a positive
-control.** A call almost never passes a literal — `updateCoach(id, patch)` builds `patch` two
-lines up from `coachEditPatch()` in another file — so the first run read "no keys passed" and
-reported §2.1's **brand-new edit form** as four fields with no control. The known-good answer
-failing loudly is the only reason it was not believed. Keys now resolve through a local `const`,
-a `useState` initial value, and one level of "the object this function returns"; anything deeper
-is reported as **opaque**, never as missing.
-
-**The one real finding: `externalRef`.** Never written by anything, always `""`, and **read** —
-`csvExport.js:224` emits it as a **"Reference"** column in the members CSV, so every gym's export
-carried a blank column promising a reference to their previous system. Given its writer on the
-one path where the value exists: a column in the file the old system exported. Aliases
-deliberately exclude a bare **"ID"** — a spreadsheet's "ID" is as likely to be a row number, and
-a row number in `external_ref` is a confident wrong answer where a blank was merely empty.
-**Not** hand-editable (another system's key is not something a human should type), and **not
-deleted** (that would pre-empt A16).
-
-⚠️ **The sweep's own false positive is in the doc on purpose.** A crude field-level grep flagged
-`weekKey` as unwritten; it is written at `CalendarScreen.jsx:275` in the `obj.field = value` form
-the grep could not see. Caught by reading the result, not by trusting the count.
-
-**The rule pinned is narrow on purpose.** `storeWriters.test.js` covers patch-shaped writers
-only. Widening it to every field of every stored object was tried and produced noise, and a check
-that has to be argued with every time it runs gets deleted. **The allowlist IS the positive
-control**: the known seams must still be *found*, every writer must resolve at least one accepted
-key, and at least four writers must be located — so a broken parser fails rather than going green
-on a scan reading nothing. Verified end to end: run against `fa54c4a` it reports exactly
-`active, aliases, name, userId`; at HEAD, none. Re-introducing session 30's defect fails the test
-and **names the four fields**.
-
----
-
-### §2.4 — two timezone defects, and one that was not (`fec9a75`, `63e9e43`)
-
-`addMember` stamped `joinedAt` with `toISOString().slice(0,10)` — UTC. ⚠️ **The prompt's
-illustration is off by the size of the bug**: Singapore is UTC+8, so 8am local is exactly
-midnight UTC and lands on the right day. The window is **before** 8am, which is when a gym signs
-people up.
-
-**Blast radius, measured.** `joinedAt` has four readers: `retention.js:157` (rule 1's tenure
-gate), both CSV exports, and RosterScreen's date input. `cohorts.js` deliberately does not read
-it, and `applyAttendanceImport` writes `""` — so an importing gym is unaffected and the gyms this
-reaches are the ones adding members by hand, which is the shipped path. **[unverified] in the
-prompt, now settled: no test pinned the UTC behaviour** — `store.test.js:87` asserts only the
-format, which is why it survived 1019 tests.
-
-🔴 **The test had to change timezone to mean anything.** The suite runs in UTC, where the two are
-identical, so the obvious test passes against the bug. Both new describes assert the offset is
-`-480` **first** — a positive control on their own precondition, because otherwise every
-assertion becomes trivially true.
-
-**Found while measuring the blast radius:** `useClassRunner.js` wrote a session's `date` in UTC
-and `ProfileModal.jsx:184` **displays** it, so a coach teaching at 7am in Singapore saw yesterday
-against the class they had just finished. ⚠️ **The streak above it was NOT broken** — I probed it
-in a non-UTC zone across three scenarios and it counted correctly, because writer and reader
-shared the convention. Reporting it as broken would have been a defect manufactured by my own
-fixture. Both halves moved together (changing either alone breaks the count), and `localDateStr`
-moved to `format.js` rather than being copied a third time. **No migration**: a stored date string
-has no time in it, so the zone it was written in cannot be recovered, and guessing would be a
-confident wrong answer.
-
----
-
-### §2.3 — the compare-and-set primitive, built with its status made undeniable (`18e1439`)
-
-Verified first: **`store.js` contains zero `.update()` calls**, and the only three in the app are
-unconditional. **The argument against building was taken seriously** — the repo already carries
-two never-run pieces of code, and a wrong primitive is worse than an absent one. What tips it is
-that the alternative is not "no primitive": it is `_bgUpsertDelta`, which is what the next person
-will reach for, and which is wrong in the worst way available — two coaches both approving both
-succeed, last writer wins, and one is shown an approval that did not happen, with nothing logged.
-
-It is **not imported by anything** (confirmed absent from every built chunk), its header opens by
-saying it has never made a real request, and the two PostgREST behaviours it depends on are
-written down **as assumptions**. Three outcomes, not a boolean: losing a race is a normal outcome
-a coach must be told about; a failed request is not. Two refusals are the point of it — an
-**empty guard** (an unconditional update wearing this function's name) and **more than one
-matched row** (a schema fault, not a win). Mutation-checked by dropping the guard: 6 of 13 fail.
-
----
-
-### §2.5 — dated availability exceptions: NOT shipped, and the reason is structural
-
-§2.5 says not to ship half of it. **It cannot be shipped at all yet, and the blocker is one level
-down from the calendar UI.** `coachesFreeAt` takes a weekday NAME and a slot. A cover request
-carries `classDay: "Thu"` and `classSlot` and **no date anywhere** — deliberately denormalised
-from a weekly rule, which has no single date to carry. So "away this Thursday" has nothing to
-match against: a coach could mark themselves away on a date and `coachesFreeAt`, receiving only
-"Thu", could not suppress it. That is exactly the silent half-feature §2.5 warns about.
-
-**The prerequisite is that cover requests target a dated occurrence rather than a rule.**
-`occurrencesForWeek` already produces dated occurrences, so the machinery exists, but rewiring
-the ask flow changes the request shape whose denormalisation has a deliberate comment explaining
-itself. That is its own piece of work and should be its own item.
-
----
-
-### Found by looking, and fixed (`852550c`)
-
-**The Dashboard header said "Monday 24 Aug" and "Recent sessions", three cards below it, said
-"2026-08-24".** The same day in two notations on one screen — the shape session 30 found in the
-availability column — and machine notation shown to a coach besides. No test failed and none
-would have: both strings were correct, and correctness was not the complaint. `fmtSessionDay`
-now says "today" / "yesterday" / "Sat 22 Aug", used by the only two renderers of a stored
-session date (`App.jsx:666`, `ProfileModal.jsx:184`).
-
-🔴 **And it is parsed BY PARTS.** `new Date("2026-08-22").getDate()` is **21** in New York,
-because a date-only string is UTC midnight by specification. Formatting this the obvious way
-would have reintroduced §2.4's bug **in the renderer** — one layer further out and harder to
-see, because the stored value would have been right. The test demonstrates the trap next to the
-fix.
-
-### Found and not fixed
-
-- **Two checkboxes still render browser-default blue on a gym's own palette** —
-  `RosterScreen.jsx:343` and `PersonasScreen.jsx:1009` lack `accentColor: "var(--accent)"`. The
-  new one in `CoachCoverPanel.jsx:287` has it. Same defect class as `8c581d0` (the demo screen
-  drawing its own controls on a gym's palette). Left out of this session's commits because
-  widening a commit is how polish arrives untested — it wants its own change with a token test.
-- **`+ Mara K. (1)` sits directly below the alias box while editing Mara**, and the obvious click
-  adds her as a SECOND coach — which is the wrong action if they are the same person. Nothing
-  connects the offer to the control that merges them. Noticed by rendering the panel and reading
-  it; not a test failure.
-
-### Traps paid for this session
-
-- ⚠️ **I shipped `fec9a75` with `lint:crash` at 3 and had to fix it in the next commit.** The
-  §2.4 test set `process.env.TZ` directly and `process` is not a declared global in
-  `eslint.crash.config.js`. Caught by *running* the gate rather than assuming the earlier green
-  still held. Now via `vi.stubEnv`, since the eslint config is infra.
-- ⚠️ **`navAnyWidth` takes a screen OBJECT from `ALL_SCREENS`, not a string**, and its
-  `aside` count is a **one-shot read that races a reload** — follow `page.reload()` with
-  `waitForAppAnyWidth` or a 1280px test goes down the phone branch and hunts for a "More" button
-  that is not there.
-- ⚠️ **`localeCompare` puts "nameless@…" before "Unnamed account"** — an ICU collation, not a
-  bug. My expectation was wrong, not the code.
-- The Playwright scratch config had to be rewritten again (image ships Chromium r1194, the CDN is
-  proxy-blocked). It lives in `.e2e-scratch/` and is **not committed**, so session 32 will need
-  it once more.
-
----
-
-### What is genuinely left
-
-1. **§2.5 needs its prerequisite first** — cover requests on a dated occurrence, not a rule.
-2. **The two un-skinned checkboxes**, with a token test.
-3. **The alias/offer adjacency** in the roster panel.
-4. **`updateMember.externalRef` stays deliberately unwritten** — recorded in
-   `storeWriters.test.js`'s allowlist with its reason. Revisit only if A16 is answered yes.
-
-### Standing risks — carried forward, with what MOVED marked
-
-- 🔴 **`main` is four sessions stale and nothing merges to it.** Sessions 28–31 all live only on
-  their own branches. **This is now the oldest unaddressed process risk in the repo** and it has
-  cost four sessions the same twenty minutes. A prompt can only tell the next session to work
-  around it; it cannot merge the branches. **This one is Dylan's or it is nobody's.**
-- 🔴 **A15 — migration `0010_coach_cover.sql` is unapplied.** A cover request reaches one phone.
-  The product says so on screen. ✅ **MOVED in part:** the compare-and-set primitive A15 needs
-  now exists (`src/lib/compareAndSet.js`) and A15 carries a note for whoever wires it. **It has
-  never made a real request** — that gap does not close until 0010 runs.
-- 🔴 **A16 is open and is a decision, not work.** Should Jungle write back to a gym's booking
-  system at all? Nothing is blocked; nothing should be built until it is answered. §2.2
-  deliberately did **not** delete `externalRef` for this reason.
-- 🔴 **Migrations `0005` and `0006` have never been applied.** Personas, plans and the movement
-  catalogue exist on one device with no server copy. ⚠️ The coach-delete dialog *tells* the coach
-  that and `e2e/destructive.spec.js` asserts the string — applying them makes a shipped sentence
-  a lie, in the same session.
-- 🔴 **N4 member links are built and undeployed — twelve sessions.** A12/A13, 35 minutes.
-- 🔴 **Nobody's phone rings.** No push, email or SMS anywhere in the product. Cover is in-app
-  only, which is no use for the case it exists for — a coach ill at 5am.
-- ⚠️ **A14 is open and is a yes/no**: does Jungle bend a gym's accent to make it legible?
-- ⚠️ **A1 — the Supabase region has never been confirmed.** Five-minute read-only check, and the
-  only item that gets dramatically more expensive with age.
-- ⚠️ **10 unmerged Dependabot PRs**, five of them major GitHub-Actions bumps. Ask Dylan first.
-- ✅ **MOVED: `addMember`'s UTC `joinedAt`** — fixed this session, with a test that needs a
-  non-UTC timezone to mean anything.
-- ⚠️ **The container is ~4× slower than the one these prompts are written on.** A full e2e run is
-  **33 minutes**. Budget three or four, and lean on `npm test` (4s) and single-spec runs (20–30s).
-  A **foreground blocking wait** advances real time properly; a backgrounded sleep loop does not.
-- ⚠️ **`.e2e-scratch/` is not committed**, so the Playwright launch workaround needs rewriting
-  again next session. `playwright.config.js` is untouched, as it must be.
