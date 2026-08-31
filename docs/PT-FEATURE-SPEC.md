@@ -1,6 +1,28 @@
 # PT-FEATURE-SPEC — 1:1 personal training, and the client-facing app
 
-_Ideation → requirements. Written 2026-08-31 against `30520f2`. **Nothing here is built.**_
+_Ideation → requirements. Written 2026-08-31 against `30520f2`._
+
+> ## Status — phases 0–3 have SHIPPED (code, not migrations)
+>
+> This document began as "nothing here is built". That is no longer true, and leaving the
+> sentence would be exactly the stale-prose failure this repo keeps paying for. What exists now:
+>
+> | | State |
+> |---|---|
+> | `0010` staff read boundary + self-test + `rlsBoundary.test.js` | ✅ written, ⛔ **not applied** |
+> | `0011`–`0013` identity / spine / wellbeing | ✅ written, ⛔ **not applied** |
+> | `ptConstants.js` + `dbConstraints` coverage | ✅ shipped |
+> | `progression.js` — every honesty gate, thresholds pinned | ✅ shipped |
+> | PT store domain (identities, PAR-Q, programs, sessions, set logs) | ✅ shipped |
+> | `ClientsScreen` — PT1–PT4 + PT9, lazy chunk with its own budget | ✅ shipped |
+> | Client app (PT5), credits (PT6), wellbeing surfaces (PT7–PT8) | ⛔ not started |
+>
+> Gates at that point: `lint:crash` 0 · **955 unit (33 files)** · **456 e2e** · 7-chunk build ·
+> 0 over budget. **StaffApp 354.64 / 360 kB — 5.36 kB left**, and §10.1 now understates the
+> constraint: it is tighter than when this was written.
+>
+> 🔴 **Nothing is applied to a database.** Every migration below is a file. §16 Q1 is still the
+> blocking question, and it is now blocking more code than it was.
 
 > **How to read this.** §1–§4 are decisions and the one blocking prerequisite; read those even if
 > you read nothing else. §5–§9 are the buildable spec. §10–§14 are platform, testing, infra and
@@ -815,11 +837,11 @@ decision deferred to phase N+1.
 
 | Phase | What | Gate to the next |
 |---|---|---|
-| **0** | Apply `0005`, `0006`. Ship **`0010_staff_read_boundary.sql`** + self-test. | 11/11 green, member-role user proven blind. **No PT code before this.** |
-| **1** | `0011` sessions XOR + `member_identities`. Trainer client list, invite, revoke. | A real trainer can invite a real client and the client can sign in and see an empty, correct, branded shell. |
-| **2** | PT2 PAR-Q gate (+ trigger, + consent scope). | A program cannot be activated without valid screening. Proven by test, not by clicking. |
-| **3** | PT3 program authoring (persona-drafted, trainer-approved) + PT4 set logging, offline-first. | A trainer runs a full week of real sessions on it and does not reach for paper. |
-| **4** | PT5 client app: Today / Program / History. | A real client opens it twice in a week unprompted. |
+| **0** | ✅ **Written.** `0010_staff_read_boundary.sql` + `0010_rls_selftest.sql` (15 checks, 3 of them positive controls) + `src/lib/rlsBoundary.test.js`, which replays drop/create across every migration and asserts the effective policy set. ⛔ Not applied. Two bugs caught in draft — see the commit. | Self-test green against a live database. **Still the gate: no PT reaches a real gym before this is applied.** |
+| **1** | ✅ **Written.** `0011` (identities + own-record policies), `0012` (XOR, programs, prescriptions, set logs), `0013` (PAR-Q, measurements, habits, nutrition, credits). Store domain + `ClientsScreen` shipped: invite, revoke, three access states. | A real trainer can invite a real client and the client can sign in — **blocked on the migrations and on the client app (PT5), neither of which exists yet.** |
+| **2** | ✅ **Shipped.** The gate exists TWICE on purpose: `0013`'s trigger, and `parqStatus()` client-side — because local-first means a server-only gate lands the write locally and reports the rejection as a sync error. Consent scopes widened by ALTER ahead of any client that writes them. | ✅ Proven by test: unit (12 mutations, 12 red) and e2e (the refusal names the screening problem and the next action). |
+| **3** | 🟡 **Half.** Set logging, correction-by-superseding and manual programs are shipped and driven end to end. **Persona-drafted programs are NOT** — the generator is untouched, so a program is typed rather than drafted. | ⛔ Not met. A trainer has not run a week on it, and PT3's actual value (a program in the coach's own voice) is the missing half. |
+| **4** | ⛔ **Not started.** The third entry point does not exist. Note the constraint discovered while shipping phase 3: StaffApp has 5.36 kB left, and the PT store domain already sits in it — the client app must not add to `store.js` without buying that room back. | A real client opens it twice in a week unprompted. **Still the honest gate**: everything before it is measurable by tests, this one only by a person choosing to open the app. |
 | **5** | PT6 credits. | Trainer stops counting sessions in WhatsApp. |
 | **6** | PT7–PT9: habits, measurements, photos, nutrition, progress analytics. | §9's honesty gates hold on real, sparse data. |
 | **7** | Capacitor wrap → push, then PT10–PT12. | — |

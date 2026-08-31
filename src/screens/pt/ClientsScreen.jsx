@@ -64,6 +64,11 @@ const btn = (variant = "primary") => ({
   background: variant === "primary" ? "var(--accent)" : "transparent",
   color: variant === "primary" ? "var(--bg)" : "var(--text)",
   fontWeight: 700, fontSize: "13px", cursor: "pointer",
+  // A button in a flex row beside a full-width input gets squeezed to its text's
+  // wrap width — "Add programme" broke across two lines at every viewport,
+  // including 1280px where there was plenty of room. Neither is a layout bug the
+  // e2e can see: the button is found, clicked, and works.
+  whiteSpace: "nowrap", flex: "none",
 });
 const field = { padding: "9px 11px", borderRadius: "9px", border: "1px solid var(--border)",
                 background: "var(--bg)", color: "var(--text)", fontSize: "13px", width: "100%", boxSizing: "border-box" };
