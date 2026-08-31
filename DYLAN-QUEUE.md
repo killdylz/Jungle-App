@@ -43,6 +43,7 @@ undo it. Nothing in Part A needs me.
 | A10 | Brief a lawyer | 1 email | none |
 | A11 | The live-verification queue (7 checks) | ~2 h | none |
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
+| 🔴 **A14** | **Run migration 0010 — the staff read boundary.** A `member`-role account currently reads the whole gym. | **10 min** | low, idempotent |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 
 ---
@@ -591,6 +592,32 @@ sign-in. No Jungle branding anywhere.**
 
 ---
 ---
+
+## 🔴 A14 — run migration 0010. Do this before anyone gets a client login.
+
+**What is wrong.** Every read policy written since `0001` is `gym_id in (select user_gym_ids())`,
+and that function filters on `status = 'active'` but **not on role**. `membership_role` has
+included `'member'` since the day it was written. So the obvious way to give a PT client an
+account — a `memberships` row with role `'member'` — hands that client `SELECT` on the entire
+roster with email addresses, every attendance row, every consent record, and the coach persona
+corpus your first gym's agreement says belongs to the coach.
+
+**It is not exploitable today** only because no member-role user has ever existed. That is a fact
+about your data, not about your policies, and it stops being true the moment a client portal ships.
+
+**What to do** (10 minutes, idempotent, safe to re-run):
+
+1. Merge the PR titled *0010 — a member-role account could read the entire gym*. That only puts
+   the file in the repo; **it changes nothing on the server.**
+2. Supabase dashboard → **SQL Editor** → New query.
+3. Paste the whole of `supabase/migrations/0010_staff_read_boundary.sql` → **Run**.
+4. Expect `Success. No rows returned`.
+5. Verify: new query → paste `supabase/tests/0010_rls_selftest.sql` → **Run**. It asserts the
+   boundary rather than assuming it, and tells you which policy is wrong if one is.
+
+**If it goes wrong:** the migration only replaces policies, it touches no data. `0010` is written
+to be re-runnable, so a partial run is fixed by running it again.
+
 
 # PART B — decisions
 

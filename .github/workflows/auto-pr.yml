@@ -1,0 +1,99 @@
+name: Open a PR for a claude branch
+
+# ─── So work can never sit invisible again ───────────────────────────────────
+#
+# The failure this exists to prevent, in its own words: six `claude/**` branches
+# accumulated 47 commits — coach availability, cover requests, a retention
+# analytic, a live-policy security fix — and nothing anywhere said so. They were
+# not rejected or parked. Nobody knew they were there.
+#
+# A branch is a decision waiting to be made. This turns every push onto one into
+# a pull request, which is the only surface in GitHub that shows up in a list,
+# carries checks, and can be merged with one click.
+#
+# ⚠️ IT OPENS A PR. IT DOES NOT MERGE ONE. Deliberately: a merge to `main`
+# publishes to the studio's live site, and the morning this file was written is
+# the argument — a blanket auto-merge would have landed a rival PT implementation
+# on top of the one that had just gone live.
+#
+# ⚠️ A PR OPENED BY `GITHUB_TOKEN` DOES NOT TRIGGER `pull_request` WORKFLOWS.
+# That is GitHub's loop-prevention and it is why `ci.yml` beside this file keys on
+# `push` instead: the gate runs on the branch, and its result attaches to the head
+# SHA, so it appears on this PR as a check anyway. If you ever move `ci.yml` to
+# `pull_request`, PRs opened here will silently stop being checked.
+
+on:
+  push:
+    branches: ['claude/**']
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the "does this branch actually differ from main" check
+          # below needs both sides, and a shallow clone has neither.
+          fetch-depth: 0
+
+      - name: Open a pull request if there is not one already
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # A branch that is level with main is a leftover, not a proposal. This
+          # is the case that fires after a PR merges and the branch is pushed
+          # again — opening an empty PR there is noise with a number on it.
+          ahead=$(git rev-list --count origin/main.."origin/$BRANCH")
+          if [ "$ahead" -eq 0 ]; then
+            echo "::notice::$BRANCH has no commits beyond main — nothing to propose."
+            exit 0
+          fi
+
+          open=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$open" -gt 0 ]; then
+            num=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+            echo "::notice::PR #$num is already open for $BRANCH; the new commits are on it."
+            exit 0
+          fi
+
+          # The title is the newest commit's subject. This repo writes commit
+          # subjects as sentences about what changed, so it is already the best
+          # one-line description of the branch that exists — better than anything
+          # a script could assemble from a branch name like
+          # "claude/gracious-hopper-quifam".
+          title=$(git log -1 --format=%s "origin/$BRANCH")
+
+          {
+            echo "Opened automatically because \`$BRANCH\` was pushed with **$ahead commit(s)** beyond \`main\`."
+            echo
+            echo "This is a **draft for a decision**, not a request to merge. Nothing here deploys until"
+            echo "someone merges it — \`deploy.yml\` publishes on push to \`main\` and nowhere else."
+            echo
+            echo "### Commits"
+            echo
+            git log --no-merges --format='- %s' "origin/main..origin/$BRANCH" | head -50
+            echo
+            echo "### Checks"
+            echo
+            echo "\`CI\` runs on every push to this branch and its result is attached to the head commit,"
+            echo "so it shows above whether or not a human opened this PR. It runs the same gate as the"
+            echo "deploy — \`lint:crash\`, unit, e2e, a credentialed build and \`size --prod\` — and"
+            echo "publishes nothing."
+            echo
+            echo "---"
+            echo "_Opened by \`.github/workflows/auto-pr.yml\`. Close it if the branch is not going anywhere;"
+            echo "it will not be reopened unless the branch is pushed again._"
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body-file /tmp/pr-body.md
