@@ -592,9 +592,9 @@ sign-in. No Jungle branding anywhere.**
 ---
 ---
 
-# PART B — all answered, kept as the record
+# PART B — decisions
 
-**Nothing here needs you.** You answered every one of these in session 18; they are
+**One open question (B10, added session 28).** The rest you answered in session 18; they are
 listed so the decisions have somewhere to live until the spec absorbs them.
 
 | # | Question | Your answer | State |
@@ -608,8 +608,34 @@ listed so the decisions have somewhere to live until the spec absorbs them.
 | B7 | Docs cleanup | **Yes** | ✅ Session prompts moved to `docs/history/` |
 | B8 | `winBackBlockedReason` | **Keep** | ✅ Closed |
 | B9 | `claude-opus-4-8` default | **Yes, update** | ✅ Done — A6 sets it explicitly anyway |
+| **B10** | **The 1:1 / PT tables (F1)** | *unanswered* | 🔴 **OPEN — session 28.** See below. |
 
-**There are no open questions for you right now.** When there are, they go back here.
+## B10 — the 1:1 tables. One question, and it is not urgent.
+
+**Session 28 built the PT function**: a `1:1 Clients` screen, a `Health Screen` (PAR-Q), planned
+and delivered 1:1 sessions, and the hard gate the spec requires — a coach cannot plan a
+personalised session for someone without a valid health screen. It works today, end to end.
+
+**It is stored on ONE DEVICE.** Three localStorage keys (`jungle_pt_clients`,
+`jungle_parq_records`, `jungle_pt_sessions`) and no server table, because F1's
+`session_assignments` migration is your call and I did not make it. If the coach's laptop dies,
+the 1:1 records and every health screen with it are gone. Nothing else in the product is affected —
+the member roster syncs exactly as it always has, and a 1:1 client is a member.
+
+**I deliberately did NOT write sync code against tables that do not exist.** It would fail on every
+write, light the sync banner permanently, and make the retry loop re-push the same doomed rows every
+30 seconds — breaking the banner for classes, personas and attendance too.
+
+**The question:** do you want the migration written? It is three tables (1:1 clients, PAR-Q records,
+1:1 sessions) plus RLS, and — because PAR-Q answers are health data under PDPA — it is the first
+thing in this product that stores a special category of personal data on a server. That is worth
+putting in front of the lawyer in **A10** at the same time, which is the real reason this is a
+question rather than a task.
+
+Either answer is fine and neither blocks anything: **"not yet"** leaves it exactly as it is, working
+and local, with the screen telling the gym so in its first card.
+
+**There are no other open questions for you right now.** When there are, they go back here.
 
 ---
 

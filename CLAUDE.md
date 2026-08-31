@@ -15,10 +15,15 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of `dc25bf2`: **`lint:crash` 0 · 875 unit (30 files) · 440 e2e (44 spec files) ·
-6-chunk build · 0 over budget.** App.jsx is **3,787 lines**. StaffApp **349.46 / 360 kB — 10.5 kB
+Green as of session 28: **`lint:crash` 0 · 935 unit (33 files) · 466 e2e (45 spec files) ·
+7-chunk build · 0 over budget.** App.jsx is **3,857 lines**. StaffApp **354.16 / 360 kB — 5.8 kB
 left, and it is the binding constraint on anything new.** A new screen goes in a `lazy()` chunk
 **with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+⚠️ **Two screens that share libraries want ONE barrel module, lazy-imported twice** — two dynamic
+imports of two files emit a third chunk for the shared code, under a generated name no budget
+covers. `src/screens/pt/PTScreens.js` is the shape. And a definition `store.js` needs must live on
+the EAGER side of that seam: importing one four-line coercion from a lazy module pulled the whole
+1:1 lens into StaffApp and put it 0.9 kB over.
 
 - `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
   advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
@@ -193,6 +198,10 @@ not. **Assert the STORED object, not only what was rendered.**
   comment above it.
 - **`restorePersonaCascade` and `_clearLedgerIfSettled`** (`store.js`) look redundant and are
   not. Both have unit tests saying so. Do not "simplify" them.
+- **A health screen gates individualised load, and `parqStatus()` is the only thing that decides
+  it.** `blocksLoad` is read by the screen AND by `store.assignPtSession` — a gate that lives only
+  in JSX is one the next caller walks through. Expiry is evaluated BEFORE a doctor's clearance, an
+  undated clearance is ignored, and an unanswered question is never a "no".
 - **`--danger` is deliberately not skin-derived.** A gym whose accent is red must not get a
   delete button matching its primary action.
 - **`isViewEnabled` is the single choke-point** for what appears in a nav — there are four nav
@@ -227,5 +236,8 @@ not. **Assert the STORED object, not only what was rendered.**
 
 🔴 **Outstanding and not code:** migrations `0005_coach_personas.sql` and
 `0006_persona_generations.sql` have never been applied. Until they are, a gym's personas, plans
-and movement catalogue exist on **one device with no server copy**. Also **10 unmerged Dependabot
+and movement catalogue exist on **one device with no server copy** — and since session 28 so do its
+1:1 clients, health screens and 1:1 sessions, which have no migration written at all
+(`jungle_pt_clients` / `jungle_parq_records` / `jungle_pt_sessions`). **Those three deliberately
+make no sync call**; read the block above `getParqRecords` in `store.js` before adding one. Also **10 unmerged Dependabot
 PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**

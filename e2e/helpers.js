@@ -121,6 +121,12 @@ export const ALL_SCREENS = [
   // responsive.spec.js checks this list against the running app — so the omission
   // would have failed loudly rather than silently, which is the design working.
   { key: "analytics",    side: "Analytics",        sheet: "Analytics" },
+  // F1's 1:1 lens and the PAR-Q gate that landed with it. Both use the SAME word
+  // in the sidebar and the More sheet: the three-vocabulary problem documented
+  // above is a trap, not a pattern to follow, and neither screen is on the
+  // four-item bottom bar (a coach does not open a health screen mid-burpee).
+  { key: "pt",           side: "1:1 Clients",      sheet: "1:1 Clients" },
+  { key: "pt-parq",      side: "Health Screen",    sheet: "Health Screen" },
   { key: "brand-studio", side: "Brand Studio",     sheet: "Brand Studio", bar: "Brand" },
 ];
 

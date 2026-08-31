@@ -1,12 +1,127 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-10 (session 27)_
+_Last updated: 2026-08-31 (session 28)_
 
 > 📁 **Sessions 6–25 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 28 — the 1:1 path exists, and the health screen that had to land with it
+
+> **Gates green.** `lint:crash` **0** · **935 unit** (33 files) · **466 e2e** (45 spec files) ·
+> seven-chunk build: member path **211.58 kB**, staff **564.43 kB** (StaffApp **354.16/360 kB** —
+> 5.8 kB left, and still the binding constraint). New lazy chunk `PTScreens.js` **31.63/34 kB**.
+> App.jsx **3,857 lines**.
+
+**The brief was one line: "I would like to see the new screens built for the PT function."** The
+branch name said `pt-function-new-screens` and carried no commits, so nothing existed to be shown
+and this is the build.
+
+### What "the PT function" turned out to mean
+
+F1 ("session/assignment primitive") has been 🟡 since the spec was written, and its unbuilt half is
+the same sentence in six places: **"no 1:1/PT path exists at all"**, so design principle P5 — *one
+primitive, two lenses* — was ⛔. F2's gap 1 attaches a condition to closing it: the PAR-Q screen
+**"must land in the same change that introduces individualized load, not after"**. So this is one
+change, not two.
+
+### The decision that shaped everything: no migration
+
+The spec says F1 "needs a migration — Dylan's call", and CLAUDE.md says no infra changes without
+asking. Both hold. So the 1:1 lens is **local-first only**: three new localStorage keys
+(`jungle_pt_clients`, `jungle_parq_records`, `jungle_pt_sessions`) and **not one sync call**.
+
+That is not a shortcut, and the comment above `getParqRecords` says why at length. Wiring
+`_bgUpsertDelta("pt_clients", …)` against a table that does not exist fails on **every** write,
+and the failure is loud in the wrong way: `_noteSyncError` lights the sync banner permanently and
+`startSyncRetry` re-pushes the same doomed rows every 30 seconds for the life of the session. A
+feature that breaks the banner for every other domain is worse than one that is honest about being
+local, and the screen says so in its first card.
+
+⚠️ `members` still syncs. A 1:1 client **is** a member — the same row the roster, the check-in list
+and the retention analytics already know — plus a record saying "this person also trains 1:1". The
+shared roster stays shared; only the part with no table waits.
+
+### What shipped
+
+**Two screens, one lazy chunk.** `1:1 Clients` (`pt`) and `Health Screen` (`pt-parq`), both in
+`src/screens/pt/`, both reached from the sidebar and the More sheet under the SAME word — the
+Builder's three vocabularies are a documented trap, not a pattern. Neither is on the four-item
+bottom bar; a coach does not open a health screen mid-burpee.
+
+⚠️ **App.jsx lazy-loads ONE barrel (`PTScreens.js`) twice, on purpose.** Two dynamic imports of two
+files emit two chunks plus a third for the shared libs — with a generated name that is not in
+`check-size.mjs`, which its own ⚠️ says is how a lazy chunk grows with no ceiling at all. One
+specifier, one chunk, one budget line.
+
+**The gate is `lib/parq.js`, and it is arithmetic, not markup.** The seven classic PAR-Q questions
+in the industry's own words (a reworded health question is a different question), six states, and
+one function — `parqStatus()` — that every surface reads `blocksLoad` from. A second answer to
+"may I prescribe for this person" is how a hard gate stops being one.
+
+Three rules in it are worth knowing:
+- **Unanswered ≠ "no".** `newParqAnswers()` is `null`, not `false`. A sheet defaulted to `false`
+  reads as a completed screen with seven clean answers that nobody was ever asked.
+- **Expiry is checked BEFORE clearance,** and the order is load-bearing. A 2025 GP letter was
+  granted against a 2025 health picture and cannot clear a 2026 session.
+- **A clearance with no date is ignored** — undated is a coach ticking a box, which is what the
+  gate exists to prevent. Both the store and `parqStatus` refuse it.
+
+**The refusal is enforced twice and shown once.** `store.assignPtSession` will not write a session
+without a passing status, and the screen renders the refusal instead of hiding the form — a form
+that vanishes teaches nothing, and a coach who cannot see the block will look for a way round it.
+Each written session carries `parqStateAtAssign`, because `cleared` and `gp_cleared` are different
+assurances and a year from now that is the whole question. Plans are **snapshotted** on assign, so
+editing the Builder draft afterwards cannot rewrite what was prescribed to a named person — the
+boundary F1 notes classes still do not have.
+
+**1:1 sessions are deliberately NOT written into `class_instances` or `attendance`.** The shapes
+fit, and that is the trap: every studio number would quietly start counting one-person sessions as
+classes, average class size would fall, the retention curve would move, and nothing on screen would
+say why. The banner states it in the owner's words.
+
+### Two defects found by READING the screen, not by running it
+
+935 unit tests and 466 e2e tests were green when both of these were on the page.
+
+1. **The refusal printed the same forty words twice.** `describeLoadGate` restated
+   `parqStatus().reason` directly beneath the health-screen panel that had just said it. It now
+   says what is LOST and where the fix is; `parq.test.js` pins that it must not contain `reason`.
+2. **The health screen scolded a coach who had not asked anything yet.** The live preview read
+   *"0 of 7 questions answered. A part-answered screen is not a screen."* on an untouched form —
+   about the thing the form is FOR. Hidden until the first answer.
+
+### What the sweeps needed, and the trap under it
+
+Adding two screens grew the existing sweeps by 16 tests automatically (`ALL_SCREENS` is checked
+against the running app by `responsive.spec.js`, which is that design working). Two things had to
+be done by hand:
+
+- `interactions.spec.js` needed a **seed** for both. An empty 1:1 screen has one button on it and
+  would have satisfied the ≥4 positive control by testing nothing — the trap that has now bitten
+  three times in this repo.
+- The PAR-Q's fourteen Yes/No buttons are **44px in the box, not via a `data-tap` overlay**.
+  `index.css` warns that adjacent overlays closer than 44px steal each other's hit area, and these
+  sit in pairs eight pixels apart. `pt.spec.js` hit-tests them at 390px with the questions actually
+  rendered, because `mobile.spec.js` visits this screen on a fresh app where they do not exist.
+
+Both new screens were also added to `brandTokens.spec.js`, which sweeps opaque text for AA contrast
+on a hand-built LIGHT skin. `--danger` (#EF4444) reads at 3.8:1 on a white card, so the blocked
+chips carry it as a **border and a dot** and the words carry `--text`.
+
+### What is still Dylan's
+
+Unchanged and now more expensive: **`0005` and `0006` have still never been applied**, and the 1:1
+ledgers join the coach corpus in existing on exactly one laptop. The `session_assignments` migration
+that F1's acceptance criterion actually names — *`session_assignment` targets a `class_instance`
+XOR a `member`* — is still unwritten, so **F1 stays 🟡 and its server half is untouched**. What
+changed is that the product now has the 1:1 lens in front of a coach, and the mappers have an
+obvious place to go when the table exists: beside `_memberToRow`, replacing three local-only
+getters. See `DYLAN-QUEUE.md`.
 
 ---
 
@@ -260,153 +375,3 @@ than being parked behind a precondition the product already satisfied.
 What is left in the queue is not theatre, but it is thinner than what came off it. The next session's
 highest-value work is almost certainly **not on this list**: it is getting 0005/0006 and N4 in front
 of a real gym, both of which need Dylan and neither of which any amount of code will move.
-
-
-## Session 26 — three premises that were false, and the two defects underneath them
-
-> **Gates green.** `lint:crash` **0** · **809 unit** (28 files, no todos) · **395 e2e**
-> (38 spec files, no fixmes) · five-chunk build: member path **211.57 kB**, staff **554.22 kB**
-> (StaffApp **343.82/360 kB**). App.jsx **3,386 lines** — the prompt said 3,602, then 3,608. Both
-> were wrong, which set the tone for the session.
->
-> ⚠️ **A SECOND CLAUDE SESSION WAS WORKING THE SAME TREE.** Not the same port — the same files. It
-> committed uncommitted work, deleted a scratch file mid-use, left a live `MUTATION` marker in
-> `src/index.css` that would have made a gate run lie, and tore down the shared dev server on 5191
-> repeatedly. See `concurrent-session-shares-worktree` in memory. Stage only your own paths
-> (`git commit --only <paths>`) and grep for `MUTATION` before trusting any gate result.
-
-### The method: every named item was driven before it was built
-
-**Three items on the polish list were wrong, and each wrongness was the useful finding.**
-
-1. 🔴 **§3.1 said the Builder loses a class on navigation, and wanted a guard on `navTo`.** It does
-   not. `stages`/`sessionName`/`classChoice` live at the **App root**, so navigation never unmounts
-   them, and a `useEffect` autosaves on every change — a rename survives a full `page.reload()`.
-   The guard would have interrupted a coach to prevent a loss that cannot happen, which is worse
-   than no guard: an interruption that is never right teaches people to click through the one that
-   is. `e2e/builderDraft.spec.js` pins the persistence instead; deleting the autosave reds all
-   three tests. **That is the condition for re-raising this, and nothing less is.** The *plan
-   editor* loss was real — four dismiss paths, all silent — and now hands the draft back through
-   the undo toast, guarded on `dirty` so an untouched open stays instant.
-
-2. 🔴 **§3.4 listed three touch-target offenders. Measured, it was 100 of 186 controls under 44px
-   at 390px.** The list came from wherever the last person happened to look, not from a sweep.
-
-3. 🔴 **§1.4 asked for "assert the counter reaches 3/3". It must not.** Running a class flips
-   `showChecklist` false — the checklist is a cold-start surface that is REPLACED, not completed.
-   Writing the requested test would have pinned a product decision backwards.
-
-**And §3.6 asked for the timer to be `aria-live`.** `remaining` ticks every second: ~1,800
-announcements in a 30-minute class, over everything else the coach's phone must say. An
-accessibility feature can be actively hostile. The region carries what is DISCRETE instead, and a
-test asserts it never contains `/\d+:\d\d/`.
-
-### Two defects found underneath the polish, neither on any list
-
-🔴 **Every loading spinner in the app was frozen.** `@keyframes spin` lived in `src/App.css` — Vite
-scaffolding **nothing imports**. Six `animation: spin` call sites resolved to nothing. Four are on
-live, network-bound paths (Slides listing and import, reading a pasted class, generating in a
-coach's style), so on the app's four slowest journeys **"working" and "hung" looked identical**.
-Nothing throws, and a screenshot of a still spinner looks exactly like a moving one.
-
-🔴 **A dialog could start the class behind it.** The Runner binds shortcuts on `window`, and
-`useDialog` stops propagation for **Escape only**, deliberately. So with the check-in panel open —
-the one dialog opened mid-class — focusing "Done" and pressing Space **started the class**, and
-"n" advanced the room a stage, behind a dialog the coach is looking at. `isDialogOpen()` now
-exposes the stack `useDialog` already kept.
-
-### The tap-target mechanism, and the one control it could not fix
-
-`data-tap` lays a transparent 44px pseudo-element over a small control: the hit area grows, the
-visible box does not. **`tapScan.js` hit-tests the running page rather than measuring rectangles**,
-because both failure modes leave the element's rect identical:
-
-- **An `overflow:hidden` ancestor clips the overlay** — caught on the Calendar's week-nav pill.
-- 🔴 **An overlay eats its NEIGHBOUR**, and this one shipped in `40b31cb`. Marking the schedule's
-  Remove ✕ covered the Edit pencil 14px away and made it unclickable. **Nine tests went red on the
-  EDIT flow and not one mentions tap targets**: an overlay that eats a neighbour presents as the
-  neighbour being broken, three files away. `orphanScan` closes it.
-
-⚠️ **Adding `orphanScan` to the nine screen sweeps did not catch the mutation** — the sweeps run on
-a fresh app, a fresh app has an empty schedule, and neither button existed to scan. **An empty
-screen passes every scan trivially.** There is now one test that seeds a class first. That property
-is true of all nine sweeps above it, and is worth remembering before trusting the next one.
-
-**Two controls are deliberately left small, with the measurement written above them:** the
-Builder's 19px movement preview (a 44px target cannot fit a 30px row) and the schedule ✕ (14px from
-its neighbour). Pretending otherwise costs the neighbour.
-
-### Also shipped
-
-- **Two Schedule panels that could never fill.** "Jungle Intelligence" and "Trainer load" are
-  `FLAGS.mockAnalytics ? [...] : []` with the flag false, so both rendered their EMPTY state
-  permanently, promising a feature with no implementation behind it. Gated on the flag their data
-  already uses — one switch, not two. Took a hard-coded *"Mara is near weekly cap"* with them.
-- **`deleteEx` becomes an undo**, the last half of the inverted guard. The undo holds the **LIST**,
-  not the row: re-appending would put the movement back at the end of an order the coach set by
-  hand. The library's local `showToast` folded into the shared primitive — it structurally cannot
-  host a button, and two toast positions on one screen is worse than either.
-- **`--danger`**, deliberately NOT skin-derived: a gym whose accent is red would get a delete
-  button matching its primary action. The test asserts it differs from `--accent` too, because
-  "differs from muted" alone is satisfied by exactly that mistake.
-- **`layoutScan` skips 1px boxes.** The visually-hidden live region clips by design. The exemption
-  is itself mutation-checked — clipping "ELAPSED" into 20px still fails with "52px of text in
-  20px" — so the rule is narrowed, not weakened.
-
-### Traps this session paid for
-
-- ⚠️ **PowerShell mangles `node -e` containing `var(--muted)`** — `--` parses as a unary operator.
-  Use a bash heredoc `.mjs`, or the Edit tool.
-- ⚠️ **Git Bash `/tmp` is not Node's `C:\tmp`.** A heredoc written in bash and read by `node -e`
-  fails with ENOENT. Use one tool for both halves.
-- ⚠️ **`nav()` leaves focus on the button it clicked**, so a bare `Space` in a Runner test
-  re-activates the sidebar as well as firing the shortcut. Reset via body tabindex/focus.
-- ⚠️ **A JSX comment cannot be the first child of `{cond && (`** — it is not an expression. The
-  symptom is a broad e2e failure that reads exactly like a dev-server flake.
-- ⚠️ **The check-in dialog's first button is "Done"**, so Space closes it. A test asserting the
-  dialog stays open after Space is asserting that the button is broken.
-
-### Two more that landed after the block above was written
-
-- **§3.5 Team.** With Supabase unconfigured its entire content was *"Team accounts are available on
-  the online version of Jungle."* It is no longer offered. The decision goes through
-  `isViewEnabled`, which now takes runtime context — **all four nav arrays pass it**, because an
-  `&& supabaseEnabled` bolted onto one of them is exactly how a screen survives in a single menu.
-  ⚠️ Production is unaffected (`supabaseEnabled` is true there); this changes the credential-less
-  build, which is what e2e, an offline demo and the PIN-gated mode all see. Removing Team from
-  `ALL_SCREENS` is **not** a workaround — the inventory guard checks that list against the running
-  sidebar both ways, and the mutation reds the guard *and* the new test, for different reasons.
-
-- **§1.6 the interaction sweep** (`e2e/interactions.spec.js`). Presses every non-destructive,
-  non-navigating control on all eight screens and checks the **console** after each click — React's
-  boundary makes a crash look handled, so a DOM-only sweep passes on a screen that just died. The
-  denylist is the design, and its four exclusions each have a different reason.
-  🔴 **Its positive control fired immediately: Coaches and Members render three controls each on a
-  fresh install, so both would have swept an empty state and reported a pass** — the same trap the
-  tap sweep hit an hour earlier in a different file. Both are seeded now.
-  ⚠️ One thing deliberately NOT reported: an attendance row in the Members seed rendered the error
-  boundary, but the fixture had `at` as a **number** where `recordSession` writes an **ISO string**,
-  so the crash was as likely mine as the app's. **A sweep must not report a defect it manufactured.**
-  If the app really is fragile there, it needs a fixture built from a real check-in.
-
-### Still open
-
-§3.2 save toasts (partial), §3.5's Members "Check-in speed" panel, §3.7 skeletons, sweep §1.5, and
-§1.3's `removeClass` / `handleReset` / `handleNewClass`. **Everything is pushed and the deploy is
-green** — `main` at `68ac39a`, `Deploy to GitHub Pages` **success**.
-
-⚠️ **Cancelled deploy runs in this repo are usually NOT failures.** Four pushes inside sixteen
-minutes produced one `success` and three `cancelled`: GitHub Pages uses a concurrency group that
-cancels an in-flight deploy the moment a newer push arrives, so only the last one needs to finish.
-Reading one of those as a red build is the mirror image of session 24's mistake. Judge the run
-whose SHA is `HEAD`, by workflow **name**, and ignore superseded ones.
-
-`gh` **is now installed and authenticated** (2.97.0, as `killdylz`) — the earlier note that it was
-missing is obsolete. ⚠️ It resolves on `PATH` only in a shell started *after* the install; an
-older session must call `"C:\Program Files\GitHub CLI\gh.exe"` by full path, and `gh` outside the
-repo needs `--repo killdylz/Jungle-App` or it cannot infer the base repo.
-
-§0 is unchanged: migrations `0005` and `0006` still need running, and until then the coach corpus
-exists on exactly one laptop.
-
----

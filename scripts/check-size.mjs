@@ -43,9 +43,20 @@ const KB = 1000;
 // cannot be measured locally — no credentials — and CI is the run that judges it.
 // Its contents are app code plus lib/cohorts.js, with nothing supabase-shaped of
 // its own, so the two build shapes should agree closely.
+// PTScreens.js (F1's 1:1 lens + the PAR-Q gate) is BOTH screens in one chunk —
+// App.jsx lazy-loads the barrel twice on purpose, because two dynamic imports of
+// two files would emit a third, generated-name chunk for the shared libs, and
+// the ⚠️ above is exactly about that chunk having no ceiling. Its ceiling is set
+// the same way RetentionScreen's was: the credential-less number measured when
+// it landed, plus room, with the prod figure a little wider because it cannot be
+// measured locally and CI is the run that judges it. Nothing supabase-shaped is
+// in it, so the two shapes should agree closely. Measured 31.52 KB
+// credential-less when it landed: two full screens, the seven PAR-Q question
+// texts, and lib/parq.js + lib/ptClients.js, none of which the eager bundle
+// pays for.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClassSummary.js": 8, "summaryApi.js": 5 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClassSummary.js": 8, "summaryApi.js": 3 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 36, "ClassSummary.js": 8, "summaryApi.js": 5 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 34, "ClassSummary.js": 8, "summaryApi.js": 3 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }
@@ -98,8 +109,9 @@ console.log("");
 line("member path", memberPath, PATHS.member);
 line("staff path", staffPath, PATHS.staff);
 console.log(`\n(member path = index.js + index.css + ClassSummary.js + summaryApi.js;`
-  + ` staff = index + StaffApp; PersonasScreen ${get("PersonasScreen.js").toFixed(2)} KB`
-  + ` and RetentionScreen ${get("RetentionScreen.js").toFixed(2)} KB load lazily)`);
+  + ` staff = index + StaffApp; PersonasScreen ${get("PersonasScreen.js").toFixed(2)} KB,`
+  + ` RetentionScreen ${get("RetentionScreen.js").toFixed(2)} KB`
+  + ` and PTScreens ${get("PTScreens.js").toFixed(2)} KB load lazily)`);
 
 console.log(`\nmeasured ${files.length} files · ${failed} over budget`);
 process.exit(failed ? 1 : 0);

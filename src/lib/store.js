@@ -45,6 +45,12 @@ const KEYS = {
   classInstances:"jungle_class_instances",
   attendance:    "jungle_attendance",
   retentionActions:"jungle_retention_actions",
+  // ── 1:1 / PT (F1's second lens) ──────────────────────────────────────────
+  // Local-only. See the block above `getParqRecords` for why none of these three
+  // sync, and what has to land before they can.
+  ptClients:     "jungle_pt_clients",
+  parqRecords:   "jungle_parq_records",
+  ptSessions:    "jungle_pt_sessions",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -1116,6 +1122,31 @@ export function retentionRule(r) {
 // migrations by dbConstraints.test.js. Order is the UI display order; the guard
 // compares sets, so it is free. Anything the dropdowns can emit is, by
 // construction, a member of these arrays.
+// ── The 1:1 vocabularies ────────────────────────────────────────────────────
+// Here rather than in `ptClients.js` for the same reason MEMBER_STATUSES is
+// here: this module is the last line of defence before a value is persisted, so
+// it coerces rather than trusting a caller, and a definition it needs cannot sit
+// behind a lazy import. `ptClients.js` re-exports these — see the note at the
+// top of that file for why the arrow points this way and not the other.
+export const PT_CLIENT_STATUSES = ["active", "paused", "ended"];
+export const PT_CLIENT_STATUS_LABEL = {
+  active: "Training",
+  paused: "Paused",
+  // "Ended", never "Deleted". Same rule as the roster: a 1:1 relationship that
+  // finished is history worth keeping, and a trash icon beside a name is how a
+  // gym loses the record of who trained whom.
+  ended:  "Ended",
+};
+export function ptClientStatus(s) {
+  const v = String(s || "").toLowerCase();
+  return PT_CLIENT_STATUSES.includes(v) ? v : "active";
+}
+export const PT_SESSION_STATUSES = ["planned", "done"];
+export function ptSessionStatus(s) {
+  const v = String(s || "").toLowerCase();
+  return PT_SESSION_STATUSES.includes(v) ? v : "planned";
+}
+
 export const PERSONA_KINDS   = ["coach", "house", "format"];
 export const SCHEDULE_REPEATS = ["once", "weekly", "daily"];
 function _raToRow(a) {
@@ -1224,6 +1255,172 @@ export function updateMember(id, patch = {}) {
 // from, and the owner would never connect the two. Leaving is `status:
 // 'cancelled'`, which keeps the history. Erasure deserves its own deliberate
 // flow, with the consent ledger involved.
+
+// ── The 1:1 / PT ledgers · LOCAL ONLY, and deliberately so ──────────────────
+//
+// Three local keys: the 1:1 client records, the PAR-Q ledger, and the planned
+// and delivered 1:1 sessions. Read the next paragraph before adding a sync call
+// to any of them.
+//
+// 🔴 NONE OF THESE SYNC, AND THAT IS NOT AN OVERSIGHT. There is no
+// `session_assignments` table and no PAR-Q table — F1 is "half-blocked", the
+// migration is Dylan's call, and this session did not make it. Wiring
+// `_bgUpsertDelta("pt_clients", …)` against a table that does not exist would
+// fail on EVERY write, and the failure would not be quiet: `_noteSyncError`
+// would light the sync banner permanently and `startSyncRetry` would re-push
+// the same doomed rows every 30 seconds for the life of the session. A feature
+// that breaks the banner for every other domain is worse than one that is
+// honest about being local.
+//
+// So these behave exactly like the app's pre-Supabase state: localStorage is the
+// source of truth, and the PT screens say on screen that this data lives on one
+// device. When the migration lands, the mappers go here beside `_memberToRow`
+// and the getters below stop being special.
+//
+// ⚠️ `members` DOES sync, and a 1:1 client is a member — so the person is on the
+// server even though the 1:1 relationship is not. That is the right way round:
+// the shared roster stays shared, and only the part with no table waits.
+
+// A PAR-Q record is an APPEND-ONLY ledger row: re-screening someone adds a row
+// rather than editing last year's answers. Last year's answers are what a coach
+// acted on last year, and overwriting them destroys the only evidence of why.
+export function getParqRecords() { return readJSON(KEYS.parqRecords, []); }
+
+// Returns the whole ledger so a caller can setState without a second read.
+// `screenedAt` is a DATE — a health screen is dated by the day it was taken —
+// while `recordedAt` is the instant the row was written, which is what breaks a
+// same-day tie. Both, because they answer different questions.
+export function appendParqRecord({ memberId, answers, screenedAt, clearance = null, note = "", screenedBy = "" }) {
+  if (!memberId) return getParqRecords();
+  const rec = {
+    id: newId(), memberId,
+    screenedAt: String(screenedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    // Copied, not referenced: the screen holds this object in state and would
+    // otherwise keep mutating a row that is supposed to be a fixed record.
+    answers: { ...(answers || {}) },
+    clearance: clearance && clearance.grantedAt
+      ? { grantedAt: String(clearance.grantedAt).slice(0, 10), note: String(clearance.note || "") }
+      : null,
+    note: String(note || ""), screenedBy: String(screenedBy || ""),
+    recordedAt: new Date().toISOString(),
+  };
+  const list = [...getParqRecords(), rec];
+  writeJSON(KEYS.parqRecords, list);
+  return list;
+}
+
+export function getPtClients() { return readJSON(KEYS.ptClients, []); }
+export function savePtClients(list) { writeJSON(KEYS.ptClients, list || []); return list || []; }
+
+// One 1:1 record per member. A second one would give the coach two histories
+// for the same person and no way to tell which is current — the returning-client
+// case is handled by setting the existing record back to `active`, which is what
+// `availableMembers` keeps the picker honest about.
+export function addPtClient({ memberId, goal = "", coachName = "", startedAt = "" } = {}) {
+  const list = getPtClients();
+  if (!memberId) return { client: null, clients: list, error: "Pick a member first." };
+  const existing = list.find(c => c && c.memberId === memberId);
+  if (existing) return { client: existing, clients: list, error: "That member is already a 1:1 client." };
+  const c = {
+    id: newId(), memberId,
+    goal: String(goal || "").trim(), coachName: String(coachName || "").trim(),
+    startedAt: String(startedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    status: "active", notes: "",
+  };
+  const out = [...list, c];
+  savePtClients(out);
+  return { client: c, clients: out, error: "" };
+}
+
+// Patch-shaped for the same reason `updateMember` is: a caller round-tripping a
+// stale copy must not be able to blank a field it never meant to touch. Unknown
+// keys are dropped.
+export function updatePtClient(id, patch = {}) {
+  const list = getPtClients();
+  const i = list.findIndex(c => c && c.id === id);
+  if (i < 0) return { client: null, clients: list };
+  const next = { ...list[i] };
+  if ("goal" in patch)      next.goal = String(patch.goal || "").trim();
+  if ("coachName" in patch) next.coachName = String(patch.coachName || "").trim();
+  if ("notes" in patch)     next.notes = String(patch.notes || "");
+  if ("startedAt" in patch) next.startedAt = String(patch.startedAt || "").slice(0, 10);
+  if ("status" in patch)    next.status = ptClientStatus(patch.status);
+  const out = [...list];
+  out[i] = next;
+  savePtClients(out);
+  return { client: next, clients: out };
+}
+
+// NOTE: no `deletePtClient`, for the same reason there is no `deleteMember`.
+// A finished 1:1 relationship is `status: 'ended'` — the sessions delivered
+// under it are the record of work the gym was paid for.
+
+export function getPtSessions() { return readJSON(KEYS.ptSessions, []); }
+export function savePtSessions(list) { writeJSON(KEYS.ptSessions, list || []); return list || []; }
+
+// 🔴 THE GATE, ENFORCED AT THE STORE AND NOT ONLY AT THE SCREEN.
+//
+// F2's gap 1 makes the health screen a hard gate before any individualised load
+// prescription. A gate that lives only in JSX is a gate that the next screen to
+// call this function walks straight through — so the refusal is here, at the one
+// place a 1:1 session can be written, and the screen renders the same reason.
+//
+// `parq` is the caller's already-computed `parqStatus(...)`. Passing the STATUS
+// rather than the record keeps this function free of clock injection and keeps
+// one implementation of the rule (parq.js) rather than two.
+export function assignPtSession({ clientId, memberId, date, planName = "", stages = null, notes = "" }, parq) {
+  const list = getPtSessions();
+  if (!clientId || !memberId) return { session: null, sessions: list, error: "Pick a client first." };
+  if (!date) return { session: null, sessions: list, error: "A session needs a date." };
+  if (!parq || parq.blocksLoad !== false) {
+    return { session: null, sessions: list,
+             error: parq?.reason || "This client has no valid health screen, so a personalised session cannot be planned." };
+  }
+  const s = {
+    id: newId(), clientId, memberId,
+    date: String(date).slice(0, 10),
+    planName: String(planName || "").trim() || "1:1 session",
+    // Snapshotted, not referenced. The spec's F1 note — "templates do not
+    // snapshot on publish" — is a known gap for classes; there is no reason to
+    // repeat it here. Editing the Builder draft afterwards must not rewrite a
+    // session that was already prescribed to a named person.
+    stages: stages ? JSON.parse(JSON.stringify(stages)) : null,
+    notes: String(notes || ""),
+    status: "planned",
+    // WHICH gate state let this through, kept with the row. This is the audit
+    // trail: "cleared" and "gp_cleared" are different assurances, and a year
+    // from now the difference is the whole question.
+    parqStateAtAssign: parq.state,
+    createdAt: new Date().toISOString(),
+  };
+  const out = [...list, s];
+  savePtSessions(out);
+  return { session: s, sessions: out, error: "" };
+}
+
+// Marking a session done is not destructive and needs no confirm; un-marking it
+// is the undo, which is why this toggles rather than sets.
+export function togglePtSessionDone(id) {
+  const list = getPtSessions();
+  const i = list.findIndex(s => s && s.id === id);
+  if (i < 0) return list;
+  const out = [...list];
+  out[i] = { ...out[i], status: out[i].status === "done" ? "planned" : "done",
+             completedAt: out[i].status === "done" ? "" : new Date().toISOString() };
+  savePtSessions(out);
+  return out;
+}
+
+// Removing a PLANNED session is genuinely a delete — nothing happened, so there
+// is no history to protect — and it returns the PRIOR LIST so the caller can
+// offer an undo. The repo's rule: an undo holds the prior list, not the deleted
+// row, because position is part of what was lost.
+export function removePtSession(id) {
+  const before = getPtSessions();
+  const out = before.filter(s => s && s.id !== id);
+  savePtSessions(out);
+  return { sessions: out, undo: before };
+}
 
 // ── class_instances: one dated occurrence ───────────────────────────────────
 // Local shape: { id, startsAt, name, classType, coachName, durationMin }
