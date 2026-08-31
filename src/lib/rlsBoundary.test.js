@@ -174,14 +174,27 @@ describe("0010 — staff read boundary", () => {
     expect(invented).toEqual([]);
   });
 
-  it("keeps attendance and consent_records append-only through the rewrite", () => {
-    // 0010 rewrites both. Writing `for all` instead of the select+insert pair
-    // would hand back UPDATE and DELETE on the table the retention numbers are
-    // priced against — silently, since nothing in the app exercises it.
+  it("keeps attendance and consent_records append-only through every migration", () => {
+    // The invariant is THE ABSENCE OF A MUTATION ROUTE, not a policy count. An
+    // earlier version of this test asserted exactly ["insert","select"] and went
+    // red when 0011 legitimately added the client's own-attendance read — pinning
+    // the shape of the policy set instead of the property that matters, which
+    // would have pushed the next author to weaken the test rather than think.
+    //
+    // What must stay true: with RLS on and NO policy for a command, that command
+    // matches zero rows for every non-superuser. So any policy here whose command
+    // is update, delete, or `all` hands back the ability to edit the table the
+    // retention numbers are priced against — silently, since nothing in the app
+    // exercises it.
     const live = effectivePolicies(realSources());
     for (const table of ["attendance", "consent_records", "retention_actions"]) {
-      const cmds = [...live.values()].filter(p => p.table === table).map(p => p.cmd).sort();
-      expect(cmds, `${table} policy commands`).toEqual(["insert", "select"]);
+      const cmds = [...live.values()].filter(p => p.table === table).map(p => p.cmd);
+      expect(cmds.length, `${table} has policies at all`).toBeGreaterThan(0);   // control
+      expect(cmds, `${table} must stay readable`).toContain("select");
+      expect(cmds, `${table} must stay writable by staff`).toContain("insert");
+      for (const forbidden of ["update", "delete", "all"]) {
+        expect(cmds, `${table} gained a ${forbidden.toUpperCase()} route`).not.toContain(forbidden);
+      }
     }
   });
 });
