@@ -92,8 +92,28 @@ jobs:
             echo "it will not be reopened unless the branch is pushed again._"
           } > /tmp/pr-body.md
 
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "$title" \
-            --body-file /tmp/pr-body.md
+          # ⚠️ THIS NEEDS A REPOSITORY SETTING, and it is OFF BY DEFAULT.
+          # Settings → Actions → General → Workflow permissions →
+          #   ☑ Allow GitHub Actions to create and approve pull requests
+          # Without it the API answers "GitHub Actions is not permitted to create
+          # or approve pull requests (createPullRequest)". That is a
+          # configuration gap, not a broken branch, so it must not paint a red
+          # cross next to the CI check that is actually judging the code — a
+          # workflow that is always red is a workflow everyone learns to ignore,
+          # and the next real failure hides behind it. It warns loudly and exits
+          # clean. Any OTHER failure is a real one and still fails the run.
+          if out=$(gh pr create \
+                     --base main \
+                     --head "$BRANCH" \
+                     --title "$title" \
+                     --body-file /tmp/pr-body.md 2>&1); then
+            echo "$out"
+            exit 0
+          fi
+
+          echo "$out"
+          if printf '%s' "$out" | grep -q "not permitted to create or approve pull requests"; then
+            echo "::warning title=Auto-PR is switched off at the repo level::$BRANCH has $ahead commit(s) beyond main and no PR. Enable it at Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'. Until then, open the PR by hand. See DYLAN-QUEUE A15."
+            exit 0
+          fi
+          exit 1
