@@ -43,9 +43,22 @@ const KB = 1000;
 // cannot be measured locally — no credentials — and CI is the run that judges it.
 // Its contents are app code plus lib/cohorts.js, with nothing supabase-shaped of
 // its own, so the two build shapes should agree closely.
+// ClientsScreen (PT) measured 16.28 KB credential-less when it landed; its ceiling
+// is 18 rather than the usual +4%, following RetentionScreen's precedent and for
+// the same reason — the PROD-shaped number cannot be measured locally (no
+// credentials) and CI is the run that judges it. Its contents are app code plus
+// lib/progression.js and lib/ptConstants.js, both pure and neither
+// supabase-shaped, so the two build shapes should agree closely.
+//
+// ⚠️ StaffApp went 349.84 -> 354.64 KB in the same commit, and NOT because this
+// screen is in it. It is not. The PT domain in store.js became REACHABLE when
+// this chunk started importing it, so rollup could no longer drop it — and
+// store.js lives in StaffApp. That leaves 5.36 KB of StaffApp headroom, which is
+// the tightest this budget has ever been. The client app (a third entry point)
+// must not add to store.js without buying the room back first.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClassSummary.js": 8, "summaryApi.js": 5 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClassSummary.js": 8, "summaryApi.js": 3 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClientsScreen.js": 18, "ClassSummary.js": 8, "summaryApi.js": 5 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "ClientsScreen.js": 18, "ClassSummary.js": 8, "summaryApi.js": 3 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }
@@ -99,7 +112,8 @@ line("member path", memberPath, PATHS.member);
 line("staff path", staffPath, PATHS.staff);
 console.log(`\n(member path = index.js + index.css + ClassSummary.js + summaryApi.js;`
   + ` staff = index + StaffApp; PersonasScreen ${get("PersonasScreen.js").toFixed(2)} KB`
-  + ` and RetentionScreen ${get("RetentionScreen.js").toFixed(2)} KB load lazily)`);
+  + `, RetentionScreen ${get("RetentionScreen.js").toFixed(2)} KB`
+  + ` and ClientsScreen ${get("ClientsScreen.js").toFixed(2)} KB load lazily)`);
 
 console.log(`\nmeasured ${files.length} files · ${failed} over budget`);
 process.exit(failed ? 1 : 0);

@@ -14,8 +14,15 @@ export const supabase = supabaseEnabled
 // Effective-permission helper (RBAC-SPEC §3). role defaults + grant − deny.
 const ROLE_DEFAULTS = {
   admin:     ["*"],
-  manager:   ["library:*","glossary:*","templates:*","class:*","schedule:*","music:view","analytics:view","members:manage","brand:view"],
-  coach:     ["library:*","glossary:*","templates:*","class:*","schedule:*","music:view","analytics:view"],
+  manager:   ["library:*","glossary:*","templates:*","class:*","schedule:*","music:view","analytics:view","members:manage","brand:view","clients:*"],
+  // `clients:*` is NOT `members:*`. A coach has never had members:view — the
+  // roster is an admin surface — but a coach IS the person who delivers PT, so
+  // gating the Clients screen on members:view would hide it from exactly the
+  // people it is for. And frontdesk deliberately has neither: a training record
+  // carries health screening and body measurements, and someone checking a
+  // member into a spin class has no business reading them. That is the same
+  // split 0013 makes in RLS, where parq_responses is admin-and-member only.
+  coach:     ["library:*","glossary:*","templates:*","class:*","schedule:*","music:view","analytics:view","clients:*"],
   frontdesk: ["schedule:*","members:view","music:view"],
   member:    ["workout:view","schedule:view","music:view","glossary:view","progress:view-own"],
 };

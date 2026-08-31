@@ -121,6 +121,12 @@ export const ALL_SCREENS = [
   // responsive.spec.js checks this list against the running app — so the omission
   // would have failed loudly rather than silently, which is the design working.
   { key: "analytics",    side: "Analytics",        sheet: "Analytics" },
+  // PT. Same vocabulary in both places, deliberately — "Clients" is short enough
+  // that the sidebar/sheet split the other entries need does not apply, and a
+  // fourth word for the same screen is what the three-vocabulary warning above
+  // is about. Not in the bottom bar: that has four slots and they are spoken
+  // for; the More sheet is the mobile route.
+  { key: "clients",      side: "Clients",          sheet: "Clients" },
   { key: "brand-studio", side: "Brand Studio",     sheet: "Brand Studio", bar: "Brand" },
 ];
 

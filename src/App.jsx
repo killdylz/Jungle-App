@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
-import { Plus, Monitor, ArrowLeft, LogOut, Search, Wifi, User, BookOpen, BarChart2, Calendar, X, Clock, Home, Layers, Check, Mic, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
+import { Plus, Monitor, ArrowLeft, LogOut, Search, Wifi, User, BookOpen, BarChart2, Calendar, X, Clock, Home, Layers, Check, Mic, LayoutGrid, List, PlayCircle, Users, UserCheck, Palette, Plug, Zap } from "lucide-react";
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
 import { FLAGS, isViewEnabled } from "./config/flags.js";
@@ -81,6 +81,12 @@ import AnalyticsScreen from "./screens/AnalyticsScreen.jsx";
 // bytes are real bytes, and StaffApp had 12.65 kB of budget left.
 const RetentionScreen = React.lazy(() =>
   import("./screens/RetentionScreen.jsx").then(m => ({ default: m.RetentionScreen })));
+// PT (F1's member lens). LAZY for the same reason as the line above — this
+// branch is live, so its bytes are real bytes, and StaffApp had 10.16 kB of
+// budget left. It carries its own ceiling in scripts/check-size.mjs: an
+// unlisted chunk is counted in the file total and has no ceiling at all.
+const ClientsScreen = React.lazy(() =>
+  import("./screens/pt/ClientsScreen.jsx").then(m => ({ default: m.ClientsScreen })));
 // ui/labels.js went with the personas cluster — every one of its label MAPS is
 // read by that screen and nothing else. Session 25 added coach-facing copy that
 // is not a map: the sync banner's sentence, which lives there for the reason
@@ -771,7 +777,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers},{k:"templates",l:"Templates",Icon:LayoutGrid},{k:"library",l:"Exercise Library",Icon:BookOpen},{k:"glossary",l:"Glossary",Icon:List}]},
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle}]},
-    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
+    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar},{k:"member",l:"Members",Icon:Users},{k:"clients",l:"Clients",Icon:UserCheck},{k:"analytics",l:"Analytics",Icon:BarChart2}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette},{k:"integrations",l:"Integrations",Icon:Plug}]},
   ].map(g => ({ ...g, items: g.items.filter(it => isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
 
@@ -3132,7 +3138,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coaches",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle,cap:"class:view"}]},
-    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
+    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"clients",l:"Clients",Icon:UserCheck,cap:"clients:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
   ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
   const first = coachFirstName(profile?.display_name);
@@ -3608,6 +3614,7 @@ export default function App() {
     {key:"library",      label:"Library",      icon:"\ud83d\udcda",  group:"Tools",    cap:"library:view"},
     {key:"glossary",     label:"Glossary",     icon:"\ud83d\udcd6",  group:"Tools",    cap:"glossary:view"},
     {key:"member",       label:"Members",      icon:"\ud83d\udc65",  group:"Studio",   cap:"members:view"},
+    {key:"clients",      label:"Clients",      icon:"\ud83c\udfaf",  group:"Studio",   cap:"clients:view"},
     {key:"team",         label:"Team",         icon:"\ud83d\udee1\ufe0f",  group:"Studio", cap:"members:manage"},
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio",   cap:"integrations:manage"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio",   cap:"brand:view"},
@@ -3769,6 +3776,7 @@ export default function App() {
             the FALSE arm: it used to be a coming-soon panel, and is now the real
             thing computed from the gym's own attendance rows. */}
         {view==="analytics"&&(FLAGS.mockAnalytics?<AnalyticsScreen onBack={()=>setView("dashboard")}/>:<RetentionScreen onBack={()=>setView("dashboard")} onNavigate={setView}/>)}
+        {view==="clients"&&<ClientsScreen onBack={()=>setView("dashboard")}/>}
         {view==="calendar"&&<CalendarScreen onBack={()=>setView("dashboard")} onStartClass={handleStartScheduled}/>}
         {view==="music"&&(!FLAGS.music
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>
