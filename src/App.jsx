@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
-import { Plus, Monitor, ArrowLeft, LogOut, Search, Wifi, User, BookOpen, BarChart2, Calendar, X, Clock, Home, Layers, Check, Mic, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap } from "lucide-react";
+import { Plus, Monitor, ArrowLeft, LogOut, Search, Wifi, User, BookOpen, BarChart2, Calendar, X, Clock, Home, Layers, Check, Mic, LayoutGrid, List, PlayCircle, Users, Palette, Plug, Zap, UserRound, HeartPulse } from "lucide-react";
 import { supabase, supabaseEnabled } from "./supabase.js";
 import { useJungleAuth } from "./AuthGate.jsx";
 import { FLAGS, isViewEnabled } from "./config/flags.js";
@@ -81,6 +81,18 @@ import AnalyticsScreen from "./screens/AnalyticsScreen.jsx";
 // bytes are real bytes, and StaffApp had 12.65 kB of budget left.
 const RetentionScreen = React.lazy(() =>
   import("./screens/RetentionScreen.jsx").then(m => ({ default: m.RetentionScreen })));
+// The 1:1 / PT pair (F1's second lens, and the PAR-Q gate that has to land with
+// it). LAZY for the same reason as the line above — StaffApp had 10.5 kB of
+// budget left and CLAUDE.md calls it the binding constraint on anything new.
+//
+// ⚠️ BOTH import the SAME module, and that is deliberate. Two dynamic imports of
+// two files would emit two chunks plus a third, UNNAMED one holding lib/parq.js
+// and lib/ptClients.js — which `check-size.mjs` counts in the file total and
+// gives no ceiling at all. One barrel is one chunk with one budget line.
+const PTScreen = React.lazy(() =>
+  import("./screens/pt/PTScreens.js").then(m => ({ default: m.PTScreen })));
+const ParqScreen = React.lazy(() =>
+  import("./screens/pt/PTScreens.js").then(m => ({ default: m.ParqScreen })));
 // ui/labels.js went with the personas cluster — every one of its label MAPS is
 // read by that screen and nothing else. Session 25 added coach-facing copy that
 // is not a map: the sync banner's sentence, which lives there for the reason
@@ -3132,7 +3144,7 @@ function AppSidebar({ view, onNavigate, onProfile, profile, can=(()=>true) }){
     {group:"HOME",   items:[{k:"dashboard",l:"Dashboard",Icon:Home}]},
     {group:"BUILD",  items:[{k:"builder",l:"Class Builder",Icon:Layers,cap:"class:view"},{k:"personas",l:"Coaches",Icon:Mic,cap:"class:view"},{k:"templates",l:"Templates",Icon:LayoutGrid,cap:"templates:view"},{k:"library",l:"Exercise Library",Icon:BookOpen,cap:"library:view"},{k:"glossary",l:"Glossary",Icon:List,cap:"glossary:view"}]},
     {group:"RUN",    items:[{k:"live",l:"Class Runner",Icon:PlayCircle,cap:"class:view"}]},
-    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
+    {group:"MANAGE", items:[{k:"calendar",l:"Schedule",Icon:Calendar,cap:"schedule:view"},{k:"member",l:"Members",Icon:Users,cap:"members:view"},{k:"pt",l:"1:1 Clients",Icon:UserRound,cap:"class:view"},{k:"pt-parq",l:"Health Screen",Icon:HeartPulse,cap:"class:view"},{k:"team",l:"Team",Icon:Users,cap:"members:manage"},{k:"analytics",l:"Analytics",Icon:BarChart2,cap:"analytics:view"}]},
     {group:"GROW",   items:[{k:"brand-studio",l:"Brand Studio",Icon:Palette,cap:"brand:view"},{k:"integrations",l:"Integrations",Icon:Plug,cap:"integrations:manage"}]},
   ].map(g => ({ ...g, items: g.items.filter(it => (!it.cap || can(it.cap)) && isViewEnabled(it.k, { supabaseEnabled })) })).filter(g => g.items.length);
   const first = coachFirstName(profile?.display_name);
@@ -3365,6 +3377,9 @@ export default function App() {
   const [stages,      setStages]      = useState(() => savedDraft?.stages || mkStages());
   const [sessionName, setSessionName] = useState(() => savedDraft?.name || "My Workout");
   const [showProfile, setShowProfile] = useState(false);
+  // Which client the Health Screen opens on. Empty is a valid state — see
+  // `navToPt`.
+  const [parqMemberId, setParqMemberId] = useState("");
   const [djProgress,  setDjProgress]  = useState(null);
   // Persist the working class on every change, so closing the tab mid-plan is
   // not a data-loss event. Local only — see store.saveDraftClass.
@@ -3493,6 +3508,18 @@ export default function App() {
   };
   // Workstream D: draft a persona plan's blocks into the Builder as an editable
   // starting session (coach edits + approves — the hard gate before it's a class).
+  // A 1:1 session that was prescribed to a named person, opened in the Builder.
+  // This is how the second lens reaches the Runner: the Runner runs whatever the
+  // Builder holds, so there is no separate 1:1 runner to build or keep in step.
+  // It does NOT touch classChoice — a 1:1 session has no class type, and setting
+  // one would put the wrong header and the wrong BPM targets on it.
+  const handleLoadPtSession = ({ name, stages: st }) => {
+    if (!st?.length) return;
+    setStages(st);
+    setSessionName(name || "1:1 session");
+    setView("builder");
+  };
+
   const handleDraftFromPersona = (draftStages, name, builderClass) => {
     if (!draftStages?.length) return;
     setStages(draftStages);
@@ -3608,6 +3635,12 @@ export default function App() {
     {key:"library",      label:"Library",      icon:"\ud83d\udcda",  group:"Tools",    cap:"library:view"},
     {key:"glossary",     label:"Glossary",     icon:"\ud83d\udcd6",  group:"Tools",    cap:"glossary:view"},
     {key:"member",       label:"Members",      icon:"\ud83d\udc65",  group:"Studio",   cap:"members:view"},
+    // Same labels as the sidebar, deliberately. The Builder already speaks in
+    // three vocabularies ("Class Builder" / "Builder" / "Build") and
+    // e2e/helpers.js documents it as a trap; a fourth was not worth a shorter
+    // menu entry.
+    {key:"pt",           label:"1:1 Clients",  icon:"\ud83e\uddcd",  group:"Studio",   cap:"class:view"},
+    {key:"pt-parq",      label:"Health Screen",icon:"\u2764\ufe0f",  group:"Studio",   cap:"class:view"},
     {key:"team",         label:"Team",         icon:"\ud83d\udee1\ufe0f",  group:"Studio", cap:"members:manage"},
     {key:"integrations", label:"Integrations", icon:"\ud83d\udd0c",  group:"Studio",   cap:"integrations:manage"},
     {key:"brand-studio", label:"Brand Studio", icon:"\ud83c\udfa8",  group:"Studio",   cap:"brand:view"},
@@ -3618,6 +3651,17 @@ export default function App() {
     if ((view==="live"||view==="room-tv") && player) player.pause().catch(()=>{});
     if (view==="live"||view==="room-tv") setLiveState(ls=>({...ls,playing:false}));
     setView(key); setShowNav(false);
+  };
+
+  // The 1:1 screens navigate WITH a subject: "open the health screen for this
+  // client". Everything else in this app navigates to a screen and lets the
+  // screen work out what to show, and that is still true here — `pt-parq`
+  // renders its own client picker when it arrives cold, so this is a
+  // convenience, never a precondition. A route that only works when something
+  // else set a variable first is a route that breaks on reload.
+  const navToPt = (key, opts = {}) => {
+    if (opts.memberId !== undefined) setParqMemberId(opts.memberId);
+    navTo(key);
   };
 
   return (
@@ -3774,6 +3818,14 @@ export default function App() {
           ? <MockDisabledScreen title="Music" note="Jungle no longer runs the music. Studio playback needs licences the gym holds directly, so the room's own sound system stays the room's. The tempo guide on the display is unaffected." onBack={()=>setView("dashboard")}/>
           : token?<MusicHubScreen onBack={()=>setView("dashboard")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setView("dashboard")}/>)}
         {view==="member"&&<RosterScreen onBack={()=>setView("dashboard")} onNavigate={setView}/>}
+        {/* F1's second lens, and the PAR-Q gate the spec requires to land in the
+            same change as individualised load. `onNavigate` is `navToPt` rather
+            than `setView` because these two screens hand each other a client. */}
+        {view==="pt"&&<PTScreen onBack={()=>setView("dashboard")} onNavigate={navToPt} onLoadSession={handleLoadPtSession}/>}
+        {/* Back goes to 1:1 Clients, not the Dashboard: this screen is almost
+            always reached from a client, and returning somewhere else loses the
+            place the coach was working in. */}
+        {view==="pt-parq"&&<ParqScreen onBack={()=>setView("pt")} onNavigate={navToPt} memberId={parqMemberId}/>}
         {view==="integrations"&&<MockDisabledScreen title="Integrations" note="Booking, payments and wearable integrations land in a later phase. The cards that used to sit here showed services as “connected” that never were." onBack={()=>setView("dashboard")}/>}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}

@@ -87,24 +87,40 @@ Everything downstream of it is now gated on **volume and on Dylan**, not on code
 - **N2 cohort analytics** waits on rows accumulating, which waits on the pilot running.
 - **N4 member magic-link** — the only member-facing surface, and the last Phase-1 gap — waits on an
   Edge Function Dylan must deploy. ⛔ Do not build the page first; that is the `<AttendeeView/>` mistake.
-- **F1's 1:1 path** waits on a migration decision (and PAR-Q must land in the same change).
+- **F1's 1:1 path** — the COACH-FACING half shipped in session 28 (`1:1 Clients` + `Health
+  Screen`, local-first, PAR-Q in the same change as the spec requires). The `session_assignments`
+  table and the XOR still wait on a migration decision, so the 1:1 ledgers live on one device.
 - **Backups** — the free tier has none. `docs/LEGAL-AND-SECURITY.md` §3 hole #1, and it is Day 1.
 
 ---
 
 ## 2. Core functional specification
 
-### F1 — Session/assignment primitive · 🟡 Partial (group only)
+### F1 — Session/assignment primitive · 🟡 Partial (both lenses in the UI, one table on the server)
 
 **Built:** A class is an array of stages, each with exercises, durations, type and optional
 tracks. Classes persist through `store.getUserClasses()/saveUserClasses()` and sync to Postgres.
 Completed sessions append to `session_history` (insert-only RLS — history genuinely cannot be
 rewritten).
 
-**Not built — and this is the spec's actual acceptance criterion:** there is no
-`session_assignments` table and **no 1:1 path at all**. Templates also do not snapshot on
+**Not built — and this is the spec's actual acceptance criterion:** there is still no
+`session_assignments` table, so the XOR test remains unrunnable. Templates also do not snapshot on
 publish; editing a template today does not mutate delivered history only because history is a
 separate append-only log, not because a snapshot boundary was designed.
+
+> **Corrected 2026-08-31 (session 28).** This paragraph said "**no 1:1 path at all**", and that is
+> now false in the product even though it stays true in the database. `src/screens/pt/` ships the
+> second lens — 1:1 clients joined to `members`, planned and delivered 1:1 sessions, and the PAR-Q
+> gate F2's gap 1 requires to land with it. It is **local-first only** (`jungle_pt_clients`,
+> `jungle_parq_records`, `jungle_pt_sessions`) with **no sync call of any kind**, because pushing to
+> a table that does not exist fails every write, lights the sync banner permanently and makes
+> `startSyncRetry` re-push doomed rows every 30 seconds. The 1:1 session record DOES snapshot its
+> plan on assign, so a later Builder edit cannot rewrite what was prescribed to a named person —
+> the boundary the paragraph above says classes still lack.
+>
+> What this does NOT do: write into `class_instances` or `attendance`. The shapes fit, and folding
+> one-person sessions into the class numbers would move every figure on the Analytics screen with
+> nothing saying why.
 
 > **Corrected 2026-07-25 (session 9).** This paragraph said "no `class_instances`". That half is
 > now false: `class_instances` shipped in `0007`, and since session 9 the Schedule can publish a
@@ -113,9 +129,11 @@ separate append-only log, not because a snapshot boundary was designed.
 > exists.** The spec's test — *"`session_assignment` targets a `class_instance` XOR a `member`"* —
 > is still unrunnable, but for one reason rather than two.
 
-**Consequence:** the PT/1:1 market and the "one primitive, two lenses" design principle (P5) are
-both unreachable until the member side lands. That is a **new migration and therefore Dylan's
-call**, and PAR-Q must land in the same change that introduces individualised load.
+**Consequence:** P5 ("one primitive, two lenses") is now reachable IN THE PRODUCT — a coach can
+program for a class or for one person, off the same stage array — but not yet in the schema, where
+the second lens has no row to live in. Making the 1:1 ledgers survive a second device is a **new
+migration and therefore Dylan's call**. PAR-Q was required to land in the same change that
+introduced individualised load, and it did.
 
 ### F2 — Programming & builder (AI-drafted, coach-approved) · ✅ Built, with two gaps
 
@@ -133,9 +151,13 @@ call**, and PAR-Q must land in the same change that introduces individualised lo
 - **Coach-approval gate holds by construction:** every generated plan lands in the Builder as a
   draft. Nothing auto-publishes and no LLM output reaches a member surface unreviewed.
 
-**Gap 1 — PAR-Q screen: ⛔ not built.** The spec makes this a hard gate before any *individualized*
-load prescription. It is not currently load-bearing because there is no 1:1 path (F1) — but it
-must land in the same change that introduces one, not after.
+**Gap 1 — PAR-Q screen: ✅ built (session 28), and it is load-bearing.** The spec makes this a hard
+gate before any *individualized* load prescription, and it landed in the same change that introduced
+one, as required. `src/lib/parq.js` holds the seven classic questions and the ONE function every
+surface reads `blocksLoad` from; `store.assignPtSession` refuses to write a 1:1 session without a
+passing status, so the gate is not only in JSX. Screens expire after 12 months, expiry is evaluated
+**before** a doctor's clearance (a 2025 letter was granted against a 2025 health picture), an
+undated clearance is ignored, and an unanswered question is never read as a "no".
 
 **Gap 2 — exercise media: 🟡 still on the user's own API key.** `App.jsx:5537` still asks the
 coach to *"Paste your ExerciseDB (RapidAPI) key"*, and `App.jsx:433/441` calls RapidAPI directly
@@ -266,7 +288,7 @@ self-hosted, which is also what makes the PWA work offline).
 | **P2** | The 10-foot rule | ✅ | Every member-facing display size (Overview / Floor / Coach) is now keyed to viewport **height** via `tvFont` — a `clamp(floor, Nvh, cap)` that reproduces the tuned 1080p px exactly and then grows, so the primary element (move + timer) holds ~8.5% of height on **1080p and 4K** alike, not a shrinking fraction. The floor board's phase timer, previously 7.8% at 1080p (already under the floor) and half that on 4K, now holds ~8.9%. Regression: `e2e/display.spec.js` drives the real Room TV at 1920×1080 **and** 3840×2160 and asserts the primary is 8–12% of height at both plus viewport-invariant; mutation-verified (fixing the timer back to px fails the 4K band and the invariance check). |
 | **P3** | Brand-forward, coach-neutral | 🟡 | Staff surfaces neutral ✅; member surfaces don't exist yet, so the half that matters is untested. |
 | **P4** | Zero-touch room | ✅ | Auto-advance + phone-as-remote + Realtime Follow. |
-| **P5** | One primitive, two lenses | ⛔ | No 1:1 lens (see F1). |
+| **P5** | One primitive, two lenses | 🟡 | Both lenses ship in the UI (session 28); the 1:1 one has no server table (see F1). |
 | **P6** | Capture costs <5s | 🚫 | Awaiting F4. **Must be instrumented, not assumed.** |
 | **P7** | Degrade gracefully | 🟡 | localStorage-first everywhere, QR generates offline, and the **PWA now ships**: self-hosted fonts, manifest, and a hand-written service worker with build-time precache injection. Proven locally with the preview server stopped — the app boots, both skin fonts report loaded, and a check-in still records. Becomes ✅ only when the **physical gym soak test** (REGRESSION-PLAN §4, router off 5 min mid-class) passes on real hardware. |
 
@@ -646,8 +668,8 @@ Grouped by the spec's own numbering so it maps onto the Fable roadmap.
 
 | Item | State |
 |---|---|
-| **F1 — session primitive** (`sessions`, `session_assignments`, XOR) | 🟡 Half-blocked. `class_instances` exists and is now generated from the schedule, so one side of the XOR is real; `session_assignments` and the member side are not. **No 1:1/PT path exists**, so P5 ("one primitive, two lenses") is unreachable. Needs a migration — Dylan's call. |
-| **PAR-Q screen** | Not started. Must land in the same change that introduces individualized load. |
+| **F1 — session primitive** (`sessions`, `session_assignments`, XOR) | 🟡 Half-blocked. `class_instances` exists and is generated from the schedule, so one side of the XOR is real; `session_assignments` is not. The **1:1/PT path now exists in the product** (session 28, `src/screens/pt/`, local-first, PAR-Q gate included), so P5 is reachable for a coach but not for a second device. The table still needs a migration — Dylan's call. |
+| **PAR-Q screen** | ✅ Built in session 28, in the same change as the 1:1 path, as required. `src/lib/parq.js` + `src/screens/pt/ParqScreen.jsx`. |
 | **Server-side exercise media proxy** | Not started (see I8). |
 | **N6 — Soundtrack / personal-Spotify routing** | Not started; needs `MusicProvider`. |
 | **Tempo-guide extensions** | Floor board's no-music slot, Builder per-stage preview, tap-tempo. |
@@ -957,8 +979,8 @@ _Re-ranked to match `docs/WEEK-PLAN.md`. **N4 has moved up from "Next" — it is
 |---|---|
 | N2 | 90-day cohort curve + benchmark overlay + revenue-at-risk |
 | N3-LLM | Win-back message drafting (model drafts; rules decide) |
-| F1 | Session primitive (`sessions`, `session_assignments`, XOR) — **no 1:1/PT path exists at all**, so P5 is unreachable |
-| PAR-Q | Must land in the same change that introduces individualised load |
+| F1 | Session primitive (`sessions`, `session_assignments`, XOR) — the 1:1/PT path ships local-first (session 28); the TABLE does not exist, so it cannot leave one device |
+| PAR-Q | ✅ Built in session 28, in that same change |
 
 ### Structural debt (still real)
 `I6` screens split (`App.jsx` **4,852 lines** total, `wc -l`; down from 8,780; stage 4 ✅ done — the personas

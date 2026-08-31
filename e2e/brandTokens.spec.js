@@ -109,7 +109,11 @@ test.describe("brand tokens carry the gym's palette, not Canopy's", () => {
     await seedLightSkin(page);
     await page.evaluate(CONTRAST);
 
-    const SCREENS = ["Dashboard", "Brand Studio", "Members", "Analytics", "Schedule", "Class Builder"];
+    // The 1:1 pair joined this list in the commit that added them. A new screen
+    // that is not swept here is a new screen with no white-label enforcement,
+    // which is the gap this file was written to close.
+    const SCREENS = ["Dashboard", "Brand Studio", "Members", "Analytics", "Schedule", "Class Builder",
+                     "1:1 Clients", "Health Screen"];
     for (const screen of SCREENS) {
       await nav(page, screen);
       const result = await page.evaluate(() => {
