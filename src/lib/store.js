@@ -17,6 +17,10 @@ import { occurrenceKeyOf } from "./csvImport.js";
 // libraryStore.js has no imports of its own, so this cannot close a cycle back
 // through libraryAccess.js (which imports THIS file).
 import { resolveClassType } from "./libraryStore.js";
+// The PT enums, pinned in one zero-import module so the client bundle can share
+// them without pulling this file (and Supabase) along. dbConstraints.test.js
+// asserts each against its migration.
+import { programStatus, sessionStatus, setLogSource } from "./ptConstants.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -45,6 +49,11 @@ const KEYS = {
   classInstances:"jungle_class_instances",
   attendance:    "jungle_attendance",
   retentionActions:"jungle_retention_actions",
+  ptIdentities: "jungle_pt_identities",
+  ptParq:       "jungle_pt_parq",
+  ptPrograms:   "jungle_pt_programs",
+  ptSessions:   "jungle_pt_sessions",
+  ptSetLogs:    "jungle_pt_set_logs",
 };
 
 // Client-generated UUID, used as the row PK on both coach_personas and
@@ -1499,6 +1508,329 @@ export function recordConsent({ memberId, scope = "roster_attendance", granted =
     else _clearSyncError("consent_records");
   }, (e) => _noteSyncError("consent_records", e?.message || e));
 }
+
+// ── PT: identities, programs, sessions, prescriptions, set logs ─────────────
+//
+// Local-first exactly like every domain above: localStorage is the instant,
+// offline read layer and the Supabase push rides behind it. A PT session in a
+// basement gym has no signal, and this is that case — NOT a reason to invent a
+// second sync mechanism beside the one with the failure ledger, the tombstones
+// and the backoff already in this file.
+//
+// ⚠️ Every value bound for a CHECK-constrained column goes through a normaliser
+// from ptConstants.js at the MAPPER, not at the call site. The mapper is the last
+// line of defence before Postgres, and this repo's three data-loss incidents were
+// all a caller writing a value the constraint rejected.
+
+// ── member_identities (0011) ─────────────────────────────────────────────────
+// The link between a roster row and an auth user. A gym that never sells PT
+// never writes one, which is the whole point of the narrow reversal.
+//
+// `linkedAt` stays null until the person accepts. The trainer's screen must be
+// able to say "invited 6 days ago, not opened" rather than implying someone is
+// looking at their program; `revokedAt` withdraws access WITHOUT deleting the
+// record of who granted it.
+function _miToRow(m) {
+  return { member_id: m.memberId, gym_id: _ctx.gymId, user_id: m.userId || null,
+           invited_by: _ctx.userId || null, invited_at: m.invitedAt,
+           linked_at: m.linkedAt || null, revoked_at: m.revokedAt || null };
+}
+export function getMemberIdentities() { return readJSON(KEYS.ptIdentities, []); }
+export function saveMemberIdentities(list) {
+  writeJSON(KEYS.ptIdentities, list || []);
+  if (!_synced()) return;
+  // Keyed on member_id, not id — the table's PK is the member. Passing "id" here
+  // would upsert against a column that does not exist and fail every write.
+  _bgUpsertDelta("member_identities", (list || []).map(_miToRow), "member_id");
+}
+
+// Three states, and the UI needs all three by name: never invited, invited and
+// waiting, live. "Revoked" reads as never-invited to everything downstream,
+// deliberately — access is gone, and the row exists for the audit trail.
+export function memberAppAccess(memberId, list = getMemberIdentities()) {
+  const row = (list || []).find(m => m && m.memberId === memberId);
+  if (!row || row.revokedAt) return { state: "none", row: row || null };
+  if (!row.linkedAt) return { state: "invited", row };
+  return { state: "linked", row };
+}
+
+export function inviteMemberToApp(memberId) {
+  if (!memberId) return { ok: false, reason: "no-member" };
+  const list = getMemberIdentities();
+  const i = list.findIndex(m => m && m.memberId === memberId);
+  const row = { memberId, userId: i >= 0 ? list[i].userId || null : null,
+                invitedAt: new Date().toISOString(), linkedAt: null, revokedAt: null };
+  // Re-inviting UPDATES rather than appending. member_id is the primary key
+  // server-side, so a second row would be rejected — and locally it would make
+  // "which link owns this record" ambiguous, which is the thing the PK prevents.
+  const next = i >= 0 ? list.map((m, n) => (n === i ? row : m)) : [...list, row];
+  saveMemberIdentities(next);
+  return { ok: true, identities: next };
+}
+
+export function revokeMemberAppAccess(memberId) {
+  const list = getMemberIdentities();
+  const i = list.findIndex(m => m && m.memberId === memberId);
+  if (i < 0) return { ok: false, reason: "not-invited" };
+  const next = [...list];
+  next[i] = { ...list[i], revokedAt: new Date().toISOString() };
+  saveMemberIdentities(next);
+  return { ok: true, identities: next };
+}
+
+// ── parq_responses (0013) — the screening gate ──────────────────────────────
+// PT2. Read BEFORE a program may be activated, and the reason it lives here
+// rather than only in 0013's trigger: local-first means the client's write
+// succeeds and the server's rejection arrives asynchronously, so a UI-only
+// activation would land in localStorage, fail the upsert, and sit in the error
+// ledger looking like a network problem. The trigger is the backstop; this is
+// the gate the trainer actually experiences.
+export const PARQ_VALID_MONTHS = 12;
+
+function _parqToRow(p) {
+  return { id: p.id, gym_id: _ctx.gymId, member_id: p.memberId, form_version: p.formVersion,
+           answers: p.answers || {}, flagged: !!p.flagged, clearance_ref: p.clearanceRef || null,
+           cleared_by: p.clearedAt ? (_ctx.userId || null) : null, cleared_at: p.clearedAt || null,
+           completed_at: p.completedAt, expires_at: p.expiresAt };
+}
+export function getParqResponses() { return readJSON(KEYS.ptParq, []); }
+
+/**
+ * Is this member cleared for individualised load, right now?
+ *
+ * Returns a REASON rather than a boolean, because every one of these needs a
+ * different sentence and a different next action from the trainer. A bare false
+ * would make "never screened" and "screened, flagged, awaiting a doctor's note"
+ * indistinguishable on screen.
+ */
+export function parqStatus(memberId, now = Date.now(), list = getParqResponses()) {
+  const mine = (list || []).filter(p => p && p.memberId === memberId);
+  if (!mine.length) return { ok: false, reason: "never-screened" };
+  // Most recent first. An older, still-valid form does not rescue a newer one
+  // that flagged: the latest answers are what the person most recently said.
+  const latest = mine.slice().sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0];
+  if (new Date(latest.expiresAt).getTime() <= now) {
+    return { ok: false, reason: "expired", expiresAt: latest.expiresAt };
+  }
+  if (latest.flagged && !latest.clearedAt) {
+    return { ok: false, reason: "flagged-uncleared", flagged: true };
+  }
+  return { ok: true, expiresAt: latest.expiresAt, flagged: !!latest.flagged };
+}
+
+export function recordParq({ memberId, formVersion = "parq-v1", answers = {}, flagged = false,
+                             completedAt = new Date().toISOString() }) {
+  if (!memberId) return { ok: false, reason: "no-member" };
+  const exp = new Date(completedAt);
+  exp.setMonth(exp.getMonth() + PARQ_VALID_MONTHS);
+  const row = { id: newId(), memberId, formVersion, answers, flagged: !!flagged,
+                clearanceRef: "", clearedAt: null, completedAt, expiresAt: exp.toISOString() };
+  const list = [...getParqResponses(), row];
+  writeJSON(KEYS.ptParq, list);
+  if (_synced()) _bgUpsertDelta("parq_responses", list.map(_parqToRow));
+  return { ok: true, response: row, responses: list };
+}
+
+// Recording clearance is an append too — a new row superseding the flagged one
+// would lose which answers were cleared, so this patches the row it clears and
+// records who cleared it. It is the one PAR-Q mutation, and it only ever moves a
+// member from blocked to allowed.
+export function recordParqClearance(id, clearanceRef = "") {
+  const list = getParqResponses();
+  const i = list.findIndex(p => p && p.id === id);
+  if (i < 0) return { ok: false, reason: "not-found" };
+  const next = [...list];
+  next[i] = { ...list[i], clearanceRef: String(clearanceRef || ""), clearedAt: new Date().toISOString() };
+  writeJSON(KEYS.ptParq, next);
+  if (_synced()) _bgUpsertDelta("parq_responses", next.map(_parqToRow));
+  return { ok: true, responses: next };
+}
+
+// ── programs (0012) ──────────────────────────────────────────────────────────
+function _programToRow(p) {
+  return { id: p.id, gym_id: _ctx.gymId, member_id: p.memberId, persona_id: p.personaId || null,
+           title: p.title, goal: p.goal || null, weeks: p.weeks || null,
+           starts_on: p.startsOn || null, status: programStatus(p.status),
+           plan: p.plan || {}, version: p.version || 1,
+           supersedes_id: p.supersedesId || null, created_by: _ctx.userId || null };
+}
+export function getPrograms() { return readJSON(KEYS.ptPrograms, []); }
+export function savePrograms(list) {
+  writeJSON(KEYS.ptPrograms, list || []);
+  if (!_synced()) return;
+  _bgUpsertDelta("programs", (list || []).map(_programToRow));
+}
+
+export function createProgram({ memberId, title, goal = "", weeks = null, personaId = null,
+                                startsOn = null, plan = {} }) {
+  const name = String(title || "").trim();
+  if (!memberId) return { ok: false, reason: "no-member" };
+  if (!name) return { ok: false, reason: "no-title" };
+  // ALWAYS draft. The coach-approval gate (F2) says no generated output reaches
+  // a member surface unreviewed, and 0012's client-read policy refuses drafts —
+  // so a program born active would be visible in someone's app the instant a
+  // generator finished. There is deliberately no way to pass a status in here.
+  const p = { id: newId(), memberId, personaId, title: name, goal: String(goal || ""),
+              weeks, startsOn, status: "draft", plan, version: 1, supersedesId: null,
+              createdAt: new Date().toISOString() };
+  const list = [...getPrograms(), p];
+  savePrograms(list);
+  return { ok: true, program: p, programs: list };
+}
+
+/**
+ * Move a program to active — the one transition PAR-Q gates.
+ *
+ * Refuses with the screening reason rather than writing and hoping. 0013's
+ * trigger says the same thing server-side; if this ever disagrees with it, the
+ * write lands locally, fails upstream, and reports as a sync error — which is
+ * why parqStatus() and the trigger have to encode the same rule.
+ */
+export function activateProgram(id, now = Date.now()) {
+  const list = getPrograms();
+  const i = list.findIndex(p => p && p.id === id);
+  if (i < 0) return { ok: false, reason: "not-found" };
+
+  const screening = parqStatus(list[i].memberId, now);
+  if (!screening.ok) return { ok: false, reason: "parq", screening };
+
+  const next = [...list];
+  next[i] = { ...list[i], status: "active" };
+  savePrograms(next);
+  return { ok: true, program: next[i], programs: next };
+}
+
+export function setProgramStatus(id, status) {
+  // Routed here so 'active' cannot reach savePrograms without the gate above.
+  // A caller reaching for setProgramStatus(id, "active") is the exact mistake
+  // this branch exists to catch.
+  if (programStatus(status) === "active") return activateProgram(id);
+  const list = getPrograms();
+  const i = list.findIndex(p => p && p.id === id);
+  if (i < 0) return { ok: false, reason: "not-found" };
+  const next = [...list];
+  next[i] = { ...list[i], status: programStatus(status) };
+  savePrograms(next);
+  return { ok: true, program: next[i], programs: next };
+}
+
+// ── sessions (0012) — the member side of the XOR ────────────────────────────
+// This store only ever writes 1:1 sessions. The class side of the XOR is
+// `class_instances`, which already has three call sites above; a session row
+// carrying both columns is rejected by the CHECK, so `classInstanceId` is not a
+// parameter here at all rather than a parameter nobody may pass.
+// Exported for tests, same reasoning as _ciToRow: this mapper is the last line
+// of defence before Postgres, and the XOR it satisfies is a CHECK constraint —
+// worth pinning directly rather than through a proxy.
+export function _sessionToRow(s) {
+  return { id: s.id, gym_id: _ctx.gymId, class_instance_id: null, member_id: s.memberId,
+           trainer_id: _ctx.userId || null, program_id: s.programId || null,
+           starts_at: s.startsAt, duration_min: s.durationMin || null,
+           status: sessionStatus(s.status), notes: s.notes || null,
+           created_by: _ctx.userId || null };
+}
+export function getPtSessions() { return readJSON(KEYS.ptSessions, []); }
+export function savePtSessions(list) {
+  writeJSON(KEYS.ptSessions, list || []);
+  if (!_synced()) return;
+  _bgUpsertDelta("sessions", (list || []).map(_sessionToRow));
+}
+
+export function createPtSession({ memberId, startsAt, programId = null, durationMin = 60, notes = "" }) {
+  if (!memberId) return { ok: false, reason: "no-member" };
+  if (!startsAt) return { ok: false, reason: "no-time" };
+  const s = { id: newId(), memberId, programId, startsAt, durationMin,
+              status: "planned", notes: String(notes || "") };
+  const list = [...getPtSessions(), s];
+  savePtSessions(list);
+  return { ok: true, session: s, sessions: list };
+}
+
+export function setPtSessionStatus(id, status) {
+  const list = getPtSessions();
+  const i = list.findIndex(s => s && s.id === id);
+  if (i < 0) return { ok: false, reason: "not-found" };
+  const next = [...list];
+  next[i] = { ...list[i], status: sessionStatus(status) };
+  savePtSessions(next);
+  return { ok: true, session: next[i], sessions: next };
+}
+
+// ── set_logs (0012) — the PT data spine ─────────────────────────────────────
+export function _setLogToRow(l) {
+  return { id: l.id, gym_id: _ctx.gymId, session_id: l.sessionId, member_id: l.memberId,
+           prescription_id: l.prescriptionId || null, movement: l.movement,
+           set_index: l.setIndex, reps: l.reps ?? null, load_kg: l.loadKg ?? null,
+           rpe: l.rpe ?? null, rir: l.rir ?? null, duration_sec: l.durationSec ?? null,
+           distance_m: l.distanceM ?? null, logged_by: _ctx.userId || null,
+           source: setLogSource(l.source), performed_at: l.performedAt,
+           supersedes_id: l.supersedesId || null, voided: !!l.voided };
+}
+export function getSetLogs() { return readJSON(KEYS.ptSetLogs, []); }
+function _saveSetLogs(list) {
+  writeJSON(KEYS.ptSetLogs, list || []);
+  if (!_synced()) return;
+  _bgUpsertDelta("set_logs", (list || []).map(_setLogToRow));
+}
+
+/**
+ * Record one set. The hot path — a trainer's thumb between sets, offline, on a
+ * phone that must not make them wait for anything.
+ */
+export function logSet({ sessionId, memberId, movement, setIndex, reps = null, loadKg = null,
+                         rpe = null, rir = null, durationSec = null, distanceM = null,
+                         prescriptionId = null, source = "trainer",
+                         performedAt = new Date().toISOString() }) {
+  if (!sessionId || !memberId) return { ok: false, reason: "no-session" };
+  const name = String(movement || "").trim();
+  if (!name) return { ok: false, reason: "no-movement" };
+
+  const row = { id: newId(), sessionId, memberId, prescriptionId, movement: name,
+                setIndex: Number(setIndex) || 1, reps, loadKg, rpe, rir, durationSec, distanceM,
+                source: setLogSource(source), performedAt, supersedesId: null, voided: false };
+  const list = [...getSetLogs(), row];
+  _saveSetLogs(list);
+  return { ok: true, log: row, logs: list };
+}
+
+/**
+ * Correct a set. INSERTS a superseding row and voids the original — never edits.
+ *
+ * A trainer will type 100 for 10, and the correction must be possible. But a
+ * plain edit throws away the fact that a correction happened, and progression
+ * maths over silently-edited history has the evidential problem attendance's
+ * immutability exists to prevent. 0012 enforces the same rule with a trigger:
+ * `voided` is the only column an UPDATE may touch.
+ */
+export function correctSetLog(id, patch = {}) {
+  const list = getSetLogs();
+  const i = list.findIndex(l => l && l.id === id);
+  if (i < 0) return { ok: false, reason: "not-found" };
+  if (list[i].voided) return { ok: false, reason: "already-superseded" };
+
+  const cur = list[i];
+  const next = { ...cur, id: newId(), supersedesId: cur.id, voided: false,
+                 performedAt: cur.performedAt };
+  for (const k of ["reps", "loadKg", "rpe", "rir", "durationSec", "distanceM", "movement", "setIndex"]) {
+    if (k in patch) next[k] = patch[k];
+  }
+  next.movement = String(next.movement || "").trim();
+  if (!next.movement) return { ok: false, reason: "no-movement" };
+
+  const out = [...list];
+  out[i] = { ...cur, voided: true };
+  out.push(next);
+  _saveSetLogs(out);
+  return { ok: true, log: next, superseded: out[i], logs: out };
+}
+
+// Reads. Both filter voided rows out, because every caller wants current truth;
+// the superseded rows stay in storage for the audit trail and are reachable by
+// asking for them explicitly.
+export const setLogsForSession = (sessionId, list = getSetLogs()) =>
+  (list || []).filter(l => l && l.sessionId === sessionId && !l.voided);
+export const setLogsForMember = (memberId, list = getSetLogs()) =>
+  (list || []).filter(l => l && l.memberId === memberId && !l.voided);
 
 // ── I14: paged fetch ────────────────────────────────────────────────────────
 // `.limit(2000)` on an append-only log is a silent truncation with a date on it.
