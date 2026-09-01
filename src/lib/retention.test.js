@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   atRiskMembers, retentionSummary, describeRetention, attendanceIndex, studioActivity,
-  applyRetentionActions, RETENTION_RULES, INACTIVE_STATUSES, isCurrentMember,
+  applyRetentionActions, activityIndex, RETENTION_RULES, INACTIVE_STATUSES, isCurrentMember,
   ABSENCE_DAYS, NEW_MEMBER_MIN_VISITS,
 } from "./retention.js";
-import { RETENTION_ACTIONS, retentionAction, retentionRule, MEMBER_STATUSES } from "./store.js";
+import {
+  RETENTION_ACTIONS, retentionAction, retentionRule, MEMBER_STATUSES,
+  PT_SESSION_STATUSES, ptSessionStatus,
+} from "./store.js";
 
 // A fixed "now" so every test is deterministic — a retention rule that drifts
 // with the wall clock is untestable, and this one has to be defensible to an
@@ -484,5 +487,166 @@ describe("isCurrentMember", () => {
     // It runs inside a `.filter` over whatever localStorage held.
     expect(isCurrentMember(null)).toBe(true);
     expect(isCurrentMember(undefined)).toBe(true);
+  });
+});
+
+// ─── D1 · a 1:1 client trained twice a week and was flagged for not turning up ─
+//
+// The defect, exactly: `addMember` always stamps `joinedAt`, so rule 1 runs on
+// every hand-added member. 1:1 sessions are deliberately never written into
+// `attendance`. So a PT-only client had `visits === 0`, tripped
+// "fewer than 4 visits in their first month" at the highest severity a flag
+// carries, and `revenueAtRisk` priced it as money walking out of the door.
+//
+// 🔴 EVERY TEST HERE CARRIES ITS OWN CONTROL. A fixture that produces no flag
+// either way would pass the "not flagged" assertion by testing nothing — this
+// repo's empty-screen trap, which has now bitten it three times — so each test
+// below asserts the flag IS there without the 1:1 log before asserting it is
+// gone with it.
+const ptSession = (memberId, d, status = "done") => ({
+  id: `s${memberId}${d}`, clientId: `c${memberId}`, memberId,
+  date: new Date(NOW - d * 86_400_000).toISOString().slice(0, 10),
+  status, planName: "1:1 session",
+});
+
+describe("atRiskMembers — the 1:1 log as a second activity source (D1)", () => {
+  // Joined 20 days ago: inside rule 1's 14–30 day window, past its grace period.
+  const joined20 = [member("m1", "Ana", new Date(NOW - 20 * 86_400_000).toISOString().slice(0, 10))];
+  // Twice a week for those three weeks.
+  const twiceAWeek = [2, 5, 9, 12, 16, 19].map(d => ptSession("m1", d));
+
+  it("flags a PT-only client when the 1:1 log is not passed — the control", () => {
+    // This is the defect reproducing. If this assertion ever goes green-by-
+    // absence, every "no longer flagged" test below is worthless.
+    const flags = atRiskMembers(joined20, [], { now: NOW });
+    expect(flags).toHaveLength(1);
+    expect(flags[0].rule).toBe("new_member_low_visits");
+    expect(flags[0].visits).toBe(0);
+  });
+
+  it("does not flag them once their 1:1 sessions are counted", () => {
+    const flags = atRiskMembers(joined20, [], { now: NOW, ptSessions: twiceAWeek });
+    expect(flags).toEqual([]);
+  });
+
+  it("names WHICH kind of session it counted", () => {
+    // A coach reading "attended 3 times" about someone they only ever see
+    // one-to-one cannot tell whether the number includes those sessions — and
+    // ignoring them is precisely what made this flag wrong.
+    const flags = atRiskMembers(joined20, [], { now: NOW, ptSessions: [ptSession("m1", 3)] });
+    expect(flags).toHaveLength(1);          // 1 visit is still under the threshold
+    expect(flags[0].visits).toBe(1);
+    expect(flags[0].reason).toContain("all one-to-one");
+  });
+
+  it("names the split when a member does both", () => {
+    const flags = atRiskMembers(joined20, [visit("m1", 4)], { now: NOW, ptSessions: [ptSession("m1", 3)] });
+    expect(flags).toHaveLength(1);
+    expect(flags[0].visits).toBe(2);
+    expect(flags[0].reason).toContain("1 in class, 1 one-to-one");
+  });
+
+  it("counts DELIVERED sessions only, never booked ones", () => {
+    // A booking is an intention. Counting it would let a client who books and
+    // never turns up look like the most engaged member on the roster — the
+    // opposite of what this rule is for.
+    const planned = twiceAWeek.map(s => ({ ...s, status: "planned" }));
+    const flags = atRiskMembers(joined20, [], { now: NOW, ptSessions: planned });
+    expect(flags).toHaveLength(1);
+    expect(flags[0].visits).toBe(0);
+  });
+
+  it("lets the absence rule see a 1:1 client who has stopped coming", () => {
+    // The other direction, and it is new true-positive value: before this, a
+    // PT-only client had no attendance rows at all, so rule 2 (`visits > 0`)
+    // skipped them entirely and nothing could ever flag them.
+    const members = [member("m2", "Bo", "")];
+    const recent = [visit("mOther", 1)];                 // the studio IS recording
+    const stale = [ptSession("m2", 40), ptSession("m2", 47)];
+    const without = atRiskMembers(members, recent, { now: NOW });
+    expect(without).toEqual([]);                          // control: invisible before
+    const flags = atRiskMembers(members, recent, { now: NOW, ptSessions: stale });
+    expect(flags).toHaveLength(1);
+    expect(flags[0].rule).toBe("absence");
+    expect(flags[0].daysSince).toBe(40);
+    expect(flags[0].reason).toContain("all one-to-one");
+  });
+
+  it("keeps studioActivity attendance-only, deliberately", () => {
+    // The one place the 1:1 log is NOT folded in, and the reason is the flood
+    // this file's header exists to prevent: a gym that imported two years of
+    // history and then ran a single 1:1 must not have its whole back-catalogue
+    // flagged on the strength of that one session.
+    const recentPt = [ptSession("m1", 1), ptSession("m1", 3)];
+    expect(studioActivity([], NOW).recording).toBe(false);
+    // Fed the 1:1 rows directly it still says no: they carry `date`, not
+    // `checkedInAt`, so there is not even an accidental path by which one could
+    // turn recording on.
+    expect(studioActivity(recentPt, NOW).recording).toBe(false);
+    // And the summary the screen reads says "no data" rather than claiming the
+    // studio is recording — an honest silence, stated on screen, not a wrong
+    // number. This is the deliberate cost of the decision above.
+    const s = retentionSummary([member("m1", "Ana", "")], [], { now: NOW, ptSessions: recentPt });
+    expect(s.state).toBe("no-data");
+    expect(s.atRisk).toBe(null);
+    expect(describeRetention(s)).toContain("No attendance recorded yet");
+  });
+
+  it("merges both sources into one visit count and one last-seen", () => {
+    const idx = activityIndex([visit("m1", 10)], [ptSession("m1", 3), ptSession("m1", 20)]);
+    const e = idx.get("m1");
+    expect(e.visits).toBe(3);
+    expect(e.classVisits).toBe(1);
+    expect(e.ptVisits).toBe(2);
+    // Last seen is the 1:1 session three days ago, not the class ten days ago.
+    expect(new Date(e.lastMs).toISOString().slice(0, 10))
+      .toBe(new Date(NOW - 3 * 86_400_000).toISOString().slice(0, 10));
+  });
+
+  it("survives a malformed 1:1 row rather than counting it", () => {
+    const idx = activityIndex([], [null, { memberId: "m1" }, { status: "done" }, { memberId: "m1", status: "done", date: "nope" }]);
+    expect(idx.get("m1")).toBeUndefined();
+  });
+
+  it("reopens a suppressed flag when the member returns one-to-one", () => {
+    // `applyRetentionActions` closes an episode when the member is SEEN AGAIN.
+    // Reading attendance only, a client whose visits are all 1:1 could never be
+    // seen again, so a handled flag would stay suppressed for ever.
+    const members = [member("m3", "Cy", "")];
+    const attendance = [visit("m3", 30), visit("m3", 40), visit("mOther", 1)];
+    const flags = atRiskMembers(members, attendance, { now: NOW });
+    expect(flags).toHaveLength(1);                        // control: absence fires
+    const actions = [{ memberId: "m3", rule: "absence", action: "acted", occurredAt: new Date(NOW - 20 * 86_400_000).toISOString() }];
+
+    const stillHandled = applyRetentionActions(flags, actions, attendance);
+    expect(stillHandled.active).toEqual([]);              // control: suppressed
+
+    const back = applyRetentionActions(flags, actions, attendance, { ptSessions: [ptSession("m3", 2)] });
+    expect(back.active).toHaveLength(1);
+    expect(back.handled).toEqual([]);
+  });
+
+  it("threads the 1:1 log through retentionSummary", () => {
+    // The screen calls the summary, not `atRiskMembers`. A fix that stopped at
+    // the rule would be invisible to every surface.
+    const before = retentionSummary(joined20, [], { now: NOW });
+    expect(before.flags).toHaveLength(1);                 // control
+    const after = retentionSummary(joined20, [], { now: NOW, ptSessions: twiceAWeek });
+    expect(after.flags).toEqual([]);
+  });
+
+  it("spells 'done' the same way store.js coerces it", () => {
+    // retention.js compares the status literally rather than importing
+    // `ptSessionStatus`, because store.js imports RETENTION_RULES from
+    // retention.js and the import would close a cycle. This is the mirror test
+    // that keeps the two spellings honest — the shape `classToken.mirror.test.js`
+    // uses for the same reason.
+    expect(PT_SESSION_STATUSES).toContain("done");
+    expect(ptSessionStatus("done")).toBe("done");
+    // The coercion maps everything unrecognised to "planned", so a literal
+    // `=== "done"` accepts exactly the same set it does.
+    for (const v of ["", null, undefined, "DONE?", "finished", "planned"]) {
+      expect(ptSessionStatus(v) === "done").toBe(String(v || "").toLowerCase() === "done");
+    }
   });
 });

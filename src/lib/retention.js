@@ -90,20 +90,95 @@ const daysBetween = (a, b) => Math.round((startOfDay(a) - startOfDay(b)) / DAY_M
 
 /**
  * Per-member attendance facts. Pure; no assumptions about ordering.
- * @returns Map memberId -> { visits, firstMs, lastMs }
+ * @returns Map memberId -> { visits, classVisits, ptVisits, firstMs, lastMs }
  */
 export function attendanceIndex(attendance = []) {
   const idx = new Map();
   attendance.forEach(a => {
     const ms = msOf(a?.checkedInAt);
     if (!a?.memberId || ms == null) return;
-    const e = idx.get(a.memberId) || { visits: 0, firstMs: ms, lastMs: ms };
+    const e = idx.get(a.memberId) || { visits: 0, classVisits: 0, ptVisits: 0, firstMs: ms, lastMs: ms };
     e.visits++;
+    e.classVisits++;
     if (ms < e.firstMs) e.firstMs = ms;
     if (ms > e.lastMs) e.lastMs = ms;
     idx.set(a.memberId, e);
   });
   return idx;
+}
+
+// ── D1 · the 1:1 log is the SECOND activity source ──────────────────────────
+//
+// 🔴 THE DEFECT THIS CLOSES. A 1:1 client trained twice a week and was flagged
+// at risk for not turning up. `addMember` always stamps `joinedAt`, so rule 1
+// runs on every hand-added member; 1:1 sessions are deliberately NOT written
+// into `attendance` (see ptClients.js — writing them there would silently make
+// every one-person session count as a class); so `visits` was 0 for someone in
+// the gym twice a week. Rule 1 fired at the maximum severity a flag can carry,
+// and `revenueAtRisk` then priced the false flag as money walking out the door.
+//
+// The member never sees the flag, which is what made it expensive: the coach
+// phones someone they trained on Tuesday to ask why they have stopped coming.
+//
+// ⚠️ WHY THE RAW SESSION ROWS AND NOT A SHARED HELPER. store.js imports
+// `RETENTION_RULES` from this file, so importing `ptSessionStatus` back would
+// close an import cycle through the module that owns localStorage. And the
+// obvious alternative — mapping the rows in `ptClients.js` and passing the
+// result — puts a lazy module on RosterScreen's import graph, which is the seam
+// CLAUDE.md warns about: one four-line coercion pulled the whole 1:1 lens into
+// the eager bundle once already.
+//
+// So the shape is read here, and `"done"` is compared literally. That is NOT a
+// second vocabulary: `ptSessionStatus` coerces anything unrecognised to
+// "planned", so `status === "done"` and `ptSessionStatus(status) === "done"`
+// accept exactly the same set. `retention.test.js` pins that equivalence against
+// store.js's own list rather than trusting this comment.
+const PT_DONE = "done";
+
+// A completed 1:1 session is dated by the DAY it happened, like an imported
+// check-in. Anchored at noon UTC for the same reason the importer's rows are:
+// midnight lands on the previous calendar day in every timezone west of UTC and
+// reads as "0 days ago" for a session that has not happened yet in others.
+// `daysBetween` snaps to local midnight anyway, and noon is the value that
+// survives the round trip in both directions.
+const ptMs = date => msOf(`${String(date).slice(0, 10)}T12:00:00.000Z`);
+
+/**
+ * Attendance and completed 1:1 sessions, merged into one per-member view.
+ *
+ * PLANNED sessions are deliberately excluded. A booking is an intention; this
+ * index answers "when was this person last actually here", and counting a
+ * session that has not happened would let a client who books and never turns up
+ * look like the most engaged member on the roster.
+ *
+ * @returns Map memberId -> { visits, classVisits, ptVisits, firstMs, lastMs }
+ */
+export function activityIndex(attendance = [], ptSessions = []) {
+  const idx = attendanceIndex(attendance);
+  (ptSessions || []).forEach(s => {
+    if (!s?.memberId || String(s.status || "").toLowerCase() !== PT_DONE) return;
+    const ms = ptMs(s.date);
+    if (ms == null) return;
+    const e = idx.get(s.memberId) || { visits: 0, classVisits: 0, ptVisits: 0, firstMs: ms, lastMs: ms };
+    e.visits++;
+    e.ptVisits++;
+    if (ms < e.firstMs) e.firstMs = ms;
+    if (ms > e.lastMs) e.lastMs = ms;
+    idx.set(s.memberId, e);
+  });
+  return idx;
+}
+
+// WHICH KIND OF SESSION WAS COUNTED, in the flag's own words. A coach reading
+// "has attended 3 times" about a client they only ever see one-to-one cannot
+// tell whether the number includes those sessions or has ignored them — and the
+// whole reason this flag was wrong before is that it ignored them. Stated only
+// when there is a mix to state; "(0 one-to-one)" on every class-only member is
+// noise, and this line appears on a screen an owner reads every morning.
+function _breakdown(e) {
+  if (!e || !e.ptVisits) return "";
+  if (!e.classVisits) return " (all one-to-one)";
+  return ` (${e.classVisits} in class, ${e.ptVisits} one-to-one)`;
 }
 
 /**
@@ -129,7 +204,20 @@ export function studioActivity(attendance = [], now = Date.now()) {
  */
 export function atRiskMembers(members = [], attendance = [], opts = {}) {
   const now = opts.now ?? Date.now();
-  const idx = attendanceIndex(attendance);
+  const idx = activityIndex(attendance, opts.ptSessions);
+  // ⚠️ `studioActivity` stays ATTENDANCE-ONLY, deliberately, and it is the one
+  // place the 1:1 log is not folded in.
+  //
+  // It answers a question about the STUDIO, not about a member: "would firing
+  // the absence rule right now produce a wall of false alarms?" A single
+  // recorded 1:1 session does not mean the gym is recording the CLASS
+  // attendance that the rest of the roster is measured by — and a gym that
+  // imported two years of history and then ran one 1:1 would, if this counted,
+  // have its entire back-catalogue flagged on the strength of that one session.
+  // That is the day-one false-alarm flood this file's header exists to prevent.
+  //
+  // The cost is a silence, not a wrong number: a gym recording ONLY 1:1 sessions
+  // gets no absence alerts and `retentionSummary` says why on screen.
   const activity = studioActivity(attendance, now);
   const flags = [];
 
@@ -162,7 +250,7 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
       if (age >= NEW_MEMBER_GRACE_DAYS && age <= NEW_MEMBER_WINDOW_DAYS && visits < NEW_MEMBER_MIN_VISITS) {
         flags.push({
           memberId: m.id, name: m.name || "", rule: RULE_NEW_MEMBER,
-          reason: `Joined ${age} days ago and has attended ${visits} time${visits === 1 ? "" : "s"} — fewer than ${NEW_MEMBER_MIN_VISITS} in their first month.`,
+          reason: `Joined ${age} days ago and has attended ${visits} time${visits === 1 ? "" : "s"}${_breakdown(e)} — fewer than ${NEW_MEMBER_MIN_VISITS} in their first month.`,
           visits, daysSince: e ? daysBetween(now, e.lastMs) : age,
           since: dayOf(new Date(joinedMs).toISOString()),
           severity: NEW_MEMBER_MIN_VISITS - visits + 2,   // fewer visits = more urgent
@@ -179,7 +267,7 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
       if (daysSince >= ABSENCE_DAYS) {
         flags.push({
           memberId: m.id, name: m.name || "", rule: RULE_ABSENCE,
-          reason: `Last attended ${daysSince} days ago, after ${visits} visit${visits === 1 ? "" : "s"} — more than ${ABSENCE_DAYS} days away.`,
+          reason: `Last attended ${daysSince} days ago, after ${visits} visit${visits === 1 ? "" : "s"}${_breakdown(e)} — more than ${ABSENCE_DAYS} days away.`,
           visits, daysSince, since: dayOf(new Date(e.lastMs).toISOString()),
           severity: Math.min(10, Math.floor(daysSince / ABSENCE_DAYS) + 1),
         });
@@ -214,7 +302,11 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
  *          show what was done and when, rather than hiding the work.
  */
 export function applyRetentionActions(flags = [], actions = [], attendance = [], opts = {}) {
-  const idx = opts.index || attendanceIndex(attendance);
+  // The 1:1 log belongs here too. "Seen again since the action" is what closes a
+  // suppressed episode, and a client whose only visits are one-to-one would
+  // otherwise never be seen again by this function — so a flag the coach already
+  // dealt with would stay suppressed for ever, even after the member came back.
+  const idx = opts.index || activityIndex(attendance, opts.ptSessions);
   const latest = new Map();
   (actions || []).forEach(a => {
     if (!a?.memberId || !a?.rule) return;
@@ -248,7 +340,7 @@ export function applyRetentionActions(flags = [], actions = [], attendance = [],
 export function retentionSummary(members = [], attendance = [], opts = {}) {
   const now = opts.now ?? Date.now();
   const activity = studioActivity(attendance, now);
-  const flags = atRiskMembers(members, attendance, { now });
+  const flags = atRiskMembers(members, attendance, { now, ptSessions: opts.ptSessions });
 
   let state;
   if (!attendance.length) state = "no-data";
