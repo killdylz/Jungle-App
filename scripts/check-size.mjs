@@ -151,6 +151,19 @@ const KB = 1000;
 // credential-less when it landed: two full screens, the seven PAR-Q question
 // texts, and lib/parq.js + lib/ptClients.js, none of which the eager bundle
 // pays for.
+// 🔴 PTScreens 34 → 36 credential-less, 36 → 38 prod (D6). What bought the
+// bytes: the 1:1 client detail EDITOR. `updatePtClient` accepted `goal`,
+// `coachName`, `notes` and `startedAt` and the app's only call sent `{ status }`
+// — four stored fields with no way in, two of which (`coachName`, `notes`) no
+// screen rendered at all. Closing that needs both halves: a read-only summary
+// that names an empty field in words rather than leaving a blank, and the form
+// behind "Edit details" with its four inputs, the roster datalist that keeps a
+// typed coach name in step with `resolveCoach`, and the save handler.
+// Measured 34.83 KB, up from 31.63 — 0.83 over the old ceiling, which is why
+// this line moves rather than the feature shipping on the edge of it.
+// `src/lib/storeWriters.test.js` is what made the gap visible; it could not be
+// closed for less.
+//
 // ─── MERGE NOTE (integrating the S29–S33 stack onto main) ───────────────────
 // Both sides rewrote BUDGETS and neither superseded the other, so this is the
 // UNION, not a pick. From main: PTScreens (F1's 1:1 lens). From the stack:
@@ -158,8 +171,8 @@ const KB = 1000;
 // RetentionScreen 14 -> 18 (the class-type return-rate panel bought those
 // bytes; main's 14 predates it). Every other ceiling is identical on both sides.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 36, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 34, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 38, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 36, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }

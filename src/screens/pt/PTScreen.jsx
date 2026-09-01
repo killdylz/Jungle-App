@@ -42,6 +42,11 @@ const today = () => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
+// The four fields `updatePtClient` accepts. Declared once so the edit form and
+// its reset cannot drift apart — a key missing here is a key the form silently
+// stops sending, which is the D6 shape all over again.
+const EMPTY_DETAIL = { goal: "", coachName: "", startedAt: "", notes: "" };
+
 export function PTScreen({ onBack, onNavigate, onLoadSession }) {
   const vw = useWindowWidth();
   const isMobile = vw < 640;
@@ -102,6 +107,40 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
   };
 
   const setStatus = (id, status) => setClients(store.updatePtClient(id, { status }).clients);
+
+  // ── D6 · the four fields the store accepted and nothing could set ─────────
+  //
+  // 🔴 `updatePtClient` has always taken `goal`, `coachName`, `notes` and
+  // `startedAt`. The only call in the app sent `{ status }`, so a goal typed
+  // once when the client was added was PERMANENT — a typo in it could not be
+  // corrected from anywhere in the product — and `coachName` and `notes` were
+  // stored fields no screen rendered at all. No test could notice: there is
+  // nothing to assert about a control that was never built.
+  // `scripts/audit-store-writers.mjs` is what named them; `storeWriters.test.js`
+  // is the check that fails until every one of them has a way in.
+  //
+  // Keyed on the client id rather than a bare boolean, matching RosterScreen:
+  // an `editing` flag survives a click onto a DIFFERENT client and offers one
+  // person's form under another person's name.
+  const [editId, setEditId] = useState(null);
+  const [detail, setDetail] = useState(EMPTY_DETAIL);
+
+  // Suggestions only. ⚠️ A coach is a TYPED NAME and must stay one — identity
+  // lives in the roster and resolves by name (`lib/coachRoster.js`), so nothing
+  // here writes an id. The datalist just keeps what a coach types in step with
+  // the roster, because `resolveCoach` matches on the string.
+  const coachNames = useMemo(
+    () => store.getCoaches().map(c => c && c.name).filter(Boolean), []);
+
+  const startEdit = (row) => {
+    setEditId(row.id);
+    setDetail({ goal: row.goal, coachName: row.coachName, startedAt: row.startedAt, notes: row.notes });
+  };
+  const saveDetail = (id) => {
+    setClients(store.updatePtClient(id, detail).clients);
+    setEditId(null);
+    toast("Details saved");
+  };
 
   const plan = () => {
     if (!selected) return;
@@ -374,6 +413,69 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* ── Details (D6) ─────────────────────────────────────────────
+                  Read-only until asked for, like the roster row. Every field is
+                  shown even when empty, and says so in words: "No goal recorded"
+                  is information, a blank is an unanswered question. */}
+              <div style={{marginTop:"18px"}} data-testid="pt-details">
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",flexWrap:"wrap",marginBottom:"8px"}}>
+                  <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>Details</div>
+                  <button data-tap style={ghost}
+                    onClick={()=> editId === selected.id ? setEditId(null) : startEdit(selected)}>
+                    {editId === selected.id ? "Cancel" : "Edit details"}
+                  </button>
+                </div>
+
+                {editId === selected.id ? (
+                  <>
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"10px"}}>
+                      <div>
+                        <label style={label} htmlFor="pt-edit-goal">Working towards</label>
+                        <Input id="pt-edit-goal" value={detail.goal} placeholder="First pull-up"
+                          onChange={e=>setDetail(d=>({...d,goal:e.target.value}))}/>
+                      </div>
+                      <div>
+                        <label style={label} htmlFor="pt-edit-coach">Coach</label>
+                        <Input id="pt-edit-coach" value={detail.coachName} placeholder="Who runs these sessions"
+                          list="pt-coach-names"
+                          onChange={e=>setDetail(d=>({...d,coachName:e.target.value}))}/>
+                        <datalist id="pt-coach-names">
+                          {coachNames.map(n => <option key={n} value={n}/>)}
+                        </datalist>
+                      </div>
+                      <div>
+                        <label style={label} htmlFor="pt-edit-started">1:1 since</label>
+                        <Input id="pt-edit-started" type="date" value={detail.startedAt}
+                          onChange={e=>setDetail(d=>({...d,startedAt:e.target.value}))}/>
+                      </div>
+                    </div>
+                    <div style={{marginTop:"10px"}}>
+                      <label style={label} htmlFor="pt-edit-notes">Notes about this client</label>
+                      <textarea id="pt-edit-notes" value={detail.notes}
+                        onChange={e=>setDetail(d=>({...d,notes:e.target.value}))}
+                        placeholder="Anything a coach picking this up would need to know"
+                        style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",
+                                borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",
+                                boxSizing:"border-box",minHeight:"64px",resize:"vertical",fontFamily:"inherit"}}/>
+                    </div>
+                    <button onClick={()=>saveDetail(selected.id)} style={{...primary,marginTop:"10px"}} data-tap>
+                      <Check size={13}/> Save details
+                    </button>
+                  </>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:"8px 16px"}}>
+                    <div><span style={label}>Working towards</span>
+                      <span style={{fontSize:"12px",color:"var(--text)"}}>{selected.goal || "No goal recorded"}</span></div>
+                    <div><span style={label}>Coach</span>
+                      <span style={{fontSize:"12px",color:"var(--text)"}}>{selected.coachName || "Nobody named"}</span></div>
+                    <div><span style={label}>1:1 since</span>
+                      <span style={{fontSize:"12px",color:"var(--text)"}}>{selected.startedAt || "No start date recorded"}</span></div>
+                    <div style={{gridColumn:isMobile?"auto":"1 / -1"}}><span style={label}>Notes</span>
+                      <span style={{fontSize:"12px",color:"var(--text)",whiteSpace:"pre-wrap"}}>{selected.notes || "None"}</span></div>
+                  </div>
+                )}
               </div>
 
               {/* ── Status ───────────────────────────────────────────────────

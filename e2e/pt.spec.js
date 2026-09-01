@@ -264,6 +264,92 @@ test.describe("the health screen gates individualised load", () => {
 });
 
 test.describe("planned sessions", () => {
+  // ── D6 · the four fields that had no way in ────────────────────────────────
+  //
+  // 🔴 `updatePtClient` accepted `goal`, `coachName`, `notes` and `startedAt`
+  // from the day it was written, and the app's only call sent `{ status }`. So a
+  // goal typed once at add time was permanent, and `coachName` and `notes` were
+  // stored fields no screen rendered. `storeWriters.test.js` proves a CALL SITE
+  // exists; it cannot prove the form works. This drives it and reads the STORED
+  // row, which is the repo rule and the only thing that separates "a control was
+  // added" from "a control writes what it says it writes".
+  test("every detail a 1:1 client carries can be corrected, and it is what gets stored", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "1:1 Clients");
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+
+    // POSITIVE CONTROL. The panel is really on screen, showing the seeded goal
+    // and saying — in words, not as a blank — what is not recorded yet.
+    const details = page.getByTestId("pt-details");
+    await expect(details).toContainText("First pull-up");
+    await expect(details).toContainText("Nobody named");
+    await expect(details).toContainText("No start date recorded");
+
+    await page.getByRole("button", { name: "Edit details" }).click();
+    await page.locator("#pt-edit-goal").fill("First strict pull-up");
+    await page.locator("#pt-edit-coach").fill("Mara K.");
+    await page.locator("#pt-edit-started").fill(day(-30));
+    await page.locator("#pt-edit-notes").fill("Left shoulder — keep overhead volume low.");
+    await page.getByRole("button", { name: "Save details" }).click();
+
+    // 🔴 THE STORED ROW. All four, in one write.
+    const clients = await stored(page, "jungle_pt_clients");
+    expect(clients).toHaveLength(1);
+    expect(clients[0].goal).toBe("First strict pull-up");
+    expect(clients[0].coachName).toBe("Mara K.");
+    expect(clients[0].startedAt).toBe(day(-30));
+    expect(clients[0].notes).toBe("Left shoulder — keep overhead volume low.");
+    // The relationship itself is untouched: an edit is not a status change.
+    expect(clients[0].status).toBe("active");
+    expect(clients[0].memberId).toBe("m0");
+
+    // And the panel reads back what was written, rather than the form's own state.
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    await expect(page.getByTestId("pt-details")).toContainText("First strict pull-up");
+    await expect(page.getByTestId("pt-details")).toContainText("Mara K.");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // ⚠️ The bug an `editing` boolean produces, pinned so it cannot come back: the
+  // form is keyed on the CLIENT ID, so clicking a different person while editing
+  // must not offer the first person's values under the second person's name.
+  test("an open edit form does not follow you onto another client", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    // A second client, so there is somewhere else to click.
+    await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem("jungle_pt_clients"));
+      list.push({ id: "c1", memberId: "m1", goal: "Deadlift 100kg", status: "active", startedAt: "" });
+      localStorage.setItem("jungle_pt_clients", JSON.stringify(list));
+    });
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    await page.getByRole("button", { name: "Edit details" }).click();
+    await page.locator("#pt-edit-goal").fill("EDITED BUT NEVER SAVED");
+
+    // Switch client. The form must close, not travel.
+    await page.getByRole("button", { name: /^Marcus Lee/ }).click();
+    await expect(page.locator("#pt-edit-goal")).toHaveCount(0);
+    await expect(page.getByTestId("pt-details")).toContainText("Deadlift 100kg");
+    await expect(page.getByTestId("pt-details")).not.toContainText("EDITED BUT NEVER SAVED");
+
+    // And nothing was written by abandoning the form.
+    const clients = await stored(page, "jungle_pt_clients");
+    expect(clients.find(c => c.id === "c0").goal).toBe("First pull-up");
+
+    expectNoConsoleErrors(errors);
+  });
+
   test("a session is marked done, and removing a planned one can be undone", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
