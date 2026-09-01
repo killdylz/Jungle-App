@@ -1,5 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 0010 — coach roster, availability and cover requests (S30 §2.1–§2.3)
+-- 0011 — coach roster, availability and cover requests (S30 §2.1–§2.3)
+-- ⚠️ RENUMBERED 0010 -> 0011 when this stack was merged onto main. Main had
+-- already taken 0010 for the staff read boundary (PR #13), so two different
+-- migrations were both numbered 0010. If you have notes referring to "0010
+-- coach cover", this is that file.
 --
 -- 🔴 UNAPPLIED, AND THE CLIENT DOES NOT WRITE TO IT. This file is written so
 -- Dylan has the exact SQL (DYLAN-QUEUE A15) and so the shape is reviewable — it
@@ -217,14 +221,22 @@ drop policy if exists coach_absences_rw on public.coach_absences;
 -- recording their own is the ordinary case. Narrowing this to "only your own
 -- row" is tempting and wrong — a manager records an absence for a coach who
 -- phoned in, which is how most of them actually get recorded.
+-- 🔴 STAFF, NOT EVERY MEMBER OF THE GYM. These five policies were written
+-- against `user_gym_ids()` because this migration was authored BEFORE
+-- 0010_staff_read_boundary.sql existed — the two lines forked before it merged.
+-- Left as they were, running this file would hand any `member`-role account the
+-- whole coach roster, every coach's availability, and every cover request:
+-- precisely the hole 0010 was written to close, through a new door.
+-- `staff_gym_ids()` is defined in 0010, which runs first.
+-- Caught by src/lib/rlsBoundary.test.js when the two lines were merged.
 create policy coach_absences_rw on public.coach_absences for all
-  using      (public.is_platform_admin() or gym_id in (select public.user_gym_ids()))
-  with check (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
+  using      (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()))
+  with check (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()));
 
 drop policy if exists coach_roster_rw on public.coach_roster;
 create policy coach_roster_rw on public.coach_roster for all
-  using      (public.is_platform_admin() or gym_id in (select public.user_gym_ids()))
-  with check (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
+  using      (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()))
+  with check (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()));
 
 -- Read and insert for any active member of the gym; UPDATE is allowed because
 -- approving IS an update. There is deliberately no DELETE policy: a request that
@@ -234,9 +246,9 @@ drop policy if exists cover_requests_read   on public.cover_requests;
 drop policy if exists cover_requests_insert on public.cover_requests;
 drop policy if exists cover_requests_update on public.cover_requests;
 create policy cover_requests_read on public.cover_requests for select
-  using (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
+  using (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()));
 create policy cover_requests_insert on public.cover_requests for insert
-  with check (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
+  with check (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()));
 create policy cover_requests_update on public.cover_requests for update
-  using      (public.is_platform_admin() or gym_id in (select public.user_gym_ids()))
-  with check (public.is_platform_admin() or gym_id in (select public.user_gym_ids()));
+  using      (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()))
+  with check (public.is_platform_admin() or gym_id in (select public.staff_gym_ids()));

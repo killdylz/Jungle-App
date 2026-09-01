@@ -75,7 +75,7 @@ const GUARDED = [
   // the day the migration runs. `settleCoverRequest` now writes this column for
   // real, through `_coverToRow`, so it is an ordinary member of this list — the
   // exception was simply early rather than wrong.
-  ["cover_requests.status",   COVER_STATUSES,      () => checkValues("0010_coach_cover.sql", "status")],
+  ["cover_requests.status",   COVER_STATUSES,      () => checkValues("0011_coach_cover.sql", "status")],
 ];
 
 describe("client value sets match the database constraints", () => {
@@ -164,16 +164,16 @@ const MAPPER_SAMPLES = [
   // of what these tables will look like, and a mapper that drifts from it would
   // fail every push on the day it is applied — with a message naming only the
   // table. The samples are over-populated for the same reason the two above are.
-  ["coach_roster", "0010_coach_cover.sql", _coachToRow,
+  ["coach_roster", "0011_coach_cover.sql", _coachToRow,
    { id: "c1", name: "Mara", aliases: ["Mara K."], userId: "u1", active: true,
      availability: { Mon: ["06:00"] }, availabilityAt: "2026-08-24" }],
-  ["cover_requests", "0010_coach_cover.sql", _coverToRow,
+  ["cover_requests", "0011_coach_cover.sql", _coverToRow,
    { id: "r1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon",
      classSlot: "06:00", classDate: "2026-08-24", absenceId: "a1",
      fromCoachId: "c1", toCoachId: "c2", note: "flu",
      status: "approved", createdAt: "2026-08-24T05:00:00.000Z",
      settledAt: "2026-08-24T05:04:00.000Z", settledBy: "u2" }],
-  ["coach_absences", "0010_coach_cover.sql", _absenceToRow,
+  ["coach_absences", "0011_coach_cover.sql", _absenceToRow,
    { id: "a1", coachId: "c1", from: "2026-08-24", to: "2026-08-28", note: "leave",
      createdAt: "2026-08-20T05:00:00.000Z", cancelledAt: "2026-08-21T05:00:00.000Z" }],
 ];
@@ -222,9 +222,9 @@ describe("🔴 row mappers only name columns the database actually has", () => {
   // being compared are really the roster's, and that a plausible wrong key is
   // caught rather than shrugged at.
   it("the 0010 mappers are judged against 0010's own columns", () => {
-    const roster = tableColumns("0010_coach_cover.sql", "coach_roster");
-    const cover  = tableColumns("0010_coach_cover.sql", "cover_requests");
-    const absent = tableColumns("0010_coach_cover.sql", "coach_absences");
+    const roster = tableColumns("0011_coach_cover.sql", "coach_roster");
+    const cover  = tableColumns("0011_coach_cover.sql", "cover_requests");
+    const absent = tableColumns("0011_coach_cover.sql", "coach_absences");
 
     // 🔴 S33's two new columns. A cover with no `class_date` is a cover that
     // means "from now on", which is the defect dated cover exists to remove —

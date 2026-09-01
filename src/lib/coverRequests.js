@@ -10,7 +10,7 @@
 // local-first version of that. It is the first feature in this repo whose
 // correctness depends on the server actually working.
 //
-// The server does not work yet. `supabase/migrations/0010_coach_cover.sql` is
+// The server does not work yet. `supabase/migrations/0011_coach_cover.sql` is
 // written and unapplied (DYLAN-QUEUE A15), joining 0005 and 0006, and the
 // shipped build has no Supabase credentials at all. So on the build a gym runs
 // today, a request raised here is written to ONE PHONE and read by nobody.
@@ -29,7 +29,7 @@ import { coachReach } from "./coachRoster.js";
 import { occurrenceDate } from "./coachAbsence.js";
 
 // MUST stay in step with the CHECK on cover_requests.status in
-// 0010_coach_cover.sql. Guarded in src/lib/dbConstraints.test.js — a constrained
+// 0011_coach_cover.sql. Guarded in src/lib/dbConstraints.test.js — a constrained
 // column rejecting a client value is this repo's recurring data-loss bug.
 // ⚠️ `rejected` WAS HERE AND IS GONE (S33). It belonged to the directed flow —
 // one named coach was asked and could say no. A cover is now offered to everyone

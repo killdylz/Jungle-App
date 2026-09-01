@@ -2,7 +2,7 @@
 //
 // 🔴🔴 THIS HAS NEVER MADE A REAL REQUEST. Nothing in the product calls it, and
 // nothing can: the table it was written for (`cover_requests`, migration
-// `0010_coach_cover.sql`) has never been applied — DYLAN-QUEUE A15. Every
+// `0011_coach_cover.sql`) has never been applied — DYLAN-QUEUE A15. Every
 // assertion about it in `compareAndSet.test.js` is against a FAKE that models
 // what PostgREST is documented to do. Treat it as a specification with a test
 // suite, not as code that is known to work, and the first time it runs for real,
