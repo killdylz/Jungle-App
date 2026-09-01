@@ -70,8 +70,19 @@ wrong in three places, and the first one would have shipped a compliance defect.
 only on PR #14's branch, and a `push` event runs the workflow files present *on the pushed ref* —
 so a branch cut from `main` never triggers it. PR #14's own `open` job did run and went green, but
 its log shows it exited early with *"PR #14 is already open… the new commits are on it"* — it never
-reached `gh pr create`. **A15's state is therefore still unknown, and stays unknown until #14 is on
-`main`.**
+reached `gh pr create`. **A15's state was therefore unknown — and is now MEASURED, because #14 was merged
+later in this session and the next push tested it for real.** The answer is **OFF**. Pushing this
+branch ran `auto-pr.yml` from `main` for the first time, and the log says it exactly:
+
+```
+pull request create failed: GraphQL: GitHub Actions is not permitted to
+create or approve pull requests (createPullRequest)
+```
+
+The job then warned and exited **clean**, which is the behaviour `af56d07` designed on purpose — a
+workflow that is always red is one everybody learns to ignore, and the next real failure hides
+behind it. So **A15 is confirmed outstanding, with the API's own words**, and until Dylan ticks the
+box every `claude/**` branch still needs its PR opened by hand.
 
 ### What shipped
 
@@ -146,13 +157,21 @@ the kind of number this repo refuses. **Left for Dylan, stated here rather than 
 
 ### What is still Dylan's
 
-- **§2.1 (merge #14, then #13) was NOT done.** The prompt's own header says *"Do NOT run this
-  session fully autonomously"* and its intro says everything in §2 needs him. Merging to `main`
-  also triggers a Pages deploy. #14's head has a genuine green 13-minute `gate` run — the first
-  real check in this repo's history — and #13 still has **no check at all**. ⚠️ The prompt's step 2
-  (`workflow_dispatch` CI against `claude/rls-staff-read-boundary`) **will not work as written**:
-  that branch was cut before `ci.yml` existed, and a dispatch runs the workflow file from the
-  chosen ref. Merge `main` into that branch after #14 lands and let the `push` trigger do it.
+- **§2.1 was NOT done autonomously — it was put to Dylan first, and he said land them.** The
+  prompt's header says *"Do NOT run this session fully autonomously"* and its intro puts all of §2
+  on him, and merging to `main` triggers a Pages deploy, so this was asked rather than assumed.
+  **#14 is merged** (`bd04de0`), which put `ci.yml` and `auto-pr.yml` on `main` and made A15
+  measurable — see above.
+
+  ⚠️ **The prompt's step 2 does not work as written.** `workflow_dispatch` against
+  `claude/rls-staff-read-boundary` cannot run `ci.yml`, because a dispatch runs the workflow file
+  **from the chosen ref** and that branch was cut before `ci.yml` existed — there is no file there
+  to dispatch. What works: merge `main` into it (no history rewritten, migration untouched) and let
+  the `push` trigger fire. Done in `ec6cd89`, and **#13 has a running CI check for the first time in
+  its life** — the gap the prompt's §2.1 exists to close.
+
+  🔴 **Merging #13 still changes NOTHING on the server.** The policies move when **A14** is run in
+  the SQL editor, not when the file lands. Do not report the RLS hole as closed on a merge.
 - **§2.2 (which PT implementation survives) is untouched**, as instructed. No PT surface was added;
   D1/D4/D5 are all repairs to what is already on `main`, so none of them is wasted work if the
   rival implementation wins — the PAR-Q gate and the at-risk rules are shared either way.
