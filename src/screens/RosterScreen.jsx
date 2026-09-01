@@ -221,7 +221,7 @@ export function RosterScreen({ onBack, onNavigate }) {
 
           {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
               tell, say so — never a green all-clear over unmeasured data. */}
-          <div style={card}>
+          <div style={card} data-testid="at-risk-panel">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Who&rsquo;s slipping away</div>
               <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
@@ -325,8 +325,133 @@ export function RosterScreen({ onBack, onNavigate }) {
             )}
           </div>
 
-          {/* ── CSV backfill ───────────────────────────────────────────── */}
-          <div style={card}>
+          {/* ── Roster ─────────────────────────────────────────────────── */}
+          <div style={card} data-testid="roster-panel">
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
+              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>
+                Roster · {activeCount}
+                {members.length !== activeCount &&
+                  <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"7px"}}>
+                    ({members.length - activeCount} not active)
+                  </span>}
+              </div>
+              <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
+                  style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
+                {/* The gym's own copy of its roster. Disabled rather than hidden
+                    on an empty roster: an owner evaluating Jungle should be able
+                    to see that their data can leave, before they put any in. */}
+                <button onClick={exportRoster} disabled={!members.length} data-testid="export-roster"
+                  title="Download every member and their visit history as a CSV"
+                  style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"6px",...(members.length?{}:{opacity:.45,cursor:"not-allowed"})}}>
+                  <Download size={12}/> Export CSV
+                </button>
+                <button onClick={()=>{ setAdding(a=>!a); setEditId(null); setFormErr(""); }}
+                  style={{padding:"7px 12px",borderRadius:"7px",border:`1px solid var(--border)`,background:adding?"var(--accent)":"transparent",color:adding?"var(--on-accent)":"var(--text)",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
+                  {adding ? "Cancel" : "Add member"}
+                </button>
+              </div>
+            </div>
+
+            {/* Add. Only a name is required — the same bar as the mid-class
+                quick-add, because a roster the owner refuses to start is worse
+                than one with blank emails. */}
+            {adding && (
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"8px",background:"var(--bg)",marginBottom:"10px"}}>
+                <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Name (required)" style={fieldStyle}/>
+                <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Email (optional)" style={fieldStyle}/>
+                <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
+                  title="Joined" style={fieldStyle}/>
+                <button onClick={submitAdd} style={primaryBtn}>Add</button>
+              </div>
+            )}
+            {formErr && <div style={{fontSize:"12px",color:"#EF4444",marginBottom:"10px"}}>{formErr}</div>}
+
+            {members.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
+                No members yet. <strong>Add member</strong> puts one in by hand — a name is all
+                that’s needed. You can also check people in from the Class Runner, which creates
+                the roster row for you, or import your old attendance history below.
+              </p>
+            ) : shown.length === 0 ? (
+              <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+                {shown.slice(0, 200).map(m => editId === m.id ? (
+                  /* ── Editing ── an inline row, not a modal: the owner is
+                     usually correcting a name they can see misspelled in the
+                     list, and a dialog would hide the thing being compared. */
+                  <div key={m.id} style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"7px",background:"var(--bg)",border:`1px solid var(--accent)`}}>
+                    <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
+                      placeholder="Name" style={fieldStyle}/>
+                    <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
+                      placeholder="Email" style={fieldStyle}/>
+                    <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
+                      title="Joined" style={fieldStyle}/>
+                    {/* Options come from MEMBER_STATUSES, never spelled inline —
+                        members.status is CHECK-constrained and this dropdown is
+                        exactly where a value the DB rejects would be born. */}
+                    <select value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}
+                      title="Status" style={{...fieldStyle,cursor:"pointer",flex:"0 0 auto"}}>
+                      {MEMBER_STATUSES.map(s => <option key={s} value={s}>{MEMBER_STATUS_LABEL[s]}</option>)}
+                    </select>
+                    <button onClick={()=>submitEdit(m.id)} style={primaryBtn}>Save</button>
+                    <button onClick={cancelForm} style={ghostBtn}>Cancel</button>
+                  </div>
+                ) : (
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)",opacity:m.status&&m.status!=="active"?0.62:1}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        {m.name||"(no name)"}
+                        {/* Only NON-active states are badged. Tagging every row
+                            "active" is noise on the common case. */}
+                        {m.status && m.status !== "active" && (
+                          <span style={{marginLeft:"7px",fontSize:"9px",fontWeight:"800",letterSpacing:"0.5px",textTransform:"uppercase",padding:"2px 6px",borderRadius:"4px",border:`1px solid var(--border)`,color:"var(--muted)"}}>
+                            {MEMBER_STATUS_LABEL[m.status] || m.status}
+                          </span>
+                        )}
+                      </div>
+                      {m.email&&<div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.email}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)"}}>{visitsFor(m.id)}</div>
+                      <div style={{fontSize:"10px",color:"var(--muted)"}}>{lastSeen(m.id)||"never"}</div>
+                    </div>
+                    {/* aria-label, not title: a title does NOT override text
+                        content for the accessible name, so every one of these
+                        buttons announced itself as just "Edit" — indistinguishable
+                        in a 200-row roster to a screen reader, and ambiguous to
+                        any test. The label names who is being edited. */}
+                    {/* One member's own record, for when they ask what is held
+                        about them (PDPA access). aria-label for the same reason
+                        as Edit below: `title` does NOT override text content for
+                        an accessible name, so 200 rows would all announce
+                        themselves as "Data". */}
+                    <button onClick={()=>exportMember(m)} aria-label={`Download ${m.name||"member"}'s data`}
+                      title={`Download everything held about ${m.name||"this member"}`}
+                      style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"5px"}}>
+                      <Download size={11}/> Data
+                    </button>
+                    <button onClick={()=>startEdit(m)} aria-label={`Edit ${m.name||"member"}`} style={ghostBtn}>Edit</button>
+                  </div>
+                ))}
+                {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── CSV backfill ─────────────────────────────────────────────
+              BELOW the roster on purpose. This panel used to render above it,
+              so the first thing on Members was a file picker and an owner
+              reasonably concluded a CSV was the only way in — while the Add
+              member button sat off the bottom of the fold. This is attendance
+              HISTORY, which is a migration job a gym does once; adding a member
+              is the thing it does every week. Order says which is which. */}
+          <div style={card} data-testid="csv-import-panel">
             <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
             <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
               Bring past check-ins across from your previous system. A CSV with a <strong>member name
@@ -399,124 +524,6 @@ export function RosterScreen({ onBack, onNavigate }) {
                 Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
                 {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
                 {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
-              </div>
-            )}
-          </div>
-
-          {/* ── Roster ─────────────────────────────────────────────────── */}
-          <div style={card}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
-              <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>
-                Roster · {activeCount}
-                {members.length !== activeCount &&
-                  <span style={{fontSize:"11px",fontWeight:"600",color:"var(--muted)",marginLeft:"7px"}}>
-                    ({members.length - activeCount} not active)
-                  </span>}
-              </div>
-              <div style={{display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
-                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search members…"
-                  style={{padding:"7px 11px",borderRadius:"7px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",outline:"none",minWidth:"180px"}}/>
-                {/* The gym's own copy of its roster. Disabled rather than hidden
-                    on an empty roster: an owner evaluating Jungle should be able
-                    to see that their data can leave, before they put any in. */}
-                <button onClick={exportRoster} disabled={!members.length} data-testid="export-roster"
-                  title="Download every member and their visit history as a CSV"
-                  style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"6px",...(members.length?{}:{opacity:.45,cursor:"not-allowed"})}}>
-                  <Download size={12}/> Export CSV
-                </button>
-                <button onClick={()=>{ setAdding(a=>!a); setEditId(null); setFormErr(""); }}
-                  style={{padding:"7px 12px",borderRadius:"7px",border:`1px solid var(--border)`,background:adding?"var(--accent)":"transparent",color:adding?"var(--on-accent)":"var(--text)",fontSize:"12px",fontWeight:"600",cursor:"pointer"}}>
-                  {adding ? "Cancel" : "Add member"}
-                </button>
-              </div>
-            </div>
-
-            {/* Add. Only a name is required — the same bar as the mid-class
-                quick-add, because a roster the owner refuses to start is worse
-                than one with blank emails. */}
-            {adding && (
-              <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"8px",background:"var(--bg)",marginBottom:"10px"}}>
-                <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
-                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Name (required)" style={fieldStyle}/>
-                <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
-                  onKeyDown={e=>e.key==="Enter"&&submitAdd()} placeholder="Email (optional)" style={fieldStyle}/>
-                <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
-                  title="Joined" style={fieldStyle}/>
-                <button onClick={submitAdd} style={primaryBtn}>Add</button>
-              </div>
-            )}
-            {formErr && <div style={{fontSize:"12px",color:"#EF4444",marginBottom:"10px"}}>{formErr}</div>}
-
-            {members.length === 0 ? (
-              <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
-                No members yet. Import a CSV above, or check people in from the Class Runner —
-                a name is all that’s needed and the roster row is created for you.
-              </p>
-            ) : shown.length === 0 ? (
-              <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
-            ) : (
-              <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
-                {shown.slice(0, 200).map(m => editId === m.id ? (
-                  /* ── Editing ── an inline row, not a modal: the owner is
-                     usually correcting a name they can see misspelled in the
-                     list, and a dialog would hide the thing being compared. */
-                  <div key={m.id} style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center",padding:"10px",borderRadius:"7px",background:"var(--bg)",border:`1px solid var(--accent)`}}>
-                    <input autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
-                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
-                      placeholder="Name" style={fieldStyle}/>
-                    <input value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
-                      onKeyDown={e=>{ if(e.key==="Enter") submitEdit(m.id); if(e.key==="Escape") cancelForm(); }}
-                      placeholder="Email" style={fieldStyle}/>
-                    <input type="date" value={form.joinedAt} onChange={e=>setForm(f=>({...f,joinedAt:e.target.value}))}
-                      title="Joined" style={fieldStyle}/>
-                    {/* Options come from MEMBER_STATUSES, never spelled inline —
-                        members.status is CHECK-constrained and this dropdown is
-                        exactly where a value the DB rejects would be born. */}
-                    <select value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}
-                      title="Status" style={{...fieldStyle,cursor:"pointer",flex:"0 0 auto"}}>
-                      {MEMBER_STATUSES.map(s => <option key={s} value={s}>{MEMBER_STATUS_LABEL[s]}</option>)}
-                    </select>
-                    <button onClick={()=>submitEdit(m.id)} style={primaryBtn}>Save</button>
-                    <button onClick={cancelForm} style={ghostBtn}>Cancel</button>
-                  </div>
-                ) : (
-                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)",opacity:m.status&&m.status!=="active"?0.62:1}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {m.name||"(no name)"}
-                        {/* Only NON-active states are badged. Tagging every row
-                            "active" is noise on the common case. */}
-                        {m.status && m.status !== "active" && (
-                          <span style={{marginLeft:"7px",fontSize:"9px",fontWeight:"800",letterSpacing:"0.5px",textTransform:"uppercase",padding:"2px 6px",borderRadius:"4px",border:`1px solid var(--border)`,color:"var(--muted)"}}>
-                            {MEMBER_STATUS_LABEL[m.status] || m.status}
-                          </span>
-                        )}
-                      </div>
-                      {m.email&&<div style={{fontSize:"11px",color:"var(--muted)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.email}</div>}
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:"13px",fontWeight:"700",color:"var(--accent)"}}>{visitsFor(m.id)}</div>
-                      <div style={{fontSize:"10px",color:"var(--muted)"}}>{lastSeen(m.id)||"never"}</div>
-                    </div>
-                    {/* aria-label, not title: a title does NOT override text
-                        content for the accessible name, so every one of these
-                        buttons announced itself as just "Edit" — indistinguishable
-                        in a 200-row roster to a screen reader, and ambiguous to
-                        any test. The label names who is being edited. */}
-                    {/* One member's own record, for when they ask what is held
-                        about them (PDPA access). aria-label for the same reason
-                        as Edit below: `title` does NOT override text content for
-                        an accessible name, so 200 rows would all announce
-                        themselves as "Data". */}
-                    <button onClick={()=>exportMember(m)} aria-label={`Download ${m.name||"member"}'s data`}
-                      title={`Download everything held about ${m.name||"this member"}`}
-                      style={{...ghostBtn,display:"inline-flex",alignItems:"center",gap:"5px"}}>
-                      <Download size={11}/> Data
-                    </button>
-                    <button onClick={()=>startEdit(m)} aria-label={`Edit ${m.name||"member"}`} style={ghostBtn}>Edit</button>
-                  </div>
-                ))}
-                {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
               </div>
             )}
           </div>

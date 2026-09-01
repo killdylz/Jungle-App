@@ -209,6 +209,14 @@ const importCsv = async (page, lines) => {
   await expect(page.getByText(/^Imported \d+ check-in/)).toBeVisible();
 };
 
+// Read the at-risk panel itself. ⚠️ This was `body.innerText.slice(i, i + 400)`
+// from the "Who’s slipping away" heading, which was only ever a proxy for "the
+// at-risk panel" — it worked while the next 400 characters happened to be the
+// CSV panel's prose. The roster now renders directly below the at-risk card, so
+// that window picked up every member's name and both callers failed on their own
+// selector rather than on the rule they test.
+const atRiskText = (page) => page.getByTestId("at-risk-panel").innerText();
+
 test.describe("history becomes the thing the gym is paying for", () => {
   test("an imported lapse is flagged, with the numbers behind it", async ({ page }) => {
     const errors = watchConsole(page);
@@ -238,11 +246,7 @@ test.describe("history becomes the thing the gym is paying for", () => {
     // And the member who is still turning up is not on the list. The count above
     // is the control for this: "nobody is flagged" and "the panel is broken"
     // would otherwise look the same.
-    const panel = await page.evaluate(() => {
-      const t = document.body.innerText;
-      const i = t.indexOf("Who’s slipping away");
-      return i < 0 ? "" : t.slice(i, i + 400);
-    });
+    const panel = await atRiskText(page);
     expect(panel, "precondition: the at-risk panel rendered").toContain("Larry Tan");
     expect(panel, "a member who came 2 days ago is not slipping away").not.toContain("Rita Chua");
 
@@ -308,11 +312,7 @@ test.describe("history becomes the thing the gym is paying for", () => {
     expect((await stored(page, "jungle_members")).every(m => m.joinedAt === ""),
       "precondition: an imported member has no join date").toBe(true);
 
-    const panel = await page.evaluate(() => {
-      const t = document.body.innerText;
-      const i = t.indexOf("Who’s slipping away");
-      return i < 0 ? "" : t.slice(i, i + 400);
-    });
+    const panel = await atRiskText(page);
     expect(panel, "control: the at-risk panel is working in this very run").toContain("Larry Tan");
     expect(panel, "a member of unknown tenure must not be called a lapsing newcomer")
       .not.toContain("Nia Ong");
