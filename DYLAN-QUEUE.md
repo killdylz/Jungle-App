@@ -44,6 +44,7 @@ undo it. Nothing in Part A needs me.
 | A11 | The live-verification queue (7 checks) | ~2 h | none |
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
+| **A16** | **Decide the `health_screen` consent scope** — one CHECK constraint, and the health screen is already collecting the consent locally | **10 min to decide** | none until you write it |
 
 ---
 
@@ -728,3 +729,60 @@ No test asserts it is absent, because a test that did would be asserting a fact 
 project rather than about the code. `e2e/destructive.spec.js` asserts it is PRESENT, so removing the
 string means updating that assertion in the same commit — which is the reminder, if you are reading
 the test output.
+
+
+---
+
+## A16 · The `health_screen` consent scope  ·  added 2026-09-01 (session 34)
+
+**⚠️ Numbering note:** PR #14 adds an **A14** (run migration `0010`) and an **A15** (the auto-PR
+repository setting) to this file. This entry is numbered **A16** to sit after them rather than
+collide. If #14 has not merged when you read this, A14 and A15 will not be above — they are in that
+branch, not lost.
+
+### The decision
+
+`consent_records.scope` (migration `0007`) carries a CHECK constraint listing exactly five values:
+
+```
+'roster_attendance', 'biometric_live', 'biometric_store', 'coach_view', 'export'
+```
+
+The health screen collects **health answers** — a special category of data under the PDPA — and none
+of those five describes that. Adding a sixth, `health_screen`, is a one-line migration. **Whether to
+write it is yours**, on the same standing rule as every other schema change.
+
+### What session 34 did in the meantime, and why it is not a workaround
+
+Session 34's own prompt asked for `store.recordConsent()` to be called on save with a `health_screen`
+scope. **That was refused, for two reasons, and the second is the important one:**
+
+1. The scope is not in the constraint, so **every insert would have been rejected by Postgres.** A
+   constrained column rejecting a client value is this repo's recurring data-loss bug — three prior
+   occurrences, and the reason `RETENTION_RULES` exists as a single exported constant.
+
+2. A `consent_records` row **asserts that a person consented.** `CheckInPanel` already refuses to
+   write one for check-ins, in its own words: *"in a coach sweep, none was [shown]... writing one
+   anyway would fabricate a compliance record, which is worse than an empty ledger."* Fabricating
+   that record for **health** answers would be the worst version of that mistake, not an acceptable
+   one.
+
+So the consent is now **real and local**: `PARQ_CONSENT_NOTICE` is displayed on the health screen,
+there is a checkbox that starts unticked, and `store.appendParqRecord` **refuses to write health
+answers without it**. Each record carries `{ grantedAt, policyVersion, method: 'explicit_opt_in' }`.
+
+`explicit_opt_in` is already one of the four values 0007's `method` constraint allows. So the rows
+being written today are **shaped to be mirrored** the day the scope exists — the only missing piece
+is the scope itself.
+
+### If you decide yes
+
+The migration is one statement (drop and recreate the CHECK with the sixth value). Then
+`appendParqRecord` can mirror to `consent_records` beside the local write. **Do not** back-fill the
+records written before then: they carry an honest `grantedAt` from the day the client actually
+ticked, and inventing server rows for the ones that predate the field would be the fabrication this
+entry exists to refuse.
+
+⚠️ The PAR-Q ledger itself is still **local-only and unsynced** (`jungle_parq_records`), so mirroring
+consent alone would put a consent trail on a server for health answers that are not there. Sequence
+this **after** the 1:1 tables (B10), not before.

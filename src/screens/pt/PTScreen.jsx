@@ -32,7 +32,7 @@ import {
   ptClientRows, ptRosterSummary, describePtRoster, sessionsForClient,
   availableMembers, sessionMinutes, PT_CLIENT_STATUSES, PT_CLIENT_STATUS_LABEL,
 } from "../../lib/ptClients.js";
-import { describeLoadGate } from "../../lib/parq.js";
+import { describeLoadGate, parqExpiryShort } from "../../lib/parq.js";
 import { useWindowWidth, StatCard, Input, Select } from "../../ui/primitives.jsx";
 import { useToast } from "../../ui/toast.jsx";
 
@@ -226,7 +226,7 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
               <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 {rows.map(r => (
                   <button key={r.id} onClick={()=>setSelectedId(r.id === selectedId ? "" : r.id)}
-                    aria-label={`${r.name || "Client"} — ${r.parq.label}`}
+                    aria-label={`${r.name || "Client"} — ${r.parq.label}${parqExpiryShort(r.parq) ? `, ${parqExpiryShort(r.parq)}` : ""}`}
                     style={{textAlign:"left",width:"100%",padding:"11px 13px",borderRadius:"10px",cursor:"pointer",
                             border:`1px solid ${r.id===selectedId?"var(--accent)":"var(--border)"}`,
                             background:r.id===selectedId?"color-mix(in srgb, var(--accent) 10%, transparent)":"var(--bg)",
@@ -406,6 +406,11 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
 // text. The word carries `--text` so it is legible on every skin a gym can build.
 function ParqChip({ status }) {
   const bad = status.blocksLoad;
+  // The expiry warning rides in the chip's TEXT, not its colour — see
+  // `parqExpiryShort`. The dot stays green because the screen is genuinely still
+  // valid: this is a deadline, not a refusal, and colouring it like a block
+  // would teach a coach to read a working screen as a broken one.
+  const soon = parqExpiryShort(status);
   return (
     <span data-testid="pt-parq-chip"
       style={{display:"inline-flex",alignItems:"center",gap:"6px",padding:"4px 9px",borderRadius:"999px",
@@ -414,6 +419,7 @@ function ParqChip({ status }) {
       <span aria-hidden="true" style={{width:"7px",height:"7px",borderRadius:"50%",flexShrink:0,
                    background:bad ? "var(--danger)" : "var(--green)"}}/>
       {status.label}
+      {soon && <span style={{fontWeight:"600",color:"var(--muted)"}}>· {soon}</span>}
     </span>
   );
 }

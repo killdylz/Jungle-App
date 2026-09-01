@@ -21,6 +21,7 @@ import { ArrowLeft, ShieldAlert, ShieldCheck } from "lucide-react";
 import * as store from "../../lib/store.js";
 import {
   PARQ_QUESTIONS, PARQ_DISCLAIMER, PARQ_VALID_MONTHS,
+  PARQ_CONSENT_NOTICE, PARQ_POLICY_VERSION,
   newParqAnswers, answeredCount, parqStatus, latestParq,
 } from "../../lib/parq.js";
 import { ptClientRows } from "../../lib/ptClients.js";
@@ -47,6 +48,10 @@ export function ParqScreen({ onBack, onNavigate, memberId: initialMemberId = "" 
   const [clearanceAt, setClearanceAt] = useState("");
   const [clearanceNote, setClearanceNote] = useState("");
   const [err, setErr] = useState("");
+  // D5. Starts FALSE and is never pre-ticked — a consent box that arrives ticked
+  // records agreement nobody gave, which is the fabricated compliance record
+  // this whole change exists to avoid.
+  const [consented, setConsented] = useState(false);
 
   const rows = useMemo(
     () => ptClientRows(clients, members, parqs, [], { now: new Date() }),
@@ -75,9 +80,19 @@ export function ParqScreen({ onBack, onNavigate, memberId: initialMemberId = "" 
   const save = () => {
     if (!memberId) { setErr("Choose whose health screen this is."); return; }
     if (!complete) { setErr(`${PARQ_QUESTIONS.length - answered} question${PARQ_QUESTIONS.length - answered === 1 ? " is" : "s are"} still unanswered. A part-answered screen is not a screen.`); return; }
-    const list = store.appendParqRecord({ memberId, answers, screenedAt, screenedBy });
+    // Refused in words rather than by grieving out the button. A disabled Save
+    // with no explanation is the same dead end as a vanished form — the screen
+    // says what is missing, the way the other two refusals here do.
+    if (!consented) { setErr("The client has to agree to their health answers being kept before you can record them."); return; }
+    const list = store.appendParqRecord({
+      memberId, answers, screenedAt, screenedBy,
+      consent: { grantedAt: today(), policyVersion: PARQ_POLICY_VERSION },
+    });
     setParqs(list); setErr("");
     setAnswers(newParqAnswers());
+    // Back to unticked for the NEXT client. Consent is per person and per
+    // screening; carrying the tick over would silently consent the next one.
+    setConsented(false);
     toast("Health screen recorded");
   };
 
@@ -90,6 +105,11 @@ export function ParqScreen({ onBack, onNavigate, memberId: initialMemberId = "" 
       memberId, answers: onFile.answers, screenedAt: onFile.screenedAt,
       screenedBy: onFile.screenedBy, note: onFile.note,
       clearance: { grantedAt: clearanceAt, note: clearanceNote },
+      // An AMENDMENT to the row on file, not a fresh collection. The store
+      // inherits that row's consent rather than asking for a new tick — this
+      // appends a doctor's note against answers the client already gave, and the
+      // client is not in the room. See `appendParqRecord`.
+      amends: onFile.id,
     });
     setParqs(list); setErr(""); setClearanceAt(""); setClearanceNote("");
     toast("Doctor’s clearance recorded");
@@ -233,6 +253,29 @@ export function ParqScreen({ onBack, onNavigate, memberId: initialMemberId = "" 
                   <p style={note}>{draftStatus.reason}</p>
                 </div>
               )}
+
+              {/* ── D5 · the consent, immediately above the button that writes ─
+                  A real notice and a real tick, because this is the one surface
+                  in the product where both are possible: someone is sitting with
+                  this form open. `CheckInPanel` refuses to write a consent record
+                  for the opposite reason — nobody is shown anything in a coach
+                  sweep — and a fabricated consent for HEALTH answers would be the
+                  worst version of that mistake.
+
+                  A real <input type="checkbox"> and a real <label>, not a styled
+                  div: session 27 found the Brand Studio's three skin presets were
+                  `<div onClick>` and therefore invisible to keyboard users and to
+                  `keyboard.spec.js`, which sweeps elements with a ROLE. A consent
+                  control that a keyboard user cannot reach is a consent nobody
+                  can give. */}
+              <label htmlFor="parq-consent" data-testid="parq-consent"
+                style={{display:"flex",gap:"10px",alignItems:"flex-start",marginTop:"14px",padding:"12px",
+                        borderRadius:"10px",background:"var(--bg)",border:"1px solid var(--border)",cursor:"pointer"}}>
+                <input id="parq-consent" type="checkbox" checked={consented}
+                  onChange={e=>setConsented(e.target.checked)}
+                  style={{width:"18px",height:"18px",flexShrink:0,marginTop:"1px",cursor:"pointer",accentColor:"var(--accent)"}}/>
+                <span style={note}>{PARQ_CONSENT_NOTICE} <strong style={{color:"var(--text)"}}>They agree to this being kept.</strong></span>
+              </label>
 
               <div style={{display:"flex",gap:"10px",marginTop:"14px",flexWrap:"wrap"}}>
                 <button onClick={save} data-tap style={primary}>Save health screen</button>

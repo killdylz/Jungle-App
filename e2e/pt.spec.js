@@ -52,6 +52,10 @@ async function completeScreen(page, only = []) {
     const word = only.includes(short) ? "Yes" : "No";
     await page.getByRole("button", { name: `${word} — ${short}`, exact: true }).click();
   }
+  // D5: health answers are not written without the consent tick. Part of the
+  // helper because it is part of every real screening — the tests that assert
+  // the tick is REQUIRED drive it by hand instead.
+  await page.getByTestId("parq-consent").locator("input[type=checkbox]").check();
   await page.getByRole("button", { name: "Save health screen" }).click();
 }
 
@@ -261,6 +265,38 @@ test.describe("the health screen gates individualised load", () => {
 
     expectNoConsoleErrors(errors);
   });
+
+  // ─── D4 · the cliff has a warning in front of it now ──────────────────────
+  test("a screen about to expire warns without blocking", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    // Screened eleven and a half months ago: ~15 days of validity left, inside
+    // the 30-day warning window. Relative to today, so the fixture cannot rot.
+    await page.evaluate((screenedAt) => {
+      const clean = ["q1","q2","q3","q4","q5","q6","q7"].reduce((a, k) => { a[k] = false; return a; }, {});
+      localStorage.setItem("jungle_parq_records", JSON.stringify([
+        { id: "p0", memberId: "m0", screenedAt, answers: clean, clearance: null,
+          screenedBy: "Dylan", recordedAt: new Date().toISOString() },
+      ]));
+    }, day(-350));
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+
+    // The list chip carries it, so a coach sees it while scanning rather than
+    // only after opening the client.
+    await expect(page.getByTestId("pt-parq-chip").first()).toContainText("expires in");
+
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    // 🔴 The load-bearing half: still cleared, still programmable. A warning
+    // that blocked would just move the cliff thirty days earlier.
+    await expect(page.getByTestId("pt-parq-state")).toContainText("Cleared");
+    await expect(page.getByTestId("pt-plan-locked")).toHaveCount(0);
+    await expect(page.getByTestId("pt-parq-state")).toContainText("expires in");
+
+    expectNoConsoleErrors(errors);
+  });
 });
 
 test.describe("planned sessions", () => {
@@ -355,4 +391,74 @@ test("the 1:1 screen's session row survives a thumb at 390px", async ({ page }) 
 
   const scan = await tapScan(page);
   expect(scan.misses, reportTaps("1:1 Clients with a session at 390px", scan)).toEqual([]);
+});
+
+// ─── D5 · health answers are not collected without a consent trail ───────────
+//
+// The store refuses too (`ptStore.test.js`), because a gate that lives only in
+// JSX is one the next caller walks through. This drives the surface: the notice
+// is on screen, the tick is required, and — per the repo rule — the assertion is
+// on the STORED object, not only on what was rendered.
+test.describe("health-screen consent", () => {
+  test("refuses to record health answers until the client agrees", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "Health Screen");
+    await page.selectOption("#parq-client", { label: "Sarah Chen" });
+
+    // The notice is actually on the page. A consent record whose notice was
+    // never shown is the fabricated compliance record this change exists to
+    // avoid, so the words being present is part of the assertion.
+    await expect(page.getByTestId("parq-consent")).toContainText("These are health answers");
+
+    for (const short of ["Heart condition", "Chest pain when active", "Chest pain at rest",
+                         "Dizziness or blackouts", "Bone or joint problem",
+                         "Blood-pressure or heart medication", "Any other reason"]) {
+      await page.getByRole("button", { name: `No — ${short}`, exact: true }).click();
+    }
+    // Every question answered, consent NOT ticked.
+    const box = page.getByTestId("parq-consent").locator("input[type=checkbox]");
+    await expect(box).not.toBeChecked();
+    await page.getByRole("button", { name: "Save health screen" }).click();
+
+    await expect(page.getByRole("alert")).toContainText("agree");
+    // Nothing written. This is the assertion that matters — a screen that shows
+    // a refusal and writes the row anyway would pass a render-only test.
+    expect(await stored(page, "jungle_parq_records")).toBeNull();
+
+    // 🔴 THE CONTROL. Without this the test above passes on a form that is
+    // broken for some entirely different reason, which is how a "nothing was
+    // written" assertion goes green by accident.
+    await box.check();
+    await page.getByRole("button", { name: "Save health screen" }).click();
+    const records = await stored(page, "jungle_parq_records");
+    expect(records).toHaveLength(1);
+    expect(records[0].consent.grantedAt).toBe(day(0));
+    expect(records[0].consent.method).toBe("explicit_opt_in");
+    expect(records[0].consent.policyVersion).toBe("parq-v1");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the consent box is reachable and operable by keyboard", async ({ page }) => {
+    // Session 27 found the Brand Studio's three skin presets were `<div onClick>`
+    // — unreachable by keyboard, and invisible to `keyboard.spec.js` because a
+    // div has no role. A consent control a keyboard user cannot reach is a
+    // consent nobody can give, so this drives it with the keyboard only.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "Health Screen");
+    await page.selectOption("#parq-client", { label: "Sarah Chen" });
+
+    const box = page.getByTestId("parq-consent").locator("input[type=checkbox]");
+    await expect(box).toHaveCount(1);
+    await box.focus();
+    await expect(box).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(box).toBeChecked();
+
+    expectNoConsoleErrors(errors);
+  });
 });

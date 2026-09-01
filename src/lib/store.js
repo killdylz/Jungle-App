@@ -1290,10 +1290,58 @@ export function getParqRecords() { return readJSON(KEYS.parqRecords, []); }
 // `screenedAt` is a DATE — a health screen is dated by the day it was taken —
 // while `recordedAt` is the instant the row was written, which is what breaks a
 // same-day tie. Both, because they answer different questions.
-export function appendParqRecord({ memberId, answers, screenedAt, clearance = null, note = "", screenedBy = "" }) {
+export function appendParqRecord({ memberId, answers, screenedAt, clearance = null, note = "", screenedBy = "", consent = null, amends = "" }) {
   if (!memberId) return getParqRecords();
+  const ledger = getParqRecords();
+  // ── D5 · no consent, no record ──────────────────────────────────────────
+  // Health answers are a special category of data and this is the moment they
+  // are collected. The screen asks for the tick and refuses in words a coach can
+  // read; this refuses again, because a gate that lives only in JSX is one the
+  // next caller walks straight through — the same rule `assignPtSession` follows
+  // for the load gate itself.
+  //
+  // Refused by returning the ledger UNCHANGED, which is this function's existing
+  // shape for an invalid write (see `!memberId` above) rather than a new one.
+  //
+  // ⚠️ `grantedAt` is required for the reason an undated doctor's clearance is
+  // ignored two files away: an undated consent is a box someone ticked, and the
+  // date is the whole evidentiary value of the record.
+  //
+  // ── EXCEPT WHEN AMENDING, and this exception is the honest half ──────────
+  // `amends` names an existing row for this member, and the only caller is
+  // "the doctor's note arrived". That appends a clearance against answers the
+  // client ALREADY gave and already agreed to keep — it collects nothing new,
+  // and the client is typically not in the room. Demanding a fresh tick there
+  // would do one of two bad things: block a clearance on a signature nobody can
+  // give, or teach a coach to tick a consent box on someone else's behalf.
+  //
+  // So an amendment inherits the prior row's consent — including inheriting
+  // NOTHING, for a screen recorded before this field existed. An empty consent
+  // that is honestly empty beats one back-filled with today's date, which would
+  // assert an agreement that was never asked for.
+  const prior = amends ? ledger.find(r => r && r.id === amends && r.memberId === memberId) : null;
+  if (!prior && (!consent || !consent.grantedAt)) return ledger;
   const rec = {
     id: newId(), memberId,
+    // The row this one amends, kept so an append-only ledger can be read as the
+    // chain it actually is rather than as four unrelated rows about one person.
+    amends: prior ? prior.id : "",
+    // Copied field by field rather than spread, so a caller cannot widen the
+    // stored shape by passing extra keys — the same reason `updateMember` drops
+    // unknown ones.
+    consent: prior
+      ? (prior.consent || null)
+      : {
+          grantedAt: String(consent.grantedAt).slice(0, 10),
+          policyVersion: String(consent.policyVersion || ""),
+          // 'explicit_opt_in' is one of the four methods 0007's CHECK constraint
+          // already allows, so this row is ready for the day a `health_screen`
+          // scope exists and it can be mirrored to `consent_records`. It is NOT
+          // sent today: that scope is not in the constraint, and the insert
+          // would be rejected on every write. See DYLAN-QUEUE A16 and the block
+          // above PARQ_CONSENT_NOTICE.
+          method: "explicit_opt_in",
+        },
     screenedAt: String(screenedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
     // Copied, not referenced: the screen holds this object in state and would
     // otherwise keep mutating a row that is supposed to be a fixed record.
@@ -1304,7 +1352,7 @@ export function appendParqRecord({ memberId, answers, screenedAt, clearance = nu
     note: String(note || ""), screenedBy: String(screenedBy || ""),
     recordedAt: new Date().toISOString(),
   };
-  const list = [...getParqRecords(), rec];
+  const list = [...ledger, rec];
   writeJSON(KEYS.parqRecords, list);
   return list;
 }

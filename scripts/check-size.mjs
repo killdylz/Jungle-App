@@ -54,9 +54,23 @@ const KB = 1000;
 // credential-less when it landed: two full screens, the seven PAR-Q question
 // texts, and lib/parq.js + lib/ptClients.js, none of which the eager bundle
 // pays for.
+//
+// ── RAISED 34 → 36 (prod 36 → 38) in session 34, and here is what bought it ──
+// The chunk measured 34.00 KB against a 34 KB ceiling — passing by ONE BYTE,
+// which is a ceiling that has stopped being a guard and become a tripwire for
+// whoever edits a PT screen next. Two features in this commit put prose in it,
+// and prose is the point of both:
+//   • D4's expiry warning — `_expiryNote` and `parqExpiryShort` in lib/parq.js,
+//     the sentences that stop a health screen going valid → blocking overnight.
+//   • D5's consent — `PARQ_CONSENT_NOTICE`, the notice a client actually reads
+//     before their health answers are kept, plus the checkbox and its refusal.
+// Both are user-facing text on the lazy side of the seam, which is exactly where
+// this repo wants prose to live. The new headroom (+5.9%) matches the margin the
+// ceiling was originally set with (31.52 measured → 34 = +7.9%), and prod stays
+// two wider than credential-less for the reason stated above.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 36, "ClassSummary.js": 8, "summaryApi.js": 5 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 34, "ClassSummary.js": 8, "summaryApi.js": 3 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 38, "ClassSummary.js": 8, "summaryApi.js": 5 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 14, "PTScreens.js": 36, "ClassSummary.js": 8, "summaryApi.js": 3 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }

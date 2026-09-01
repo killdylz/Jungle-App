@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  PARQ_QUESTIONS, PARQ_VALID_MONTHS, newParqAnswers, answeredCount,
-  flaggedQuestions, parqExpiresOn, parqStatus, latestParq, describeLoadGate,
+  PARQ_QUESTIONS, PARQ_VALID_MONTHS, PARQ_EXPIRING_DAYS, PARQ_STATES, newParqAnswers,
+  answeredCount, flaggedQuestions, parqExpiresOn, parqStatus, latestParq,
+  describeLoadGate, parqExpiryShort,
 } from "./parq.js";
 
 // The gate that F2's "gap 1" describes. Every assertion below is about one
@@ -165,5 +166,140 @@ describe("latestParq", () => {
       { memberId: "m1", screenedAt: "2026-08-01", answers: clean(), recordedAt: "2026-08-01T18:00:00Z", note: "corrected" },
     ];
     expect(latestParq(sameDay, "m1").note).toBe("corrected");
+  });
+});
+
+// ─── D4 · the cliff now has a warning in front of it ─────────────────────────
+//
+// The defect: a health screen went valid → blocking OVERNIGHT. `expiresOn` fed
+// the hard cliff and nothing else, so the first thing that ever mentioned an
+// expiry was the refusal itself — discovered with the client already in the room.
+//
+// Every test here is about the window BEFORE that, and the load-bearing property
+// of all of them is that `blocksLoad` stays false throughout. A warning that
+// blocked would just move the cliff thirty days earlier.
+describe("parqStatus — the expiry warning window (D4)", () => {
+  it("warns inside the window while staying non-blocking", () => {
+    const s = parqStatus(rec({ screenedAt: "2025-09-15" }), { now: NOW });
+    expect(s.expiring).toBe(true);
+    expect(s.daysToExpiry).toBe(15);
+    // The whole point: still cleared, still allowed to be programmed for.
+    expect(s.state).toBe("cleared");
+    expect(s.blocksLoad).toBe(false);
+    // The tone changes so the chip and the panel can show it without inventing
+    // their own rule about what "soon" means.
+    expect(s.tone).toBe("warn");
+    // A deadline with the DATE on it — "expires soon" is a feeling.
+    expect(s.reason).toContain("2026-09-15");
+    expect(s.reason).toContain("15 days");
+  });
+
+  it("does not warn outside the window", () => {
+    // 2026-08-01 + 12 months = 2027-08-01, a year out.
+    const s = parqStatus(rec({ screenedAt: "2026-08-01" }), { now: NOW });
+    expect(s.expiring).toBe(false);
+    expect(s.tone).toBe("ok");
+    expect(s.daysToExpiry).toBe(335);
+    expect(s.reason).not.toContain("expires in");
+  });
+
+  it("treats the window edge as inside, and one day past it as outside", () => {
+    // The boundary in both directions, because an off-by-one here is a warning
+    // that arrives a day late — and a day is the whole margin on a 30-day notice.
+    const inside = parqStatus(rec({ screenedAt: "2025-09-30" }), { now: NOW });
+    expect(inside.daysToExpiry).toBe(PARQ_EXPIRING_DAYS);
+    expect(inside.expiring).toBe(true);
+
+    const outside = parqStatus(rec({ screenedAt: "2025-10-01" }), { now: NOW });
+    expect(outside.daysToExpiry).toBe(PARQ_EXPIRING_DAYS + 1);
+    expect(outside.expiring).toBe(false);
+  });
+
+  it("says TODAY on the last valid day, and still does not block", () => {
+    // The pre-existing "still valid on the expiry day itself" test pins the gate;
+    // this pins that the coach is TOLD, on the one day it matters most.
+    const s = parqStatus(rec({ screenedAt: "2025-08-31" }), { now: NOW });
+    expect(s.daysToExpiry).toBe(0);
+    expect(s.expiring).toBe(true);
+    expect(s.blocksLoad).toBe(false);
+    expect(s.reason).toContain("TODAY");
+    expect(parqExpiryShort(s)).toBe("expires today");
+  });
+
+  it("says TOMORROW the day before", () => {
+    const s = parqStatus(rec({ screenedAt: "2025-09-01" }), { now: NOW });
+    expect(s.daysToExpiry).toBe(1);
+    expect(s.reason).toContain("TOMORROW");
+    expect(parqExpiryShort(s)).toBe("expires tomorrow");
+  });
+
+  it("stops warning once the screen has actually expired", () => {
+    // A record cannot be both about to lapse and lapsed. `expiring` goes false
+    // and the negative day count survives, so a caller can say how long ago.
+    const s = parqStatus(rec({ screenedAt: "2025-08-30" }), { now: NOW });
+    expect(s.state).toBe("expired");
+    expect(s.expiring).toBe(false);
+    expect(s.daysToExpiry).toBe(-1);
+    expect(parqExpiryShort(s)).toBe("");
+  });
+
+  it("warns on a doctor-cleared screen too, without losing the clearance", () => {
+    // The regression this guards: the clearance expires WITH the screen, and
+    // `gp_cleared` is a different assurance from `cleared`. A warning that
+    // flattened the two would erase which one applied.
+    const answers = clean(); answers.q1 = true;
+    const s = parqStatus(
+      rec({ screenedAt: "2025-09-15", answers, clearance: { grantedAt: "2025-09-20", note: "Cardiology sign-off" } }),
+      { now: NOW });
+    expect(s.state).toBe("gp_cleared");
+    expect(s.blocksLoad).toBe(false);
+    expect(s.expiring).toBe(true);
+    expect(s.tone).toBe("warn");
+    expect(s.reason).toContain("Cardiology sign-off");
+    expect(s.reason).toContain("15 days");
+  });
+
+  it("does not warn under a live refusal", () => {
+    // `referred` already blocks. A second deadline under an active block is
+    // noise: the coach's next step is the doctor, not the calendar.
+    const answers = clean(); answers.q1 = true;
+    const s = parqStatus(rec({ screenedAt: "2025-09-15", answers }), { now: NOW });
+    expect(s.state).toBe("referred");
+    expect(s.blocksLoad).toBe(true);
+    expect(s.expiring).toBe(false);
+  });
+
+  it("defines the new fields on every return path, never undefined", () => {
+    // `status.expiring` is read by a gate-adjacent surface. `undefined` and
+    // `false` are the same in an `if` and different in a `=== false`, and this
+    // object has six exits.
+    const answers = clean(); answers.q1 = true;
+    const all = [
+      parqStatus(null, { now: NOW }),                                   // unscreened
+      parqStatus(rec({ answers: newParqAnswers() }), { now: NOW }),     // incomplete
+      parqStatus(rec(), { now: NOW }),                                  // cleared
+      parqStatus(rec({ answers }), { now: NOW }),                       // referred
+      parqStatus(rec({ answers, clearance: { grantedAt: "2026-08-10" } }), { now: NOW }), // gp_cleared
+      parqStatus(rec({ screenedAt: "2020-01-01" }), { now: NOW }),      // expired
+    ];
+    expect(all).toHaveLength(6);
+    for (const s of all) {
+      expect(typeof s.expiring).toBe("boolean");
+      expect(s).toHaveProperty("daysToExpiry");
+      expect(s.daysToExpiry === null || typeof s.daysToExpiry === "number").toBe(true);
+    }
+    // The positive control: this sweep is worthless if the fixtures collapsed
+    // onto one state, which is the empty-screen trap in a different costume.
+    expect(new Set(all.map(s => s.state)).size).toBe(6);
+  });
+
+  it("keeps 'expiring' OUT of PARQ_STATES, on purpose", () => {
+    // Session 34's prompt asked for "a sixth non-blocking expiring state". It is
+    // deliberately a modifier instead: `assignPtSession` writes
+    // `parqStateAtAssign: parq.state` as the audit trail, and a state that
+    // overwrote `cleared`/`gp_cleared` near an expiry would erase which
+    // assurance applied for exactly the sessions taken closest to the edge.
+    expect(PARQ_STATES).not.toContain("expiring");
+    expect(parqStatus(rec({ screenedAt: "2025-09-15" }), { now: NOW }).state).toBe("cleared");
   });
 });
