@@ -15,10 +15,18 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 28: **`lint:crash` 0 · 935 unit (33 files) · 466 e2e (45 spec files) ·
-7-chunk build · 0 over budget.** App.jsx is **3,857 lines**. StaffApp **354.16 / 360 kB — 5.8 kB
+Green as of session 34: **`lint:crash` 0 · 964 unit (33 files) · 469 e2e (45 spec files) ·
+7-chunk build · 0 over budget.** App.jsx is **3,857 lines**. StaffApp **355.19 / 360 kB — 4.8 kB
 left, and it is the binding constraint on anything new.** A new screen goes in a `lazy()` chunk
 **with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+⚠️ **`npm run test:e2e` needs a browser this sandbox may not have.** `@playwright/test` 1.61.1
+wants chromium build **1228**; the cloud image ships **1194**, so every spec fails at ~2 ms with
+`Executable doesn't exist` — which looks exactly like the stale-dev-server symptom below and is
+not. Do NOT run `playwright install` (the image forbids it). Run against the installed binary
+instead, with a throwaway config that is never committed:
+`export default { ...base, use: { ...base.use, launchOptions: { executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" } } }`.
+CI is unaffected — it installs its own.
+
 ⚠️ **Two screens that share libraries want ONE barrel module, lazy-imported twice** — two dynamic
 imports of two files emit a third chunk for the shared code, under a generated name no budget
 covers. `src/screens/pt/PTScreens.js` is the shape. And a definition `store.js` needs must live on
