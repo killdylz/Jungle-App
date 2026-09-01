@@ -118,8 +118,21 @@ of Vite silently picking another one that the preview pane then cannot reach.
 gh run list --repo killdylz/Jungle-App --workflow "Deploy to GitHub Pages" --limit 5
 ```
 
-- **Filter by workflow NAME.** `Deploy to GitHub Pages` is the run that gates this repo. The
-  `npm_and_yarn` Dependabot run has been **red since `76b800c`** and is not a build failure.
+- **Three workflows now.** `CI` runs the full gate on every push to a branch that is not `main`
+  and deploys nothing; `Open a PR for a claude branch` turns any pushed `claude/**` branch into a
+  pull request; `Deploy to GitHub Pages` is still the only thing that publishes, and still only on
+  push to `main`. ⚠️ `ci.yml` and `deploy.yml` hold the SAME step list on purpose — a green CI has
+  to mean a green deploy, so changing one means changing the other.
+- ⚠️ **`ci.yml` keys on `push`, not `pull_request`, and that is load-bearing.** A PR opened by
+  `GITHUB_TOKEN` (which `auto-pr.yml` does) never triggers `pull_request` workflows. Moving CI to
+  that trigger would silently un-check every auto-opened PR.
+- **Filter by workflow NAME.** The `npm_and_yarn` Dependabot run has been **red since `76b800c`**
+  and is not a build failure.
+- ⚠️ **A branch is not deployed until it is MERGED.** Opening a PR publishes nothing; only a push
+  to `main` does. Session 28 shipped a feature to a branch, opened a PR, and it sat there — and the
+  audit that followed found **47 commits across six branches** nobody knew were waiting. Before
+  starting anything, run `git branch -r` and compare against `origin/main`: this repo has had two
+  parallel PT implementations at once because that check was never made.
 - ⚠️ **`cancelled` is usually not a failure.** GitHub Pages uses a concurrency group that kills
   an in-flight deploy when a newer push arrives, so several pushes in a row leave one `success`
   and a trail of `cancelled`. **Judge the run whose SHA is `HEAD`.**
