@@ -1,0 +1,97 @@
+name: CI
+
+# ─── The gate, on every branch that is not main ──────────────────────────────
+#
+# 🔴 WHY THIS FILE EXISTS. Until it did, `deploy.yml` was the ONLY workflow, and
+# it triggers on `push: branches: [main]` and `workflow_dispatch`. There was no
+# `pull_request` trigger anywhere in the repo, so **no pull request had ever run
+# a single check** — the first 30 workflow runs in this repo's history are all
+# `main`/`push`. A PR gave you a diff to read and nothing else, and the gates
+# first ran as the deploy, after merge, when a red result is a failed deploy
+# rather than a blocked merge.
+#
+# That is also how 47 commits across six branches came to sit undeployed with
+# nothing reporting on them.
+#
+# ── WHY `push` AND NOT `pull_request` ────────────────────────────────────────
+# Two reasons, and the second is the load-bearing one:
+#
+#   1. Running BOTH duplicates every run — a PR's `refs/pull/N/merge` and the
+#      branch's `refs/heads/...` are different refs, so `concurrency` cannot
+#      collapse them. Twice the minutes for the same answer.
+#   2. A pull request opened by `GITHUB_TOKEN` — which is what `auto-pr.yml`
+#      beside this file does — **does not trigger `pull_request` workflows**.
+#      That is GitHub's deliberate loop-prevention, and it would have made every
+#      auto-opened PR checkless: exactly the hole this file closes, reopened by
+#      the automation meant to help.
+#
+# Keying on `push` sidesteps both. The run is attached to the head SHA, so it
+# shows on the PR as a check whoever opened it — and a branch is gated from its
+# first push, before a PR exists at all.
+#
+# `main` is excluded because `deploy.yml` runs the identical gate there before it
+# will publish anything. Two runs of a 13-minute e2e suite on the same commit is
+# a waste, not a belt and braces.
+
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+# A branch pushed three times in a minute needs one answer, about the last push.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # The steps below are deliberately IDENTICAL to deploy.yml's, in the same
+      # order, with the same env. A green run here has to mean a green deploy, or
+      # the check is decoration. If you change one file, change the other.
+      - run: npm run lint:crash
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      # Built WITH credentials, like the deploy, because the two build shapes are
+      # not comparable — see the header of scripts/check-size.mjs. A build without
+      # VITE_SUPABASE_* drops the whole @supabase client and StaffApp measures
+      # ~340 kB instead of ~580 kB.
+      #
+      # ⚠️ A pull request FROM A FORK gets no secrets, so this would produce a
+      # credential-less bundle and the `--prod` size check would fail loudly with
+      # "this is a CREDENTIAL-LESS build". That is the right failure — it says
+      # what happened — and there are no forks of this repo today. If that
+      # changes, the fix is a conditional on `secrets.VITE_SUPABASE_URL`, not
+      # dropping `--prod`.
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_SLIDES_CLIENT_ID: 752012094269-2egmufghtkmoiem8r923edublm4i4n3o.apps.googleusercontent.com
+      - run: npm run size -- --prod
+
+      # NOTHING IS UPLOADED AND NOTHING IS DEPLOYED. This workflow's whole job is
+      # to answer "would this merge be safe" before the merge, not to publish. The
+      # Pages artifact is built and discarded on purpose — a CI job that could
+      # deploy is a CI job that will, one day, deploy a branch.

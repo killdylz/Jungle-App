@@ -43,6 +43,8 @@ undo it. Nothing in Part A needs me.
 | A10 | Brief a lawyer | 1 email | none |
 | A11 | The live-verification queue (7 checks) | ~2 h | none |
 | **A12** | **Turn on member links (N4)** — 1 secret, 2 functions, 1 migration | **25 min** | low, fully revertible |
+| 🔴 **A14** | **Run migration 0010 — the staff read boundary.** A `member`-role account currently reads the whole gym. | **10 min** | low, idempotent |
+| **A15** | **Let Actions open pull requests** — one checkbox, so branches stop going unnoticed | **30 sec** | none, revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
 
 ---
@@ -591,6 +593,62 @@ sign-in. No Jungle branding anywhere.**
 
 ---
 ---
+
+## 🔴 A14 — run migration 0010. Do this before anyone gets a client login.
+
+**What is wrong.** Every read policy written since `0001` is `gym_id in (select user_gym_ids())`,
+and that function filters on `status = 'active'` but **not on role**. `membership_role` has
+included `'member'` since the day it was written. So the obvious way to give a PT client an
+account — a `memberships` row with role `'member'` — hands that client `SELECT` on the entire
+roster with email addresses, every attendance row, every consent record, and the coach persona
+corpus your first gym's agreement says belongs to the coach.
+
+**It is not exploitable today** only because no member-role user has ever existed. That is a fact
+about your data, not about your policies, and it stops being true the moment a client portal ships.
+
+**What to do** (10 minutes, idempotent, safe to re-run):
+
+1. Merge the PR titled *0010 — a member-role account could read the entire gym*. That only puts
+   the file in the repo; **it changes nothing on the server.**
+2. Supabase dashboard → **SQL Editor** → New query.
+3. Paste the whole of `supabase/migrations/0010_staff_read_boundary.sql` → **Run**.
+4. Expect `Success. No rows returned`.
+5. Verify: new query → paste `supabase/tests/0010_rls_selftest.sql` → **Run**. It asserts the
+   boundary rather than assuming it, and tells you which policy is wrong if one is.
+
+**If it goes wrong:** the migration only replaces policies, it touches no data. `0010` is written
+to be re-runnable, so a partial run is fixed by running it again.
+
+
+## A15 — let Actions open pull requests. One checkbox.
+
+`auto-pr.yml` turns any pushed `claude/**` branch into a pull request, so work
+cannot sit invisible the way 47 commits across six branches did. It is written,
+merged and running — and GitHub refuses it:
+
+> `pull request create failed: GraphQL: GitHub Actions is not permitted to create
+> or approve pull requests (createPullRequest)`
+
+That is a repository setting, off by default, not a bug in the workflow.
+
+**What to do** (30 seconds):
+
+1. Repo → **Settings** → **Actions** → **General**
+2. Scroll to **Workflow permissions**
+3. Tick **☑ Allow GitHub Actions to create and approve pull requests**
+4. **Save**
+
+**How to check it worked:** push anything to a `claude/**` branch, or re-run the
+latest *Open a PR for a claude branch* job. A PR appears within a minute.
+
+**Until you do**, the workflow does not fail — it posts a yellow warning on the
+run naming the branch and its commit count, because a workflow that is always red
+is one everyone learns to ignore, and the next real failure would hide behind it.
+The cost of leaving it off is that you go on opening those PRs by hand.
+
+⚠️ The setting also permits Actions to *approve* PRs. Nothing in this repo does,
+and nothing should — approval is a human saying they read it.
+
 
 # PART B — decisions
 
