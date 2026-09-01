@@ -10,7 +10,7 @@ function ConnectSpotifyPrompt({ onConnect, onBack }) {
       <div style={{fontFamily:"var(--display)",fontSize:"20px",fontWeight:"800",color:"var(--text)"}}>Connect Spotify</div>
       <div style={{fontSize:"13px",color:"var(--muted)",maxWidth:"420px",lineHeight:1.5}}>Music is optional. Connect a Spotify account to power playlists and Auto-DJ. You can use the rest of Jungle without it.</div>
       <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
-        {onConnect&&<button onClick={onConnect} style={{padding:"10px 20px",background:"#1DB954",color:"#fff",border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"800",fontSize:"13px"}}>Connect Spotify</button>}
+        {onConnect&&<button onClick={onConnect} style={{padding:"10px 20px",background:"#1DB954",color:"#fff"  /* Spotify's own green and its own white wordmark ink — see PlaylistImportModal */,border:"none",borderRadius:"9px",cursor:"pointer",fontWeight:"800",fontSize:"13px"}}>Connect Spotify</button>}
         {onBack&&<button onClick={onBack} style={{padding:"10px 20px",background:"transparent",color:"var(--text)",border:"1px solid var(--border)",borderRadius:"9px",cursor:"pointer",fontWeight:"700",fontSize:"13px"}}>Back</button>}
       </div>
     </div>

@@ -84,3 +84,80 @@ export function resolveSkinTokens(activeSkinId, customSkinTokens) {
   const base = baseSkin(activeSkinId).tokens;
   return customSkinTokens ? { ...base, ...customSkinTokens } : { ...base };
 }
+
+// ─── Is this palette the one the broken generator handed out? ────────────────
+//
+// Session 28 fixed `runAnalysis`: the generator read `palette` from a stale
+// closure, got `null`, took the `|| ["#7BE3A4"]` fallback and derived every
+// gym's identity from Canopy's mint regardless of the logo. **The fix is not
+// retroactive.** A gym that pressed "Apply to all surfaces" before it has those
+// tokens in `jungle_custom_skin`, and stored tokens are the source of truth —
+// the app will keep painting them forever, and the Brand Studio will keep
+// showing them as if the gym had chosen them.
+//
+// 🔴 THE DETECTOR IS ON THE TOKENS, NOT THE SKIN ID. `applyGenerated` sets
+// `activeSkinId` to `"canopy"` DELIBERATELY and layers the generated tokens over
+// it (this module's header explains why), so every generated identity — good or
+// bad — sits under the id `"canopy"`. Keying on the id identifies the mechanism,
+// not the fault, and would flag every correctly-generated gym.
+//
+// ⚠️ AND NOT ON THE ACCENT EITHER, which is the obvious heuristic and is WRONG
+// in both directions:
+//
+//   · It MISSES a third of the affected gyms. The fallback produced three
+//     themes and the coach picked one of them. Signature and Charge both land on
+//     `#7BE3A4`, but **Steel's accent is `#aeccba`** — a desaturated derivation
+//     that looks nothing like Canopy's mint. An accent test never sees them.
+//   · It over-fires on anyone who genuinely likes mint.
+//
+// So the test is the WHOLE token set, byte for byte, against what that path
+// deterministically produced. Eight values have to match, and the discriminator
+// that makes this safe is the derived background: the fallback generates
+// `#0b130e`, where Canopy's own preset background is `#0A0F0C`. A studio that
+// hand-picked mint is sitting on Canopy's surfaces, not on these, so it does not
+// match and is never told its brand is a bug.
+//
+// Exact-match also means a gym that took the bad palette and then NUDGED one
+// token is not offered anything. That is deliberate: they have since made a
+// decision about their palette, and re-reading the logo would discard it.
+//
+// FROZEN, not re-derived from `generateThemes` at call time, for two reasons.
+// These describe what gyms ALREADY HAVE STORED — a fact about history that a
+// future change to the generator must not silently rewrite. And the generator
+// lives in the owner-only half of `colors.js`; calling it from this module,
+// which is eager, would pin it into the entry chunk. `skins.test.js` asserts
+// these still equal the fallback path's real output, so the provenance is
+// checked rather than asserted in a comment.
+//
+// The luma argument does not appear here because it cannot vary: the same stale
+// closure held `luma` at its `useState(0.2)` initial, and every value below the
+// 0.5 light/dark threshold produces this identical dark output.
+export const FALLBACK_GENERATED_TOKEN_SETS = Object.freeze([
+  // "Signature" and "Charge" — identical tokens, because `generateThemes` takes
+  // its second accent as `pal[1] || pal[0]` and the fallback palette is one
+  // colour long. They differ only in fonts and voice, which are not stored.
+  Object.freeze({ bg:"#0b130e", card:"#121c16", navy:"#18251d", border:"rgba(255,255,255,.07)",
+                  accent:"#7BE3A4", green:"#daf4e4", text:"#e9ecea", muted:"#949e98" }),
+  // "Steel" — the one an accent-based detector cannot see.
+  Object.freeze({ bg:"#0d110f", card:"#141a16", navy:"#1b221e", border:"rgba(255,255,255,.07)",
+                  accent:"#aeccba", green:"#f1f4f2", text:"#e9ecea", muted:"#949e98" }),
+]);
+
+const TOKEN_KEYS = ["bg", "card", "navy", "border", "accent", "green", "text", "muted"];
+const norm = (v) => String(v == null ? "" : v).trim().toLowerCase();
+
+/**
+ * Does this stored custom palette match one the broken generator produced?
+ *
+ * Case- and whitespace-insensitive because these values round-trip through JSON
+ * and a server column, and `#0B130E` is the same colour as `#0b130e`. A palette
+ * missing any of the eight keys cannot be a generated one — the generator always
+ * writes all eight — so a partial object is not a match rather than a match on
+ * the keys that happen to be present.
+ */
+export function isFallbackGeneratedSkin(tokens) {
+  if (!tokens || typeof tokens !== "object") return false;
+  if (!TOKEN_KEYS.every((k) => tokens[k] != null)) return false;
+  return FALLBACK_GENERATED_TOKEN_SETS.some((set) =>
+    TOKEN_KEYS.every((k) => norm(tokens[k]) === norm(set[k])));
+}

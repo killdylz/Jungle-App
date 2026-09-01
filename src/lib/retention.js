@@ -86,7 +86,10 @@ const msOf = iso => { const t = Date.parse(iso); return Number.isNaN(t) ? null :
 // Round, not floor: a DST transition inside the span leaves it 23 or 25 hours
 // short of a whole multiple, and a floor would quietly drop a day.
 const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const daysBetween = (a, b) => Math.round((startOfDay(a) - startOfDay(b)) / DAY_MS);
+// Exported since session 30: `lib/coachRoster.js` asks the same question about a
+// coach's stated availability ("how long ago did they say this?") and a second
+// definition of "days ago" is exactly the drift the comment above is about.
+export const daysBetween = (a, b) => Math.round((startOfDay(a) - startOfDay(b)) / DAY_MS);
 
 /**
  * Per-member attendance facts. Pure; no assumptions about ordering.

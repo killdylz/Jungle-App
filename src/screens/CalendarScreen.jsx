@@ -21,12 +21,18 @@ import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
          startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
+import { applyCovers } from "../lib/coverRequests.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useToast } from "../ui/toast.jsx";
 import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
 import { resolveClassType } from "../lib/libraryStore.js";
+import { hueInk } from "../lib/colors.js";
+// Not lazy: this screen is already in the StaffApp chunk and a `lazy()` here
+// would add a chunk that needs its own line in check-size.mjs to have a
+// ceiling at all. It is a panel on this screen, not a destination.
+import { CoachCoverPanel } from "./CoachCoverPanel.jsx";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
@@ -246,6 +252,25 @@ export function CalendarScreen({onBack, onStartClass}) {
     setShowAddClass(true);
   };
 
+  // Reassign one rule's coach. The class keeps carrying a NAME — there is no
+  // `coachId` on a rule and deliberately so (see coachRoster.js and migration
+  // 0010) — so an approved cover writes the new coach's name exactly as a coach
+  // typing it would, and nothing about the sync path changes.
+  // 🔴 `assignCoach` IS GONE (S33), AND ITS ABSENCE IS THE FEATURE. Approving a
+  // cover used to call this, which rewrote the RULE's coach field — permanent,
+  // because a rule has no dates, so covering one ill Monday moved the class
+  // every Monday until a human edited it back. A cover is now a dated row that
+  // `applyCovers` overlays onto the derived occurrences, so it lasts exactly as
+  // long as the day it names and the schedule is never written to at all.
+  //
+  // The panel bumps this instead, and the covers are re-read. A counter rather
+  // than lifting the whole cover state up: the panel owns that state and this
+  // screen only needs to know it changed.
+  const [coverTick, setCoverTick] = React.useState(0);
+  const covers = React.useMemo(
+    () => ({ requests: store.getCoverRequests(), roster: store.getCoaches() }),
+    [coverTick]);
+
   const addClass = () => {
     if (!addForm.name.trim()) return;
     if (editingId) {
@@ -321,7 +346,12 @@ export function CalendarScreen({onBack, onStartClass}) {
   // must see the normalised type. Driving the UI and reading the stored row back
   // is what caught this: the grid above was already showing the healed value
   // while the published occurrence still carried `"HIIT"`.
-  const weekOccurrences = occurrencesForWeek(rules, startOfWeek, { days: DAYS });
+  // ⚠️ COVERS ARE APPLIED BEFORE ANYTHING READS THIS, including `publishWeek`.
+  // A published `class_instances` row carries `coach_name`, so a week published
+  // after a cover was agreed has to name the coach who is actually teaching —
+  // otherwise attendance and every analysis over it credit the wrong person.
+  const weekOccurrences = applyCovers(
+    occurrencesForWeek(rules, startOfWeek, { days: DAYS }), covers.requests, covers.roster);
   const pending = diffOccurrences(weekOccurrences, instances);
   const publishWeek = () => {
     const r = store.publishOccurrences(weekOccurrences);
@@ -348,6 +378,9 @@ export function CalendarScreen({onBack, onStartClass}) {
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
   ] : [];
 
+  // MOCK DATA, gated off (FLAGS.mockAnalytics is false and the invented KPIs are
+  // verified absent from the deployed bundle). The hexes are part of the fixture,
+  // not part of the theme — they never reach a gym.
   const trainers = FLAGS.mockAnalytics ? [
     {name:"Mara K.",  classes:14, cap:16, color:"#F59E0B"},
     {name:"Dev R.",   classes:11, cap:14, color:"#22D3A6"},
@@ -524,7 +557,18 @@ export function CalendarScreen({onBack, onStartClass}) {
                         </button>
                       )}
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"28px"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {/* 🔴 THE OCCURRENCE'S COACH, NOT THE RULE'S. They are the
+                          same name on every ordinary day; on a day somebody is
+                          covering, the occurrence carries who is actually
+                          teaching and the rule still carries whose class it is.
+                          Showing the rule's name here would make an agreed cover
+                          invisible on the one screen the gym looks at most. */}
+                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[occ?.coachName || cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {occ?.coveringFor && (
+                        <div style={{fontSize:"10px",color:"var(--text)",marginTop:"2px",fontWeight:"700"}}>
+                          covering for {occ.coveringFor}
+                        </div>
+                      )}
                       {/* The fill bar and its "%" are gone. Nothing in the
                           product ever SETS `fill` — no capacity field, no
                           booking integration — so every cell on every gym's
@@ -600,6 +644,13 @@ export function CalendarScreen({onBack, onStartClass}) {
         ))}
       </div>
 
+      {/* S30 §2.1–§2.3 · the roster, availability and cover. It sits under the
+          grid rather than in a nav entry of its own: the names it is about are
+          typed into the dialog on THIS screen, and the product already has two
+          other things called "Coaches". See CoachCoverPanel.jsx's header. */}
+      <CoachCoverPanel userClasses={userClasses} isMobile={isMobile}
+                       onCoversChanged={() => setCoverTick(n => n + 1)} />
+
       {/* Bottom: AI tips + Trainer load */}
       {/* ─── UI-POLISH §3.5 · two panels that could never fill ────────────────
           `aiTips` and `trainers` are both `FLAGS.mockAnalytics ? [...] : []` and
@@ -653,10 +704,10 @@ export function CalendarScreen({onBack, onStartClass}) {
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                   <span style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{t.name}</span>
-                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?hueInk("var(--warn)"):"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
                 </div>
                 <div style={{height:"7px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
-                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
+                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"var(--warn)":t.color  /* a FILL: the meter bar, not ink */,borderRadius:"4px",transition:"width 0.4s"}}/>
                 </div>
                 <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
               </div>
@@ -666,7 +717,7 @@ export function CalendarScreen({onBack, onStartClass}) {
             )}
           </div>
           {trainers.some(t=>t.classes/t.cap>0.85) && (
-            <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
+            <div style={{marginTop:"14px",padding:"10px 12px",background:"color-mix(in srgb, var(--warn) 8%, transparent)",border:"1px solid var(--warn-border)",borderRadius:"8px",fontSize:"11px",color:hueInk("var(--warn)"),lineHeight:"1.5"}}>
               ⚠ Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
             </div>
           )}

@@ -59,6 +59,25 @@ const COLUMNS = {
   className: ["class", "class name", "session", "session name", "activity", "course"],
   classType: ["type", "class type", "format", "category"],
   coach:     ["coach", "instructor", "trainer", "teacher", "staff"],
+  // S31 §2.2. `externalRef` was the one field in this product with a live reader
+  // and no writer: the members CSV exports a "Reference" column, and NOTHING
+  // could ever fill it — `addMember` and `updateMember` both accept the key, no
+  // control passes it, and `applyAttendanceImport` hard-coded "". So every gym's
+  // export carried a blank column promising a reference to their previous system.
+  //
+  // This is the one path where that reference actually exists: it is a column in
+  // the file the old system exported.
+  //
+  // ⚠️ DELIBERATELY NOT ALIASED TO A BARE "id". A spreadsheet's "ID" column is as
+  // likely to be a row number as a client number, and a row number written into
+  // `external_ref` is a confident wrong answer — worse than the blank it replaces.
+  // Only headers that SAY which id they are.
+  //
+  // ⚠️ LAST IN THIS OBJECT ON PURPOSE. `mapHeaders` gives earlier columns first
+  // refusal on every header, so appending can only claim headers that previously
+  // matched nothing. Inserting it higher could take a header off `member`.
+  externalRef: ["client id", "member id", "customer id", "external id",
+                "client number", "member number", "client ref", "member ref"],
 };
 const norm = s => String(s || "").trim().toLowerCase().replace(/[_\s-]+/g, " ");
 
@@ -206,7 +225,8 @@ export function analyzeAttendanceCsv(text, members = [], opts = {}) {
       // A name not on the roster becomes a NEW member — created explicitly and
       // counted in the preview, never quietly attached to a similar existing one.
       memberKey = `new:${norm(email) || norm(name)}`;
-      if (!newMembers.has(memberKey)) newMembers.set(memberKey, { name: name || email, email: email || "" });
+      if (!newMembers.has(memberKey)) newMembers.set(memberKey,
+        { name: name || email, email: email || "", externalRef: cell(map.externalRef) });
     }
 
     const className = cell(map.className) || "Imported class";

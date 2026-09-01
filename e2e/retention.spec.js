@@ -13,8 +13,11 @@ const ANALYTICS = ALL_SCREENS.find(s => s.key === "analytics");
 //   1. the nav entry is REACHABLE. It was not — `isViewEnabled("analytics")`
 //      returned false because flags.js mapped `analytics` to `mockAnalytics`, so
 //      all three nav arrays filtered it out. The route was live and unreachable.
-//   2. the MOCK stays dead. `FLAGS.mockAnalytics` is still false, and none of
-//      AnalyticsScreen's invented figures may appear on any screen.
+//   2. the MOCK stays dead. `AnalyticsScreen.jsx` was DELETED in session 29 once
+//      this screen had replaced it, so the test below has changed job: it was a
+//      guard against the flag being flipped, and it is now a guard against the
+//      invented figures being reintroduced anywhere. Kept for that reason —
+//      deleting the source makes the assertion cheap, not pointless.
 
 const NAMES = ["Larry Tan","Gina Lim","Rita Chua","Wei Ng","Ana Rodrigues","Marcus Lee","Priya Nair",
   "Jun Hao","Siti Rahman","Ben Koh","Chloe Wong","Dinesh Kumar","Emma Teo","Farid Hassan","Grace Lim",
@@ -197,10 +200,12 @@ test.describe("studio analytics", () => {
     await expect(firstRow).toContainText("—");
   });
 
-  test("the fabricated analytics screen stays dead", async ({ page }) => {
-    // FLAGS.mockAnalytics is still false. Flipping it would ship "1,284 active
-    // members" and "£412 revenue per class" to a paying gym — this asserts the
-    // route did not accidentally become the mock.
+  test("the fabricated analytics screen stays deleted", async ({ page }) => {
+    // `AnalyticsScreen.jsx` is gone as of session 29 — this used to assert that
+    // `FLAGS.mockAnalytics` had not been flipped, and now asserts the figures
+    // themselves have not come back. The strings are the point, not the file:
+    // "1,284 active members" and "£412 revenue per class" on a paying gym's
+    // screen is the outcome being prevented, whichever component would draw it.
     const errors = watchConsole(page);
     await seed(page, build());
     await nav(page, "Analytics");
@@ -225,5 +230,141 @@ test.describe("studio analytics", () => {
     const overflow = await page.evaluate(() =>
       document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, "the page must not scroll sideways on a phone").toBeLessThanOrEqual(0);
+  });
+
+  // ─── §2.6 · which class types keep members ──────────────────────────────────
+  //
+  // The join no competitor holds: `class_instances.classType` × `attendance`.
+  // These drive the SCREEN; `classTypeRetention.test.js` drives the arithmetic,
+  // including every way the number can lie.
+
+  const DAY = 86_400_000;
+  const ago = (d) => new Date(Date.now() - d * DAY).toISOString();
+
+  /**
+   * A gym whose timetable really does separate. `spec` is
+   * `{ type: [triers, returners] }`, every trier's first visit 200 days back so
+   * everyone has had the same four weeks.
+   *
+   * ⚠️ Rows are joined through class_instances exactly as the product writes
+   * them, rather than by putting a type on the attendance row — the attendance
+   * table has no type column, and a fixture that invented one would test a
+   * schema this product does not have.
+   */
+  function timetable(spec, extra = {}) {
+    const members = [], attendance = [], classInstances = [];
+    let n = 0;
+    for (const [type, [triers, returners]] of Object.entries(spec)) {
+      for (let i = 0; i < triers; i++) {
+        const id = `${type}-m${i}`;
+        members.push({ id, name: NAMES[n % NAMES.length], email: "", status: "active", joinedAt: "", externalRef: "" });
+        n++;
+        const first = `${type}-ci-a-${i}`;
+        classInstances.push({ id: first, classType: type, startsAt: ago(200), name: type, durationMin: 45 });
+        attendance.push({ id: `${type}-at-a-${i}`, classInstanceId: first, memberId: id, source: "import", checkedInAt: ago(200) });
+        if (i < returners) {
+          const back = `${type}-ci-b-${i}`;
+          classInstances.push({ id: back, classType: type, startsAt: ago(193), name: type, durationMin: 45 });
+          attendance.push({ id: `${type}-at-b-${i}`, classInstanceId: back, memberId: id, source: "import", checkedInAt: ago(193) });
+        }
+      }
+    }
+    // Rows the importer really produces: a "Type" column it could not match, so
+    // the instance carries no class type at all.
+    for (let i = 0; i < (extra.orphans || 0); i++) {
+      classInstances.push({ id: `orphan-ci-${i}`, classType: "", startsAt: ago(150), name: "Open Gym", durationMin: 45 });
+      attendance.push({ id: `orphan-at-${i}`, classInstanceId: `orphan-ci-${i}`, memberId: `${Object.keys(spec)[0]}-m0`, source: "import", checkedInAt: ago(150) });
+    }
+    return { members, attendance, classInstances };
+  }
+
+  async function seedTimetable(page, fixture) {
+    await page.goto("./");
+    await page.evaluate((f) => {
+      localStorage.clear();
+      sessionStorage.setItem("jungle_pin_ok", "1");
+      localStorage.setItem("jungle_members", JSON.stringify(f.members));
+      localStorage.setItem("jungle_attendance", JSON.stringify(f.attendance));
+      localStorage.setItem("jungle_class_instances", JSON.stringify(f.classInstances));
+      localStorage.setItem("jungle_gym_branding", JSON.stringify({ gymName: "The Garage" }));
+    }, fixture);
+    await page.reload();
+  }
+
+  test("a gym sees which class types members come back to, with the population behind each", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedTimetable(page, timetable({ hiit: [12, 10], strength: [12, 3] }));
+    await nav(page, "Analytics");
+
+    const panel = page.getByTestId("class-type-retention");
+    await expect(panel).toBeVisible();
+    // The figures, and the POPULATION behind each — a percentage with no
+    // denominator is the confident wrong number this product refuses.
+    await expect(panel).toContainText("83%");
+    await expect(panel).toContainText("10/12");
+    await expect(panel).toContainText("25%");
+    await expect(panel).toContainText("3/12");
+
+    // 🔴 THE CONTROL: the fixture really produces a RANKING, and the better type
+    // is first. Without this, "the panel shows percentages" passes on a screen
+    // that lists them in insertion order or shows one type twice.
+    const rows = await panel.locator("div[title]").evaluateAll(els => els.map(e => e.getAttribute("title")));
+    expect(rows.length, "no ranked rows rendered — this test measures nothing").toBeGreaterThan(1);
+    expect(rows[0]).toContain("10 of 12");
+    expect(rows[1]).toContain("3 of 12");
+
+    // The studio's own baseline, pooled over members rather than over types.
+    await expect(panel).toContainText("studio average 54%");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a class type too thin to rank is NAMED as excluded, never silently dropped", async ({ page }) => {
+    // An owner who cannot see that Barre was left out reads the list as the whole
+    // timetable and concludes Barre has no problem.
+    await seedTimetable(page, timetable({ hiit: [12, 9], barre: [3, 0] }));
+    await nav(page, "Analytics");
+
+    const panel = page.getByTestId("class-type-retention");
+    // "HIIT", not "hiit": the catalogue LABEL is what a human reads and the key
+    // is storage — the rule `rawValues.spec.js` exists to enforce. `barre` below
+    // renders as itself because the catalogue has no such key, and
+    // `resolveClassType` deliberately keeps an unrecognised value rather than
+    // mapping it to a near neighbour and inventing programming.
+    await expect(panel).toContainText("HIIT");
+    const excluded = page.getByTestId("class-type-excluded");
+    await expect(excluded).toBeVisible();
+    await expect(excluded).toContainText("barre (3)");
+    // The threshold is stated, so "not ranked" is checkable rather than a shrug.
+    await expect(excluded).toContainText("8 members");
+  });
+
+  test("check-ins that cannot be traced to a class type are counted on the screen", async ({ page }) => {
+    // A ranking computed over 60% of the data and presented as the whole
+    // timetable is precisely what this sentence exists to prevent.
+    await seedTimetable(page, timetable({ hiit: [12, 9] }, { orphans: 7 }));
+    await nav(page, "Analytics");
+    await expect(page.getByTestId("class-type-retention"))
+      .toContainText("7 check-ins could not be traced to a class type");
+  });
+
+  test("a gym with no history is told what this panel is waiting for, and shown no ranking", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Analytics");
+    await expect(page.getByTestId("class-type-not-ready")).toBeVisible();
+    // ⚠️ Deliberately NOT the cohort panel's sentence: both render here, and one
+    // owner should not be told the same fact twice in two voices. A strict-mode
+    // violation is what caught the duplicate.
+    await expect(page.getByTestId("class-type-not-ready")).toContainText("Once a few weeks of classes");
+    await expect(page.getByTestId("class-type-retention").locator("div[title]")).toHaveCount(0);
+  });
+
+  test("the class-type panel holds up on a phone", async ({ page }) => {
+    // ⚠️ Viewport BEFORE load — a resize without a reload shows a stale render.
+    await page.setViewportSize({ width: 390, height: 780 });
+    await seedTimetable(page, timetable({ hiit: [12, 10], strength: [12, 3] }));
+    await navAnyWidth(page, ANALYTICS);
+    await expect(page.getByTestId("class-type-retention")).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, "the ranking must not push the page sideways on a phone").toBeLessThanOrEqual(1);
   });
 });

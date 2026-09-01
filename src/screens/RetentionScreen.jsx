@@ -3,11 +3,12 @@
 // Replaces `MockDisabledScreen` on the `analytics` route. NOT a new surface: the
 // route, the nav entries and the `analytics:view` capability all predate this.
 //
-// ⚠️ `FLAGS.mockAnalytics` stays FALSE and `AnalyticsScreen.jsx` stays dead. That
-// screen's KPIs are invented — "1,284 active members", "£412 revenue per class",
-// four fabricated churn-risk names — and flipping the flag would ship 24 kB of
-// fiction to a paying customer. The flag's own comment keeps it as the layout
-// target for this build, which is what it has been used as.
+// ⚠️ `AnalyticsScreen.jsx` WAS the layout target for this file and is gone as of
+// session 29. Its KPIs were invented — "1,284 active members", "£412 revenue per
+// class", four fabricated churn-risk names — and it sat one flag away from a
+// paying customer's screen for the sole reason that this build had not landed
+// yet. It had. `FLAGS.mockAnalytics` survives it, gating CalendarScreen's mock
+// panels; see flags.js.
 //
 // LAZY, and it has to be: `npm run size` had 12.65 kB of StaffApp headroom when
 // this was written. Everything numeric lives in `lib/cohorts.js` so this file is
@@ -23,8 +24,11 @@
 
 import { ArrowLeft } from "lucide-react";
 import * as store from "../lib/store.js";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { cohortModel, describeCohorts, monthLabel, MIN_POINT_N } from "../lib/cohorts.js";
+import { classTypeRetention, describeClassTypes } from "../lib/classTypeRetention.js";
+import { getLibrary } from "../lib/libraryAccess.js";
+import { resolveClassType } from "../lib/libraryStore.js";
 import { useWindowWidth, StatCard } from "../ui/primitives.jsx";
 
 export function RetentionScreen({ onBack, onNavigate }) {
@@ -39,11 +43,34 @@ export function RetentionScreen({ onBack, onNavigate }) {
     store.hydrateAttendance().then(r => {
       if (!alive || !r) return;
       setMembers(r.members); setAttendance(r.attendance);
+      if (r.classInstances) setInstances(r.classInstances);
     });
     return () => { alive = false; };
   }, []);
 
   const m = cohortModel(members, attendance);
+
+  // ── Which class types keep members (session 28 §2.6) ──────────────────────
+  // The same route, deliberately: this is another answer to "is the studio
+  // healthy", not a new destination, and the queue is explicit that no nav entry
+  // is added for it.
+  //
+  // ⚠️ Instances are normalised through `resolveClassType` BEFORE the join.
+  // `class_instances.class_type` had three writers speaking two taxonomies until
+  // session 27, so a gym that ran one class type through the Builder and the
+  // Schedule has rows saying both `hiit` and `HIIT` — two rows no `group by`
+  // brings back together, and the column is not recoverable after the fact. The
+  // resolver folds them at READ time, which is the only place left to do it.
+  const [instances, setInstances] = useState(() => store.getClassInstances());
+  const ct = useMemo(() => {
+    const lib = getLibrary();
+    const norm = (instances || []).map(c => ({ ...c, classType: resolveClassType(c?.classType, lib) }));
+    // A key is storage; the label is what a human reads. `resolveClassType`
+    // deliberately returns the RAW string when nothing matches — a legacy
+    // "Mobility" rule the catalogue never had — so that string is shown as
+    // itself rather than mapped to a near neighbour that invents programming.
+    return classTypeRetention(attendance, norm, { label: k => lib[k]?.label || k });
+  }, [attendance, instances]);
 
   const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
   const h = { fontFamily:"var(--display)", fontSize:"15px", fontWeight:"700", color:"var(--text)" };
@@ -58,12 +85,72 @@ export function RetentionScreen({ onBack, onNavigate }) {
               arrays. This repo already carries three vocabularies for the Builder
               and it is a documented trap; a fourth was not worth a better title. */}
           <h1 style={{fontFamily:"var(--display)",fontSize:isMobile?"18px":"22px",fontWeight:"800",color:"var(--text)"}}>Studio analytics</h1>
-          <p style={{fontSize:"12px",color:"var(--muted)"}}>How long members stay, from your own attendance</p>
+          <p style={{fontSize:"12px",color:"var(--muted)"}}>Which classes keep members, and how long they stay — from your own attendance</p>
         </div>
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px":"24px"}}>
         <div style={{maxWidth:"1000px",margin:"0 auto",display:"flex",flexDirection:"column",gap:"18px"}}>
+
+          {/* ── Which class types keep members ──────────────────────────────
+              🟢 FIRST on the screen, and it is a deliberate reordering. The
+              cohort curve below needs twelve members and whole months of history;
+              this needs eight members who tried a class four weeks ago. A studio
+              in its first month sees this and nothing else, and it is the more
+              actionable of the two — it names a row on the timetable.
+
+              It has its OWN gate rather than sharing the curve's: the two ask
+              different questions of different populations, and hiding a
+              measurable ranking behind an unrelated "not enough history" is how
+              a screen comes to under-report what it knows. */}
+          <div style={card} data-testid="class-type-retention">
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:"10px",flexWrap:"wrap"}}>
+              <div style={h}>Which classes members come back to</div>
+              {ct.ready && ct.studioRate != null && (
+                <div style={{fontSize:"11px",color:"var(--muted)"}}>
+                  studio average {ct.studioRate}% · {ct.studioOf} members measured
+                </div>
+              )}
+            </div>
+
+            {!ct.ready ? (
+              <p style={{...note,marginTop:"6px"}} data-testid="class-type-not-ready">{ct.reason}</p>
+            ) : <>
+              <p style={{...note,margin:"4px 0 14px"}}>{describeClassTypes(ct)}</p>
+              <div style={{display:"flex",flexDirection:"column",gap:"9px"}}>
+                {ct.types.map(t => (
+                  <div key={t.type} style={{display:"flex",alignItems:"center",gap:isMobile?"8px":"12px"}}>
+                    <div style={{flex:isMobile?"0 0 96px":"0 0 150px",minWidth:0,fontSize:"12px",fontWeight:"600",color:"var(--text)",
+                                 overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</div>
+                    {/* A bar, not a chart library — the same reasoning as the
+                        curve below. The title carries the arithmetic, so the
+                        figure is checkable rather than merely stated. */}
+                    <div style={{flex:1,minWidth:0,height:"18px",borderRadius:"4px",background:"var(--navy)",overflow:"hidden"}}
+                         title={`${t.returned} of ${t.triers} members who tried ${t.label} came back within ${ct.windowDays} days`}>
+                      <div style={{width:`${Math.max(1,t.pct)}%`,height:"100%",borderRadius:"4px",
+                                   background:"color-mix(in srgb, var(--accent) 85%, transparent)"}}/>
+                    </div>
+                    <div style={{flex:"0 0 auto",textAlign:"right",fontSize:"12px",fontWeight:"700",color:"var(--text)",minWidth:"38px"}}>{t.pct}%</div>
+                    <div style={{flex:"0 0 auto",fontSize:"11px",color:"var(--muted)",minWidth:isMobile?"44px":"70px",textAlign:"right"}}>
+                      {t.returned}/{t.triers}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>}
+
+            {/* 🔴 EXCLUDED TYPES ARE NAMED, whether or not a ranking rendered. An
+                owner who cannot see that Yoga was left out will read this list as
+                the whole timetable and conclude Yoga has no problem. */}
+            {ct.excluded.length > 0 && (
+              <p style={{...note,marginTop:"12px",fontSize:"11px"}} data-testid="class-type-excluded">
+                Not ranked, too few members measured so far:{" "}
+                {ct.excluded.map(e => `${e.label} (${e.triers})`).join(", ")}. A class needs{" "}
+                {ct.minTriers} members who tried it more than {ct.windowDays} days ago before a share
+                is worth reading.
+              </p>
+            )}
+          </div>
 
           {/* ── The gate ─────────────────────────────────────────────────────
               First thing rendered and the only thing rendered when it fails.

@@ -55,7 +55,7 @@ export function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, n
           {canFollow && (
             <button onClick={()=>onFollow(!follow)} title="Mirror the runner playing on another device"
               style={{padding:"10px 16px",borderRadius:"10px",border:`1px solid ${follow?"var(--accent)":"rgba(255,255,255,0.25)"}`,cursor:"pointer",fontSize:"14px",fontWeight:"700",background:follow?"color-mix(in srgb, var(--accent) 25%, transparent)":"transparent",color:follow?"var(--accent)":"rgba(255,255,255,0.85)",display:"inline-flex",alignItems:"center",gap:"7px"}}>
-              <span style={{width:"9px",height:"9px",borderRadius:"50%",background:remoteLive?"#22C55E":(follow?"#F59E0B":"rgba(255,255,255,0.4)"),display:"inline-block"}}/>
+              <span style={{width:"9px",height:"9px",borderRadius:"50%",background:remoteLive?"#22C55E":(follow?"var(--warn)":"rgba(255,255,255,0.4)")  /* a 9px status DOT, not text: green/amber/grey is the universal live-indicator vocabulary and is deliberately fixed. The words beside it carry the state — see stageConfig.js */,display:"inline-block"}}/>
               Follow
             </button>
           )}

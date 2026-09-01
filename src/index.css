@@ -56,3 +56,33 @@ body {
   width: max(100%, 44px);
   height: max(100%, 44px);
 }
+
+/* ─── Keyboard focus must be visible on a text field ──────────────────────────
+   §2.5, session 29. Tabbing the app with real key presses (programmatic
+   `.focus()` does NOT trigger `:focus-visible`, and measuring that way reports
+   every button as ringless) found that BUTTONS are fine — Chrome paints its
+   default `outline: auto` ring, which it reports with a computed width of 0px,
+   so a sweep testing `outlineWidth > 0` calls them all failures. The genuine
+   hits were the text fields: `outline:"none"` is set inline on the shared Input
+   and Select primitives and on ~16 more fields across the app, so a keyboard
+   user got no focus indicator at all on any of them. WCAG 2.4.7.
+
+   🔴 `!important` IS THE RIGHT TOOL HERE and not a shortcut. Those suppressions
+   are INLINE styles, which beat any stylesheet rule without it. The alternative
+   is editing eighteen call sites and relying on the nineteenth to remember —
+   which is how this got here.
+
+   `--text`, not `--accent`. §2.2 measured generated accents as low as 1.25:1 on
+   their own background, so an accent-coloured ring is invisible on exactly the
+   palettes that most need one. `--text` is the one token the AA audit guarantees
+   against every surface.
+
+   ⚠️ Scoped to fields. A `<div {...dlg}>` modal wrapper also carries
+   `outline:none` and keeps it: it is focused programmatically when the dialog
+   opens, it is not a control, and a ring around the whole modal is noise. */
+#root input:focus-visible,
+#root select:focus-visible,
+#root textarea:focus-visible {
+  outline: 2px solid var(--text) !important;
+  outline-offset: 1px;
+}

@@ -363,7 +363,7 @@ export function RosterScreen({ onBack, onNavigate }) {
 
             {/* Preview. Everything the apply will do, before it does any of it. */}
             {analysis && !analysis.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #F5576C55",background:"#F5576C14",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid var(--danger-border)",background:"color-mix(in srgb, var(--danger) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
                 {analysis.error}
               </div>
             )}
@@ -445,7 +445,7 @@ export function RosterScreen({ onBack, onNavigate }) {
                 <button onClick={submitAdd} style={primaryBtn}>Add</button>
               </div>
             )}
-            {formErr && <div style={{fontSize:"12px",color:"#EF4444",marginBottom:"10px"}}>{formErr}</div>}
+            {formErr && <div style={{fontSize:"12px",color:"var(--danger)",marginBottom:"10px"}}>{formErr}</div>}
 
             {members.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
@@ -480,7 +480,19 @@ export function RosterScreen({ onBack, onNavigate }) {
                     <button onClick={cancelForm} style={ghostBtn}>Cancel</button>
                   </div>
                 ) : (
-                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)",opacity:m.status&&m.status!=="active"?0.62:1}}>
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",
+                    // 🔴 An inactive member RECEDES BY LOSING ITS PLATE, not by being
+                    // dimmed. `opacity:0.62` on the whole row was the obvious way
+                    // to say "not active" and it dimmed everything inside it —
+                    // email, last-seen date, status pill and the Edit button that
+                    // is how you reactivate them — from 6.72:1 to **3.36:1 on
+                    // Canopy**, the shipped default. Below AA on four readouts at
+                    // once, and invisible to any sweep that does not composite
+                    // alpha, which is why it survived until session 28.
+                    // Dropping the plate keeps the recession and every token at
+                    // full strength; the badge beside the name is what carries
+                    // the state, the same rule stageConfig.js states for colour.
+                    background:m.status&&m.status!=="active"?"transparent":"var(--bg)"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                         {m.name||"(no name)"}

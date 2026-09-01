@@ -15,24 +15,91 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 28: **`lint:crash` 0 · 935 unit (33 files) · 466 e2e (45 spec files) ·
-7-chunk build · 0 over budget.** App.jsx is **3,857 lines**. StaffApp **354.16 / 360 kB — 5.8 kB
-left, and it is the binding constraint on anything new.** A new screen goes in a `lazy()` chunk
-**with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+Green as of the S29-33 merge: **`lint:crash` 0 · @@UNIT@@ unit (@@UNITF@@ files) · @@E2E@@ e2e
+(@@E2EF@@ spec files) · @@CHUNKS@@-chunk build · 0 over budget.** App.jsx is **@@APPLINES@@ lines**.
+StaffApp **@@STAFF@@ / @@STAFFB@@ kB**. A new screen goes in a `lazy()` chunk **with its own budget
+line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
 ⚠️ **Two screens that share libraries want ONE barrel module, lazy-imported twice** — two dynamic
 imports of two files emit a third chunk for the shared code, under a generated name no budget
 covers. `src/screens/pt/PTScreens.js` is the shape. And a definition `store.js` needs must live on
 the EAGER side of that seam: importing one four-line coercion from a lazy module pulled the whole
 1:1 lens into StaffApp and put it 0.9 kB over.
 
-- `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports **211**
-  advisory problems (196 errors, 15 warnings) and that is expected; judge on runtime. ⚠️ The crash gate is **blind to `<UndefinedComponent/>`**:
-  it resolves identifiers, not JSX element names.
+🔴 **`lint:crash` IS BLIND TO THE TEMPORAL DEAD ZONE.** Session 32 read a `const` above its own
+declaration in a component body: `lint:crash` 0, 1095 unit tests green, and the entire Schedule
+screen fell into its error boundary. It resolves identifiers, and the binding genuinely exists
+in scope. ⚠️ **A broad failure confined to ONE spec file, straight after a render-order change,
+is a crash — not the stale-server flake below.** The tell is an error-boundary heading in the
+page snapshot; the fastest route to the cause is a throwaway spec with `page.on("pageerror")`.
+
+⚠️ **ONE SPEC FLAKES UNDER FULL-SUITE LOAD, and it is not always the same spec.** Recorded here
+for three sessions as a `syncBanner.spec.js` problem; **session 32's full run failed
+`responsive.spec.js` › "Analytics fits" at 390px instead, and passed 28/28 alone.** So the flake
+is in the APP MOUNT under load, not in any one spec — `syncBanner` was simply where it kept
+landing. It is INTERMITTENT, not one-per-run (session 31 got one failure and one clean sweep in
+two full runs).
+
+**The tell is a `waitForApp*` timeout whose error context has NO PAGE CONTENT** — the app never
+mounted, so nothing the spec is about was exercised. Check it directly:
+
+```bash
+grep -cE 'ref=|- button|- text:' .e2e-scratch/results/<dir>/error-context.md   # 0 ⇒ never mounted
+```
+
+⚠️ **Match on page CONTENT, not on `ref=` alone.** Session 33 used `grep -c "ref="` and misread a
+different failure as this one: snapshots do not always carry `ref=` attributes, so an empty count
+proved nothing. The question is whether the snapshot shows a rendered app at all.
+
+🔴 **AND THERE IS A SECOND, DIFFERENT LOAD FAILURE** — session 33's full run hit both in one pass.
+`schedule.spec.js` › "unpinning takes the scheduled-type notice" timed out on an assertion with a
+**fully rendered page snapshot**: the app was up, the click landed, and a 5-second
+`expect.timeout` was simply not enough for the next screen under two workers on a loaded box. So
+**a populated snapshot means it is NOT the mount flake** — it is either a slow render or a real
+defect, and the spec run is what separates them. Both specs passed on their own (18/18 and
+28/28).
+
+**A real regression fails the same test twice.** Re-run the spec alone before investigating.
+
+🔴 **`npx playwright test` EXITS 0 WITH FAILING TESTS.** Confirmed again in session 31: exit code
+0 under a run reporting `1 failed`. **Read the count, never the exit code.**
+
+**⚠️ `index.js` is the binding constraint — 203.06 / 215 kB, 5.6% headroom — and it is 93%
+REACT.** Session 29 attributed every byte via the sourcemap: react-dom alone is 172.40 kB, and
+**all of our own code in the entry chunk is 11.19 kB**. This ceiling is not app-code creep and
+**cannot be fixed by moving app code**; the full table is in `check-size.mjs`'s header. StaffApp
+has 10.3% headroom (322.76 / 360 kB after session 33's absence board) and is not the constraint.
+
+🔴 **Rollup places whole MODULES, not exports.** `main.jsx` imports one function from `colors.js`
+and that put the entire file — the owner-only brand generator included — in the chunk a MEMBER
+downloads, while a comment in `BrandStudioScreen.jsx` claimed the opposite for a whole session.
+**Any eager import from a module is an import of all of it.** A new screen goes in a `lazy()`
+chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+
+- `lint:crash` must be **0**. It is NOT the style baseline — `npm run lint` reports a few hundred
+  advisory problems and that is expected; judge on runtime. ⚠️ The crash gate is **blind to
+  `<UndefinedComponent/>`**: it resolves identifiers, not JSX element names. It is also blind to
+  an **unused import** — App.jsx carried nine dead ones for a session — but it does catch a
+  duplicate binding, which is the division of labour that config documents.
 - ⚠️ **e2e can fail broadly on a stale dev server holding port 5191.** Symptoms are
   `ERR_CONNECTION_REFUSED` or `Failed to fetch dynamically imported module` across many specs.
   **Re-run once before investigating.**
+- 🔴 **`syncBanner.spec.js` IS FLAKY UNDER FULL-SUITE LOAD, and it is not a defect.** Session 30
+  ran the full suite twice and each run failed **one** test in this file — **a different one each
+  time** (line 34, then line 124) — and all seven passed when the spec was run alone. The tell is
+  that the failure is a `waitForApp` timeout with **no page snapshot in the error context at all**:
+  the app never mounted, so nothing about the banner was ever exercised. A real regression fails
+  the SAME test twice. **Re-run the spec alone before reading anything into it.**
+- ⚠️ **A REVERTED MUTATION ON AN UNTRACKED FILE DOES NOT SHOW IN `git diff`.** The standing rule
+  is to mutate, confirm red, revert, and `git diff` before stopping — but a NEW file is
+  untracked, so a failed revert leaves the source mutated and the diff clean. Session 30's
+  revert script aborted on an empty-string anchor and left `coachKey` without its
+  `.toLowerCase()`. `grep -rn MUTATION src/` does not help either when the mutation is a
+  DELETION. **Re-read the function you mutated**, not the diff.
 - Raise a size ceiling **only** in the commit that needs it, and say what bought the bytes.
 - **No infra changes without asking Dylan.**
+- ⚠️ **Do not edit source while the e2e suite is running.** Vite HMR fires, `main.jsx`
+  re-executes, and specs fail on `createRoot() on a container that has already been passed to
+  createRoot()`. It reads like a real defect and is not. Session 29 lost a 7-minute run to it.
 
 ---
 
@@ -63,6 +130,22 @@ share a filesystem view.
   `git commit -F msg.txt --only <paths>`.
 - ⚠️ **The Edit tool converts `\uXXXX` in its arguments into real control characters.** Writing
   a literal escape sequence into source needs a one-shot `.mjs`.
+
+### 🔴 Check what your branch is based on, EVERY time
+
+Three sessions in a row have started behind because the previous session's work was on its own
+`claude/…` branch and **nothing merges those to `main`**. Session 29 started five commits behind;
+session 30 started **fourteen**, and the commit its prompt named as the baseline did not exist in
+the repository at all.
+
+```bash
+git log --oneline -3                      # does the top commit match the prompt?
+git ls-remote --heads origin              # if not, the work is on another branch
+git merge --ff-only <that branch's tip>   # usually a clean fast-forward
+```
+
+**Confirm the fix with a gate, not with the log**: run `npm test` and check the count against the
+prompt's. A tree that merely builds is not proof you are where the prompt thinks you are.
 
 ### More than one session may share this working tree
 
@@ -176,6 +259,20 @@ not. **Assert the STORED object, not only what was rendered.**
   tab order, starts halfway down. `blur()` does **not** reset it — Chromium keeps a sequential
   focus navigation starting point. Use
   `document.body.setAttribute("tabindex","-1"); document.body.focus();`.
+- ⚠️ **`navAnyWidth` takes a screen OBJECT from `ALL_SCREENS`, not a string**, and its `aside`
+  count is a **one-shot read that races a reload**. Follow `page.reload()` with
+  `waitForAppAnyWidth` or a 1280px test silently takes the phone branch and hunts for a "More"
+  button that is not there — the failure names "More", which reads as a nav defect and is not one.
+- 🔴 **`new Date("2026-08-22")` is UTC MIDNIGHT**, so `.getDate()` is **21** anywhere west of
+  UTC. Never parse a stored `YYYY-MM-DD` that way — build `new Date(y, m-1, d)`, which is local
+  by construction. `fmtSessionDay` in `format.js` does, and its test demonstrates the trap next
+  to the fix. This is the same bug as a UTC write, one layer further out and harder to see,
+  because the STORED value is right and only the render is wrong.
+- ⚠️ **A test that needs a TIMEZONE must set one, and prove it took.** The suite runs in UTC,
+  where local and UTC dates are identical, so any assertion about local-date handling passes
+  against the bug. Use `vi.stubEnv("TZ", …)` — **not** `process.env.TZ =`, which is 3 crash-lint
+  errors because `process` is not a declared global — and assert the offset FIRST, so a zone that
+  did not take fails loudly instead of proving nothing. `src/lib/joinDate.test.js` has the shape.
 - ⚠️ **Three nav vocabularies**: sidebar "Class Builder" / More sheet "Builder" / bottom bar
   "Build", and below **900px** there is no sidebar. `ALL_SCREENS` and `navAnyWidth` in
   `e2e/helpers.js` hold all three — use them rather than a fourth list.
@@ -188,6 +285,40 @@ not. **Assert the STORED object, not only what was rendered.**
   matches nothing, and the test then fails on its selector rather than on the thing it tests.
 - ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
   traps focus, so any loop visiting every screen must visit it **last**.
+- 🔴 **A LEGIBILITY FLOOR MUST BE ABSOLUTE, NOT PROPORTIONAL.** `tvFont`'s floor was
+  `scaled * 0.7` — 70% of the thing it was protecting, which shrinks the small end of the scale
+  by exactly 30%. On a **1280×720** wall (a projector, or a laptop on HDMI) every room-facing
+  size lands on it, so `tvFont(13)` exercise names rendered at **9px**. `TV_MIN_PX` is now an
+  absolute minimum. ⚠️ A `clamp()` whose floor exceeds its cap is **invalid CSS and the browser
+  drops the declaration** — lift the cap, never lower the floor.
+- ⚠️ **`tvFont` is for type on a WALL, not for chrome.** Pushing an 11px label through it makes
+  it **7px** on a 720p display. A mechanical conversion of every fixed size on the room boards
+  made them worse and was reverted whole.
+- 🔴 **`ALL_SCREENS` IS THE NAV, NOT THE PRODUCT.** The Room TV is a fullscreen overlay off the
+  Class Runner, so every sweep that iterates `ALL_SCREENS` — a11y, layout, tap, contrast — had
+  never once looked at the surface `UI-UX-DIRECTION` §1 calls the one that must be flawless. It
+  was painting raw stage hues at **4.22:1 on Canopy**. `brandTokens.spec.js` enters it explicitly;
+  any new sweep must too.
+- 🔴 **NOT EVERY COMPUTED COLOUR IS `rgb(...)`.** A `color-mix()` computes to
+  `color(srgb 0.93 0.31 0.31)` — channels in **0–1, not 0–255**. This cost real time twice in
+  one session: a contrast scanner that scraped the numbers read every mixed ink as
+  `rgb(1,1,1)` and *silently passed* a screen full of unreadable text, and a `toMatch(/^rgb/)`
+  positive control failed on a change that was correct. Parse the `color(` form, and assert
+  that a colour **exists** rather than what shape it takes.
+- ⚠️ **Appending 8-bit hex alpha (`` `${c}18` ``) only works while `c` is 6-digit hex.**
+  `var(--warn)18` is not a colour, and the element loses the tint *and* the border silently.
+  A hue used for both a FILL and INK therefore needs **two values** — the raw hex for the
+  plate, `hueInk(hex)` for the text. `CalendarScreen`'s `GRID_FALLBACK` documents the same trap.
+- ⚠️ **`el.focus()` does NOT trigger `:focus-visible`.** A programmatic focus sweep reported 35
+  of 40 controls as ringless; all false. Press Tab.
+- ⚠️ **Chrome reports `outline-style: auto` with a computed width of `0px`.** A check for
+  `outlineWidth > 0` calls every default-ringed button a failure and buries real hits among
+  invented ones. The signal is the STYLE being `none`.
+- ⚠️ **A control that opts out cannot measure the rule it opted out of.** An inline
+  `transition:all .15s` beats the global reskin rule, so measuring that element says nothing
+  about the rule.
+- ⚠️ **`test.use({ reducedMotion })` does not apply through a scratch Playwright config, and
+  fails OPEN.** Use `page.emulateMedia` and assert the precondition — that is what caught it.
 - ⚠️ **`jungle_skin` holds a bare string, not JSON** — the `stored()` helper parses and cannot
   read it.
 - ⚠️ **A control that is a `<div onClick>` is invisible to `keyboard.spec.js`**, which sweeps
@@ -215,8 +346,13 @@ not. **Assert the STORED object, not only what was rendered.**
   it.** `blocksLoad` is read by the screen AND by `store.assignPtSession` — a gate that lives only
   in JSX is one the next caller walks through. Expiry is evaluated BEFORE a doctor's clearance, an
   undated clearance is ignored, and an unanswered question is never a "no".
-- **`--danger` is deliberately not skin-derived.** A gym whose accent is red must not get a
-  delete button matching its primary action.
+- **`--danger` and `--warn` are deliberately not skin-derived.** A gym whose accent is red
+  must not get a delete button matching its primary action. Both are FILLS; used as INK they
+  still go through `hueInk`.
+- **A decorative hue used as INK goes through `hueInk`** (`colors.js`) — `color-mix(in srgb,
+  var(--text) 65%, hue)`. The 65% is measured, not chosen: at 60% the worst pair is 4.36:1 and
+  `colors.test.js` asserts BOTH the floor and that edge. A **filled** plate is the other case
+  and takes `inkOn(hue,"#000000","#FFFFFF")` instead.
 - **`isViewEnabled` is the single choke-point** for what appears in a nav — there are four nav
   arrays in `App.jsx`, and a second rule bolted onto one of them is how a screen survives in
   exactly one menu.
@@ -234,23 +370,103 @@ not. **Assert the STORED object, not only what was rendered.**
   refuses the same substitution for a different reason: it asserts a tenure it does not hold.
 - **A pooled retention curve with per-point denominators can RISE**, and each point is individually
   correct while the line lies. Use one population for every point (`lib/cohorts.js`).
+- **The Brand Studio AA panel and `e2e/brandTokens.spec.js` share ONE implementation** of the
+  compositing maths, in `colors.js`; `contrastScan.js` serialises those functions into the page.
+  They must stay self-contained — arguments and each other, nothing else — or they arrive with
+  undefined bindings. `colors.test.js` asserts that by evaluating them in an empty scope.
+- **`contrast.passesAA` is `textOnBg >= 4.5` and NOTHING else.** It is not a verdict on a
+  palette: a generated accent can be 1.25:1 on its own background while it reads true. Anything
+  showing an AA claim to an owner must read `auditPairs`.
+- **A gym's accent is not ours to nudge.** `--danger`'s rule generalises: a colour the gym chose
+  is reported, never silently bent. `DYLAN-QUEUE.md` A14 is the open yes/no on the two palettes
+  where that leaves it below AA.
 - **A failed DELETE needs a tombstone, not a ledger entry.** `_noteSyncError` alone makes the retry
   lie: the pusher's upsert cannot remove a server row, so it succeeds and clears the error. See
   `PENDING_DEL_KEY` in `store.js`.
+- 🔴 **A COACH ON A CLASS IS A TYPED NAME AND MUST STAY ONE.** `class_schedule_rules.coach` is
+  `text`; there is deliberately no `coach_id` on the rule. Identity lives in the roster
+  (`lib/coachRoster.js`) and is resolved BY NAME, so nothing is added to the class row and nothing
+  can be dropped by a server-wins hydrate. `coachKey` folds case, whitespace and Unicode
+  composition and **never merges two different names** — "Mara" and "Mara K." are one person only
+  if a gym says so with an alias.
+- 🔴 **`_classToRow` MUST NOT NAME A COLUMN THE MIGRATION HAS NOT CREATED.** PostgREST rejects the
+  WHOLE batch, so one unknown key stops every class in the gym syncing while the ledger says only
+  that the table failed. `dbConstraints.test.js` now parses each `create table` and guards every
+  row mapper against exactly this.
+- 🔴 **`class_instances.coach_id` is the person who TEACHES, not the one who published.** It was
+  `_ctx.userId` until session 30 — one manager pressing publish recorded every class in the gym as
+  theirs. `created_by`, one line below, is where "who wrote this row" belongs. It resolves through
+  the roster and is **NULL when unknown**, which is worth more than a non-null value that is wrong.
+- 🔴 **A COVER IS ONE DAY, AND NOTHING WRITES TO THE SCHEDULE TO MAKE IT SO.** A cover request
+  carries `classDate` and `applyCovers` (`coverRequests.js`) overlays approved ones onto the
+  DERIVED occurrences, which are recomputed every render — so a cover lasts exactly as long as
+  the day it names. `assignCoach` was deleted from `CalendarScreen` in session 33 and must not
+  come back: it rewrote the RULE's coach field, and a rule has no dates, so covering one ill
+  Monday moved the class every Monday for ever. ⚠️ The grid, `publishWeek` and anything else
+  reading a week must read the COVERED occurrences, or an agreed cover is invisible on the one
+  screen a gym looks at most and `class_instances` credits the wrong coach.
+- 🔴 **AN ABSENCE'S CLASSES ARE DERIVED, NEVER STORED.** `coachAbsence.js` walks
+  `occurrencesForWeek` week by week rather than re-reading the repeat rules — a second opinion
+  about which classes a rule produces is how the grid and the cover board would disagree about
+  what a coach teaches. Storing the list would also freeze it: a class added after the absence
+  was recorded would be missing from a list that looked complete.
+- ⚠️ **`cover_requests.to_coach_id` MEANS "WHO IS COVERING", NOT "WHO WAS ASKED"** (changed in
+  session 33, column unchanged). It is NULL until somebody claims it. `inboxFor` is gone; the
+  board is `openCovers` and it deliberately does not hide a class from a coach whose grid says
+  they are busy — a grid is a claim somebody typed weeks ago, not a rota.
+- 🔴 **`create table if not exists` DOES NOT ADD A COLUMN** to a table that already exists. A
+  migration edited after somebody may have run it needs an `alter table … add column if not
+  exists` tail, or the client asks for a column the database silently never got and the whole
+  batch is rejected. `0011_coach_cover.sql` carries the shape.
+- 🔴 **THERE IS NO COMPARE-AND-SET IN THIS PRODUCT.** `store.js` contains zero `.update()` calls —
+  every write is an unconditional `upsert`, `insert` or `delete`. A cover approval needs
+  `set status='approved' where id=$1 and status='open'`; pushed through `_bgUpsertDelta` instead,
+  two coaches both approving both succeed and one is shown an approval that did not happen. Build
+  the primitive before wiring `cover_requests` to a server.
 
 ---
 
 ## Where the rest lives
 
 - `SESSION-HANDOFF.md` — the two most recent sessions in full. Read the top block first.
-- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–23.
+- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–28.
 - `DYLAN-QUEUE.md` — what needs Dylan rather than code.
 - Commit messages carry the reasoning. `git log` is the real design record here.
 
+**A field nothing writes breaks nothing, so no test can notice it.** Session 30 shipped four
+`updateCoach` keys with no control and 1019 tests passed. `node scripts/audit-store-writers.mjs`
+is the check that finds the next one; `docs/STORE-WRITER-AUDIT.md` has the classified list and —
+more usefully — what the sweep **cannot** see. Its allowlist in `storeWriters.test.js` is its
+positive control: adding a line there is a product decision, not a way to green the build.
+
+⚠️ **A test that cannot be made to fail is not automatically deletable.** Session 33's DST test
+could not be killed by any single mutation (`Math.round` absorbs the missing hour that the
+local-noon anchor was supposedly there for), and it was KEPT — with its header saying so in
+plain words, and the code comment corrected to name what actually delivers the answer. The rule
+is that a claim must be honest about what pins it, not that unpinnable behaviour goes untested.
+
+🔴 **MIGRATION NUMBERING — read before writing a new one.** Merging the S29–33 stack onto main
+brought TWO different migrations both numbered `0010`. The cover one was renamed
+`0010_coach_cover.sql` → **`0011_coach_cover.sql`**; `0010` is the staff read boundary (PR #13).
+The queue items were renumbered with it: the stack's A14/A15/A16 are now **A16/A17/A18**. Older
+handoffs and `SESSION-31-PROMPT.md` still say "0010 coach cover" and mean 0011.
+
 🔴 **Outstanding and not code:** migrations `0005_coach_personas.sql` and
-`0006_persona_generations.sql` have never been applied. Until they are, a gym's personas, plans
-and movement catalogue exist on **one device with no server copy** — and since session 28 so do its
-1:1 clients, health screens and 1:1 sessions, which have no migration written at all
+`0006_persona_generations.sql` have never been applied, and neither has `0010_staff_read_boundary.sql`
+(**A14** — merged is not run; a `member`-role account reads the whole gym until it is). Until 0005/0006
+run, a gym's personas, plans and movement catalogue exist on **one device with no server copy** — and so
+do its 1:1 clients, health screens and 1:1 sessions, which have no migration written at all
 (`jungle_pt_clients` / `jungle_parq_records` / `jungle_pt_sessions`). **Those three deliberately
-make no sync call**; read the block above `getParqRecords` in `store.js` before adding one. Also **10 unmerged Dependabot
+make no sync call**; read the block above `getParqRecords` in `store.js` before adding one.
+🔴 **`0011_coach_cover.sql` is what makes a cover request reach a second person, and it has never
+run** (**A17**). Until it does — and until the build has Supabase credentials — a cover request is
+written to one phone and read by nobody; `deliveryTruth()` returns `"device"` and the panel says so.
+⚠️ The compare-and-set the settle needs EXISTS (`src/lib/compareAndSet.js`, S31) — use it rather than
+`_bgUpsertDelta`, which would let two approvals both succeed silently. **A16** and **A18** are yes/no
+decisions with nothing blocked on them. Also **10 unmerged Dependabot
 PRs** — five are major GitHub-Actions bumps. **Ask Dylan before merging any of them.**
+
+🔴 **`main` is FOUR sessions stale and nothing merges to it.** Sessions 28–31 live only on their
+own `claude/…` branches, and each new session has started on `main` and had to fast-forward.
+Check `git log --oneline -3` against the prompt's baseline **and confirm with `npm test`, not the
+log** — a matching unit count is proof of position; a tree that merely builds is not.

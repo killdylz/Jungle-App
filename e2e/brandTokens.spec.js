@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { nav, waitForApp, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { nav, navAnyWidth, ALL_SCREENS, waitForApp, waitForAppAnyWidth, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { scanContrast, reportContrast, proveCompositingLive } from "./contrastScan.js";
 
 // ─── The white-label promise, enforced ───────────────────────────────────────
 //
@@ -26,17 +27,71 @@ const LIGHT_SKIN = {
   text: "#12181B", muted: "#5A6B60",
 };
 
-async function seedLightSkin(page) {
+// The gym the sweep is run against. An EMPTY screen passes every scan trivially
+// — this repo has been bitten by that twice in one session, in two different
+// files — so every screen the sweep visits has to have something on it. Members,
+// Schedule and the Dashboard are all empty on a fresh install; these rows are
+// what put chips, pills, badges and a class list in front of the scanner.
+const GYM = {
+  classes: [
+    { id: "uc1", name: "Sunrise Strength", type: "strength", coach: "Mara", day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
+    { id: "uc2", name: "Engine Room", type: "hiit", coach: "Dev", day: "Wed", slot: "19:00", dur: "45m", repeat: "weekly" },
+  ],
+  members: [
+    { id: "m-1", name: "Sarah Chen", email: "sarah@example.com", status: "active", joinedAt: "2026-05-02", externalRef: "" },
+    { id: "m-2", name: "Ravi Menon", email: "ravi@example.com", status: "active", joinedAt: "2026-06-11", externalRef: "" },
+    { id: "m-3", name: "Jo Tan", email: "jo@example.com", status: "paused", joinedAt: "2026-03-20", externalRef: "" },
+  ],
+};
+
+async function seedSkin(page, { custom = null, preset = null, width = 1280 } = {}) {
+  await page.setViewportSize({ width, height: 900 });
   await page.goto("./");
-  await page.evaluate((skin) => {
+  await page.evaluate(({ skin, presetId, gym }) => {
     localStorage.clear();
     sessionStorage.setItem("jungle_pin_ok", "1");
-    localStorage.setItem("jungle_custom_skin", JSON.stringify(skin));
+    if (skin) localStorage.setItem("jungle_custom_skin", JSON.stringify(skin));
+    // ⚠️ `jungle_skin` holds a BARE STRING, not JSON.
+    if (presetId) localStorage.setItem("jungle_skin", presetId);
     localStorage.setItem("jungle_gym_branding", JSON.stringify({ gymName: "Navy Barbell Co" }));
-  }, LIGHT_SKIN);
+    localStorage.setItem("jungle_user_classes", JSON.stringify(gym.classes));
+    localStorage.setItem("jungle_members", JSON.stringify(gym.members));
+    const day = 86_400_000;
+    const instances = [], rows = [];
+    for (let i = 1; i <= 6; i++) {
+      const cid = `ci-${i}`;
+      instances.push({ id: cid, startsAt: new Date(Date.now() - i * 3 * day).toISOString(),
+        name: i % 2 ? "Sunrise Strength" : "Engine Room", classType: i % 2 ? "strength" : "hiit",
+        coachName: i % 2 ? "Mara" : "Dev", durationMin: 45 });
+      gym.members.forEach((m, j) => {
+        if ((i + j) % 3 === 0) return;
+        rows.push({ id: `a-${i}-${j}`, classInstanceId: cid, memberId: m.id, source: "coach",
+          checkedInAt: new Date(Date.now() - i * 3 * day).toISOString() });
+      });
+    }
+    localStorage.setItem("jungle_class_instances", JSON.stringify(instances));
+    localStorage.setItem("jungle_attendance", JSON.stringify(rows));
+    // 🔴 A CLASS IN THE BUILDER, so the Room TV has something on it.
+    // Without this the board renders its empty state and the scan measures
+    // chrome — a sweep of nothing that reads exactly like a clean sweep. Proved
+    // the hard way: with no stages, reverting the plan rail's `hueInk` left this
+    // spec GREEN. Four DIFFERENT stage types, because the defect is a per-stage
+    // hue and one type would exercise one colour.
+    localStorage.setItem("jungle_draft_class", JSON.stringify({
+      name: "Sunrise Strength", classChoice: null,
+      stages: [
+        { id:"s1", type:"warmup",   name:"Warm-Up",         dur:300, exercises:[{n:"Light Jog",s:"",r:"5 min",rest:""}], tracks:[] },
+        { id:"s2", type:"strength", name:"Strength Block",  dur:900, exercises:[{n:"Back Squat",s:"4",r:"8",rest:"90s"}], tracks:[] },
+        { id:"s3", type:"circuit",  name:"Circuit Blast",   dur:600, exercises:[{n:"Burpee Complex",s:"3",r:"10",rest:"30s"}], tracks:[] },
+        { id:"s4", type:"recovery", name:"Active Recovery", dur:300, exercises:[{n:"Easy Walk",s:"",r:"5 min",rest:""}], tracks:[] },
+      ],
+    }));
+  }, { skin: custom, presetId: preset, gym: GYM });
   await page.reload();
-  await waitForApp(page);
+  if (width >= 900) await waitForApp(page); else await waitForAppAnyWidth(page);
 }
+
+const seedLightSkin = (page) => seedSkin(page, { custom: LIGHT_SKIN });
 
 // WCAG relative luminance and contrast ratio.
 //
@@ -101,56 +156,97 @@ test.describe("brand tokens carry the gym's palette, not Canopy's", () => {
     expectNoConsoleErrors(errors);
   });
 
-  test("no live surface paints text in Canopy's near-black on a light skin", async ({ page }) => {
-    // The generalisation, scoped to what can be measured safely: any OPAQUE
-    // text-on-background pair, on every screen, must clear AA. Alpha-composited pairs
-    // are skipped rather than guessed at — that guess is what produced twenty false
-    // positives in the scan that found this.
-    await seedLightSkin(page);
-    await page.evaluate(CONTRAST);
+  // ── The sweep ───────────────────────────────────────────────────────────────
+  //
+  // Every readable leaf on every screen, at both widths, on a dark preset and on
+  // a hand-built light skin — with the alpha COMPOSITED rather than skipped. The
+  // first version of this test measured opaque pairs only, which is most of the
+  // app's text and almost none of its chips, badges and pills. `contrastScan.js`
+  // carries the arithmetic and the reasons it is not a guess.
+  //
+  // ⚠️ THE LIBRARY IS VISITED LAST, always: "Exercise Library" opens a MODAL that
+  // covers the sidebar and traps focus, so nothing can be navigated to after it.
+  const SWEEP_SCREENS = [
+    ...ALL_SCREENS.filter((s) => s.key !== "library"),
+    ALL_SCREENS.find((s) => s.key === "library"),
+  ];
 
-    // The 1:1 pair joined this list in the commit that added them. A new screen
-    // that is not swept here is a new screen with no white-label enforcement,
-    // which is the gap this file was written to close.
-    const SCREENS = ["Dashboard", "Brand Studio", "Members", "Analytics", "Schedule", "Class Builder",
-                     "1:1 Clients", "Health Screen"];
-    for (const screen of SCREENS) {
-      await nav(page, screen);
-      const result = await page.evaluate(() => {
-        const bad = []; let measured = 0;
-        const effBg = (el) => {
-          let n = el;
-          while (n && n !== document.documentElement) {
-            const bg = getComputedStyle(n).backgroundColor;
-            if (bg && !/rgba?\(0, 0, 0, 0\)|transparent/.test(bg)) return bg;
-            n = n.parentElement;
-          }
-          return getComputedStyle(document.body).backgroundColor;
-        };
-        document.querySelectorAll("body *").forEach((el) => {
-          if (el.children.length) return;                     // leaf text only
-          const t = (el.textContent || "").trim(); if (!t) return;
-          const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return;
-          const cs = getComputedStyle(el);
-          if (cs.visibility === "hidden" || cs.opacity === "0") return;
-          const bg = effBg(el);
-          if (!window.__opaque(cs.color) || !window.__opaque(bg)) return;   // skip translucent
-          measured++;
-          const size = parseFloat(cs.fontSize), weight = parseInt(cs.fontWeight) || 400;
-          const need = (size >= 24 || (size >= 18.66 && weight >= 700)) ? 3 : 4.5;
-          const ratio = window.__contrast(cs.color, bg);
-          if (ratio < need) bad.push(`"${t.slice(0, 34)}" ${ratio.toFixed(2)}:1 (need ${need}) ${cs.color} on ${bg}`);
-        });
-        return { measured, bad };
+  // Why these two skins and not one. Every shipped preset is DARK, and on a dark
+  // preset most of this product's palette accidents are invisible — a hardcoded
+  // near-black ink is nearly right, a hardcoded near-white text is nearly right.
+  // The light custom skin is where a hand-built boutique identity actually lives
+  // and where those accidents show. Canopy is carried alongside it so a fix that
+  // only works on light skins fails here rather than in a studio.
+  const SKINS = [
+    { name: "a hand-built light skin", seed: { custom: LIGHT_SKIN } },
+    { name: "the Canopy preset",       seed: { preset: "canopy" } },
+  ];
+
+  for (const skin of SKINS) {
+    for (const width of [1280, 390]) {
+      // ⚠️ A FRESH LOAD at the stated width, never a resize: resizing without
+      // reloading shows a stale render, and this repo has produced a wrong
+      // finding that way before.
+      test(`every readable surface clears AA on ${skin.name} at ${width}px`, async ({ page }) => {
+        test.setTimeout(90_000);
+        await seedSkin(page, { ...skin.seed, width });
+
+        // 🔴 The control, run on the real document before anything is asserted:
+        // a translucent pair that composites to a FAILING ratio must be caught,
+        // and one that composites to a PASSING ratio must not be. The first half
+        // proves the scanner is alive and compositing; the second proves it is
+        // not simply flagging every rgba it sees, which is what made the earlier
+        // sweep report twenty-one violations of which one was real.
+        const control = await proveCompositingLive(page);
+        expect(control.caughtBad, "the scanner did not catch a planted 1.2:1 translucent pair — "
+          + "it is not compositing alpha, so a clean result here means nothing").toBe(true);
+        expect(control.falselyCaughtGood, "the scanner reported a planted translucent pair that "
+          + "composites to ~13:1 — it is reading rgba as solid").toEqual([]);
+        expect(control.caughtColorSpace, "the scanner missed a planted `color(srgb …)` value — "
+          + "it is reading 0–1 channels as 0–255, which is exactly how it scored every "
+          + "`color-mix()` ink in this product as near-black").toBe(true);
+
+        const failures = [];
+        // 🔴 THE ROOM TV FIRST, because it is the surface that matters most and
+        // the one every sweep in this suite was blind to. `UI-UX-DIRECTION` §1:
+        // "the Room TV and the member link are the two surfaces a member ever
+        // sees. They must be flawless before any staff screen gets polish." It is
+        // a fullscreen overlay off the Class Runner, not a nav destination, so it
+        // is not in `ALL_SCREENS` and no screen sweep has ever visited it —
+        // which is how the plan rail came to paint raw stage hues as ink there.
+        // Found by DRIVING the demo (§2.3). A sweep over the nav is a sweep over
+        // the staff app.
+        await navAnyWidth(page, ALL_SCREENS.find(s => s.key === "live"));
+        const tv = page.getByRole("button", { name: /^Room TV$/ });
+        expect(await tv.count(), "no Room TV button — the most important surface "
+          + "in the product is not being scanned").toBe(1);
+        await tv.first().click();
+        await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+        // 🔴 THE BOARD MUST HAVE A CLASS ON IT. An empty Room TV passes this scan
+        // trivially — proved, not assumed: with no seeded stages, reverting the
+        // plan rail's `hueInk` left this spec GREEN. The rail is where the
+        // per-stage hues are, so if it is not on screen nothing here is measured.
+        await expect(page.getByText("Strength Block · 15m"),
+          "the Room TV is showing no class — this scan measures chrome").toBeVisible();
+        const tvRes = await scanContrast(page);
+        expect(tvRes.measured, `Room TV at ${width}px: only ${tvRes.measured} text nodes measured`)
+          .toBeGreaterThan(8);
+        if (tvRes.bad.length) failures.push(reportContrast("Room TV", tvRes));
+        await page.keyboard.press("Escape");
+
+        for (const screen of SWEEP_SCREENS) {
+          await navAnyWidth(page, screen);
+          const res = await scanContrast(page);
+          // The per-screen count of what was actually measured, in the same run.
+          // A scan of nothing and a clean scan are the same observation from the
+          // assertion's side; two earlier runs of this sweep reported "0
+          // violations" from a tab whose innerWidth was 0.
+          expect(res.measured, `${screen.side} at ${width}px: only ${res.measured} text nodes `
+            + `measured — this screen was not really scanned`).toBeGreaterThan(8);
+          if (res.bad.length) failures.push(reportContrast(screen.side, res));
+        }
+        expect(failures, `below AA on ${skin.name} at ${width}px:\n\n${failures.join("\n\n")}`).toEqual([]);
       });
-
-      // 🔴 THE CONTROL THAT MATTERS. The first two runs of the scan that found this
-      // defect reported "0 violations" from a tab whose innerWidth was 0 — every
-      // element measured 0x0 and was skipped, so a scan of nothing was indistinguishable
-      // from a clean scan. Assert what was actually measured, per screen, in this run.
-      expect(result.measured, `${screen}: only ${result.measured} opaque text nodes measured — `
-        + `this screen was not really scanned`).toBeGreaterThan(8);
-      expect(result.bad, `${screen} has text below AA on a light skin:\n${result.bad.join("\n")}`).toEqual([]);
     }
-  });
+  }
 });

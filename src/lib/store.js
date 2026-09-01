@@ -17,6 +17,19 @@ import { occurrenceKeyOf } from "./csvImport.js";
 // libraryStore.js has no imports of its own, so this cannot close a cycle back
 // through libraryAccess.js (which imports THIS file).
 import { resolveClassType } from "./libraryStore.js";
+// coachRoster.js imports scheduleInstances and retention, both of which this
+// module already pulls in, so the roster costs no new module in the chunk. It
+// does NOT import store.js back — the resolution rules are pure and the
+// persistence is here, which is what keeps the cycle from existing.
+import { makeCoach, coachKey, normaliseAvailability, resolveCoach } from "./coachRoster.js";
+// The settle rule lives in coverRequests.js and stays there: this module owns
+// where a row is written, not what a legal transition is. Neither file imports
+// this one back, so the roster/cover pair costs no cycle and no new chunk.
+import { settleCover, makeCoverForOccurrence, requestsForOccurrence,
+         isOpen } from "./coverRequests.js";
+import { makeAbsence, occurrenceDate } from "./coachAbsence.js";
+import { compareAndSet, CAS_WON, CAS_LOST } from "./compareAndSet.js";
+import { localDateStr } from "./format.js";
 
 const KEYS = {
   userClasses:   "jungle_user_classes",
@@ -45,6 +58,11 @@ const KEYS = {
   classInstances:"jungle_class_instances",
   attendance:    "jungle_attendance",
   retentionActions:"jungle_retention_actions",
+  // ── Coach roster, availability and cover (S30–S33) ───────────────────────
+  coaches:       "jungle_coaches",
+  coverRequests: "jungle_cover_requests",
+  bookingOutbox: "jungle_booking_outbox",
+  absences:      "jungle_coach_absences",
   // ── 1:1 / PT (F1's second lens) ──────────────────────────────────────────
   // Local-only. See the block above `getParqRecords` for why none of these three
   // sync, and what has to land before they can.
@@ -52,6 +70,10 @@ const KEYS = {
   parqRecords:   "jungle_parq_records",
   ptSessions:    "jungle_pt_sessions",
 };
+
+// `localDateStr` now lives in format.js and is imported at the top of this file:
+// `useClassRunner` and `ProfileModal` needed the same rule, and a second copy is
+// exactly how a writer and its reader drift apart. Behaviour is unchanged.
 
 // Client-generated UUID, used as the row PK on both coach_personas and
 // persona_plans so the persona→plans FK bridges cleanly in the local-first
@@ -132,6 +154,54 @@ function _clearSyncError(table) {
     const all = readJSON(SYNC_ERR_KEY, {});
     if (all[table]) { delete all[table]; writeJSON(SYNC_ERR_KEY, all); }
   } catch (_) { /* ignore */ }
+}
+
+// ─── A table the database has not got is not a failed write (S32 §2.1) ──────
+//
+// 🔴 TWO THINGS THAT LOOK IDENTICAL IN THE LEDGER AND ARE NOT THE SAME EVENT.
+// A write that failed will land on a retry. A write to a table that DOES NOT
+// EXIST will never land, however many times it is retried, because the fix is a
+// migration only Dylan can run — 0005, 0006 and 0010 are all in that state
+// (DYLAN-QUEUE A15). Both belong in the ledger, and they do: the banner saying
+// "coach_roster is not synced" is true in both cases and the retry costs almost
+// nothing. What differs is what the PRODUCT may claim in the meantime.
+//
+// `deliveryTruth` is the reason this exists. It reports what happened to a cover
+// request, and its "waiting" branch means "the row is on the server and will
+// reach them when they next open Jungle". With `cover_requests` absent that is
+// FALSE — the row is on one phone, exactly as if there were no server at all —
+// and a product that says "Waiting for Dev" over a row nobody can ever receive
+// is the same defect as the panel that said "passes". So the absence is recorded
+// as its own fact and the UI reads it.
+//
+// ⚠️ IT DOES NOT SUPPRESS THE PUSH. A latch that stopped writing would have to be
+// cleared by something, and nothing would clear it: the day the migration runs,
+// the only evidence is a write that succeeds. So pushes continue on the ledger's
+// own backoff and the first success clears this, which is why it is written from
+// `_bgUpsert`'s two branches rather than from a call site.
+const ABSENT_KEY = "jungle_absent_tables";
+
+// PostgREST's vocabulary for "no such table". It answers a missing relation with
+// PGRST205 and a message naming the schema cache; Postgres itself says 42P01 /
+// "does not exist". Matched on the text because the error object's shape differs
+// between the two layers and only the message is guaranteed to reach us.
+export function _isMissingTable(err) {
+  const msg = String(err?.message || err || "");
+  const code = String(err?.code || "");
+  return code === "PGRST205" || code === "42P01"
+      || /could not find the table|does not exist|schema cache/i.test(msg);
+}
+export function tableAbsent(table) {
+  try { return (readJSON(ABSENT_KEY, []) || []).includes(table); } catch (_) { return false; }
+}
+function _noteAbsent(table, absent) {
+  try {
+    const list = readJSON(ABSENT_KEY, []) || [];
+    const has = list.includes(table);
+    if (absent === has) return;
+    const next = absent ? [...list, table] : list.filter(t => t !== table);
+    if (next.length) writeJSON(ABSENT_KEY, next); else remove(ABSENT_KEY);
+  } catch (_) { /* never let bookkeeping break a write */ }
 }
 
 // ─── Tombstones for failed deletes (§2.5) ────────────────────────────────────
@@ -396,6 +466,58 @@ export function _unmark(table, id) {
 // any remapping) already mismatches every mark and re-pushes in full on its own.
 // A second mechanism for that would only be a second thing to get wrong.
 
+// ─── Hydrate must not discard an edit the server has never seen (S32 §2.1) ──
+//
+// 🔴 SERVER-WINS IS RIGHT FOR EVERY DOMAIN THAT ONE PERSON EDITS ON ONE DEVICE,
+// AND THE ROSTER IS THE FIRST THAT IS NOT. `_guardList` protects a local row the
+// server has never HEARD OF (local-only by id) and a row the coach deleted. It
+// does not protect the third case, which did not exist before coach availability:
+// a row the server HAS, whose local copy is newer. Server-wins throws that away.
+//
+// Coach A opens Jungle on the way to the gym, ticks Thursday 06:00, and the push
+// is still in flight — or failed, or the tab closed — when the app next hydrates.
+// The manager's tablet holds the same roster entry. Server-wins would silently
+// restore the older grid and coach A's answer would be gone, with no error
+// anywhere, which is precisely the shape of the 2026-07-18 corpus loss.
+//
+// ⚠️ THE OBVIOUS FIX — COMPARE TIMESTAMPS — IS THE WRONG ONE HERE, and it is worth
+// saying why because `availabilityAt` is sitting right there looking like the
+// answer. It is a LOCAL CALENDAR DATE (`updateCoach` stamps it via `localDateStr`,
+// and `daysBetween` reads it as a date because the reader is a human with a
+// calendar). Two edits on the same day are indistinguishable by it, and two
+// devices in two timezones do not even agree which day it is. A field that is
+// correct for "how stale is this claim" is not thereby a version clock.
+//
+// THE SIGNAL THIS USES INSTEAD IS ALREADY IN THE FILE AND COSTS NOTHING: the
+// delta marks. A mark is written ONLY from `_bgUpsert`'s success path, so
+// "local row's fingerprint ≠ its mark" means exactly "the server has never
+// confirmed this content". No clocks, no timezones, no new storage.
+//
+// What this is, stated plainly: last-writer-wins biased toward the device with
+// unsynced work. Two coaches editing the same entry between two hydrates still
+// lose one edit — that needs per-field merge or a real version column, and
+// neither is worth inventing before a gym has hit it. What it removes is the
+// case where the losing edit is the one you just typed and watched save.
+export function _unsyncedIds(table, mappedRows) {
+  return new Set(_deltaRows(table, mappedRows).map(r => r.id));
+}
+
+// Swap the local version back in for any server row whose id is unsynced. Pure,
+// and exported for the same reason as `_guardList`: the decision needs no live
+// Supabase, so it is pinned directly rather than through a network round-trip.
+export function _preferLocalEdits(serverRows, localRows, unsyncedIds) {
+  if (!unsyncedIds || !unsyncedIds.size) return serverRows || [];
+  const localById = new Map((localRows || []).filter(Boolean).map(r => [r.id, r]));
+  let kept = 0;
+  const out = (serverRows || []).map(r => {
+    if (!unsyncedIds.has(r?.id) || !localById.has(r?.id)) return r;
+    kept += 1;
+    return localById.get(r.id);
+  });
+  if (kept) console.warn(`[store] keeping ${kept} local row(s) the server has an older copy of`);
+  return out;
+}
+
 // Push only what changed. `allRows` is the full mapped list, used to prune marks.
 // No delta => no request at all, which is the common case on a re-save.
 function _bgUpsertDelta(table, allRows, onConflict = "id") {
@@ -429,8 +551,15 @@ export function _clearLedgerIfSettled(table, delta) {
 function _bgUpsert(table, row, onConflict, onOk) {
   supabase.from(table).upsert(row, { onConflict }).then(
     ({ error }) => {
-      if (error) { console.warn(`[store] ${table} upsert failed:`, error.message); _noteSyncError(table, error.message); }
-      else { _clearSyncError(table); if (onOk) { try { onOk(); } catch (_) {} } }
+      if (error) {
+        console.warn(`[store] ${table} upsert failed:`, error.message);
+        // Recorded here rather than at any call site, so every domain gets it —
+        // 0005 and 0006 are unapplied too, and a screen asking "is this table
+        // really there" should get one answer however the absence was learned.
+        _noteAbsent(table, _isMissingTable(error));
+        _noteSyncError(table, error.message);
+      }
+      else { _noteAbsent(table, false); _clearSyncError(table); if (onOk) { try { onOk(); } catch (_) {} } }
     },
     (e) => _noteSyncError(table, e?.message || e));
 }
@@ -475,7 +604,7 @@ function _flushPendingDeletes(table) {
 // ── Classes (F5: user-created recurring classes) ──────────────────────────
 // Local shape: { id:"uc<ts>", name, type, coach, day, slot, dur, repeat, weekKey?, fill? }
 // Postgres:    public.class_schedule_rules, with client_id == the local id.
-function _classToRow(uc) {
+export function _classToRow(uc) {
   return {
     gym_id:     _ctx.gymId,
     client_id:  uc.id,
@@ -1181,7 +1310,7 @@ export function recordRetentionAction({ memberId, rule, action, note = "" }) {
 
 // ── members: roster rows, NOT auth users ────────────────────────────────────
 // Local shape: { id, name, email, status, joinedAt, externalRef }
-function _memberToRow(m) {
+export function _memberToRow(m) {
   return { id: m.id, gym_id: _ctx.gymId, name: m.name, email: m.email || null,
            // Through memberStatus(), not `|| "active"`. The old form passed any
            // string straight into a CHECK-constrained column, so one caller
@@ -1206,9 +1335,16 @@ export function saveMembers(list) {
 // Quick-add during check-in: a name is all that's required, because anything
 // more is a form a coach won't fill in mid-class and P6 gives us <5 seconds.
 export function addMember(name, extra = {}) {
+  // 🔴 `localDateStr`, NOT `toISOString().slice(0,10)` (S31 §2.4). The latter is
+  // UTC, which is a different calendar day from the coach's for part of every
+  // day: in Singapore a member added before 8am was recorded as joining
+  // YESTERDAY. The datum is a date and the reader is a human with a wall
+  // calendar — the same reasoning `daysBetween` carries in retention.js, and
+  // `joinedAt` is read by exactly that code (retention.js:157, rule 1's tenure
+  // gate) as well as by both CSV exports.
   const m = { id: newId(), name: String(name || "").trim(),
               email: extra.email || "", status: "active",
-              joinedAt: extra.joinedAt || new Date().toISOString().slice(0, 10),
+              joinedAt: extra.joinedAt || localDateStr(),
               externalRef: extra.externalRef || "" };
   const list = [...getMembers(), m];
   saveMembers(list);
@@ -1437,10 +1573,34 @@ function _asText(v) {
 }
 // Exported for tests: this mapper is the last line of defence before a value
 // reaches Postgres, so it's worth pinning directly rather than through a proxy.
+// 🔴 `coach_id` USED TO BE `_ctx.userId`, WHICH IS THE PERSON WHO PRESSED PUBLISH.
+//
+// `class_instances.coach_id` is `references public.profiles(id)` — it means "the
+// person who teaches this". `_ctx.userId` means "whoever was signed in when the
+// week was published". Those are the same person only when a coach publishes
+// their own classes and nobody else's, which is not how a schedule gets
+// published: one manager presses **Add to schedule** once and every class in the
+// week — everybody's — was recorded as taught by that manager.
+//
+// It was invisible because `coach_name` sat next to it holding the RIGHT answer,
+// so every screen (all of which read the name) looked correct, and the only
+// reader of the id is analytics that does not exist yet. Per-coach retention is
+// on DYLAN-QUEUE; it would have been built on this and reported one person
+// teaching a gym's entire timetable.
+//
+// ⚠️ AND THE FACT IT WAS CARRYING WAS ALREADY RECORDED. `created_by`, on the very
+// next line, is exactly "who wrote this row" and has always been `_ctx.userId`.
+// So the old value was not merely wrong, it was a duplicate of its neighbour
+// under a name that means something else.
+//
+// Now: resolve the typed coach name against the gym's roster, and use that
+// person's account when there is one. NULL when there is not — a nullable FK
+// whose null means "we do not know who this was" is worth far more than a
+// non-null one that is confidently wrong.
 export function _ciToRow(c) {
   return { id: c.id, gym_id: _ctx.gymId, starts_at: c.startsAt, name: _asText(c.name),
            class_type: _asText(c.classType), coach_name: _asText(c.coachName),
-           coach_id: _ctx.userId || null, duration_min: c.durationMin || null,
+           coach_id: coachAccountFor(c.coachName), duration_min: c.durationMin || null,
            created_by: _ctx.userId || null };
 }
 function _rowToCi(r) {
@@ -1614,8 +1774,12 @@ export function applyAttendanceImport(analysis, lib = null) {
   const memberIdFor = new Map();
   const members = getMembers();
   const newRows = (analysis.newMembers || []).map(nm => {
+    // `externalRef` from the import (S31 §2.2), not "". This is the field's only
+    // writer: it holds the member's id in the system the gym is migrating FROM,
+    // and the export of that system is the one place it appears. Still "" when
+    // the file had no such column, which is the normal case.
     const m = { id: newId(), name: nm.name, email: nm.email || "", status: "active",
-                joinedAt: "", externalRef: "" };
+                joinedAt: "", externalRef: nm.externalRef || "" };
     memberIdFor.set(nm.key, m.id);
     return m;
   });
@@ -1880,6 +2044,18 @@ const _RETRY_PUSHERS = {
   persona_plans:        () => { _flushPendingDeletes("persona_plans"); savePersonaPlans(getPersonaPlans()); },
   persona_movements:    () => { _flushPendingDeletes("persona_movements"); savePersonaMovements(getPersonaMovements()); },
   persona_generations:  () => savePersonaGenerations(getPersonaGenerations()),
+  // ⚠️ THE ROSTER HAS TO LAND BEFORE THE REQUESTS DO. `cover_requests`'
+  // from/to columns are FKs to `coach_roster`, so re-pushing requests at a
+  // server that never received the roster fails on the foreign key and reads
+  // like a broken cover table. Both thunks therefore push the roster; the
+  // roster's own delta is empty when it is already synced, so the extra call
+  // costs one localStorage read and no request.
+  coach_roster:         () => { _flushPendingDeletes("coach_roster"); saveCoaches(getCoaches()); },
+  // Absences reference the roster, so the roster goes first for the same reason
+  // cover requests do. No tombstone flush: withdrawing an absence is an update.
+  coach_absences:       () => { saveCoaches(getCoaches()); saveAbsences(getAbsences()); },
+  cover_requests:       () => { saveCoaches(getCoaches());
+                          _pushCoverInserts(getCoverRequests().map(_coverToRow)); },
   members:              () => saveMembers(getMembers()),
   class_instances:      () => saveClassInstances(getClassInstances()),
   attendance:           () => _pushAttendance(getAttendance()),
@@ -1938,4 +2114,625 @@ export async function hydrateAll() {
     _hydrateBrand(), _hydratePrefs(), _hydrateHistory(), _hydrateLibrary(),
   ]);
   return { brand, prefs, history };
+}
+
+// ── Coach roster (S30 §2.1; synced S32 §2.1) → localStorage + Postgres ──────
+// Local shape: { id, name, aliases:[], userId, active, availability:{}, availabilityAt }
+// Postgres:    public.coach_roster (migration 0010), id-keyed exactly like the
+//              persona tables — the client mints a uuid and it IS the server PK.
+//
+// 🔴 THIS DOMAIN NOW SYNCS, AND THE TABLE IT SYNCS TO MAY NOT EXIST YET.
+// Migration `0011_coach_cover.sql` is written and unapplied (DYLAN-QUEUE A15),
+// so on a gym whose server has not had it run, every push here fails. That is
+// the correct behaviour and not a reason to hold the client half back: the
+// failure lands in the sync ledger, the banner names `coach_roster`, and the
+// retry driver re-sends on the day the migration runs. Until then the roster
+// behaves exactly as it did before — local, and honest about it.
+//
+// ⚠️ WHY THIS IS SAFE TO SHIP AHEAD OF THE MIGRATION, given that `_classToRow`'s
+// lesson says the opposite. That lesson is about a COLUMN added to an existing
+// table's mapper: PostgREST rejects the whole batch, so one unknown key stops
+// every class in the gym from syncing. This is a SEPARATE TABLE with its own
+// request. A missing `coach_roster` cannot touch `class_schedule_rules`, and
+// `dbConstraints.test.js` guards the mapper below against 0010's own
+// `create table` so the column-side of that lesson still applies here.
+//
+// ⚠️ THE SHORTCUT THAT IS STILL BANNED. Do not push the roster into a jsonb
+// column that already round-trips (`brand_profiles.branding` is right there).
+// `saveGymBranding` writes that blob whole, so the next Brand Studio save would
+// silently drop the gym's entire staff list — the same data loss this module
+// exists to prevent, arriving from a screen with nothing to do with coaching.
+export function getCoaches() { return readJSON(KEYS.coaches, []); }
+
+// The account behind a typed coach name, or null.
+//
+// This is the ONLY bridge from the free text on a class to a real person, and
+// `null` is the honest answer for most gyms most of the time: a name nobody has
+// put on the roster, or a roster entry with no account, is not a person the
+// database can point at. Returning null keeps `class_instances.coach_id`
+// meaning what its column name says.
+//
+// ⚠️ Reads the roster per call, and `_ciToRow` is used through `.map()`. That is
+// a JSON parse per published class — a week is tens of rows, not thousands — and
+// the alternative (threading a roster argument through the mapper) would put a
+// parameter on the one function that must stay callable from a test with nothing
+// but a row. Revisit if a gym ever publishes a year in one press.
+export function coachAccountFor(name) {
+  const entry = resolveCoach(getCoaches(), name);
+  return entry?.userId || null;
+}
+// 🔴 GUARDED BY dbConstraints.test.js against 0010's own `create table`. A key
+// here that the migration has not created would fail every roster push with a
+// message naming only the table, which is the failure this repo pays for most.
+export function _coachToRow(c) {
+  return {
+    id:              c.id,
+    gym_id:          _ctx.gymId,
+    name:            c.name,
+    // `text[] not null default '{}'` — an absent list goes as [], never null.
+    aliases:         c.aliases || [],
+    // "" is the normal LOCAL value for "no account linked" (see makeCoach), and
+    // the column is a nullable FK to profiles. "" is not a uuid, so it must not
+    // travel: Postgres would reject the row rather than read it as absent.
+    user_id:         c.userId || null,
+    active:          c.active !== false,
+    availability:    c.availability || {},
+    // Same rule, for the same reason: "" is the local "never stated" and the
+    // column is `date`. `availabilityState` needs to tell those apart, and null
+    // is how the database spells it.
+    availability_at: c.availabilityAt || null,
+  };
+}
+// The inverse. `normaliseAvailability` on the way in for the same reason
+// `planSource` normalises on read: a grid that reached the server before a
+// tightening of the rules must not come back and fail the next push.
+function _rowToCoach(r) {
+  return {
+    id:             r.id,
+    name:           r.name || "",
+    aliases:        r.aliases || [],
+    userId:         r.user_id || "",
+    active:         r.active !== false,
+    availability:   normaliseAvailability(r.availability || {}),
+    availabilityAt: r.availability_at || "",
+  };
+}
+
+export function saveCoaches(list) {
+  writeJSON(KEYS.coaches, list || []);
+  if (!_synced()) return;
+  // The same delta writer every other id-keyed domain uses. No second mechanism:
+  // a roster re-save that changed one coach's grid sends one row.
+  _bgUpsertDelta("coach_roster", (list || []).map(_coachToRow));
+}
+
+export function addCoach(name, extra = {}) {
+  const c = { ...makeCoach(name, extra), id: extra.id || newId() };
+  const list = [...getCoaches(), c];
+  saveCoaches(list);
+  return { coach: c, coaches: list };
+}
+
+// Patch-shaped, exactly as updateMember is, and for the same reason: a caller
+// holding a stale copy must not be able to blank a field it never meant to
+// touch. Unknown keys are dropped.
+export function updateCoach(id, patch = {}) {
+  const list = getCoaches();
+  const i = list.findIndex(c => c && c.id === id);
+  if (i < 0) return { coach: null, coaches: list };
+
+  const cur = list[i];
+  const next = { ...cur };
+  if ("name" in patch)    next.name = String(patch.name || "").trim();
+  if ("userId" in patch)  next.userId = String(patch.userId || "").trim();
+  if ("active" in patch)  next.active = !!patch.active;
+  if ("aliases" in patch) {
+    // Deduplicated by match key, blanks dropped, and an alias that merely
+    // restates the entry's own name is dropped too — it would be a second way of
+    // saying the same thing, and it would survive a rename as a stale duplicate.
+    const seen = new Set([coachKey(next.name)]);
+    next.aliases = (patch.aliases || []).map(a => String(a || "").trim()).filter(a => {
+      const k = coachKey(a);
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  if ("availability" in patch) {
+    next.availability = normaliseAvailability(patch.availability);
+    // 🔴 STAMPED HERE, not by the caller. Availability whose date the UI supplies
+    // is availability whose date a UI can forget to supply, and a grid with no
+    // date is exactly the "claim from March" this stamp exists to expose. Local
+    // calendar date, matching `daysBetween`'s reasoning: the reader is a human
+    // with a wall calendar, not a clock.
+    next.availabilityAt = localDateStr();
+  }
+
+  // A coach with no name cannot be resolved from a class or picked from a list,
+  // and an empty row in a roster is worse than a missing one.
+  if (!next.name) return { coach: cur, coaches: list };
+
+  const out = list.slice();
+  out[i] = next;
+  saveCoaches(out);
+  return { coach: next, coaches: out };
+}
+
+// Returns the PRIOR LIST, not the removed row: position is part of what was
+// lost, and an undo that appends the coach back at the end has not undone
+// anything the person looking at the screen would recognise.
+export function removeCoach(id) {
+  const before = getCoaches();
+  const after = before.filter(c => c && c.id !== id);
+  saveCoaches(after);
+  // ⚠️ AN UPSERT OF `after` CANNOT EXPRESS A REMOVAL — the same reason the three
+  // persona tables delete explicitly. `_bgDelete` also `_unmark`s the id, which
+  // is what makes the toast's undo actually reach Postgres: `saveCoaches(before)`
+  // recomputes a delta that now contains the restored row instead of matching a
+  // dead fingerprint and pushing nothing. That is `restorePersonaCascade`'s
+  // lesson, and here it comes for free rather than needing its own function.
+  if (_synced()) _bgDelete("coach_roster", "id", id);
+  return { coaches: after, before };
+}
+
+// ── Cover requests (S30 §2.3; synced S32 §2.1) → localStorage + Postgres ────
+//
+// 🔴 THE ONE DOMAIN WHERE "LOCAL ONLY" IS NOT A DEGRADATION BUT A FAILURE.
+// A roster that lives on one device still does useful work there. A cover
+// request that lives on one device does NOTHING AT ALL — its entire purpose is
+// to reach a second person. `coverRequests.js`'s header is the long version and
+// it should be read before this is extended.
+//
+// 🔴🔴 THIS TABLE IS NOT WRITTEN THE WAY EVERY OTHER LIST DOMAIN IS, AND THE
+// DIFFERENCE IS THE WHOLE FEATURE. `_bgUpsertDelta` would be catastrophic here,
+// and not in a way any test of the delta writer would catch:
+//
+//   Device A holds request R as `open`. Device B approves it, so the server now
+//   says `approved`. Device A hydrates — which writes no delta marks, because
+//   nothing does — and then the coach on A raises an unrelated request. The
+//   delta is "every row whose fingerprint has no mark", which after a hydrate is
+//   ALL OF THEM, so the list upsert re-sends R as `open`. The approval is gone.
+//   Nothing failed, nothing logged, and the ledger says the table synced.
+//
+// So a cover request has exactly TWO legal server writes, and they are the two
+// the migration's RLS policies allow (insert, update — and deliberately no
+// delete, because a request that was answered is a record of who covered what):
+//
+//   1. INSERT, when it is raised. Idempotent via `ignoreDuplicates`, the same
+//      append-log shape as `attendance` and `retention_actions`. ⚠️ THE FLAG IS
+//      LOAD-BEARING, NOT AN OPTIMISATION: it is what makes re-pushing the local
+//      list on a retry unable to touch a row the server has already settled.
+//   2. The CONDITIONAL UPDATE that settles it — `settleCoverRequest` below,
+//      through `compareAndSet`. Never an upsert. See that function's comment.
+//
+// `saveCoverRequests` is therefore a LOCAL WRITE ONLY, and keeps its name so the
+// undo/toast call sites in the panel are unchanged. The two pushers are named
+// separately so that "which write is this?" is answered at the call site.
+export function getCoverRequests() { return readJSON(KEYS.coverRequests, []); }
+export function saveCoverRequests(list) { writeJSON(KEYS.coverRequests, list || []); }
+
+// 🔴 GUARDED BY dbConstraints.test.js against 0010's `create table`, and its
+// `status` is guarded against 0010's CHECK by the same file.
+export function _coverToRow(r) {
+  return {
+    id:              r.id,
+    gym_id:          _ctx.gymId,
+    class_client_id: r.classClientId,
+    class_label:     r.classLabel,
+    class_day:       r.classDay || null,
+    class_slot:      r.classSlot || null,
+    // 🔴 WHICH DAY. Null only for a request raised before S33 — see 0010's own
+    // comment on why the column is nullable rather than `not null`.
+    class_date:      r.classDate || null,
+    absence_id:      r.absenceId || null,
+    // Roster ids, and "" is the local "not known". Both are nullable FKs to
+    // coach_roster, so "" must become null or Postgres rejects the row.
+    from_coach_id:   r.fromCoachId || null,
+    to_coach_id:     r.toCoachId || null,
+    status:          r.status,
+    note:            r.note || null,
+    // The local timestamp travels rather than letting the column default fire:
+    // `created_at` is what "raised 20 minutes ago" is read from, and a row that
+    // was raised offline and inserted an hour later would otherwise claim to be
+    // an hour younger than it is.
+    created_at:      r.createdAt || new Date().toISOString(),
+    settled_at:      r.settledAt || null,
+    settled_by:      r.settledBy || null,
+  };
+}
+function _rowToCover(r) {
+  return {
+    id: r.id, classClientId: r.class_client_id || "", classLabel: r.class_label || "",
+    classDay: r.class_day || "", classSlot: r.class_slot || "",
+    classDate: r.class_date || "", absenceId: r.absence_id || "",
+    fromCoachId: r.from_coach_id || "", toCoachId: r.to_coach_id || "",
+    note: r.note || "", status: r.status || "open",
+    createdAt: r.created_at || "", settledAt: r.settled_at || "",
+    settledBy: r.settled_by || "",
+  };
+}
+
+// Write 1: the insert. `ignoreDuplicates` is the safety property described above.
+function _pushCoverInserts(rows) {
+  if (!rows || !rows.length) return;
+  supabase.from("cover_requests").upsert(rows, { onConflict: "id", ignoreDuplicates: true }).then(
+    ({ error }) => {
+      if (error) {
+        console.warn("[store] cover_requests insert failed:", error.message);
+        _noteAbsent("cover_requests", _isMissingTable(error));
+        _noteSyncError("cover_requests", error.message);
+      } else { _noteAbsent("cover_requests", false); _clearSyncError("cover_requests"); }
+    },
+    (e) => _noteSyncError("cover_requests", e?.message || e));
+}
+
+// Raise one. Local first, exactly like every other domain; the insert follows.
+export function addCoverRequest(req) {
+  if (!req) return getCoverRequests();
+  const list = [...getCoverRequests(), req];
+  saveCoverRequests(list);
+  if (_synced()) _pushCoverInserts([_coverToRow(req)]);
+  return list;
+}
+
+// Write 2: the settle. THE ONE PLACE IN THIS FILE THAT DOES NOT WRITE LOCALLY
+// FIRST, and the reason is the only reason that could justify it.
+//
+// 🔴 EVERY OTHER DOMAIN IS LOCAL-FIRST BECAUSE THE LOCAL ANSWER IS THE TRUE ONE
+// AND THE SERVER IS A COPY. A settle is the opposite: two coaches on two phones
+// both press Approve on the same 5am request, both read `open`, and both are
+// right at the moment they read. There is no local fact to be first about — the
+// question "who got it" is only decided where both writes meet, and that is
+// Postgres under a row lock. A device that applied its own approval and told the
+// coach so would be showing an approval that did not happen, which is the exact
+// defect `settleCover`'s `changed:false` branch was built to report.
+//
+// So when there is somewhere to decide it, the server decides and the local
+// write follows the answer. When there is NOT — no credentials, or migration
+// 0010 unapplied so the table is absent — we fall back to the device-only path
+// that shipped in S30, because refusing to settle at all would be a regression
+// for the gym that has been using this locally. `deliveryTruth` reports the same
+// two worlds in the same words, from `tableAbsent`, so the screen and the write
+// cannot disagree about which one we are in.
+//
+// Returns settleCover's shape plus `where` ("device" | "server") and, on the
+// losing branch, the status that actually won.
+export async function settleCoverRequest(id, next, { now = Date.now(), coachId = "" } = {}) {
+  const list = getCoverRequests();
+  const local = settleCover(list, id, next, { now, by: _ctx.userId || "", coachId });
+
+  // Refused locally — gone, illegal, or already settled on THIS device. No
+  // request is worth making; the caller renders the reason.
+  if (!local.changed) return { ...local, where: "local" };
+
+  const deviceOnly = !_synced() || tableAbsent("cover_requests");
+  if (deviceOnly) {
+    saveCoverRequests(local.list);
+    return { ...local, where: "device" };
+  }
+
+  const row = _coverToRow(local.request);
+  const res = await compareAndSet(supabase, "cover_requests", id,
+    // The guard IS the mutual exclusion. `status: "open"` re-evaluated under the
+    // row lock is what the second writer loses against.
+    { status: "open" },
+    // `to_coach_id` rides the same conditional update, so "who is covering" is
+    // written by the transaction that decided the race and cannot disagree with
+    // it. Setting it separately would let a lost claim still stamp its name.
+    { status: row.status, settled_at: row.settled_at, settled_by: row.settled_by,
+      to_coach_id: row.to_coach_id });
+
+  if (res.outcome === CAS_WON) {
+    saveCoverRequests(local.list);
+    _noteAbsent("cover_requests", false);
+    _clearSyncError("cover_requests");
+    return { ...local, where: "server" };
+  }
+
+  if (res.outcome === CAS_LOST) {
+    // Somebody else settled it. Telling the coach "you lost" without saying what
+    // won leaves them to guess whether the class is covered — which is the one
+    // fact they came here for. One extra round-trip, on the rare branch, for the
+    // answer that matters most.
+    let won = "";
+    try {
+      const { data } = await supabase.from("cover_requests").select("*").eq("id", id).maybeSingle();
+      if (data) {
+        won = data.status || "";
+        const adopted = list.slice();
+        const i = adopted.findIndex(r => r && r.id === id);
+        if (i >= 0) adopted[i] = _rowToCover(data);
+        saveCoverRequests(adopted);
+        return { list: adopted, request: adopted[i] || null, changed: false,
+                 reason: won || "settled", where: "server" };
+      }
+    } catch (_) { /* the read is a courtesy; losing is already decided */ }
+    return { list, request: local.request, changed: false, reason: won || "settled", where: "server" };
+  }
+
+  // CAS_FAIL. The write did not complete, so NOTHING is written locally: a
+  // settle we cannot confirm is not a settle, and recording it would recreate
+  // the phantom approval this function exists to prevent. The ledger gets it and
+  // the retry driver will not "fix" it — there is no re-push for a transition,
+  // which is correct, because by the time we are back online the answer may be
+  // somebody else's. The coach presses Approve again and finds out.
+  _noteAbsent("cover_requests", _isMissingTable(res.error));
+  _noteSyncError("cover_requests", res.error || "settle failed");
+  return { list, request: local.request, changed: false, reason: "unconfirmed", where: "server" };
+}
+
+// ── Coach absences (S33) → localStorage + Postgres ──────────────────────────
+//
+// Local shape: { id, coachId, from, to, note, createdAt, cancelledAt }.
+// `coachAbsence.js` owns what an absence MEANS and which classes it takes a
+// coach away from; this owns only where the row lives.
+//
+// ⚠️ NO `_bgDelete` HERE, and that is not an omission. Withdrawing an absence
+// sets `cancelledAt` rather than removing the row — the cover requests already
+// raised against it point at its id, and deleting it would leave them pointing
+// at nothing. So the delta writer alone is enough and there are no tombstones to
+// flush, which is the first id-keyed domain in this file that genuinely needs
+// neither.
+export function _absenceToRow(a) {
+  return {
+    id:           a.id,
+    gym_id:       _ctx.gymId,
+    coach_id:     a.coachId,
+    // Local calendar dates, travelling as the strings they already are. Nothing
+    // here builds a Date — see coachAbsence.js's header for why.
+    from_date:    a.from,
+    to_date:      a.to,
+    note:         a.note || null,
+    created_at:   a.createdAt || new Date().toISOString(),
+    cancelled_at: a.cancelledAt || null,
+  };
+}
+function _rowToAbsence(r) {
+  return {
+    id: r.id, coachId: r.coach_id || "",
+    from: r.from_date || "", to: r.to_date || "",
+    note: r.note || "", createdAt: r.created_at || "",
+    cancelledAt: r.cancelled_at || "",
+  };
+}
+
+export function getAbsences() { return readJSON(KEYS.absences, []); }
+export function saveAbsences(list) {
+  writeJSON(KEYS.absences, list || []);
+  if (!_synced()) return;
+  _bgUpsertDelta("coach_absences", (list || []).map(_absenceToRow));
+}
+
+// Record one. Returns { absence, absences } or { absence: null, ... } when the
+// range was refused — `makeAbsence` is the single judge of that and the caller
+// renders `absenceError`'s sentence rather than re-deciding.
+export function addAbsence({ coachId, from, to, note = "" } = {}) {
+  const list = getAbsences();
+  const a = makeAbsence({ id: newId(), coachId, from, to, note });
+  if (!a) return { absence: null, absences: list };
+  const next = [...list, a];
+  saveAbsences(next);
+  return { absence: a, absences: next };
+}
+
+// Withdraw one, and take back the asks it raised. NOT a delete: see the header.
+//
+// 🔴 A CLAIMED COVER IS LEFT ALONE, and that is the whole judgement in this
+// function. "Mara is back after all" cancels the QUESTION; it does not cancel
+// Dev having already agreed to teach Thursday and planned their week around it.
+// Withdrawing that is a conversation between two people, not a side effect of
+// pressing a button — so the open ones go and the claimed ones stay, and the
+// panel says how many of each.
+// ⚠️ ASYNC, AND THE WITHDRAWALS ARE SEQUENTIAL. Fired in parallel they each read
+// `getCoverRequests()` before any of them writes, so every one of them saves a
+// list containing only its OWN change and the last write wins — a coach
+// withdrawing a week's absence would find one class still on the board and no
+// error anywhere. Found by a test asserting all of them landed, which is the
+// only reason it was found at all: with a server each settle is a round trip, so
+// the race is wide open and completely invisible on a fast one.
+export async function cancelAbsence(id, { now = Date.now() } = {}) {
+  const list = getAbsences();
+  const i = list.findIndex(a => a && a.id === id);
+  if (i < 0 || list[i].cancelledAt) return { absence: null, absences: list, withdrawn: 0, kept: 0 };
+  const next = list.slice();
+  next[i] = { ...list[i], cancelledAt: new Date(now).toISOString() };
+  saveAbsences(next);
+
+  const mine = getCoverRequests().filter(r => r && r.absenceId === id);
+  const open = mine.filter(isOpen);
+  const kept = mine.filter(r => r.status === "approved").length;
+  // Withdrawn one at a time through the ordinary settle so each goes through the
+  // same transition rule — and, when there is a server, the same conditional
+  // update. A coach claiming one of these in the same second must still win it.
+  for (const r of open) await settleCoverRequest(r.id, "cancelled", { now });
+
+  return { absence: next[i], absences: next, withdrawn: open.length, kept };
+}
+
+/**
+ * Raise a cover request for every class an absence takes a coach away from.
+ *
+ * ⚠️ SKIPS AN OCCURRENCE THAT ALREADY HAS ONE. Re-recording an overlapping
+ * absence, or opening the panel twice, must not put the same Thursday on the
+ * board two or three times — two open asks for one class is how two coaches both
+ * turn up. A CANCELLED request does not count as one: a coach who withdrew an
+ * ask and then genuinely does need cover has to be able to raise it again.
+ *
+ * 🔴 SKIPS A CLASS THAT HAS ALREADY STARTED. Found by rendering the panel on a
+ * Tuesday: a coach marking themselves away Mon–Fri got Monday's 06:00 put on the
+ * board, asking somebody to cover a class that had already been taught. An ask
+ * nobody can act on is worse than no ask — it sits there, counts against the
+ * absence, and teaches people to ignore the board. The absence still RECORDS
+ * Monday, because they were away on Monday; only the ask is skipped.
+ *
+ * The inserts go in ONE batch rather than through `addCoverRequest` per class:
+ * a week's absence is six requests and six fire-and-forget round trips would be
+ * six chances to half-land.
+ */
+export function raiseCoversForAbsence(absence, occurrences, { now = Date.now() } = {}) {
+  const existing = getCoverRequests();
+  if (!absence?.id) return { created: [], requests: existing };
+
+  const made = [];
+  const seen = new Set();
+  for (const o of occurrences || []) {
+    const date = o?.date || occurrenceDate(o);
+    if (!date || !o.ruleId) continue;
+    // Already taught. `startsAt` is the moment the class begins, so a class
+    // running right now is still coverable for the few minutes that matters.
+    const at = new Date(o.startsAt || 0).getTime();
+    if (Number.isFinite(at) && at !== 0 && at < now) continue;
+    const key = `${o.ruleId}@${date}`;
+    if (seen.has(key)) continue;                 // two rules onto one cell
+    seen.add(key);
+    const already = requestsForOccurrence(existing, o.ruleId, date)
+      .some(r => r.status !== "cancelled");
+    if (already) continue;
+    const req = makeCoverForOccurrence({ id: newId(), occurrence: o,
+                                         fromCoachId: absence.coachId, absenceId: absence.id });
+    if (req) made.push(req);
+  }
+  if (!made.length) return { created: [], requests: existing };
+
+  const next = [...existing, ...made];
+  saveCoverRequests(next);
+  if (_synced()) _pushCoverInserts(made.map(_coverToRow));
+  return { created: made, requests: next };
+}
+
+// ── The booking outbox (S32 §2.4) → localStorage ONLY, and staying that way ──
+//
+// A record of what each approval handed to the booking seam. `bookingAdapter.js`
+// owns the shape, the idempotency key and the cap; this is only the seam that
+// lets it reach localStorage without that module growing an import.
+//
+// 🔴 LOCAL ON PURPOSE, AND NOT AS A STAGING POST. It is a log of what THIS
+// DEVICE handed over, and syncing it would need a third table in a migration
+// nobody has run — for a queue that may never be drained at all, depending on
+// how A16 question 3 comes back. A cover approval settles on exactly one device
+// (the compare-and-set has one winner), so the device that recorded it is the
+// device that did it, and per-device idempotency is per-event idempotency.
+export function getBookingOutbox() { return readJSON(KEYS.bookingOutbox, []); }
+export function saveBookingOutbox(list) { writeJSON(KEYS.bookingOutbox, list || []); }
+
+// ── One hydrate for both tables (S32 §2.1) ──────────────────────────────────
+//
+// Pulled together because they are one feature and one migration: a cover
+// request whose roster entry has not arrived renders as "someone", which is
+// worse than rendering nothing.
+//
+// ⚠️ THE TWO TABLES USE DIFFERENT MERGE RULES ON PURPOSE, and reading them side
+// by side is the fastest way to see why.
+//
+//   coach_roster   — server-wins EXCEPT for rows this device has edited and not
+//                    yet had confirmed (`_preferLocalEdits`). The roster is the
+//                    first domain two people edit on two devices, and the edit
+//                    a coach just typed must not lose to a copy the server
+//                    happens to hold.
+//   cover_requests — server-wins, FULL STOP. The local status of a request is
+//                    never ahead of the server's: the only path that changes it
+//                    while synced is `settleCoverRequest`, which writes locally
+//                    only after Postgres has already agreed. So a local value
+//                    that differs from the server is by construction a value
+//                    that LOST, and preferring it would resurrect exactly the
+//                    approval-that-did-not-happen this design is built around.
+//
+// Returns { coaches, requests, absences } or null when not synced / on error,
+// so the caller keeps whatever it already had.
+function _probeTable(table, error) {
+  if (!error) _noteAbsent(table, false);
+  else if (_isMissingTable(error)) _noteAbsent(table, true);
+}
+
+export async function hydrateCoachCover() {
+  if (!_synced()) return null;
+  try {
+    const [rRes, qRes, aRes] = await Promise.all([
+      supabase.from("coach_roster").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("cover_requests").select("*").eq("gym_id", _ctx.gymId),
+      supabase.from("coach_absences").select("*").eq("gym_id", _ctx.gymId),
+    ]);
+
+    // The probe that lets the UI stop claiming delivery. Each table is recorded
+    // on its own — they are separate relations and 0010 could half-apply.
+    //
+    // ⚠️ ONLY A SUCCESSFUL READ CLEARS AN ABSENCE. A network error is not
+    // evidence that the table is there; treating it as such would let a gym that
+    // has never run 0010 go back to being told a cover request is "waiting for
+    // Dev" for the duration of an outage — a claim that is false whether or not
+    // the wifi is working. Absence is asserted only by the error that means it.
+    _probeTable("coach_roster", rRes.error);
+    _probeTable("cover_requests", qRes.error);
+    _probeTable("coach_absences", aRes.error);
+
+    if (rRes.error || qRes.error || aRes.error) {
+      console.warn("[store] hydrateCoachCover failed:",
+        (rRes.error || qRes.error || aRes.error).message);
+      return null;
+    }
+
+    const serverCoaches = (rRes.data || []).map(_rowToCoach);
+    const serverReqs    = (qRes.data || []).map(_rowToCover);
+    const serverAbs     = (aRes.data || []).map(_rowToAbsence);
+    const localCoaches  = getCoaches();
+
+    // Seed from local when the server has nothing — the same first-run shape as
+    // hydrateUserClasses and hydratePersonas. Returning null keeps local as-is
+    // rather than flickering through an empty roster.
+    if (serverCoaches.length === 0 && localCoaches.length > 0) {
+      // 🔴 DROP THE MARKS FIRST, or the seed can push nothing at all. `saveCoaches`
+      // sends a DELTA, and a mark says "the server confirmed this content" — but
+      // we are standing here BECAUSE the server has no roster, so every mark is
+      // provably wrong. Without this, a device whose gym's server was reset (or
+      // re-provisioned) keeps its whole roster to itself for ever: the delta is
+      // empty, no request is made, and no error is recorded anywhere. That is
+      // `restorePersonaCascade`'s lesson arriving from the other direction, and
+      // it is why that function drops marks before re-saving too.
+      localCoaches.forEach(c => c && _unmark("coach_roster", c.id));
+      saveCoaches(localCoaches);
+      const localAbs = getAbsences();
+      if (localAbs.length) { localAbs.forEach(a => a && _unmark("coach_absences", a.id)); saveAbsences(localAbs); }
+      const localReqs = getCoverRequests();
+      if (localReqs.length) _pushCoverInserts(localReqs.map(_coverToRow));
+      return null;
+    }
+
+    const unsynced = _unsyncedIds("coach_roster", localCoaches.map(_coachToRow));
+    const preferred = _preferLocalEdits(serverCoaches, localCoaches, unsynced);
+    const coaches = _guardList("coach_roster", preferred, getCoaches, saveCoaches);
+    // ⚠️ ABSENCES TAKE THE ROSTER'S RULE, NOT THE COVER REQUESTS'. An absence is
+    // something a coach TYPES on their own device and the push is
+    // fire-and-forget, so the "server has an older copy of a row I just edited"
+    // case is live here exactly as it is for an availability grid. A cover's
+    // status is never legitimately ahead of the server's, because the only path
+    // that changes it while synced waits for Postgres to agree first.
+    const localAbs   = getAbsences();
+    const absUnsynced = _unsyncedIds("coach_absences", localAbs.map(_absenceToRow));
+    const absences   = _guardList("coach_absences",
+                                  _preferLocalEdits(serverAbs, localAbs, absUnsynced),
+                                  getAbsences, saveAbsences);
+
+    const requests = _guardList("cover_requests", serverReqs, getCoverRequests,
+                                // ⚠️ The resave for THIS table is the insert, not a
+                                // list upsert — see the section header.
+                                (merged) => { saveCoverRequests(merged);
+                                              _pushCoverInserts(merged.map(_coverToRow)); });
+
+    writeJSON(KEYS.coaches, coaches);
+    writeJSON(KEYS.coverRequests, requests);
+    writeJSON(KEYS.absences, absences);
+
+    // A row we kept because it was newer than the server's is a row the server
+    // still has not got. `_guardList` only re-pushes when the LEDGER says the
+    // table failed, and the commonest way to end up here is quieter than that —
+    // a tab closed mid-request marks nothing and records no failure. Re-saving
+    // recomputes the delta and sends exactly those rows.
+    if (unsynced.size) saveCoaches(coaches);
+    if (absUnsynced.size) saveAbsences(absences);
+
+    return { coaches, requests, absences };
+  } catch (e) {
+    console.warn("[store] hydrateCoachCover error:", e?.message || e);
+    return null;
+  }
 }

@@ -396,3 +396,111 @@ test.describe("a light brand survives the trip to the room", () => {
     expect(seen.color).not.toBe("rgb(255, 247, 240)");
   });
 });
+
+// ─── The 10-foot rule, measured on the wall ──────────────────────────────────
+//
+// `displayKit.js` carries the arithmetic and `displayKit.test.js` pins it, but
+// neither can see a raw `fontSize:"9px"` in the JSX — and that is how the Floor
+// board's START badge came to render at 9px on a 1280 display AND at 9px on a
+// 1920 one. This is the guard that reads the rendered board.
+//
+// ⚠️ 1280×720, deliberately. `tvFont` keys to viewport HEIGHT against a 1080
+// reference, so every room-facing size is at its smallest on a 720p panel — a
+// projector, or a laptop on an HDMI cable, which is what a boutique studio
+// actually plugs in. Measuring on 1080p would measure the case that was fine.
+test.describe("nothing on a room-facing board is smaller than the wall allows", () => {
+  const STAGES = [
+    { id:"s1", type:"warmup",   name:"Warm-Up",       dur:300, exercises:[{n:"World's Greatest Stretch",s:"",r:"5 min",rest:""}], tracks:[] },
+    { id:"s2", type:"strength", name:"Strength Block",dur:900, exercises:[{n:"Conventional Deadlift",s:"5",r:"5",rest:"3m"}], tracks:[] },
+    { id:"s3", type:"circuit",  name:"Circuit Blast", dur:600, exercises:[{n:"Kettlebell Swing",s:"3",r:"15",rest:"30s"}], tracks:[] },
+  ];
+  const TV_MIN_PX = 11;
+
+  // What each board actually puts on the wall differs — the Floor board shows
+  // STATIONS (movements), not stage names — so the "there is a class on this
+  // board" anchor has to be per-mode rather than one hopeful string.
+  const ANCHOR = { Plan: /Strength Block/, Floor: /Conventional Deadlift/, Coach: /Strength Block|World's Greatest/ };
+
+  for (const mode of ["Plan", "Floor", "Coach"]) {
+    test(`${mode} clears ${TV_MIN_PX}px on a 720p wall`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto("./");
+      await page.evaluate((st) => {
+        localStorage.clear();
+        sessionStorage.setItem("jungle_pin_ok", "1");
+        localStorage.setItem("jungle_draft_class", JSON.stringify({ name: "Sunrise Strength", classChoice: null, stages: st }));
+      }, STAGES);
+      await page.reload();
+      await page.getByRole("button", { name: "Class Runner", exact: true }).click();
+      await page.getByRole("button", { name: /^Room TV$/ }).first().click();
+      await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+      await page.getByRole("button", { name: new RegExp(`^${mode}$`) }).click();
+
+      const r = await page.evaluate(() => {
+        const small = []; let measured = 0;
+        document.querySelectorAll("body *").forEach((el) => {
+          if (el.children.length) return;
+          const t = (el.textContent || "").trim(); if (!t) return;
+          const rc = el.getBoundingClientRect(); if (rc.width < 2 || rc.height < 2) return;
+          measured++;
+          const fs = parseFloat(getComputedStyle(el).fontSize);
+          if (fs < 11) small.push(`${fs}px "${t.slice(0, 30)}"`);
+        });
+        return { measured, small };
+      });
+
+      // 🔴 The board must have a class on it. An empty Room TV clears any type
+      // floor trivially — this repo has shipped that mistake in this very file's
+      // sibling sweep, and a count control only helps if it counts the content.
+      expect(r.measured, `${mode}: only ${r.measured} text nodes — the board is empty`).toBeGreaterThan(10);
+      await expect(page.getByText(ANCHOR[mode]).first(),
+        `${mode} is not showing the seeded class`).toBeVisible();
+      expect(r.small, `${mode} renders text below ${TV_MIN_PX}px on a 720p wall:\n${r.small.join("\n")}`).toEqual([]);
+    });
+  }
+
+  test("the coach's font-scale reaches all three boards, not just one", async ({ page }) => {
+    // `FONT_SCALES` lived in DisplayScreen.jsx, so the other two boards could not
+    // read it without importing a sibling screen — they called `tvFont` with no
+    // `mult` and a coach who chose XL got XL on one surface out of three.
+    const sizeOn = async (mode, scale) => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto("./");
+      await page.evaluate(({ st, sc }) => {
+        localStorage.clear();
+        sessionStorage.setItem("jungle_pin_ok", "1");
+        localStorage.setItem("jungle_draft_class", JSON.stringify({ name: "Sunrise Strength", classChoice: null, stages: st }));
+        localStorage.setItem("jungle_disp_prefs", JSON.stringify({ preset: "full", fontScale: sc }));
+      }, { st: STAGES, sc: scale });
+      await page.reload();
+      await page.getByRole("button", { name: "Class Runner", exact: true }).click();
+      await page.getByRole("button", { name: /^Room TV$/ }).first().click();
+      await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+      await page.getByRole("button", { name: new RegExp(`^${mode}$`) }).click();
+      return page.evaluate(() => {
+        const sizes = [...document.querySelectorAll("body *")]
+          .filter(e => !e.children.length && (e.textContent || "").trim() && e.getBoundingClientRect().width > 2)
+          .map(e => parseFloat(getComputedStyle(e).fontSize));
+        return Math.max(...sizes);
+      });
+    };
+    // ⚠️ WHAT THIS DOES AND DOES NOT PROVE. It proves the setting REACHES each
+    // board, which is the defect — it reached one of the three. It does NOT
+    // prove every element on a board scales: reverting one of the Plan board's
+    // three `tvFont` calls leaves the largest element still scaling and this
+    // still passes. A per-element claim needs the elements identified, which is
+    // a bigger test than the defect warrants. Said here rather than implied by a
+    // name, so the next reader does not over-trust it.
+    //
+    // The ratio, not merely ">", is what makes it an assertion about the SCALE
+    // rather than about a rounding wobble: XL is 1.85×, so a board honouring it
+    // grows its largest type by at least half again.
+    for (const mode of ["Plan", "Floor", "Coach"]) {
+      const m = await sizeOn(mode, "m");
+      const xl = await sizeOn(mode, "xl");
+      expect(xl / m, `${mode}: the coach chose XL (1.85x) and this board's largest type `
+        + `went ${m}px -> ${xl}px`).toBeGreaterThan(1.5);
+    }
+  });
+});
+

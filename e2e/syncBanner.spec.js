@@ -156,8 +156,16 @@ test.describe("sync banner — honest, actionable, dismissible", () => {
 
     // Positive control: both reads returned a real colour, so "they differ" is
     // not two empty strings passing each other.
-    expect(calm).toMatch(/^rgb/);
-    expect(alarmed).toMatch(/^rgb/);
+    //
+    // ⚠️ `rgb(` IS NOT THE ONLY SHAPE A COMPUTED COLOUR TAKES. The severity
+    // colours became `--danger`/`--warn` in session 28, tinted with `color-mix`,
+    // and a `color-mix` computes to `color(srgb 0.93 0.31 0.31)`. This control
+    // was written against the only form the app then produced and failed on a
+    // change that was correct — the control asserting the SHAPE of the answer
+    // rather than that there IS one. The same misreading, in the contrast
+    // scanner, silently passed a screen full of unreadable text.
+    expect(calm).toMatch(/^(rgb|color)\(/);
+    expect(alarmed).toMatch(/^(rgb|color)\(/);
     expect(alarmed, "the banner must not be the same weight forever").not.toBe(calm);
   });
 
