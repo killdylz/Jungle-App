@@ -371,3 +371,96 @@ test.describe("removing a stage from the Class Builder", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── Smart Distribute — the control that overwrote a written class ────────────
+//
+// 🔴 THE BIGGEST OF THE THREE, and the one whose copy was actively misleading.
+// `distributeLibraryExercises` maps EVERY stage to `{...stage, exercises}`: a
+// coach's own movements are not merged, appended to, or spared when the stage is
+// non-empty. They are replaced. The toast said "⚡ 11 exercises across 2 stages",
+// which is a sentence about a gain, for a click that had just deleted their
+// class.
+//
+// The Builder already knew how to tell: `hasCustomExercises` / `anyCustom` sit
+// forty lines above the button and gate BOTH the class-type picker and the style
+// picker behind a confirm before replacing stages. The button between those two
+// pickers consulted neither.
+test.describe("Smart Distribute over a class the coach wrote", () => {
+  const authored = {
+    name: "Dylan’s Tuesday", classChoice: { classType: "crossfit", subType: "wod" },
+    stages: [
+      { id:"s1", type:"warmup",   name:"Warm-Up",  dur:300, exercises:[{ n:"MY OWN WARMUP", s:"", r:"5 min", rest:"" }], tracks:[] },
+      { id:"s2", type:"strength", name:"The Lift", dur:900, exercises:[{ n:"MY OWN LIFT",   s:"5", r:"5", rest:"3m" }], tracks:[] },
+    ],
+  };
+  const exOf = (d) => (d.stages || []).map(s => (s.exercises || []).map(e => e.n));
+
+  async function seedAuthored(page) {
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), authored);
+    await page.reload();
+    await nav(page, "Class Builder");
+  }
+
+  test("🔴 says it REPLACED them, and Undo gives them back", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+
+    // POSITIVE CONTROL: the authored class really loaded.
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+
+    const toast = page.getByTestId("toast");
+    // The word that was missing. "11 exercises across 2 stages" is true and reads
+    // as an addition; a coach who has just lost their class needs the verb.
+    await expect(toast).toContainText("Replaced 2 exercises");
+    await expect(toast).toContainText("from the library");
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.stages[0].exercises.length).toBeGreaterThan(1);
+    expect(exOf(after).flat()).not.toContain("MY OWN WARMUP");
+
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    // Their own movements, in their own stages, in order.
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the undo is a real write, not screen state", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+    await page.getByTestId("toast").getByRole("button", { name: "Undo" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("filling EMPTY stages is still reported as a gain, with no undo", async ({ page }) => {
+    // 🔴 THE CONTROL, and a product rule rather than a technicality:
+    // `handleNewClass` says "an undo offering to restore an empty plan is noise".
+    // Nothing was taken here, so the sentence must not claim anything was, and
+    // no Undo may appear — a version that always says "Replaced 0 exercises"
+    // would pass the test above and be wrong every time a coach starts empty.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate(() => localStorage.setItem("jungle_draft_class", JSON.stringify({
+      name: "Blank", classChoice: { classType: "crossfit", subType: "wod" },
+      stages: [{ id:"s1", type:"warmup", name:"Warm-Up", dur:300, exercises:[], tracks:[] }],
+    })));
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([[]]);   // positive control
+
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText("exercises across 1 stage");
+    await expect(toast).not.toContainText("Replaced");
+    await expect(toast.getByRole("button", { name: "Undo" })).toHaveCount(0);
+    expect(exOf(await stored(page, "jungle_draft_class"))[0].length).toBeGreaterThan(1);
+    expectNoConsoleErrors(errors);
+  });
+});

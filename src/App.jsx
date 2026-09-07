@@ -756,7 +756,6 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const [showPlaylistModal,  setShowPlaylistModal]  = useState(false);
   const [showLibraryModal,   setShowLibraryModal]   = useState(false);
   const [showDjModal,        setShowDjModal]        = useState(false);
-  const [distributeToast,    setDistributeToast]    = useState(null); // {msg}
   const [selIdx, setSelIdx] = useState(0);
 
   // Retroactively enrich BPM for any tracks already in stages (e.g. loaded from localStorage)
@@ -868,8 +867,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       const clsInfo = lib[classType];
       const subInfo = clsInfo?.subTypes?.[subType];
       const total   = distributed.reduce((a, s) => a + (s.exercises?.length||0), 0);
-      setDistributeToast({msg:`✅ ${clsInfo?.icon} ${clsInfo?.label} — ${subInfo?.label||subType} · ${newStages.length} stages · ${total} exercises loaded`});
-      setTimeout(()=>setDistributeToast(null), 4000);
+      toast(`✅ ${clsInfo?.icon} ${clsInfo?.label} — ${subInfo?.label||subType} · ${newStages.length} stages · ${total} exercises loaded`);
     }, 50);
   };
 
@@ -918,7 +916,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
         if (built.length) {
           onReorderStages(built); onSessionNameChange((data && data.name) || "Smart-built class"); setSelIdx(0);
           setSmartBusy(false); setShowSmart(false);
-          setDistributeToast({msg:`\u26a1 Built "${(data && data.name)||"your class"}" \u2014 ${built.length} stages`}); setTimeout(()=>setDistributeToast(null),4000);
+          toast(`\u26a1 Built "${(data && data.name)||"your class"}" \u2014 ${built.length} stages`);
           return;
         }
       } catch(err) { /* fall back to template matcher */ }
@@ -1102,17 +1100,58 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           style={{padding:"5px 10px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           📚 {!isMobile && "Browse "}Library
         </button>
+        {/* 🔴 THIS REPLACES EVERY EXERCISE IN THE CLASS, and it said "⚡ 11
+            exercises across 2 stages" — a sentence about a gain, for an action
+            that had just deleted the coach's own movements. Driven on a
+            hand-authored class: "MY OWN WARMUP" and "MY OWN LIFT" were gone on
+            one click, with nothing offering them back. `distributeLibraryExercises`
+            maps every stage to `{...stage, exercises}` — the coach's list is not
+            merged, appended to or spared when non-empty; it is overwritten.
+
+            It destroys more than the stage removal beside it does, so it gets the
+            same guard for the same reason (see `handleRemoveStage`): the undo
+            holds the PRIOR STAGES and puts each back at its own index, through
+            the same channel that overwrote it.
+
+            ⚠️ THE SENTENCE HAS TO SAY WHICH THING HAPPENED. Filling empty stages
+            and replacing a written class are different events and the old copy
+            described both as the first. An undo is offered only when something
+            was actually taken — `handleNewClass`'s rule, "an undo offering to
+            restore an empty plan is noise".
+
+            ⚠️ It uses the shared `toast()` rather than the bespoke
+            `distributeToast` this used to render, which was `pointerEvents:"none"`
+            and therefore could never have carried an Undo at all. One toast
+            primitive, and the one that is tested — the other three callers of the
+            bespoke one moved across in the same commit and it is gone.
+
+            🔴 THE BUILDER ALREADY KNEW. `hasCustomExercises` / `anyCustom` sit
+            forty lines above this and mean exactly "the coach wrote some of this
+            themselves"; `handleClassChange` and the style picker both consult
+            them and raise a confirm before replacing stages. The button between
+            those two pickers did not. So this was not a rule nobody had — it was
+            a rule this component holds and applied to two of its three
+            overwriting controls.
+
+            An UNDO rather than that confirm, deliberately: the pickers also
+            retype the class and rebuild its stages, which is a bigger change
+            than this one, and `handleNewClass` argues the case against paying a
+            confirm on every success. Distribute keeps the coach's stages, their
+            names and their durations, and swaps what is inside them. */}
         <button title="Smart Distribute"
           onClick={()=>{
             const lib = getLibrary();
             const allNew = distributeLibraryExercises(selectedClass, selectedSub, stages, lib);
             const filled = allNew.filter(s=>(s.exercises||[]).length>0).length;
-            if (filled === 0) { setDistributeToast({msg:"No exercises found — try a different class or style"}); setTimeout(()=>setDistributeToast(null),3500); return; }
+            if (filled === 0) { toast("No exercises found — try a different class or style"); return; }
+            const before = stages;
+            const replaced = before.reduce((a,s)=>a+(s.exercises?.length||0),0);
             allNew.forEach((s,i)=>onStageChange(i,s));
-            const clsInfo = lib[selectedClass]; const subInfo = clsInfo?.subTypes?.[selectedSub];
             const totalEx = allNew.reduce((a,s)=>a+(s.exercises?.length||0),0);
-            setDistributeToast({msg:`⚡ ${totalEx} exercises across ${filled} stage${filled!==1?"s":""}`});
-            setTimeout(()=>setDistributeToast(null),4000);
+            const across = `across ${filled} stage${filled!==1?"s":""}`;
+            if (!replaced) { toast(`⚡ ${totalEx} exercises ${across}`); return; }
+            toast(`Replaced ${replaced} exercise${replaced!==1?"s":""} with ${totalEx} from the library, ${across}`,
+              { undo: () => { before.forEach((s,i)=>onStageChange(i,s)); toast("Your own exercises are back"); } });
           }}
           style={{padding:"5px 10px",background:"color-mix(in srgb, var(--accent) 9%, transparent)",border:`1px solid color-mix(in srgb, var(--accent) 31%, transparent)`,borderRadius:"7px",cursor:"pointer",color:"var(--accent)",fontSize:"11px",fontWeight:"700",display:"flex",alignItems:"center",gap:"4px",flexShrink:0,minHeight:"30px"}}>
           ⚡ {!isMobile && "Smart "}Distribute
@@ -1147,13 +1186,6 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Keep Current</button>
             <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType)} style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--bg)",fontSize:"11px",fontWeight:"700"}}>Apply</button>
           </div>
-        </div>
-      )}
-
-      {/* Distribute toast */}
-      {distributeToast && (
-        <div style={{position:"fixed",bottom:"80px",left:"50%",transform:"translateX(-50%)",background:"var(--navy)",border:`1px solid color-mix(in srgb, var(--accent) 31%, transparent)`,borderRadius:"10px",padding:"12px 20px",color:"var(--text)",fontSize:"13px",fontWeight:"600",zIndex:200,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",pointerEvents:"none",whiteSpace:"nowrap"}}>
-          {distributeToast.msg}
         </div>
       )}
 
@@ -1240,8 +1272,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                                 const to = parseInt(ev.target.value, 10);
                                 if (Number.isNaN(to)) return;
                                 onMoveExercise(i, ei, to);
-                                setDistributeToast({msg:`↪ Moved ${ex.n} to ${stages[to]?.name || `stage ${to+1}`}`});
-                                setTimeout(()=>setDistributeToast(null), 3000);
+                                toast(`↪ Moved ${ex.n} to ${stages[to]?.name || `stage ${to+1}`}`);
                               }}
                               style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:"11px",padding:"2px",flexShrink:0,maxWidth:"34px"}}>
                               <option value="">↪</option>
