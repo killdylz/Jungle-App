@@ -205,6 +205,58 @@ export function CalendarScreen({onBack, onStartClass}) {
     else if (uc.repeat === "weekly") { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
     else if (uc.weekKey === weekKey) { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
   });
+
+  // 🔴 THE GRID HOLDS ONE CLASS PER CELL, AND THE REST USED TO VANISH IN SILENCE.
+  //
+  // `effSchedule` is an object keyed on `day-slot`, so the assignment above is
+  // LAST WINS. Nothing stops a second rule landing on a taken cell: day and slot
+  // are `<select>`s over fixed lists with no uniqueness check, and a studio with
+  // two rooms running two 06:00 Monday classes is an ordinary timetable, not an
+  // edge case. Driven through the real Add-class form, twice into Mon 06:00:
+  //
+  //   stored rules              2      both, correctly
+  //   "N classes this week"     2      counted from occurrencesForWeek, not the grid
+  //   "Publish week · N"        2      it WILL publish the hidden one
+  //   drawn on the grid         1      the second one; the first is gone
+  //
+  // So the class is still scheduled, still counted, still published to
+  // `class_instances`, and still raises cover when its coach is away — it simply
+  // cannot be seen, edited, removed or started on the one screen that shows the
+  // timetable. A coach who adds it, sees nothing, and adds it again now has
+  // three rules and one cell.
+  //
+  // Drawing several classes in a cell is a bigger change than it looks — the
+  // cell carries an edit, a remove, an occurrence lookup keyed on
+  // `cellKey(day, slot, name)` and a Start button, and there is no room or
+  // studio concept anywhere in the product for two concurrent classes to belong
+  // to. That is a product decision and it is written up rather than taken here.
+  // What is NOT a product decision is the silence: this names every rule the
+  // grid could not draw, so the screen states its own limit instead of
+  // swallowing data. Same judgement as the fill bar three hundred lines below.
+  const cellRules = {};
+  rules.forEach(uc => {
+    const put = d => { (cellRules[`${d}-${uc.slot}`] ||= []).push(uc); };
+    if (uc.repeat === "daily") DAYS.forEach(put);
+    else if (uc.repeat === "weekly") put(uc.day);
+    else if (uc.weekKey === weekKey) put(uc.day);
+  });
+  // Last wins above, so in a contested cell every EARLIER rule is the hidden one.
+  //
+  // ⚠ ONE ROW PER RULE PER CELL, and no dedupe set — the first draft had one and
+  // it was dead code. A daily rule paints seven cells and can genuinely lose
+  // more than one of them, which is two honest rows and not a duplicate; and
+  // within a single cell `put` is called once per rule per day, so the same rule
+  // cannot appear twice in one list. The set could not fire, and this repo's own
+  // rule is that a check which cannot fail gets deleted rather than kept for
+  // comfort. Found by mutating it and watching the suite stay green.
+  const hiddenClasses = [];
+  for (const [key, list] of Object.entries(cellRules)) {
+    if (list.length < 2) continue;
+    const day = key.slice(0, key.indexOf("-"));
+    const slot = key.slice(key.indexOf("-") + 1);
+    const shown = list[list.length - 1].name;
+    for (const uc of list.slice(0, -1)) hiddenClasses.push({ id: uc.id, name: uc.name, day, slot, shown });
+  }
   // ── Edit a rule in place (session 18) ─────────────────────────────────────
   // Session 15 gave the grid a remove; there was still no way to RENAME or
   // RE-SLOT a class. The only path was remove-and-re-add, which mints a new
@@ -643,6 +695,39 @@ export function CalendarScreen({onBack, onStartClass}) {
           </div>
         ))}
       </div>
+
+      {/* 🔴 What the grid above could not draw. See `hiddenClasses`.
+          A cell holds one class; a second rule on the same day and slot is
+          stored, counted in "N classes this week", included in "Publish week"
+          and invisible. Naming it does not fix the grid — that is a product
+          decision, written up rather than taken — but it stops the screen
+          swallowing a class in silence, which is the part that is not a
+          decision. */}
+      {hiddenClasses.length > 0 && (
+        <div data-testid="schedule-hidden"
+             style={{margin:"12px 0 0",padding:"12px 14px",borderRadius:"10px",
+                     border:"1px solid var(--danger-border)",
+                     background:"color-mix(in srgb, var(--danger) 6%, transparent)"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",marginBottom:"5px"}}>
+            {hiddenClasses.length} class{hiddenClasses.length === 1 ? " is" : "es are"} not shown on the grid
+          </div>
+          <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,margin:0}}>
+            The week grid holds one class per time slot, so where two share a slot only the
+            later one is drawn. {hiddenClasses.length === 1 ? "It is" : "They are"} still
+            scheduled, still counted above, and still published.
+          </p>
+          <ul style={{margin:"8px 0 0",padding:"0 0 0 16px",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+            {hiddenClasses.map(h => (
+              <li key={`${h.id}-${h.day}-${h.slot}`}>
+                <strong>{h.name}</strong> &mdash; {h.day} {h.slot}, behind {h.shown}
+              </li>
+            ))}
+          </ul>
+          <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,margin:"8px 0 0"}}>
+            To see one on the grid, move it to a free slot or remove the other.
+          </p>
+        </div>
+      )}
 
       {/* S30 §2.1–§2.3 · the roster, availability and cover. It sits under the
           grid rather than in a nav entry of its own: the names it is about are
