@@ -88,15 +88,45 @@ export function summaryContent({ stages = [], sessionName = "" } = {}) {
 export function summaryTotals(content) {
   const stages = Array.isArray(content?.stages) ? content.stages : [];
   const movements = new Set();
-  let minutes = 0;
+  let minutes = 0, timedStages = 0;
   for (const s of stages) {
-    minutes += Number(s?.durMin) || 0;
+    const m = Number(s?.durMin) || 0;
+    if (m > 0) { minutes += m; timedStages++; }
     for (const ex of s?.exercises || []) {
       const n = clean(ex?.n);
       if (n) movements.add(n.toLowerCase());
     }
   }
-  return { minutes, stageCount: stages.length, movementCount: movements.size };
+  return {
+    minutes, stageCount: stages.length, movementCount: movements.size, timedStages,
+    // 🔴 WHETHER `minutes` MAY BE CALLED THE CLASS LENGTH, and it is the whole
+    // reason this function returns more than a number.
+    //
+    // `durMin` is OPTIONAL per stage — `summaryContent` writes it only when the
+    // stage's seconds round to at least a minute, and DROPS the key otherwise.
+    // ⚠ How a real class gets there, measured rather than assumed: every
+    // stage-creation path in the app today sets a duration (`handleAddStage` uses
+    // 600, every template in `data/library.js` sets one, `blueprints.js` has a
+    // per-role default), so the way in is the Builder's own duration box, whose
+    // `min="1"` is an HTML hint and not a clamp. Typing 0 stores `dur: 0` and
+    // this key vanishes. That input should also be fixed — and is, in the commit
+    // after this one — but the sum must not depend on it: this document is
+    // whatever the Edge Function returns, from any client version, and a schema
+    // where a key is optional is one where the key is sometimes absent.
+    //
+    // Summing it anyway produces a PARTIAL total wearing a total's label. Measured
+    // on the member link: a sixty-minute class with a timed warm-up (10) and a
+    // timed conditioning block (15) around an untimed strength block reported
+    // **"25 min"** to the member — 35 minutes short, with `klass.durationMin: 60`
+    // sitting unused in the same payload because the old fallback fired only when
+    // the sum was exactly zero. A confident wrong number is worse than no number,
+    // and this is the one surface in the product a member ever reads.
+    //
+    // So the sum is offered as the class length only when EVERY stage is timed.
+    // Otherwise the caller has to reach for the class's own booked duration, or
+    // say nothing — which is what `ClassSummary` now does.
+    minutesComplete: stages.length > 0 && timedStages === stages.length,
+  };
 }
 
 /** Nothing worth publishing — the caller should say so rather than mint a link. */

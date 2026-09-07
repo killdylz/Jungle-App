@@ -1,6 +1,22 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase, supabaseEnabled, makeCan } from "./supabase.js";
 
+// ⚠️ RAW HEX HERE IS DELIBERATE, and it is the one place in the product where
+// the white-label rule cannot apply.
+//
+// This component decides WHETHER there is a gym. It renders before the staff
+// app chunk loads, so `applySkinCSS` has not run and `--bg`/`--text`/`--accent`
+// do not exist yet — a token here resolves to nothing and paints black on
+// black. It also renders for someone who is not signed in, which means the app
+// does not yet know whose brand to wear.
+//
+// Canopy's palette spelled out is therefore the honest answer: the default
+// skin, shown before a gym is known. `bootColours()` exists for the OTHER case
+// — a RETURNING gym, where the last-used background is cached and worth
+// painting. There is no cached brand on a first sign-in.
+//
+// The Google mark's four hexes are Google's, and a brand mark repainted in a
+// studio's colours is a trademark problem, not a theming win.
 const AuthContext = createContext(null);
 export const useJungleAuth = () => useContext(AuthContext);
 

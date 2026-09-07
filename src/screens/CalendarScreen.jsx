@@ -21,12 +21,18 @@ import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
          startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
+import { applyCovers } from "../lib/coverRequests.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useToast } from "../ui/toast.jsx";
 import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
 import { resolveClassType } from "../lib/libraryStore.js";
+import { hueInk } from "../lib/colors.js";
+// Not lazy: this screen is already in the StaffApp chunk and a `lazy()` here
+// would add a chunk that needs its own line in check-size.mjs to have a
+// ceiling at all. It is a panel on this screen, not a destination.
+import { CoachCoverPanel } from "./CoachCoverPanel.jsx";
 
 // Its own component only so it can hold a `useDialog` — a hook cannot be called
 // from inside the `{showAddClass && …}` that used to render this markup inline.
@@ -199,6 +205,58 @@ export function CalendarScreen({onBack, onStartClass}) {
     else if (uc.repeat === "weekly") { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
     else if (uc.weekKey === weekKey) { effSchedule[`${uc.day}-${uc.slot}`] = entry; }
   });
+
+  // 🔴 THE GRID HOLDS ONE CLASS PER CELL, AND THE REST USED TO VANISH IN SILENCE.
+  //
+  // `effSchedule` is an object keyed on `day-slot`, so the assignment above is
+  // LAST WINS. Nothing stops a second rule landing on a taken cell: day and slot
+  // are `<select>`s over fixed lists with no uniqueness check, and a studio with
+  // two rooms running two 06:00 Monday classes is an ordinary timetable, not an
+  // edge case. Driven through the real Add-class form, twice into Mon 06:00:
+  //
+  //   stored rules              2      both, correctly
+  //   "N classes this week"     2      counted from occurrencesForWeek, not the grid
+  //   "Publish week · N"        2      it WILL publish the hidden one
+  //   drawn on the grid         1      the second one; the first is gone
+  //
+  // So the class is still scheduled, still counted, still published to
+  // `class_instances`, and still raises cover when its coach is away — it simply
+  // cannot be seen, edited, removed or started on the one screen that shows the
+  // timetable. A coach who adds it, sees nothing, and adds it again now has
+  // three rules and one cell.
+  //
+  // Drawing several classes in a cell is a bigger change than it looks — the
+  // cell carries an edit, a remove, an occurrence lookup keyed on
+  // `cellKey(day, slot, name)` and a Start button, and there is no room or
+  // studio concept anywhere in the product for two concurrent classes to belong
+  // to. That is a product decision and it is written up rather than taken here.
+  // What is NOT a product decision is the silence: this names every rule the
+  // grid could not draw, so the screen states its own limit instead of
+  // swallowing data. Same judgement as the fill bar three hundred lines below.
+  const cellRules = {};
+  rules.forEach(uc => {
+    const put = d => { (cellRules[`${d}-${uc.slot}`] ||= []).push(uc); };
+    if (uc.repeat === "daily") DAYS.forEach(put);
+    else if (uc.repeat === "weekly") put(uc.day);
+    else if (uc.weekKey === weekKey) put(uc.day);
+  });
+  // Last wins above, so in a contested cell every EARLIER rule is the hidden one.
+  //
+  // ⚠ ONE ROW PER RULE PER CELL, and no dedupe set — the first draft had one and
+  // it was dead code. A daily rule paints seven cells and can genuinely lose
+  // more than one of them, which is two honest rows and not a duplicate; and
+  // within a single cell `put` is called once per rule per day, so the same rule
+  // cannot appear twice in one list. The set could not fire, and this repo's own
+  // rule is that a check which cannot fail gets deleted rather than kept for
+  // comfort. Found by mutating it and watching the suite stay green.
+  const hiddenClasses = [];
+  for (const [key, list] of Object.entries(cellRules)) {
+    if (list.length < 2) continue;
+    const day = key.slice(0, key.indexOf("-"));
+    const slot = key.slice(key.indexOf("-") + 1);
+    const shown = list[list.length - 1].name;
+    for (const uc of list.slice(0, -1)) hiddenClasses.push({ id: uc.id, name: uc.name, day, slot, shown });
+  }
   // ── Edit a rule in place (session 18) ─────────────────────────────────────
   // Session 15 gave the grid a remove; there was still no way to RENAME or
   // RE-SLOT a class. The only path was remove-and-re-add, which mints a new
@@ -245,6 +303,25 @@ export function CalendarScreen({onBack, onStartClass}) {
     setEditingId(id);
     setShowAddClass(true);
   };
+
+  // Reassign one rule's coach. The class keeps carrying a NAME — there is no
+  // `coachId` on a rule and deliberately so (see coachRoster.js and migration
+  // 0010) — so an approved cover writes the new coach's name exactly as a coach
+  // typing it would, and nothing about the sync path changes.
+  // 🔴 `assignCoach` IS GONE (S33), AND ITS ABSENCE IS THE FEATURE. Approving a
+  // cover used to call this, which rewrote the RULE's coach field — permanent,
+  // because a rule has no dates, so covering one ill Monday moved the class
+  // every Monday until a human edited it back. A cover is now a dated row that
+  // `applyCovers` overlays onto the derived occurrences, so it lasts exactly as
+  // long as the day it names and the schedule is never written to at all.
+  //
+  // The panel bumps this instead, and the covers are re-read. A counter rather
+  // than lifting the whole cover state up: the panel owns that state and this
+  // screen only needs to know it changed.
+  const [coverTick, setCoverTick] = React.useState(0);
+  const covers = React.useMemo(
+    () => ({ requests: store.getCoverRequests(), roster: store.getCoaches() }),
+    [coverTick]);
 
   const addClass = () => {
     if (!addForm.name.trim()) return;
@@ -321,7 +398,12 @@ export function CalendarScreen({onBack, onStartClass}) {
   // must see the normalised type. Driving the UI and reading the stored row back
   // is what caught this: the grid above was already showing the healed value
   // while the published occurrence still carried `"HIIT"`.
-  const weekOccurrences = occurrencesForWeek(rules, startOfWeek, { days: DAYS });
+  // ⚠️ COVERS ARE APPLIED BEFORE ANYTHING READS THIS, including `publishWeek`.
+  // A published `class_instances` row carries `coach_name`, so a week published
+  // after a cover was agreed has to name the coach who is actually teaching —
+  // otherwise attendance and every analysis over it credit the wrong person.
+  const weekOccurrences = applyCovers(
+    occurrencesForWeek(rules, startOfWeek, { days: DAYS }), covers.requests, covers.roster);
   const pending = diffOccurrences(weekOccurrences, instances);
   const publishWeek = () => {
     const r = store.publishOccurrences(weekOccurrences);
@@ -348,6 +430,9 @@ export function CalendarScreen({onBack, onStartClass}) {
     {day:"Thu",slot:"09:00",name:"Mobility",    reason:"try 12:00 — lunchtime demand"},
   ] : [];
 
+  // MOCK DATA, gated off (FLAGS.mockAnalytics is false and the invented KPIs are
+  // verified absent from the deployed bundle). The hexes are part of the fixture,
+  // not part of the theme — they never reach a gym.
   const trainers = FLAGS.mockAnalytics ? [
     {name:"Mara K.",  classes:14, cap:16, color:"#F59E0B"},
     {name:"Dev R.",   classes:11, cap:14, color:"#22D3A6"},
@@ -524,7 +609,18 @@ export function CalendarScreen({onBack, onStartClass}) {
                         </button>
                       )}
                       <div style={{fontSize:isMobile?"9px":"11px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:"28px"}}>{cls.name}</div>
-                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {/* 🔴 THE OCCURRENCE'S COACH, NOT THE RULE'S. They are the
+                          same name on every ordinary day; on a day somebody is
+                          covering, the occurrence carries who is actually
+                          teaching and the rule still carries whose class it is.
+                          Showing the rule's name here would make an agreed cover
+                          invisible on the one screen the gym looks at most. */}
+                      <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{[occ?.coachName || cls.coach, cls.dur].filter(Boolean).join(" · ")}</div>
+                      {occ?.coveringFor && (
+                        <div style={{fontSize:"10px",color:"var(--text)",marginTop:"2px",fontWeight:"700"}}>
+                          covering for {occ.coveringFor}
+                        </div>
+                      )}
                       {/* The fill bar and its "%" are gone. Nothing in the
                           product ever SETS `fill` — no capacity field, no
                           booking integration — so every cell on every gym's
@@ -600,6 +696,46 @@ export function CalendarScreen({onBack, onStartClass}) {
         ))}
       </div>
 
+      {/* 🔴 What the grid above could not draw. See `hiddenClasses`.
+          A cell holds one class; a second rule on the same day and slot is
+          stored, counted in "N classes this week", included in "Publish week"
+          and invisible. Naming it does not fix the grid — that is a product
+          decision, written up rather than taken — but it stops the screen
+          swallowing a class in silence, which is the part that is not a
+          decision. */}
+      {hiddenClasses.length > 0 && (
+        <div data-testid="schedule-hidden"
+             style={{margin:"12px 0 0",padding:"12px 14px",borderRadius:"10px",
+                     border:"1px solid var(--danger-border)",
+                     background:"color-mix(in srgb, var(--danger) 6%, transparent)"}}>
+          <div style={{fontSize:"12px",fontWeight:"700",color:"var(--text)",marginBottom:"5px"}}>
+            {hiddenClasses.length} class{hiddenClasses.length === 1 ? " is" : "es are"} not shown on the grid
+          </div>
+          <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,margin:0}}>
+            The week grid holds one class per time slot, so where two share a slot only the
+            later one is drawn. {hiddenClasses.length === 1 ? "It is" : "They are"} still
+            scheduled, still counted above, and still published.
+          </p>
+          <ul style={{margin:"8px 0 0",padding:"0 0 0 16px",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+            {hiddenClasses.map(h => (
+              <li key={`${h.id}-${h.day}-${h.slot}`}>
+                <strong>{h.name}</strong> &mdash; {h.day} {h.slot}, behind {h.shown}
+              </li>
+            ))}
+          </ul>
+          <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,margin:"8px 0 0"}}>
+            To see one on the grid, move it to a free slot or remove the other.
+          </p>
+        </div>
+      )}
+
+      {/* S30 §2.1–§2.3 · the roster, availability and cover. It sits under the
+          grid rather than in a nav entry of its own: the names it is about are
+          typed into the dialog on THIS screen, and the product already has two
+          other things called "Coaches". See CoachCoverPanel.jsx's header. */}
+      <CoachCoverPanel userClasses={userClasses} isMobile={isMobile}
+                       onCoversChanged={() => setCoverTick(n => n + 1)} />
+
       {/* Bottom: AI tips + Trainer load */}
       {/* ─── UI-POLISH §3.5 · two panels that could never fill ────────────────
           `aiTips` and `trainers` are both `FLAGS.mockAnalytics ? [...] : []` and
@@ -653,10 +789,10 @@ export function CalendarScreen({onBack, onStartClass}) {
               <div key={i}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                   <span style={{fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>{t.name}</span>
-                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?"#F59E0B":"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
+                  <span style={{fontSize:"12px",color:t.classes/t.cap>0.85?hueInk("var(--warn)"):"var(--muted)",fontWeight:"600"}}>{t.classes} classes{t.classes/t.cap>0.85?" ⚠":""}</span>
                 </div>
                 <div style={{height:"7px",background:"var(--navy)",borderRadius:"4px",overflow:"hidden"}}>
-                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"#F59E0B":t.color,borderRadius:"4px",transition:"width 0.4s"}}/>
+                  <div style={{width:`${(t.classes/t.cap)*100}%`,height:"100%",background:t.classes/t.cap>0.85?"var(--warn)":t.color  /* a FILL: the meter bar, not ink */,borderRadius:"4px",transition:"width 0.4s"}}/>
                 </div>
                 <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"2px"}}>{t.classes}/{t.cap} capacity</div>
               </div>
@@ -666,7 +802,7 @@ export function CalendarScreen({onBack, onStartClass}) {
             )}
           </div>
           {trainers.some(t=>t.classes/t.cap>0.85) && (
-            <div style={{marginTop:"14px",padding:"10px 12px",background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:"8px",fontSize:"11px",color:"#F59E0B",lineHeight:"1.5"}}>
+            <div style={{marginTop:"14px",padding:"10px 12px",background:"color-mix(in srgb, var(--warn) 8%, transparent)",border:"1px solid var(--warn-border)",borderRadius:"8px",fontSize:"11px",color:hueInk("var(--warn)"),lineHeight:"1.5"}}>
               ⚠ Mara is near weekly cap. Shift Fri Burn to Jo to balance load.
             </div>
           )}

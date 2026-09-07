@@ -91,7 +91,7 @@ export function AdminTeamScreen({ onBack }) {
   const label = { fontSize:"10px", fontWeight:"700", color:"var(--muted)", textTransform:"uppercase", letterSpacing:"1.5px", marginBottom:"10px" };
   const inp = { padding:"9px 12px", background:"var(--navy)", border:"1px solid var(--border)", borderRadius:"8px", color:"var(--text)", fontSize:"13px" };
   const sel = { ...inp, cursor:"pointer" };
-  const chipBtn = (danger) => ({ padding:"5px 10px", background:"transparent", border:`1px solid ${danger?"color-mix(in srgb, #EF4444 40%, transparent)":"var(--border)"}`, color:danger?"#EF4444":"var(--muted)", borderRadius:"7px", cursor:busy?"default":"pointer", fontSize:"11px", fontWeight:"600" });
+  const chipBtn = (danger) => ({ padding:"5px 10px", background:"transparent", border:`1px solid ${danger?"color-mix(in srgb, var(--danger) 40%, transparent)":"var(--border)"}`, color:danger?"#EF4444":"var(--muted)", borderRadius:"7px", cursor:busy?"default":"pointer", fontSize:"11px", fontWeight:"600" });
 
   if (!supabaseEnabled) return (
     <div style={{ padding:"40px", maxWidth:"640px", margin:"0 auto" }}>
@@ -114,7 +114,7 @@ export function AdminTeamScreen({ onBack }) {
       <div style={{ fontSize:"clamp(22px,3vw,28px)", fontWeight:"800", color:"var(--text)", marginBottom:"4px" }}>Team</div>
       <div style={{ fontSize:"13px", color:"var(--muted)", marginBottom:"22px" }}>{auth?.gym?.name || "Your gym"} · invite people and set what they can do.</div>
 
-      {err && <div style={{ background:"color-mix(in srgb, #EF4444 12%, transparent)", border:"1px solid color-mix(in srgb, #EF4444 30%, transparent)", color:"#EF4444", padding:"10px 12px", borderRadius:"8px", fontSize:"12px", marginBottom:"16px" }}>{err}</div>}
+      {err && <div style={{ background:"color-mix(in srgb, var(--danger) 12%, transparent)", border:"1px solid color-mix(in srgb, var(--danger) 30%, transparent)", color:"var(--danger)", padding:"10px 12px", borderRadius:"8px", fontSize:"12px", marginBottom:"16px" }}>{err}</div>}
 
       {/* Invite */}
       <div style={{ ...card, marginBottom:"18px" }}>

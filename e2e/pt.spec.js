@@ -52,6 +52,10 @@ async function completeScreen(page, only = []) {
     const word = only.includes(short) ? "Yes" : "No";
     await page.getByRole("button", { name: `${word} — ${short}`, exact: true }).click();
   }
+  // D5: health answers are not written without the consent tick. Part of the
+  // helper because it is part of every real screening — the tests that assert
+  // the tick is REQUIRED drive it by hand instead.
+  await page.getByTestId("parq-consent").locator("input[type=checkbox]").check();
   await page.getByRole("button", { name: "Save health screen" }).click();
 }
 
@@ -261,9 +265,127 @@ test.describe("the health screen gates individualised load", () => {
 
     expectNoConsoleErrors(errors);
   });
+
+  // ─── D4 · the cliff has a warning in front of it now ──────────────────────
+  test("a screen about to expire warns without blocking", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    // Screened eleven and a half months ago: ~15 days of validity left, inside
+    // the 30-day warning window. Relative to today, so the fixture cannot rot.
+    await page.evaluate((screenedAt) => {
+      const clean = ["q1","q2","q3","q4","q5","q6","q7"].reduce((a, k) => { a[k] = false; return a; }, {});
+      localStorage.setItem("jungle_parq_records", JSON.stringify([
+        { id: "p0", memberId: "m0", screenedAt, answers: clean, clearance: null,
+          screenedBy: "Dylan", recordedAt: new Date().toISOString() },
+      ]));
+    }, day(-350));
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+
+    // The list chip carries it, so a coach sees it while scanning rather than
+    // only after opening the client.
+    await expect(page.getByTestId("pt-parq-chip").first()).toContainText("expires in");
+
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    // 🔴 The load-bearing half: still cleared, still programmable. A warning
+    // that blocked would just move the cliff thirty days earlier.
+    await expect(page.getByTestId("pt-parq-state")).toContainText("Cleared");
+    await expect(page.getByTestId("pt-plan-locked")).toHaveCount(0);
+    await expect(page.getByTestId("pt-parq-state")).toContainText("expires in");
+
+    expectNoConsoleErrors(errors);
+  });
 });
 
 test.describe("planned sessions", () => {
+  // ── D6 · the four fields that had no way in ────────────────────────────────
+  //
+  // 🔴 `updatePtClient` accepted `goal`, `coachName`, `notes` and `startedAt`
+  // from the day it was written, and the app's only call sent `{ status }`. So a
+  // goal typed once at add time was permanent, and `coachName` and `notes` were
+  // stored fields no screen rendered. `storeWriters.test.js` proves a CALL SITE
+  // exists; it cannot prove the form works. This drives it and reads the STORED
+  // row, which is the repo rule and the only thing that separates "a control was
+  // added" from "a control writes what it says it writes".
+  test("every detail a 1:1 client carries can be corrected, and it is what gets stored", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "1:1 Clients");
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+
+    // POSITIVE CONTROL. The panel is really on screen, showing the seeded goal
+    // and saying — in words, not as a blank — what is not recorded yet.
+    const details = page.getByTestId("pt-details");
+    await expect(details).toContainText("First pull-up");
+    await expect(details).toContainText("Nobody named");
+    await expect(details).toContainText("No start date recorded");
+
+    await page.getByRole("button", { name: "Edit details" }).click();
+    await page.locator("#pt-edit-goal").fill("First strict pull-up");
+    await page.locator("#pt-edit-coach").fill("Mara K.");
+    await page.locator("#pt-edit-started").fill(day(-30));
+    await page.locator("#pt-edit-notes").fill("Left shoulder — keep overhead volume low.");
+    await page.getByRole("button", { name: "Save details" }).click();
+
+    // 🔴 THE STORED ROW. All four, in one write.
+    const clients = await stored(page, "jungle_pt_clients");
+    expect(clients).toHaveLength(1);
+    expect(clients[0].goal).toBe("First strict pull-up");
+    expect(clients[0].coachName).toBe("Mara K.");
+    expect(clients[0].startedAt).toBe(day(-30));
+    expect(clients[0].notes).toBe("Left shoulder — keep overhead volume low.");
+    // The relationship itself is untouched: an edit is not a status change.
+    expect(clients[0].status).toBe("active");
+    expect(clients[0].memberId).toBe("m0");
+
+    // And the panel reads back what was written, rather than the form's own state.
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    await expect(page.getByTestId("pt-details")).toContainText("First strict pull-up");
+    await expect(page.getByTestId("pt-details")).toContainText("Mara K.");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // ⚠️ The bug an `editing` boolean produces, pinned so it cannot come back: the
+  // form is keyed on the CLIENT ID, so clicking a different person while editing
+  // must not offer the first person's values under the second person's name.
+  test("an open edit form does not follow you onto another client", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    // A second client, so there is somewhere else to click.
+    await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem("jungle_pt_clients"));
+      list.push({ id: "c1", memberId: "m1", goal: "Deadlift 100kg", status: "active", startedAt: "" });
+      localStorage.setItem("jungle_pt_clients", JSON.stringify(list));
+    });
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+
+    await page.getByRole("button", { name: /^Sarah Chen/ }).click();
+    await page.getByRole("button", { name: "Edit details" }).click();
+    await page.locator("#pt-edit-goal").fill("EDITED BUT NEVER SAVED");
+
+    // Switch client. The form must close, not travel.
+    await page.getByRole("button", { name: /^Marcus Lee/ }).click();
+    await expect(page.locator("#pt-edit-goal")).toHaveCount(0);
+    await expect(page.getByTestId("pt-details")).toContainText("Deadlift 100kg");
+    await expect(page.getByTestId("pt-details")).not.toContainText("EDITED BUT NEVER SAVED");
+
+    // And nothing was written by abandoning the form.
+    const clients = await stored(page, "jungle_pt_clients");
+    expect(clients.find(c => c.id === "c0").goal).toBe("First pull-up");
+
+    expectNoConsoleErrors(errors);
+  });
+
   test("a session is marked done, and removing a planned one can be undone", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
@@ -355,4 +477,201 @@ test("the 1:1 screen's session row survives a thumb at 390px", async ({ page }) 
 
   const scan = await tapScan(page);
   expect(scan.misses, reportTaps("1:1 Clients with a session at 390px", scan)).toEqual([]);
+});
+
+// ─── D5 · health answers are not collected without a consent trail ───────────
+//
+// The store refuses too (`ptStore.test.js`), because a gate that lives only in
+// JSX is one the next caller walks through. This drives the surface: the notice
+// is on screen, the tick is required, and — per the repo rule — the assertion is
+// on the STORED object, not only on what was rendered.
+test.describe("health-screen consent", () => {
+  test("refuses to record health answers until the client agrees", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "Health Screen");
+    await page.selectOption("#parq-client", { label: "Sarah Chen" });
+
+    // The notice is actually on the page. A consent record whose notice was
+    // never shown is the fabricated compliance record this change exists to
+    // avoid, so the words being present is part of the assertion.
+    await expect(page.getByTestId("parq-consent")).toContainText("These are health answers");
+
+    for (const short of ["Heart condition", "Chest pain when active", "Chest pain at rest",
+                         "Dizziness or blackouts", "Bone or joint problem",
+                         "Blood-pressure or heart medication", "Any other reason"]) {
+      await page.getByRole("button", { name: `No — ${short}`, exact: true }).click();
+    }
+    // Every question answered, consent NOT ticked.
+    const box = page.getByTestId("parq-consent").locator("input[type=checkbox]");
+    await expect(box).not.toBeChecked();
+    await page.getByRole("button", { name: "Save health screen" }).click();
+
+    await expect(page.getByRole("alert")).toContainText("agree");
+    // Nothing written. This is the assertion that matters — a screen that shows
+    // a refusal and writes the row anyway would pass a render-only test.
+    expect(await stored(page, "jungle_parq_records")).toBeNull();
+
+    // 🔴 THE CONTROL. Without this the test above passes on a form that is
+    // broken for some entirely different reason, which is how a "nothing was
+    // written" assertion goes green by accident.
+    await box.check();
+    await page.getByRole("button", { name: "Save health screen" }).click();
+    const records = await stored(page, "jungle_parq_records");
+    expect(records).toHaveLength(1);
+    expect(records[0].consent.grantedAt).toBe(day(0));
+    expect(records[0].consent.method).toBe("explicit_opt_in");
+    expect(records[0].consent.policyVersion).toBe("parq-v1");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the consent box is reachable and operable by keyboard", async ({ page }) => {
+    // Session 27 found the Brand Studio's three skin presets were `<div onClick>`
+    // — unreachable by keyboard, and invisible to `keyboard.spec.js` because a
+    // div has no role. A consent control a keyboard user cannot reach is a
+    // consent nobody can give, so this drives it with the keyboard only.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seedUnscreenedClient(page);
+    await nav(page, "Health Screen");
+    await page.selectOption("#parq-client", { label: "Sarah Chen" });
+
+    const box = page.getByTestId("parq-consent").locator("input[type=checkbox]");
+    await expect(box).toHaveCount(1);
+    await box.focus();
+    await expect(box).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(box).toBeChecked();
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ─── D7 · the orphan a PDPA erasure left behind ──────────────────────────────
+//
+// `ptClientRows` has computed `orphan: !member` since this screen shipped and the
+// list has always rendered it honestly as "Member record deleted". What it could
+// not do was ACT on it: erasure cascades `attendance` and knows nothing about the
+// three local 1:1 ledgers, so the gym had deleted the person and kept their goal,
+// their session history and their seven health answers, with no path to any of it.
+//
+// 🔴 BOTH DIALOG PATHS ARE DRIVEN, and that is not optional here. Playwright
+// AUTO-DISMISSES dialogs, so a test that clicks "Erase" and asserts the row is
+// gone is exercising CANCEL — and would pass just as happily against a build with
+// no confirm at all. The cancel path is asserted first, on the STORED object, so
+// the accept path cannot be read as "something happened".
+test.describe("erasing a 1:1 record whose member was deleted (D7)", () => {
+  // A client, two health screens and two sessions — and NO member row, which is
+  // what an erasure that reached `members` and stopped there leaves behind.
+  async function seedOrphan(page) {
+    await freshApp(page);
+    await page.evaluate((d) => {
+      localStorage.setItem("jungle_members", JSON.stringify([
+        { id: "m9", name: "Marcus Lee", email: "marcus@example.com", status: "active" },
+      ]));
+      localStorage.setItem("jungle_pt_clients", JSON.stringify([
+        { id: "c0", memberId: "gone", goal: "First pull-up", status: "active", startedAt: d.past },
+        { id: "c1", memberId: "m9", goal: "Back squat", status: "active", startedAt: d.past },
+      ]));
+      localStorage.setItem("jungle_parq_records", JSON.stringify([
+        { id: "p0", memberId: "gone", screenedAt: d.past, answers: {}, clearance: null },
+        { id: "p1", memberId: "gone", screenedAt: d.recent, answers: {}, clearance: null },
+        { id: "p2", memberId: "m9",   screenedAt: d.recent, answers: {}, clearance: null },
+      ]));
+      localStorage.setItem("jungle_pt_sessions", JSON.stringify([
+        { id: "s0", clientId: "c0", memberId: "gone", date: d.soon, planName: "1:1 session", status: "planned" },
+        { id: "s1", clientId: "c0", memberId: "gone", date: d.soon, planName: "1:1 session", status: "planned" },
+        { id: "s2", clientId: "c1", memberId: "m9",   date: d.soon, planName: "1:1 session", status: "planned" },
+      ]));
+    }, { past: day(-200), recent: day(-10), soon: day(3) });
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+  }
+
+  test("the orphan says what happened, and offers the one action that fixes it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedOrphan(page);
+
+    // POSITIVE CONTROL. Both rows are really on screen — an empty list would
+    // pass every assertion below trivially.
+    await expect(page.getByRole("button", { name: /Member record deleted/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Marcus Lee — / })).toBeVisible();
+
+    // 🔴 And the orphan row is selectable BY ITS OWN VISIBLE NAME, which is the
+    // half this used to get wrong: the `aria-label` fell back to `r.name ||
+    // "Client"`, and `r.name` is "" for precisely this row, so a screen reader
+    // announced "Client" on the one row that means the client is gone.
+    // Selecting it by text instead of by role would have hidden that.
+
+    // The erase offer does NOT exist for the live client.
+    await page.getByRole("button", { name: /^Marcus Lee — / }).click();
+    await expect(page.getByTestId("pt-detail")).toBeVisible();
+    await expect(page.getByTestId("pt-orphan-erase")).toHaveCount(0);
+
+    // And it DOES for the orphan. Same locator, opposite answer, one run —
+    // which is what makes the count above an assertion rather than a shrug.
+    await page.getByRole("button", { name: /Member record deleted/ }).click();
+    const panel = page.getByTestId("pt-orphan-erase");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("health answers are still here");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("CANCEL erases nothing — the dialog is a guard, not a formality", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedOrphan(page);
+    await page.getByRole("button", { name: /Member record deleted/ }).click();
+
+    let asked = "";
+    page.once("dialog", (d) => { asked = d.message(); d.dismiss(); });
+    await page.getByRole("button", { name: /Erase this record permanently/ }).click();
+
+    // The dialog NAMED what it would take, in both numbers. A confirm that says
+    // "are you sure?" is a click-through, not a guard.
+    expect(asked).toContain("2 sessions");
+    expect(asked).toContain("2 health screens");
+    expect(asked).toContain("cannot be undone");
+
+    // 🔴 The STORED object, not the render. All three ledgers untouched.
+    expect(await stored(page, "jungle_pt_clients")).toHaveLength(2);
+    expect(await stored(page, "jungle_parq_records")).toHaveLength(3);
+    expect(await stored(page, "jungle_pt_sessions")).toHaveLength(3);
+    await expect(page.getByRole("button", { name: /Member record deleted/ })).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("ACCEPT takes the record, its sessions and its health answers — and nobody else's", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedOrphan(page);
+    await page.getByRole("button", { name: /Member record deleted/ }).click();
+
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: /Erase this record permanently/ }).click();
+
+    await expect(page.getByRole("button", { name: /Member record deleted/ })).toHaveCount(0);
+
+    // 🔴 The assertion this test exists for: the health answers are GONE from
+    // storage. A screen that stopped rendering the row while leaving seven
+    // health answers in localStorage would pass a render-only test and fail the
+    // erasure request that prompted it.
+    const parq = await stored(page, "jungle_parq_records");
+    expect(parq).toHaveLength(1);
+    expect(parq[0].memberId).toBe("m9");
+
+    const clients = await stored(page, "jungle_pt_clients");
+    expect(clients.map(c => c.id)).toEqual(["c1"]);
+    const sessions = await stored(page, "jungle_pt_sessions");
+    expect(sessions.map(s => s.id)).toEqual(["s2"]);
+
+    // The live client is still there and still complete — an erasure that took a
+    // neighbour would be a worse defect than the one it fixed.
+    await expect(page.getByTestId("pt-summary")).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
 });

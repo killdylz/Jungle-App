@@ -57,6 +57,13 @@ const SKIP = [
   // Writes a row, or leaves the app entirely.
   /^add to schedule$/i, /^save/i, /^publish/i, /^export/i, /^import/i,
   /load sample coach/i, /^read the file$/i, /choose csv/i, /^start class$/i,
+  // S30: the cover panel's write paths. `coachCover.spec.js` drives all four
+  // properly, including both branches of the settle. Clicked blind here they
+  // would put every schedule name on the roster and then approve its own
+  // requests, so every later click in the sweep would be testing a screen the
+  // sweep itself had rearranged.
+  /^add coach$/i, /^put .* on the roster$/i, /^ask .* to cover /i,
+  /^approve cover for /i, /^turn down cover for /i, /^withdraw the cover request /i,
   // Opens an OS file dialog Playwright cannot close.
   /upload/i, /choose file/i,
 ];

@@ -100,7 +100,10 @@ test.describe("a member opens their class link", () => {
     // Box Jump has sets and reps but no rest — the detail line must not invent one.
     await expect(page.getByText("3 × 8", { exact: true })).toBeVisible();
 
-    // 15 minutes across two stages, three... two distinct movements.
+    // 15 minutes across two stages, three... two distinct movements. Both
+    // stages carry a duration, so the sum IS the class length — see the
+    // partial-duration test at the bottom of this file for the case where it
+    // is not, and note that `durationMin` here is 45, not 15.
     await expect(page.getByText(/15 min/)).toBeVisible();
     await expect(page.getByText(/3 movements/)).toBeVisible();
 
@@ -317,5 +320,89 @@ test.describe("the coach's side of the link", () => {
     // A second row here would split one class's check-ins across two
     // occurrences — the exact failure ensureClassInstance exists to prevent.
     expect(await ids()).toEqual(first);
+  });
+});
+
+// ─── A partial stage sum is not a class length ───────────────────────────────
+//
+// 🔴 `durMin` is OPTIONAL per stage. `summaryContent` writes it only when the
+// stage's seconds round to at least a minute, and drops the key otherwise — so
+// this page receives documents where some stages carry a duration and some do
+// not. ⚠ Measured, not assumed: every stage-creation path in the app sets a
+// duration, and the way a real class loses one is the Builder's duration box,
+// whose `min="1"` is an HTML hint rather than a clamp. That input is fixed
+// separately; this page must be right about the document either way, because
+// the document is whatever the Edge Function returns from any client version.
+//
+// Summing it anyway printed a partial total wearing a total's label. Measured
+// before the fix: a SIXTY-MINUTE class with a timed warm-up (10) and a timed
+// conditioning block (15) around an untimed strength block told the member
+// **"25 min"** — 35 minutes short, with `klass.durationMin: 60` sitting unused
+// in the same payload because the old fallback fired only when the sum was
+// exactly zero. This is the one surface in the product a member ever reads, and
+// `CLAUDE.md`'s rule is that a confident wrong number is worse than no number.
+test.describe("the duration a member is told", () => {
+  const sixtyMinuteClass = (stages) => ({
+    ...PAYLOAD,
+    klass: { ...PAYLOAD.klass, name: "Thursday Engine", durationMin: 60 },
+    content: { v: 1, title: "Thursday Engine", stages },
+  });
+
+  const TIMED_WARMUP = { name: "Warm-Up", type: "warmup", durMin: 10, exercises: [{ n: "Row", r: "500 m" }] };
+  const UNTIMED_LIFT = { name: "Strength", type: "primary_lift",
+                         exercises: [{ n: "Back Squat", s: "5", r: "5", rest: "3 min" }] };
+  const TIMED_COND   = { name: "Conditioning", type: "circuit", durMin: 15,
+                         exercises: [{ n: "Assault Bike", r: "20/40 x 8" }] };
+
+  test("falls back to the class's own duration when a stage is untimed", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await stubSummary(page, { body: sixtyMinuteClass([TIMED_WARMUP, UNTIMED_LIFT, TIMED_COND]) });
+    await openLink(page);
+    await expect(page.getByTestId("summary-ready")).toBeVisible();
+
+    // POSITIVE CONTROL. The class really rendered, with all three stages —
+    // an error state would satisfy a bare "does not say 25" assertion.
+    await expect(page.getByRole("heading", { level: 2, name: "Strength" })).toBeVisible();
+    await expect(page.getByText(/3 movements/)).toBeVisible();
+
+    // ⚠ Asserted on the FACTS LINE, not the page: "rest 3 min" in a movement's
+    // detail column matches a bare /min/, so a page-level duration assertion
+    // passes and fails for reasons that are not the duration.
+    const facts = page.getByTestId("summary-facts");
+    await expect(facts).toContainText("60 min");
+    // 🔴 The partial sum, named. Asserting only "60 is present" would pass on a
+    // line showing both numbers.
+    await expect(facts).not.toContainText("25 min");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("uses the stage sum when EVERY stage is timed, even against a longer booking", async ({ page }) => {
+    await freshApp(page);
+    await stubSummary(page, { body: sixtyMinuteClass([TIMED_WARMUP, TIMED_COND]) });
+    await openLink(page);
+    // 25 of programming inside a 60-minute booking. The sum is trustworthy here
+    // and it is the more useful fact — this is the case the fallback must NOT
+    // swallow, which is why it is asserted in the same run as the one above.
+    const facts = page.getByTestId("summary-facts");
+    await expect(facts).toContainText("25 min");
+    await expect(facts).not.toContainText("60 min");
+  });
+
+  test("says nothing about duration rather than guessing, when there is nothing to say", async ({ page }) => {
+    await freshApp(page);
+    await stubSummary(page, { body: {
+      ...sixtyMinuteClass([UNTIMED_LIFT]),
+      klass: { ...PAYLOAD.klass, name: "Thursday Engine", durationMin: null },
+    } });
+    await openLink(page);
+    await expect(page.getByRole("heading", { level: 2, name: "Strength" })).toBeVisible();
+    // The other two facts still render; only the unknown one is dropped.
+    const facts = page.getByTestId("summary-facts");
+    await expect(facts).toContainText("1 movement");
+    await expect(facts).toContainText("with Priya");
+    await expect(facts).not.toContainText("min ");
+    await expect(facts).not.toContainText("0 min");
   });
 });

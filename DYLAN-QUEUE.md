@@ -46,6 +46,11 @@ undo it. Nothing in Part A needs me.
 | 🔴 **A14** | **Run migration 0010 — the staff read boundary.** A `member`-role account currently reads the whole gym. | **10 min** | low, idempotent |
 | **A15** | **Let Actions open pull requests** — one checkbox, so branches stop going unnoticed | **30 sec** | none, revertible |
 | **A13** | **Send yourself a member link and open it on your phone** | 10 min | none |
+| **A16** | **A yes/no: does Jungle bend a gym's accent to make it legible?** | 10 min read | none — a decision, no work |
+| **A17** | **Run migration 0011** — or the away/cover board stays on one phone | **10 min** | low, fully revertible |
+| **A18** | **You said yes. Four facts before anyone signs anything: Mindbody** | 20 min | none — a decision |
+| **A19** | **Decide the `health_screen` consent scope** — one CHECK constraint, and the health screen is already collecting the consent locally | **10 min to decide** | none until you write it |
+| **A20** | **A gym cannot enter a 07:00 class.** The Schedule supports five fixed times, full stop — a decision, then ~2 days of work | **15 min to decide** | none until you say yes |
 
 ---
 
@@ -786,3 +791,377 @@ No test asserts it is absent, because a test that did would be asserting a fact 
 project rather than about the code. `e2e/destructive.spec.js` asserts it is PRESENT, so removing the
 string means updating that assertion in the same commit — which is the reminder, if you are reading
 the test output.
+
+---
+
+## A DECISION: should Jungle rank COACHES the way it now ranks class types?  ·  added 2026-08-11 (session 28)
+
+**This is yours, not mine, and I have deliberately not built it.**
+
+Session 28 shipped "which of your class types keeps members" (`lib/classTypeRetention.js`, on the
+Analytics screen). It joins `class_instances.class_type` to `attendance` and reports, per class
+type, the share of members who tried it and came back within four weeks.
+
+**The identical join, with `class_instances.coach_name` instead of `class_type`, produces a coach
+league table.** It is four lines of code. The data is already there; nothing is missing. I did not
+write those four lines, and here is the case both ways so you can decide rather than discover it
+in a demo.
+
+**For:**
+- It is the most commercially obvious number in the product. An owner deciding who to give the
+  Saturday 9am slot to would pay for it on its own.
+- It is *already computable by hand* from data the gym owns, so the question is whether Jungle
+  presents it, not whether it exists.
+- Coach quality genuinely varies and a studio that cannot see it is running blind on its largest
+  controllable cost.
+
+**Against, and this is why I stopped:**
+- `GTM-SINGAPORE` §2 prices per LOCATION precisely so coaches are not taxed, because **coaches are
+  the adoption engine**. The product's whole route to market is a coach bringing their own deck in
+  and their studio following.
+- A screen that ranks coaches is a screen a coach will refuse to feed. The moment a coach believes
+  their check-in data is being scored, the cheapest defence is to stop checking people in — and
+  attendance is the spine every other number in the product stands on, including the at-risk panel
+  and the money figure beside it.
+- The number would be **wrong in a way that is invisible**: coaches do not get comparable classes.
+  A coach given the 6am weekday slot is measured on people who were always going to come; a coach
+  given the Sunday beginner intro is measured on people trying a gym for the first time. Class type
+  suffers this too, but far less — a type is a *thing the studio chose to programme*, and the whole
+  point of ranking types is that the studio can change them. A coach cannot change their slot.
+- It is not reversible in the way a feature normally is. Once an owner has seen a coach ranking,
+  un-shipping it does not un-see it.
+
+**My recommendation: no, or not without a shape that fixes the third bullet** — e.g. comparing a
+coach only against the SAME class type in the SAME slot, and refusing to report at all below a
+population where that comparison holds. That is a much larger build than four lines and it should
+not be started until you have said you want it.
+
+**What I need from you:** yes / no / "yes but only in the slot-matched shape". Nothing is blocked
+on this — the class-type ranking is shipped and stands alone.
+
+
+---
+
+## A16 · A yes/no: does Jungle bend a gym's accent to make it legible?
+
+**Nothing is blocked on this.** The product now MEASURES and REPORTS both cases below; the
+question is only whether it should also fix them, which it cannot do without changing a colour the
+gym chose.
+
+Session 29 widened Brand Studio's accessibility audit from five token pairs to fourteen, sharing
+its arithmetic with the sweep CI runs. Three things fell out. One was ours and is fixed: the
+generator clamped `muted` against `bg` alone, so on a light identity it cleared 4.5:1 against the
+lightest surface in the palette and sat at ~4.0:1 on the two darker ones. It now clamps against
+every surface, and no generated identity has an unreadable one.
+
+The other two are not ours to fix, because the only repair is to alter the gym's own accent.
+
+**1 · A dark logo produces an accent that cannot be used as a graphic on its own background.**
+WCAG 1.4.11 wants 3:1 for a non-text mark. Measured on the generator's own output:
+
+| logo | generated accent on its background |
+|---|---|
+| navy `#12224A` | **1.25:1** |
+| crimson `#B5122C` | **2.86:1** |
+| blue `#1D4ED8` | **2.90:1** |
+
+**2 · On a LIGHT identity, a mid-luminance accent has no readable label.** `inkOn` picks whichever
+of background/text contrasts more against the fill — the right question, and it cannot invert — but
+"more" is not "enough". Violet `#A855F7` gives 3.70:1 against one candidate and 4.13:1 against the
+other, so the button label fails AA whichever wins. The blue "Steel" derivation lands at 3.91:1.
+
+**Why I did not just fix them.** `colors.js` already carries the rule, for `--danger`: a colour the
+gym chose is not ours to change, because a gym whose accent is red must not get a delete button
+that matches its primary action. Nudging a studio's brand accent until it clears 3:1 is the same
+move — it makes the app compliant by making it not their brand. And it would be invisible: they
+upload a logo, and the colour that comes back is not the one they gave us.
+
+**What the product does today.** Both are reported, in the coach's own words, on the panel where
+the palette is chosen. The generated-identity badge used to read "✓ Passes WCAG AA" over the
+1.25:1 case — it was reading `contrast.passesAA`, which is `textOnBg >= 4.5` and nothing else. It
+now reads the full audit and names the failing pairs.
+
+**What I need from you, pick one:**
+
+- **(a) Leave it.** Report and let the studio decide. Cheapest, and defensible: it is their brand.
+- **(b) Offer a nudged accent as a SUGGESTION** the coach can take or decline — the shape §2.1's
+  re-read offer uses, and the one I would pick. It never rewrites, and it gives a studio with a
+  navy mark a way out that does not involve them knowing what 3:1 means.
+- **(c) Clamp it silently.** I would not: it is the invisible-change failure mode this product has
+  a standing rule against.
+
+---
+
+## A17 · Run migration 0011 — or coach cover stays on one phone
+
+**This is the one item on this list that a shipped feature is already waiting on.**
+
+> ### 🔴 Session 33: the file changed, and you have not run it, so nothing is broken
+>
+> `0011_coach_cover.sql` now also creates **`coach_absences`** and adds two columns to
+> `cover_requests` (`class_date`, `absence_id`), because cover is now recorded as *"I am away
+> these dates"* rather than *"please cover this class"*. **You have never run this file, so
+> there is nothing to undo — just use the current version.**
+>
+> ⚠️ **If you DID run an earlier copy of it at some point**, re-run the current file anyway.
+> `create table if not exists` does not add a column to a table that already exists, so an
+> earlier run would leave `cover_requests` without `class_date` and every cover push would then
+> fail. The file now ends with `alter table … add column if not exists` for exactly that case;
+> it is a no-op on a fresh database and the fix on a stale one. Re-running is safe either way.
+>
+> ⚠️ **Corrected, session 32 (2026-08-25).** This item used to be a 10-minute migration with a
+> note at the bottom saying the settle still needed wiring. That undersold it badly: the client
+> did not write to these tables **at all** — `coach_roster` and `cover_requests` appeared in
+> zero save calls and zero load calls anywhere in the app, so running this migration would have
+> created two empty tables that nothing ever touched, and the roster would have stayed on one
+> phone with the ✅ next to it. **That half is now built** (session 32). Running this migration
+> now genuinely does what the line above says it does, and the 10 minutes is the whole job.
+
+Session 30 built the coach roster, availability, and cover requests: a coach says which days
+and slots they can work, and when a class needs covering the app offers the coaches who are
+free and records who agreed to take it.
+
+🔴 **Every other feature in Jungle is one gym, one device, one person.** A coach builds a class
+and the same coach runs it, so the browser's own storage can be the source of truth and the
+server catches up whenever. **A cover request is two people on two phones.** Coach A asks,
+coach B answers, and neither phone can see the other's storage. There is no offline version of
+that — it is the first thing Jungle does that only works if the server does.
+
+**Right now the server has no table for it.** So on the build your gym runs today, a cover
+request is saved on the phone that raised it and **nobody else will ever see it.** The app says
+exactly that on screen rather than showing a hopeful "Sent" — but it is a real limit, not a
+cosmetic one.
+
+### Steps
+1. Go to <https://supabase.com/dashboard>, open your project.
+2. Left sidebar → **SQL Editor** → **New query**.
+3. Paste the whole of `supabase/migrations/0011_coach_cover.sql` → **Run**.
+   Safe to re-run: every statement is `if not exists` or `drop policy … / create policy`.
+4. If you have done **A4** (the restore drill), run it on **staging** first, then prod the
+   same day.
+
+### What "it worked" looks like
+**Table Editor** shows three new tables — `coach_roster`, `cover_requests` and
+`coach_absences` — all empty.
+
+Then, on your own phone or laptop, open **Schedule**. The notice at the top of the Coach roster
+panel changes. Before you run this it says the roster is *"stored on this device only — your
+Jungle server is connected but has no coach storage set up"*; afterwards it says cover requests
+*"reach a coach when they next open Jungle"*. **That sentence is the real test**, not the empty
+tables — it is the app telling you it can see the storage. Add a coach on one device and open
+Jungle on another; they should both show the same roster.
+
+### What the feature actually does now (session 33)
+A coach records **"I'm away, Monday to Friday"** once. Jungle works out every class of theirs
+in those days and puts each one on a **board** that every coach sees. The first coach to claim
+one takes it, and **the claim covers that day only** — the recurring class goes back to its
+usual coach the following week, and nothing is written to your schedule.
+
+⚠️ **Two things this still does not do**, both unchanged and both worth knowing before you tell
+a coach about it:
+- **Nobody's phone rings.** A coach sees the board when they next open Jungle. Fine for "can
+  somebody take next Thursday", no use at all for "I am ill and my class is in an hour". Adding
+  email is a sender (Resend or Postmark, roughly S$0–30/month at your size), a domain to send
+  from, and about a day. **Not built, and I have not assumed you want it.**
+- **A coach only sees their own availability once their account is linked** to their roster
+  entry — you do that from this panel, per coach. Until then they see a note saying so rather
+  than the whole roster.
+
+### ⚠️ Two things that are still true afterwards, so you are not surprised
+- **0005 and 0006 are still unapplied.** Personas, plans and the movement catalogue remain on
+  one device with no server copy. 0010 does not change that. (⚠️ And when you do run 0005/0006,
+  note that the coach-delete dialog currently *tells* the coach their personas are device-only;
+  that sentence becomes untrue and needs changing in the same session.)
+- **Nobody's phone will ring.** Jungle has no push notifications, no email sending and no SMS —
+  there is no such code anywhere in the product. After 0010, a cover request reaches the other
+  coach **when they next open Jungle**, which is fine for "can you take Thursday" and no use at
+  all for "I am ill, my class is in an hour". If the urgent case matters to you, say so and it
+  becomes a real piece of work: a sender (Resend or Postmark for email, roughly S$0–30/month at
+  your size), a domain to send from, and about a day. **It is not built and I have not assumed
+  you want it.**
+
+### ⚠️ One thing to watch the first time it runs (session 32)
+Two coaches both pressing **Approve** on the same 5am request is the normal case, not an edge
+case, and it is decided by a **conditional** update — `set status='approved' where id=$1 and
+status='open'` — so that one of them wins and the other is told who got it. That is wired now
+(`src/lib/compareAndSet.js`, used by `settleCoverRequest`), and it is tested hard.
+
+🔴 **But it has still never made a real request against a real Postgres, because there is no
+table to make it against yet — this migration is that table.** Everything asserted about it is
+asserted against a fake that models what PostgREST is documented to do. So the first time two
+people race a real request, that is genuinely the first run. If a settle ever behaves oddly —
+both sides shown a success, or a success reported as a loss — the two assumptions to check are
+written at the top of `compareAndSet.js`. **Nothing for you to do here**; it is a note about
+where the one remaining unknown lives.
+
+### Undo
+`drop table public.cover_requests; drop table public.coach_roster;` — nothing else references
+them, and the app keeps working exactly as it does today.
+
+---
+
+## A18 · A decision, and four facts I cannot look up: Mindbody
+
+**Nothing is blocked on this, and nothing has been built against it.** The ask was that an
+approved cover push through to Mindbody, which propagates to ClassPass. Session 30 built the
+**seam** — one adapter with a pinned payload, and one implementation that does nothing and says
+so. There is no Mindbody code, no endpoint, no key, and no "coming soon" panel.
+
+> ### 🔴 Session 32: you have answered the decision, and it does not unblock the build
+>
+> You said you want Mindbody updated when a cover is approved. **That answers the decision
+> below — the "no CRM" question — and it is recorded as a yes.** It does not answer questions
+> 1–4, and question 3 is the one that could make this feature *actively harmful* rather than
+> merely absent: **if the only way to change a class's instructor is cancel-and-recreate, then
+> approving a cover would delete your members' existing bookings for that class.** Losing real
+> bookings is worse than never integrating. So nothing calls Mindbody, and nothing will until
+> question 3 has an answer.
+>
+> **What session 32 did build, because it needs none of those answers:** every approved cover
+> now leaves a durable record of the exact payload a booking system would have been handed,
+> with an idempotency key so the same substitution can never be posted twice. It exercises the
+> payload shape against real approvals instead of only against a test, and the day an adapter
+> exists there is a queue rather than a standing start. **It is not a queue that will drain on
+> its own and there is deliberately no screen showing it as pending** — that would promise a
+> send that may never happen. Nothing about it claims anything reached Mindbody.
+>
+> **Question 3 is free to answer** and it is the whole decision:
+> <https://developers.mindbodyonline.com> — is there an endpoint that substitutes a class's
+> instructor, or is cancel-and-recreate the only route?
+
+### Why it stopped there
+- The architecture spec's risk **A6** records that Mindbody's API is a **paid, gated partner
+  program**, and its §347 lists partner-program costs among the facts to re-verify at the point
+  of commitment. Nobody has verified them. There is no account and no sandbox.
+- **"Mindbody pushes it to ClassPass" is an assumption.** They do integrate. Whether an
+  *instructor substitution* propagates, how fast, and whether ClassPass tells members who
+  already booked are three separate questions, and this repo answers none of them. A studio
+  that tells its members "your coach changed" on Jungle's authority and is wrong has a worse
+  problem than one that never claimed it.
+
+### 🔴 First, the decision — this one is yours and it is not technical
+Your own decision doc holds the **"no CRM" line for the first 1–2 years**: *"the moment we bolt
+on scheduling/payments early, we become a worse Mindbody and lose the wedge."*
+
+My reading is that coach availability and finding cover sit **inside** that line — they are
+staff operations, nothing books a member and nothing takes a payment — but that **writing back
+to Mindbody is the part that genuinely crosses it.** It makes Jungle a thing that edits the
+booking system, which is the direction the line was drawn against.
+
+**So: do you want Jungle writing to a gym's booking system at all?** If the answer is no, the
+seam stays a seam, nothing is wasted, and the four questions below do not matter.
+
+### If the answer is yes, these are the four facts
+1. **Partner-program status and cost.** Apply at <https://developers.mindbodyonline.com>. What
+   tier, what monthly cost, what per-call cost, and how long approval takes.
+2. **Which API.** Public API v6 or the newer Platform API — they are different products with
+   different access rules. Which one is a substitution available on?
+3. **What a staff substitution actually is.** Is there an endpoint that changes a class's
+   instructor, or does it require cancel-and-recreate? Cancel-and-recreate would drop existing
+   bookings, which would make this feature actively harmful.
+4. **Sandbox.** Is there a free test site, and does it accept substitution calls?
+
+**Do not sign anything before question 3 has an answer.** If the only way to change an
+instructor is to cancel the class, the honest product decision is not to integrate.
+
+---
+
+## A19 · The `health_screen` consent scope  ·  added 2026-09-01 (session 34)
+
+**⚠️ Renumbered A16 → A19 by session 36.** Session 34 wrote this as **A16** to sit after the
+A14/A15 that PR #14 was adding. It landed on a branch, and by the time that branch was merged the
+integration branch had already assigned **A16** (accent legibility), **A17** (migration `0011`) and
+**A18** (Mindbody). Two live entries called A16 is how a queue stops being one, so this is A19.
+Nothing about the decision changed — only the number.
+
+### The decision
+
+`consent_records.scope` (migration `0007`) carries a CHECK constraint listing exactly five values:
+
+```
+'roster_attendance', 'biometric_live', 'biometric_store', 'coach_view', 'export'
+```
+
+The health screen collects **health answers** — a special category of data under the PDPA — and none
+of those five describes that. Adding a sixth, `health_screen`, is a one-line migration. **Whether to
+write it is yours**, on the same standing rule as every other schema change.
+
+### What session 34 did in the meantime, and why it is not a workaround
+
+Session 34's own prompt asked for `store.recordConsent()` to be called on save with a `health_screen`
+scope. **That was refused, for two reasons, and the second is the important one:**
+
+1. The scope is not in the constraint, so **every insert would have been rejected by Postgres.** A
+   constrained column rejecting a client value is this repo's recurring data-loss bug — three prior
+   occurrences, and the reason `RETENTION_RULES` exists as a single exported constant.
+
+2. A `consent_records` row **asserts that a person consented.** `CheckInPanel` already refuses to
+   write one for check-ins, in its own words: *"in a coach sweep, none was [shown]... writing one
+   anyway would fabricate a compliance record, which is worse than an empty ledger."* Fabricating
+   that record for **health** answers would be the worst version of that mistake, not an acceptable
+   one.
+
+So the consent is now **real and local**: `PARQ_CONSENT_NOTICE` is displayed on the health screen,
+there is a checkbox that starts unticked, and `store.appendParqRecord` **refuses to write health
+answers without it**. Each record carries `{ grantedAt, policyVersion, method: 'explicit_opt_in' }`.
+
+`explicit_opt_in` is already one of the four values 0007's `method` constraint allows. So the rows
+being written today are **shaped to be mirrored** the day the scope exists — the only missing piece
+is the scope itself.
+
+### If you decide yes
+
+The migration is one statement (drop and recreate the CHECK with the sixth value). Then
+`appendParqRecord` can mirror to `consent_records` beside the local write. **Do not** back-fill the
+records written before then: they carry an honest `grantedAt` from the day the client actually
+ticked, and inventing server rows for the ones that predate the field would be the fabrication this
+entry exists to refuse.
+
+⚠️ The PAR-Q ledger itself is still **local-only and unsynced** (`jungle_parq_records`), so mirroring
+consent alone would put a consent trail on a server for health answers that are not there. Sequence
+this **after** the 1:1 tables (B10), not before.
+
+---
+
+## A20 · A gym cannot enter a 07:00 class  ·  added 2026-09-07 (session 36)
+
+**This is the most likely thing to stop a studio on day one, and it is a decision before it is
+work.** Nothing is broken; the product simply does not support it.
+
+### The finding
+
+`src/screens/CalendarScreen.jsx` line 123:
+
+```js
+const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
+```
+
+That one array is BOTH the week grid's rows AND the Add-class form's `<select>` options. Verified
+across `src/`: there is no other writer of a schedule rule's `slot` anywhere, so those five times
+are the complete set of times a class can be scheduled at.
+
+Most boutique timetables run 07:00, 07:30, 17:30 and 19:00. An owner setting up their real week
+finds three of their classes have nowhere to go.
+
+### What it would take, if you say yes  ·  ~2 days
+
+The grid derives its rows from the distinct times the gym's own rules actually use, seeded with
+the current five for an empty gym; the form's `<select>` becomes a `type="time"` input. It touches
+`CalendarScreen`, `lib/scheduleInstances.js` and `lib/coachRoster.js` (availability answers in
+`day`/`slot` pairs). **No migration** — `class_rules.slot` is already free text, so this is client
+work only.
+
+### The decision underneath it, which is yours
+
+**Does the grid stay a grid?** A gym running eleven distinct times gets an eleven-row wall, mostly
+empty. A day-column list ordered by time scales properly and is a bigger change. Answering "keep
+the grid" makes this two days; answering "list" makes it four or five.
+
+### The adjacent one, and it can wait
+
+Two classes at the same time (two rooms) is a separate limit: the grid holds one class per cell,
+so the second is stored, counted, published — and until session 36 it was invisible. It now says
+so out loud, which is honest but is not support. Whether Jungle models concurrent classes needs a
+room or studio field, and that IS a migration. See `SESSION-36-HANDOFF.md` §4.3 and §5.2.
+
+**What I need from you:** yes / no on entering arbitrary times, and if yes, grid or list.

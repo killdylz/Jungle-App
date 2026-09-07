@@ -229,7 +229,8 @@ function AutoDjPanel({ stages, onDjClass, djProgress }) {
                 }}>
                   {selected.includes(pl.id) && (
                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                      <polyline points="2,6 5,9 10,3" stroke="#0A0F0C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      {/* A tick drawn INSIDE an accent-filled dot; `var(--on-accent)` is the token for exactly this. */}
+                      <polyline points="2,6 5,9 10,3" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   )}
                 </div>

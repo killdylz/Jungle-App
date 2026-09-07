@@ -35,6 +35,7 @@ import { useDialog } from "../../ui/dialog.js";
 import { useToast } from "../../ui/toast.jsx";
 import { ROLE_LABEL, MOVEMENT_CATEGORY_LABEL, CLASS_CATEGORY_LABEL, SOURCE_LABEL,
          KIND_LABEL, schemeTypeLabel, readErrorMessage } from "../../ui/labels.js";
+import { hueInk } from "../../lib/colors.js";
 
 // ─── Coach Personas (workstream D — persona-level planning) ──────────────────
 // Persona-first: define/choose a persona, connect historical plans as its
@@ -91,6 +92,11 @@ const P_CARD = { background:"var(--card)", border:"1px solid var(--border)", bor
 const P_CHIP = { display:"inline-block", padding:"3px 9px", background:"var(--navy)", color:"var(--muted)", borderRadius:"5px", fontSize:"11px", fontWeight:"600", margin:"0 5px 5px 0" };
 // Label maps live in src/ui/labels.js so the "no jargon reaches a coach" rule
 // can be unit-tested rather than eyeballed (see labels.test.js).
+// Violet and blue distinguish the three persona SOURCES; the label beside them
+// is what carries the meaning. ⚠️ Raw hues, because one call site paints a FILLED
+// `Tag` with these and a filled plate owes nothing to the skin. The site that
+// uses one as INK wraps it in `hueInk` there — see colors.js for why the two
+// cases need different tools.
 const KIND_COLOR = { coach:"var(--accent)", format:"#8B5CF6", house:"#3B82F6" };
 // (`ctOf` was a byte-identical copy of personaAggregate's `classTypeOf`. Two
 //  readers of one question is exactly what §2.4 warns about, and the class-type
@@ -891,7 +897,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
             coach needs to know they only exist on this device. */}
         {planSyncErr && (
           <div style={{maxWidth:"1200px",margin:"0 auto 16px",padding:"10px 14px",borderRadius:"8px",
-                       border:"1px solid #F59E0B55",background:"#F59E0B14",fontSize:"12px",color:"var(--text)",lineHeight:"1.5"}}>
+                       border:"1px solid var(--warn-border)",background:"color-mix(in srgb, var(--warn) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:"1.5"}}>
             <strong>These plans haven’t synced to your account yet.</strong> They’re saved on this
             device and Jungle will keep retrying, so nothing is lost — but they won’t appear on
             another device until the sync succeeds. <span style={{color:"var(--muted)"}}>({planSyncErr.msg})</span>
@@ -930,7 +936,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:"13px",fontWeight:on?"700":"600",color:on?"var(--accent)":"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
                         <div style={{fontSize:"11px",color:"var(--muted)",marginTop:"2px"}}>
-                          <span style={{color:KIND_COLOR[p.kind]||"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{KIND_LABEL[p.kind]||p.kind}</span>
+                          <span style={{color:hueInk(KIND_COLOR[p.kind]||"var(--muted)"),fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px"}}>{KIND_LABEL[p.kind]||p.kind}</span>
                           {"  ·  "}{countFor(p.id)} class{countFor(p.id)===1?"":"es"}
                         </div>
                       </div>
@@ -1110,7 +1116,8 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px",gap:"12px",flexWrap:"wrap"}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
                         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} class{prof.planCount===1?"":"es"}</span></p>
-                        <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
+                        {/* `Tag` paints a FILLED plate, so this is a background, not ink. */}
+                      <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
                         <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{getLibrary()[builderClass]?.label||builderClass}</b></span>
                       </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
@@ -1143,7 +1150,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                               })}
                             </div>
                             {ctMoves.length === 0 && (
-                              <p style={{fontSize:"11px",color:"#E0B85B",marginBottom:"10px",lineHeight:"1.5"}}>
+                              <p style={{fontSize:"11px",color:hueInk("#E0B85B"),marginBottom:"10px",lineHeight:"1.5"}}>
                                 No movements saved for {curCT} yet, so these open the class named and timed with the sections empty — ready to fill from the Library.
                               </p>
                             )}
@@ -1306,7 +1313,7 @@ function DeleteCoachConfirm({ pending, onCancel, onConfirm }) {
           {/* `--danger`, deliberately not skin-derived: a gym whose accent is red
               must not get a delete button matching its primary action. */}
           <button onClick={onConfirm} data-testid="delete-coach-go"
-            style={{padding:"9px 18px",background:"var(--danger)",border:"none",borderRadius:"8px",cursor:"pointer",color:"#fff",fontSize:"12px",fontWeight:"800"}}>
+            style={{padding:"9px 18px",background:"var(--danger)",border:"none",borderRadius:"8px",cursor:"pointer",color:"#FFFFFF",fontSize:"12px",fontWeight:"800"}}  /* `--danger` is a FIXED colour by design, so its ink is a fixed choice too — white on #EF4444 at 12px/800 is large-text AA */>
             Delete {pending.label}
           </button>
         </div>
@@ -1440,7 +1447,7 @@ function ClassShapeCard({ blueprint, classType, onSave, onDraft, draftable, empt
           </p>
           {/* §13 Q7: the edit stands, the divergence is shown, nothing is auto-applied. */}
           {blueprint.contradiction && (
-            <div style={{marginTop:"10px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #E0B85B",background:"color-mix(in srgb, #E0B85B 10%, transparent)"}}>
+            <div style={{marginTop:"10px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #E0B85B",background:"color-mix(in srgb, #E0B85B 10%, transparent)"  /* gold: the "needs your eye" plate, a fill not ink */}}>
               <p style={{fontSize:"12px",color:"var(--text)",fontWeight:"600",marginBottom:"3px"}}>Your recent classes have been running a different shape.</p>
               <p style={{fontSize:"11px",color:"var(--muted)",marginBottom:"8px"}}>{shapeChips(blueprint.contradiction.slots)}</p>
               <Btn variant="ghost" onClick={()=>onSave({ ...blueprint.contradiction, source:"edited" })} style={{padding:"4px 10px"}}>Use this instead</Btn>

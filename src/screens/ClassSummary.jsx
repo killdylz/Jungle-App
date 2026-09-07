@@ -27,6 +27,11 @@ import { summaryTotals } from "../lib/summaryContent.js";
 // URL becomes a PDPA disclosure. If a personalised version is ever wanted, it
 // needs a different token design and a privacy notice first (spec §F6).
 
+// The member-facing page's palette when the class token carries no brand — an
+// old link, or a gym that never opened Brand Studio. Raw hex because there is
+// no skin on this route at all: `ClassSummary` is its own chunk, served to
+// someone who is not a customer, with no localStorage and no `applySkinCSS`.
+// The tokens a real link DOES carry are applied over these.
 const FALLBACK = {
   bg: "#0A0F0C", card: "#0F1611", text: "#E8EFE9", muted: "#8AA294",
   accent: "#7BE3A4", border: "rgba(255,255,255,.10)",
@@ -127,7 +132,14 @@ export default function ClassSummary({ token }) {
 
   const totals = summaryTotals(content);
   const facts = [
-    totals.minutes ? `${totals.minutes} min` : (klass.durationMin ? `${klass.durationMin} min` : ""),
+    // 🔴 The stage sum is the class length ONLY when every stage was timed.
+    // See `summaryTotals`: a partial sum used to be printed as a total, and a
+    // 60-minute class with one untimed stage read as "25 min" to the member. When the sum cannot be trusted the class's own booked duration is
+    // the honest number; when there is neither, this fact is DROPPED rather
+    // than guessed, which is what `.filter(Boolean)` below is for.
+    totals.minutesComplete
+      ? `${totals.minutes} min`
+      : (klass.durationMin ? `${klass.durationMin} min` : ""),
     totals.movementCount ? `${totals.movementCount} movement${totals.movementCount === 1 ? "" : "s"}` : "",
     klass.coachName ? `with ${klass.coachName}` : "",
   ].filter(Boolean);
@@ -149,7 +161,12 @@ export default function ClassSummary({ token }) {
         </h1>
 
         {facts.length ? (
-          <div style={{ color: tokens.muted, fontSize: "14px", marginBottom: "26px" }}>{facts.join("  ·  ")}</div>
+          // Named so a test can assert on THIS line rather than on the page.
+          // "no `min` anywhere" matches "rest 3 min" in a movement's detail
+          // column, so a duration assertion written against the page passes and
+          // fails for reasons that have nothing to do with the duration.
+          <div data-testid="summary-facts"
+               style={{ color: tokens.muted, fontSize: "14px", marginBottom: "26px" }}>{facts.join("  ·  ")}</div>
         ) : null}
 
         {content && content.stages?.length ? (

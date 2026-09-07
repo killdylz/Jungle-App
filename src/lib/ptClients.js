@@ -23,7 +23,7 @@
 // Everything here is pure. The screens render what these functions return; they
 // never decide a status themselves.
 
-import { parqStatus, latestParq } from "./parq.js";
+import { parqStatus, latestParq, PARQ_EXPIRING_DAYS } from "./parq.js";
 
 // The status vocabularies live in `store.js`, beside `MEMBER_STATUSES`, and are
 // re-exported here so the 1:1 screens have one import for the 1:1 lens.
@@ -137,6 +137,12 @@ export function ptRosterSummary(rows = []) {
     // A paused client with an expired screen is not a problem this week.
     blocked: training.filter(r => r.parq.blocksLoad).length,
     unscreened: training.filter(r => r.parq.state === "unscreened").length,
+    // Screens that are still valid but about to lapse. Counted over `training`
+    // for the same reason `blocked` is — a paused client's expiring screen is
+    // not this week's problem — and kept SEPARATE from `blocked` because the
+    // whole point is that these clients can still be programmed for today. Add
+    // them together and the number would say a coach is stuck when they are not.
+    expiring: training.filter(r => r.parq.expiring).length,
     booked: training.filter(r => r.nextPlanned).length,
     overdue: training.reduce((t, r) => t + r.overduePlanned, 0),
     orphans: rows.filter(r => r.orphan).length,
@@ -165,6 +171,13 @@ export function describePtRoster(s) {
   let out = parts.join(" · ");
   if (s.overdue) {
     out += `. ${s.overdue} planned ${s.overdue === 1 ? "session is" : "sessions are"} in the past and still unmarked.`;
+  }
+  // Last, and as its own sentence, because it is the only line here about
+  // something that has NOT gone wrong yet. Folded into the `·` list above it
+  // would read as another problem; stated separately it reads as the warning it
+  // is — the one this screen exists to give before the cliff rather than after.
+  if (s.expiring) {
+    out += ` ${s.expiring} health ${s.expiring === 1 ? "screen expires" : "screens expire"} within ${PARQ_EXPIRING_DAYS} days — still valid, but book the next one now.`;
   }
   return out;
 }

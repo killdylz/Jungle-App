@@ -139,6 +139,46 @@ describe("reaching the end is said once, after the switch", () => {
 // ─── What to call the coach ──────────────────────────────────────────────────
 // The greeting reads "GOOD AFTERNOON, <name>" in 12px letterspaced accent caps
 // across the top of the Dashboard, so whatever this returns is shouted.
+describe("SETUP_STEPS — a step never names one route into something with several", () => {
+  // §2.4 — a step must not name ONE route into something that has several.
+  //
+  // The members step read "Import members" over a body describing only a CSV,
+  // while `addMember` (the roster's Add member button), `updateMember` (the
+  // inline row edit) and the Class Runner's quick-add all already existed. The
+  // checklist is the only place this product gives instructions, so that copy
+  // is why an owner concludes Jungle cannot add a member by hand.
+  //
+  // The tell that it was always wrong: `done` for this step is `members > 0`,
+  // which ANY route satisfies. The tick and the copy disagreed about what the
+  // step was.
+  it("names more than one way in for members, and does not lead with the import", () => {
+    const step = SETUP_STEPS.find(s => s.key === "members");
+    expect(step, "the members step").toBeTruthy();
+
+    // Both routes are named...
+    expect(step.body).toMatch(/by hand/i);
+    expect(step.body).toMatch(/import/i);
+    // ...and the manual one first. An owner reads until they find a route they
+    // can use, and importing is the one that presumes an old system to leave.
+    expect(step.body.search(/by hand/i)).toBeLessThan(step.body.search(/import/i));
+
+    // The button is route-neutral, like "Add a class" on step one. A CTA that
+    // names a file format is the whole defect in three words.
+    expect(step.cta).not.toMatch(/import|csv|upload|file/i);
+  });
+
+  // The same rule, swept over every step, so a future step cannot reintroduce
+  // it. ⚠️ Positive control: this sweep matched something — SETUP_STEPS is
+  // asserted non-empty first, because a scan over an empty list is green for
+  // the wrong reason.
+  it("has no step whose button names a file format", () => {
+    expect(SETUP_STEPS.length).toBeGreaterThan(0);
+    for (const s of SETUP_STEPS) {
+      expect(s.cta, `${s.key} cta`).not.toMatch(/csv|upload|spreadsheet/i);
+    }
+  });
+});
+
 describe("coachFirstName", () => {
   it("takes the first name when there is one", () => {
     expect(coachFirstName("Priya Nair")).toBe("Priya");

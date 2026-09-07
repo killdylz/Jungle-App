@@ -614,3 +614,114 @@ test.describe("the schedule and the runner name a class type the same way", () =
     expect(ci.find(c => c.name === "Saturday Grind").classType).toBe("pilates");
   });
 });
+
+// ─── Two classes in one cell, and the one the grid used to swallow ──────────
+//
+// 🔴 `effSchedule` is an object keyed on `day-slot`, so merging the rules onto
+// it is LAST WINS. Nothing prevents a second rule on a taken cell — day and slot
+// are `<select>`s over fixed lists with no uniqueness check — and a studio with
+// two rooms running two 06:00 Monday classes is an ordinary timetable.
+//
+// Driven through the real Add-class form before the fix, twice into Mon 06:00:
+// two rules stored, "2 classes this week", "Publish week · 2", and ONE class on
+// the grid. The other was scheduled, counted, publishable, and invisible — it
+// could not be seen, edited, removed or started on the only screen that shows
+// the timetable. A coach who adds it, sees nothing and adds it again ends up
+// with three rules and one cell.
+//
+// Drawing several classes per cell is a product decision (there is no room or
+// studio concept for two concurrent classes to belong to) and is written up
+// rather than taken. The SILENCE is not a decision, and this is what pins it.
+test.describe("a class the week grid cannot draw is named, not swallowed", () => {
+  const addClass = async (page, name, day, slot) => {
+    await page.getByRole("button", { name: /Add class/ }).click();
+    await page.getByPlaceholder("Class name").fill(name);
+    await page.getByLabel("Day").selectOption(day);
+    await page.getByLabel("Time slot").selectOption(slot);
+    await page.getByRole("button", { name: /Add to schedule/ }).click();
+    await expect
+      .poll(async () => ((await stored(page, "jungle_user_classes")) || []).some(r => r.name === name))
+      .toBe(true);
+  };
+
+  test("says which class is hidden, where, and behind what", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    // POSITIVE CONTROL, in two halves. One class in a slot of its own is drawn
+    // AND the notice is absent — without this, "the notice appears" proves
+    // nothing, because a notice that always appears would pass too.
+    await addClass(page, "Strength Lab", "Mon", "06:00");
+    await expect(page.getByText("Strength Lab")).toBeVisible();
+    await expect(page.getByTestId("schedule-hidden")).toHaveCount(0);
+
+    await addClass(page, "Sunrise Barre", "Mon", "06:00");
+
+    // Both are stored. The store was never the problem.
+    const rules = await stored(page, "jungle_user_classes");
+    expect(rules.map(r => [r.name, r.day, r.slot]))
+      .toEqual([["Strength Lab", "Mon", "06:00"], ["Sunrise Barre", "Mon", "06:00"]]);
+
+    // 🔴 And the screen now says what it could not draw, naming all three facts
+    // a coach needs to act: which class, which cell, and what is in front of it.
+    const notice = page.getByTestId("schedule-hidden");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("1 class is not shown");
+    await expect(notice).toContainText("Strength Lab");
+    await expect(notice).toContainText("Mon 06:00");
+    await expect(notice).toContainText("behind Sunrise Barre");
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("and the notice goes away when the collision does", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Schedule");
+    await addClass(page, "Strength Lab", "Mon", "06:00");
+    await addClass(page, "Sunrise Barre", "Mon", "06:00");
+    await expect(page.getByTestId("schedule-hidden")).toBeVisible();
+
+    // Move the drawn one out of the way. The hidden class takes the cell and
+    // there is nothing left to report — a notice that survives the fix would be
+    // a second wrong statement rather than a correction of the first.
+    await page.getByRole("button", { name: /^Edit Sunrise Barre on Mon at 06:00$/ }).click();
+    await page.getByLabel("Time slot").selectOption("09:00");
+    await page.getByRole("button", { name: /Save changes/ }).click();
+
+    await expect(page.getByTestId("schedule-hidden")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Edit Strength Lab on Mon at 06:00$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit Sunrise Barre on Mon at 09:00$/ })).toBeVisible();
+  });
+
+  test("a daily class reports EACH cell it loses, and only those", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Schedule");
+    await addClass(page, "Open Gym", "Mon", "12:00");
+    // Make it daily, so it paints all seven cells in the 12:00 row.
+    await page.getByRole("button", { name: /^Edit Open Gym on Mon at 12:00$/ }).click();
+    await page.getByRole("button", { name: "Every day", exact: true }).click();
+    await page.getByRole("button", { name: /Save changes/ }).click();
+    await expect(page.getByTestId("schedule-hidden")).toHaveCount(0);
+
+    await addClass(page, "Lunch Express", "Wed", "12:00");
+
+    const notice = page.getByTestId("schedule-hidden");
+    await expect(notice).toBeVisible();
+    // ⚠ ONE line, not seven. Open Gym paints all seven 12:00 cells and loses
+    // exactly one of them; the other six are uncontested and must not be
+    // reported. A version that listed every cell a daily rule touches would
+    // bury the real answer in six false ones.
+    await expect(notice).toContainText("1 class is not shown");
+    await expect(notice).toContainText("Wed 12:00");
+    await expect(notice).not.toContainText("Mon 12:00");
+    await expect(notice).not.toContainText("Fri 12:00");
+
+    // And it loses a SECOND cell when a second class contests one — two honest
+    // rows for one rule, which is why there is no dedupe by rule alone.
+    await addClass(page, "Friday Reset", "Fri", "12:00");
+    await expect(notice).toContainText("2 classes are not shown");
+    await expect(notice).toContainText("Wed 12:00");
+    await expect(notice).toContainText("Fri 12:00");
+  });
+});

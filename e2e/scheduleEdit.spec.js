@@ -317,7 +317,13 @@ test.describe("a class type the catalogue lacks survives an edit", () => {
 
     // An edit to a DIFFERENT field — the case where a silent re-type would be
     // invisible, because the coach never went near the type dropdown.
-    await page.getByPlaceholder("Coach").fill("Priya");
+    // ⚠️ `exact: true`. `getByPlaceholder` is a SUBSTRING match, so this used to
+    // resolve to any control on the Schedule whose placeholder merely CONTAINS
+    // "Coach" — the coach roster's "Add a coach by name" made it two elements and
+    // a strict-mode violation. The dialog's field is placeholder="Coach"
+    // exactly, which is what this line always meant; narrowing it cannot hide a
+    // defect, because a missing dialog field still fails.
+    await page.getByPlaceholder("Coach", { exact: true }).fill("Priya");
     await page.getByRole("button", { name: "Save changes" }).click();
 
     const rule = (await stored(page, KEY))[0];
@@ -364,7 +370,7 @@ test.describe("a class type the catalogue lacks survives an edit", () => {
 
     await page.getByRole("button", { name: "Edit Sunrise Burn on Tue at 18:00" }).click();
     await expect(page.getByLabel("Class type")).toHaveValue("hiit");
-    await page.getByPlaceholder("Coach").fill("Dylan");
+    await page.getByPlaceholder("Coach", { exact: true }).fill("Dylan");
     await page.getByRole("button", { name: "Save changes" }).click();
 
     expect((await stored(page, KEY))[0].type).toBe("hiit");

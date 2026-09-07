@@ -58,6 +58,16 @@ export function getCrashLog() {
   } catch (_) { return []; }
 }
 
+// ⚠️ RAW HEX, deliberately, for the same class of reason as AuthGate and a
+// sharper one: this renders BECAUSE something threw. Whatever broke may have
+// been the skin — `applySkinCSS` writes to `document.documentElement.style`,
+// and a half-applied or malformed palette is exactly the kind of state that
+// gets here. A recovery screen that reads the tokens can inherit the fault it
+// is reporting and render invisibly, which is the failure mode this whole
+// component exists to prevent.
+//
+// So its palette is fixed, self-contained, and deliberately NOT the gym's: a
+// coach seeing their own brand here would read it as part of the product.
 const wrap = {
   minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center",
   padding: "32px", background: "#060D18", color: "#EEEEEE",

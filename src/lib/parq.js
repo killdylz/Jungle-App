@@ -27,6 +27,42 @@ export const PARQ_DISCLAIMER =
   "This is a screening record, not medical advice. Jungle does not decide whether anyone " +
   "is fit to train — it records what was asked, what was answered, and when.";
 
+// ── D5 · the consent this record cannot be collected without ────────────────
+//
+// 🔴 WHY THIS IS A REAL TICK AND NOT A SILENT WRITE. Session 34's prompt asked
+// for `store.recordConsent()` to be called on save with a `health_screen` scope.
+// Both halves of that are wrong, and the second one dangerously:
+//
+//  1. `consent_records.scope` carries a CHECK constraint (0007) listing
+//     'roster_attendance', 'biometric_live', 'biometric_store', 'coach_view' and
+//     'export'. `health_screen` is not in it, so every such insert would be
+//     REJECTED by Postgres — this repo's own recurring data-loss bug, named in
+//     retention.js and in 0008's comments, with three prior occurrences. Adding
+//     the scope needs a migration, and a migration is Dylan's call.
+//
+//  2. More importantly, a `consent_records` row asserts that a person consented.
+//     `CheckInPanel` refuses to write one for exactly this reason — "in a coach
+//     sweep, none was [shown]... writing one anyway would fabricate a compliance
+//     record, which is worse than an empty ledger" — and health answers are a
+//     special category of data, so a fabricated consent for THEM is the worst
+//     version of that mistake, not an acceptable one.
+//
+// The health screen, unlike the check-in sweep, is a form somebody sits down and
+// fills in. That means a notice can actually be shown and actually be agreed to.
+// So the consent here is REAL: the words below are on the screen, the coach or
+// client ticks the box, and the record is refused without it. That is a consent
+// trail worth having, and it is the reason this is the one place in the product
+// where such a record can honestly be written today.
+export const PARQ_CONSENT_NOTICE =
+  "These are health answers, and they are kept as a dated record your coach may have to " +
+  "stand behind. They stay on this device, are used only to decide whether a personalised " +
+  "programme is safe to write, and can be deleted on request.";
+
+// Which wording was agreed to. Stored with every record, because consent is to a
+// SPECIFIC text: if this notice is ever reworded, a record carrying "v1" still
+// says truthfully what its subject actually read.
+export const PARQ_POLICY_VERSION = "parq-v1";
+
 // `id` is what is STORED, so it must never change once a record exists in the
 // wild. The order below is the order asked; `short` is for the summary chip,
 // where the full sentence does not fit and truncating it mid-clause would change
@@ -54,9 +90,37 @@ export const PARQ_QUESTIONS = [
 // insurer this product will meet expects to see.
 export const PARQ_VALID_MONTHS = 12;
 
-// The four things a record can be, and the ONE of them that is not a state of
+// How long before the cliff a valid screen starts SAYING it is about to lapse.
+//
+// WHY A WARNING WINDOW EXISTS AT ALL. Expiry was a hard cliff and nothing else:
+// a screen read `cleared`, and the next morning it read `expired` and load was
+// blocked, with no surface anywhere having said it was coming. The coach finds
+// out when they try to program someone — which is the worst possible moment,
+// because the client is standing in front of them and the only fast way out of
+// the block is to re-screen on the spot or skip it.
+//
+// 30 days because that is the shortest interval in which a client can be asked
+// to come in, fill the form and — if a question flags — actually see a doctor
+// and bring back a note. A shorter warning would arrive too late to be acted on,
+// which makes it a notification rather than a warning.
+export const PARQ_EXPIRING_DAYS = 30;
+
+// The six things a record can be, and the ONE of them that is not a state of
 // the paperwork: `referred` is a state of the person, so the label says what to
 // do rather than what is wrong.
+//
+// ⚠️ "EXPIRING" IS DELIBERATELY NOT IN THIS LIST, and that is a reversal of what
+// session 34's prompt asked for ("a sixth non-blocking 'expiring' state"). The
+// reason is `assignPtSession`, which writes `parqStateAtAssign: parq.state` into
+// every session row as the audit trail. `cleared` and `gp_cleared` are different
+// assurances — one is seven clean answers, the other is a doctor's letter — and
+// a year from now which one applied is the whole question. A state that
+// OVERWROTE either of them near an expiry date would erase that distinction from
+// the record for exactly the sessions taken closest to the edge.
+//
+// Proximity to expiry is therefore a MODIFIER on the state, not a replacement
+// for it: `expiring` and `daysToExpiry` below. Same warning, same tone change,
+// same non-blocking behaviour the prompt asked for; the assurance survives.
 export const PARQ_STATES = ["unscreened", "incomplete", "cleared", "referred", "gp_cleared", "expired"];
 
 // A blank answer sheet. `null` rather than `false` throughout, because "not
@@ -107,6 +171,32 @@ function _iso(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// Calendar days from `now` until an ISO date — negative once it is past.
+//
+// LOCAL CALENDAR DAYS, like `daysBetween` in retention.js and for the same
+// reason: the datum is a date and the reader is a human with a calendar. Both
+// sides are snapped to local midnight first, so "expires tomorrow" is true all
+// day today rather than only until the hour the screen was taken.
+//
+// Round rather than floor: a DST transition inside the span leaves it 23 or 25
+// hours short of a whole multiple, and flooring would quietly drop a day —
+// reporting "expires in 29 days" on the day the warning window opens.
+const _DAY_MS = 86_400_000;
+function _daysUntil(iso, now) {
+  const target = _asDate(iso);
+  if (!target) return null;
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target.getTime() - from.getTime()) / _DAY_MS);
+}
+
+// The sentence a coach acts on. Stated as a DEADLINE with the date attached,
+// because "expires soon" is a feeling and "book it before 14 March" is a task.
+function _expiryNote(days, expiresOn) {
+  if (days === 0) return `This screen expires TODAY (${expiresOn}) — after that, individualised load is blocked until it is redone.`;
+  if (days === 1) return `This screen expires TOMORROW (${expiresOn}) — after that, individualised load is blocked until it is redone.`;
+  return `This screen expires in ${days} days (${expiresOn}). Book the next one before then, or individualised load stops that day — and if a question flags, they may need to see a doctor first.`;
+}
+
 // ── The gate ────────────────────────────────────────────────────────────────
 //
 // One function, and everything downstream reads `blocksLoad` from it. There is
@@ -119,13 +209,19 @@ function _iso(d) {
 //   { screenedAt: "YYYY-MM-DD", answers: {q1..q7: bool|null},
 //     clearance: { grantedAt, note } | null }
 export function parqStatus(record, { now = new Date() } = {}) {
-  const today = _iso(now instanceof Date ? now : new Date(now));
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const today = _iso(nowDate);
 
   if (!record || !record.screenedAt) {
     return {
       state: "unscreened", label: "Not screened", tone: "danger", blocksLoad: true,
       reason: "This client has not completed a health screen. Individualised load stays locked until they do.",
       expiresOn: "", flagged: [], answered: 0, total: PARQ_QUESTIONS.length,
+      // Present on EVERY return, never conditionally. A caller reading
+      // `status.expiring` must get `false` from a screen that has no expiry, not
+      // `undefined` — the two are the same in an `if` and different in a
+      // `=== false`, and this object is read by a gate.
+      expiring: false, daysToExpiry: null,
     };
   }
 
@@ -138,12 +234,20 @@ export function parqStatus(record, { now = new Date() } = {}) {
       // unable to decide whether to finish it now or book five minutes for it.
       reason: `${answered} of ${PARQ_QUESTIONS.length} questions answered. A part-answered screen is not a screen.`,
       expiresOn: "", flagged: flaggedQuestions(record.answers), answered, total: PARQ_QUESTIONS.length,
+      expiring: false, daysToExpiry: null,
     };
   }
 
   const expiresOn = parqExpiresOn(record.screenedAt);
   const flagged = flaggedQuestions(record.answers);
   const clearance = record.clearance && record.clearance.grantedAt ? record.clearance : null;
+  const daysToExpiry = _daysUntil(expiresOn, nowDate);
+  // The warning window, and the reason it is a modifier rather than a state is
+  // above `PARQ_STATES`. Bounded at BOTH ends: `>= 0` keeps an already-expired
+  // screen out of it (that is the `expired` state's job, and a record cannot be
+  // both about to lapse and lapsed), and the upper bound is what makes it a
+  // window rather than a permanent label on every valid screen.
+  const expiring = daysToExpiry != null && daysToExpiry >= 0 && daysToExpiry <= PARQ_EXPIRING_DAYS;
 
   // EXPIRY IS CHECKED BEFORE CLEARANCE, and the order is load-bearing. A GP
   // letter from 2023 attached to a 2023 screen does not clear a 2026 session:
@@ -154,6 +258,10 @@ export function parqStatus(record, { now = new Date() } = {}) {
       state: "expired", label: "Expired", tone: "warn", blocksLoad: true,
       reason: `Screened ${record.screenedAt}, expired ${expiresOn}. Health changes; a screen older than ${PARQ_VALID_MONTHS} months is a record of someone who no longer exists.`,
       expiresOn, flagged, answered, total: PARQ_QUESTIONS.length,
+      // Already past the cliff: `expiring` is false because the warning is not
+      // pending any more, and `daysToExpiry` stays as the negative number so a
+      // caller can say HOW long ago without re-deriving it.
+      expiring: false, daysToExpiry,
     };
   }
 
@@ -166,20 +274,61 @@ export function parqStatus(record, { now = new Date() } = {}) {
         // way around the block.
         reason: `Answered yes to ${flagged.length} question${flagged.length === 1 ? "" : "s"} (${flagged.map(q => q.short).join(", ")}). They should speak to a doctor before a personalised programme. Record the clearance here once they have.`,
         expiresOn, flagged, answered, total: PARQ_QUESTIONS.length,
+        // Deliberately NOT warned about. This screen already blocks load, and a
+        // second deadline underneath a live refusal is noise — the coach's next
+        // step is the doctor, not the calendar.
+        expiring: false, daysToExpiry,
       };
     }
     return {
-      state: "gp_cleared", label: "Cleared by doctor", tone: "ok", blocksLoad: false,
-      reason: `Answered yes to ${flagged.length} question${flagged.length === 1 ? "" : "s"}; clearance recorded ${clearance.grantedAt}${clearance.note ? ` — ${clearance.note}` : ""}. Valid until ${expiresOn}.`,
+      state: "gp_cleared", label: "Cleared by doctor", blocksLoad: false,
+      // ⚠️ The doctor's clearance expires WITH the screen, not on its own date.
+      // Expiry is evaluated before clearance (see above) for the same reason: the
+      // letter was granted against a health picture that goes stale, so the
+      // warning here is about the whole record lapsing, not just the answers.
+      tone: expiring ? "warn" : "ok",
+      reason: `Answered yes to ${flagged.length} question${flagged.length === 1 ? "" : "s"}; clearance recorded ${clearance.grantedAt}${clearance.note ? ` — ${clearance.note}` : ""}. Valid until ${expiresOn}.`
+        + (expiring ? ` ${_expiryNote(daysToExpiry, expiresOn)}` : ""),
       expiresOn, flagged, answered, total: PARQ_QUESTIONS.length,
+      expiring, daysToExpiry,
     };
   }
 
   return {
-    state: "cleared", label: "Cleared", tone: "ok", blocksLoad: false,
-    reason: `No answers flagged. Screened ${record.screenedAt}, valid until ${expiresOn}.`,
+    state: "cleared", label: "Cleared", blocksLoad: false,
+    // `warn` while expiring, and `blocksLoad` stays FALSE throughout — the whole
+    // point is that this is a heads-up, not a gate. A warning that blocked would
+    // simply move the cliff 30 days earlier.
+    tone: expiring ? "warn" : "ok",
+    reason: `No answers flagged. Screened ${record.screenedAt}, valid until ${expiresOn}.`
+      + (expiring ? ` ${_expiryNote(daysToExpiry, expiresOn)}` : ""),
     expiresOn, flagged, answered, total: PARQ_QUESTIONS.length,
+    expiring, daysToExpiry,
   };
+}
+
+/**
+ * The expiry warning in the few characters a list chip has room for, or "" when
+ * there is nothing to warn about.
+ *
+ * WHY THE SHORT FORM IS TEXT AND NOT A COLOUR. There is no `--warn` token in
+ * this product — `colors.js` defines accent, green and danger, and danger is
+ * deliberately not skin-derived — so the honest options were to invent a fourth
+ * global colour or to say it in words. Words win twice over: WCAG 1.4.1 forbids
+ * colour as the ONLY carrier of information, and `brandTokens.spec.js` sweeps
+ * opaque text for AA contrast on a hand-built light skin, where a new amber
+ * would have to earn 4.5:1 against a white card the way `--danger` (3.8:1)
+ * could not.
+ *
+ * The chip therefore keeps the state it actually has — an expiring screen IS
+ * still cleared — and appends the deadline.
+ */
+export function parqExpiryShort(status) {
+  if (!status || !status.expiring) return "";
+  const d = status.daysToExpiry;
+  if (d === 0) return "expires today";
+  if (d === 1) return "expires tomorrow";
+  return `expires in ${d}d`;
 }
 
 // The newest record for a member. Records are an APPEND-ONLY ledger — re-screening

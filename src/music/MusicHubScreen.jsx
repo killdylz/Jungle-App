@@ -98,7 +98,7 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
                 <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"14px"}}>
                   {np.albumArt
                     ? <img src={np.albumArt} style={{width:"52px",height:"52px",borderRadius:"10px",objectFit:"cover",flexShrink:0}} alt=""/>
-                    : <div style={{width:"52px",height:"52px",borderRadius:"10px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 4px,#0f1611 4px,#0f1611 8px)",flexShrink:0}}/>
+                    : <div style={{width:"52px",height:"52px",borderRadius:"10px",background:"repeating-linear-gradient(45deg,#1a2b1f 0,#1a2b1f 4px,#0f1611 4px,#0f1611 8px)"  /* "no album art" hatch; the music surfaces are FLAGS.music-gated and ship dark */,flexShrink:0}}/>
                   }
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:"14px",fontWeight:"700",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{np.t||np.name}</div>

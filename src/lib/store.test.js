@@ -23,6 +23,8 @@ import {
   appendPersonaGeneration, getPersonaGenerations,
   _clearLedgerIfSettled, syncErrorSignature,
   restorePersonaCascade, getPersonas, getPersonaPlans, getPersonaMovements,
+  addCoach, updateCoach, removeCoach, getCoaches, saveCoaches, coachAccountFor,
+  connect,
 } from "./store.js";
 import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
 import { atRiskMembers } from "./retention.js";
@@ -791,6 +793,24 @@ Sarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm,S360
 Tom Reed,tom@example.com,2026-03-04,Tuesday 6pm,S360
 Sarah Chen,sarah@example.com,2026-03-06,Thursday 6pm,GC`;
 
+  // S31 §2.2. The end of the one path that can fill `externalRef`: the reader
+  // (`csvExport`'s "Reference" column) existed for months with nothing able to
+  // write it, so a gym's export promised a reference it always left blank.
+  it("🔴 the imported reference reaches the STORED member, not just the analysis", () => {
+    const withRef = `Member Name,Email,Date,Class,Client ID
+Sarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm,MB-4471`;
+    const r = applyAttendanceImport(analyzeAttendanceCsv(withRef, []));
+    expect(r.ok).toBe(true);
+    const stored = getMembers();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].externalRef).toBe("MB-4471");
+  });
+
+  it("stores an empty reference when the file carried none, never undefined", () => {
+    applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
+    expect(getMembers().every(m => m.externalRef === "")).toBe(true);
+  });
+
   it("creates members, classes and check-ins from an empty roster", () => {
     const r = applyAttendanceImport(analyzeAttendanceCsv(CSV, []));
     expect(r).toMatchObject({ ok: true, members: 2, classes: 2, attendance: 3 });
@@ -1367,5 +1387,124 @@ describe("appendPersonaGeneration — the per-persona cap", () => {
     const [row] = getPersonaGenerations();
     expect(row.id).toBeTruthy();
     expect(Number.isNaN(Date.parse(row.createdAt))).toBe(false);
+  });
+});
+
+// ─── The coach roster, and the link it fixes (S30 §2.1) ─────────────────────
+
+describe("the roster", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("adds, and mints an id rather than trusting the caller for one", () => {
+    const { coach, coaches } = addCoach("  Mara  ");
+    expect(coach.name).toBe("Mara");            // trimmed on the way in
+    expect(coach.id).toBeTruthy();
+    expect(coaches).toHaveLength(1);
+    expect(getCoaches()[0].id).toBe(coach.id);
+  });
+
+  it("patches only the keys it was given", () => {
+    const { coach } = addCoach("Mara");
+    updateCoach(coach.id, { userId: "u1" });
+    const after = getCoaches()[0];
+    expect(after.userId).toBe("u1");
+    expect(after.name).toBe("Mara");            // untouched
+    expect(after.active).toBe(true);
+  });
+
+  it("🔴 stamps availabilityAt itself, so a grid can never arrive undated", () => {
+    const { coach } = addCoach("Mara");
+    expect(getCoaches()[0].availabilityAt).toBe("");
+    updateCoach(coach.id, { availability: { Mon: ["06:00"] } });
+    expect(getCoaches()[0].availabilityAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("drops an alias that merely restates the name, and blank ones", () => {
+    const { coach } = addCoach("Mara");
+    updateCoach(coach.id, { aliases: ["MARA", "  ", "Mara K.", "mara k."] });
+    // "MARA" folds onto the name; "mara k." folds onto "Mara K."; blanks go.
+    expect(getCoaches()[0].aliases).toEqual(["Mara K."]);
+  });
+
+  it("refuses to blank a coach's name", () => {
+    const { coach } = addCoach("Mara");
+    updateCoach(coach.id, { name: "   " });
+    expect(getCoaches()[0].name).toBe("Mara");
+  });
+
+  it("removing hands back the PRIOR LIST, because position is part of the loss", () => {
+    addCoach("Ann"); const { coach: b } = addCoach("Bo"); addCoach("Cy");
+    const { coaches, before } = removeCoach(b.id);
+    expect(coaches.map(c => c.name)).toEqual(["Ann", "Cy"]);
+    expect(before.map(c => c.name)).toEqual(["Ann", "Bo", "Cy"]);
+    saveCoaches(before);                                    // the undo
+    expect(getCoaches().map(c => c.name)).toEqual(["Ann", "Bo", "Cy"]);
+  });
+});
+
+describe("🔴 class_instances.coach_id names the person who TEACHES, not the one who published", () => {
+  beforeEach(() => localStorage.clear());
+
+  // The regression this replaces: `coach_id` was `_ctx.userId`, so a manager
+  // publishing the week recorded every class in the gym as taught by themselves.
+  // `created_by` is where that fact belongs and already held it.
+  const instance = (coachName) => ({ id: "ci1", startsAt: "2026-08-24T06:00:00.000Z",
+                                     name: "Strength Lab", classType: "hyrox",
+                                     coachName, durationMin: 45 });
+
+  it("is the roster entry's account when the typed name resolves to one", () => {
+    const { coach } = addCoach("Mara");
+    updateCoach(coach.id, { userId: "profile-mara" });
+    expect(_ciToRow(instance("Mara")).coach_id).toBe("profile-mara");
+    // and through the same case-folding the rest of the roster uses
+    expect(_ciToRow(instance("mara")).coach_id).toBe("profile-mara");
+  });
+
+  it("is NULL for a coach on the roster with no account", () => {
+    addCoach("Mara");
+    expect(_ciToRow(instance("Mara")).coach_id).toBeNull();
+  });
+
+  it("is NULL for a name nobody has put on the roster", () => {
+    expect(_ciToRow(instance("Mara")).coach_id).toBeNull();
+    expect(_ciToRow(instance("")).coach_id).toBeNull();
+  });
+
+  it("🔴 does not follow the roster to the WRONG person", () => {
+    const { coach } = addCoach("Dev");
+    updateCoach(coach.id, { userId: "profile-dev" });
+    // Mara teaches it; only Dev has an account. The answer is "we do not know",
+    // not "the one account we happen to have".
+    expect(_ciToRow(instance("Mara")).coach_id).toBeNull();
+    expect(_ciToRow(instance("Dev")).coach_id).toBe("profile-dev");
+  });
+
+  it("🔴 is not the signed-in publisher — the regression, pinned with a real one", () => {
+    // Without this, the whole block above passes on the OLD code: `_ctx.userId`
+    // is undefined in a bare test, so `_ctx.userId || null` is null and looks
+    // correct. The bug only shows once somebody is actually signed in, which is
+    // every real gym and no previous test.
+    connect({ gymId: "gym-1", userId: "profile-the-manager" });
+    try {
+      addCoach("Mara");                                   // on the roster, no account
+      const row = _ciToRow(instance("Mara"));
+      expect(row.coach_id).toBeNull();                    // NOT the manager
+      expect(row.created_by).toBe("profile-the-manager"); // which is recorded here
+      expect(row.coach_id).not.toBe(row.created_by);
+    } finally {
+      connect({ gymId: null, userId: null });
+    }
+  });
+
+  it("keeps the typed name alongside it, which is what every screen reads", () => {
+    addCoach("Mara");
+    const row = _ciToRow(instance("Mara"));
+    expect(row.coach_name).toBe("Mara");
+  });
+
+  it("coachAccountFor is the single bridge, and answers null by default", () => {
+    expect(coachAccountFor("Mara")).toBeNull();
+    expect(coachAccountFor("")).toBeNull();
+    expect(coachAccountFor(null)).toBeNull();
   });
 });

@@ -72,7 +72,7 @@ function TrackItem({track, onAdd, onRemove, added=false, stageType=null}) {
               title={mismatch && SCFG[stageType]?.bpmMin
                 ? `⚠ Target for this stage: ${SCFG[stageType].bpmMin}–${SCFG[stageType].bpmMax} BPM · Click to edit`
                 : `${bpm} BPM · Click to edit`}
-              style={{fontSize:"10px",fontWeight:"700",padding:"1px 6px",borderRadius:"3px",background:bc+"25",color:bc,border:`1px solid ${mismatch?"#F59E0B33":"transparent"}`,cursor:"pointer",userSelect:"none"}}>
+              style={{fontSize:"10px",fontWeight:"700",padding:"1px 6px",borderRadius:"3px",background:bc+"25",color:bc,border:`1px solid ${mismatch?"var(--warn-border)":"transparent"}`,cursor:"pointer",userSelect:"none"}}>
               {mismatch && "⚠ "}{bpm} BPM
             </span>
           ) : (

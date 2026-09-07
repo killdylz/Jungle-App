@@ -47,3 +47,94 @@ export const fmtAgo = (at, now = Date.now()) => {
   const d = Math.floor(h / 24);
   return `${d} day${d === 1 ? "" : "s"} ago`;
 };
+
+// Today, as the reader's CALENDAR says it — never `toISOString().slice(0,10)`,
+// which is UTC and is a different day from the coach's for part of every day.
+//
+// 🔴 SHARED, because the alternative has already cost this product twice. It
+// lived privately in `store.js` while `useClassRunner` and `ProfileModal` each
+// used the UTC form, and a session taught at 7am in Singapore was written — and
+// DISPLAYED — under yesterday's date. Two copies of a date rule is how a writer
+// and its reader drift apart while both look correct in the timezone the tests
+// happen to run in.
+//
+// ⚠️ Anything that WRITES a date string a human will read, or compares one, uses
+// this. Jungle's first market is Singapore (UTC+8), so "the tests pass in UTC" is
+// not evidence about the shipped product.
+export const localDateStr = (ms = Date.now()) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// A stored `YYYY-MM-DD` as a coach would say it: "today", "yesterday", or
+// "Sat 22 Aug". Used by the two Recent Sessions lists (Dashboard and
+// ProfileModal), which both rendered the raw ISO string.
+//
+// 🔴 WHY THIS RENDERS AT ALL. The Dashboard header says "Monday 24 Aug" and the
+// panel three cards below it said "2026-08-24" — the same day, in two notations,
+// on one screen. Session 30 found and fixed exactly this shape in the coach
+// availability column ("3 slots · stated 4d ago" above "1 slot · stated 204 days
+// ago"); this is the same defect in a different panel, and it is machine
+// notation shown to a human besides.
+//
+// ⚠️ PARSED BY PARTS, NEVER BY `new Date(str)`. `new Date("2026-08-24")` is
+// UTC midnight by specification, so reading it back with local getters returns
+// the PREVIOUS day anywhere west of UTC — which is the exact bug S31 §2.4 spent
+// two commits removing. Building `new Date(y, m-1, d)` is a local date by
+// construction and cannot drift.
+const DAY3 = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const fmtSessionDay = (dateStr, now = Date.now()) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || "").trim());
+  // Anything that is not a plain calendar date is passed through untouched
+  // rather than guessed at — an empty cell beats a confidently wrong day.
+  if (!m) return String(dateStr || "");
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  if (diff === 0) return "today";
+  if (diff === 1) return "yesterday";
+  return `${DAY3[d.getDay()]} ${d.getDate()} ${MON3[d.getMonth()]}`;
+};
+
+// ── A stage's duration, from whatever a coach typed into the box ─────────────
+//
+// 🔴 `<input type="number" min="1" max="60">` DOES NOT CLAMP. `min` and `max`
+// are validation hints the browser reports through `:invalid` and constraint
+// validation; nothing stops a value outside them reaching `e.target.value`, and
+// the Builder's handler was `parseInt(e.target.value || "1") * 60` — an
+// expression that defends only the EMPTY string.
+//
+// So typing `-5` stored `dur: -300`, and the consequences ran the length of the
+// product. Measured by driving it:
+//
+//   • the Builder's own header read "30 min · 5 stages" for a class whose five
+//     stages are 35 minutes of work — the negative silently SUBTRACTS from every
+//     total, and nothing on screen says a stage is the reason;
+//   • the Room TV — the biggest screen in the gym, and one of the two surfaces
+//     `UI-UX-DIRECTION` §1 ranks above every staff screen — rendered
+//     **"Warm-Up · -5m"** in its plan strip and again as the running stage's
+//     duration, in front of paying members;
+//   • `summaryContent` drops a `durMin` that rounds below a minute, which is how
+//     the member link came to report a 60-minute class as 25.
+//
+// A stage of zero or negative minutes is not a short stage; it is not a
+// duration. The floor is the `min="1"` the control already declares and the `1`
+// its own empty-string fallback already used, so this changes no value a coach
+// could have meant.
+//
+// ⚠ NO CEILING, deliberately, even though the control says `max="60"`. 999
+// stores 59,940 seconds and that IS absurd — but a 75-minute open-gym block is
+// a real thing a studio programmes, and silently rewriting a coach's 75 to 60
+// would destroy input rather than reject it. Refusing the impossible and
+// allowing the merely long is the honest split. The control's `max="60"` is now
+// the only part still making a claim it does not enforce; whether it should warn
+// or be raised is a product call, and it is written up in session 36's handoff
+// as a proposal rather than decided here.
+export const MIN_STAGE_SEC = 60;
+export function stageDurSec(raw) {
+  const mins = parseInt(raw, 10);
+  if (!Number.isFinite(mins)) return MIN_STAGE_SEC;   // "", "abc", "1e5"'s tail
+  return Math.max(MIN_STAGE_SEC, mins * 60);
+}

@@ -11,7 +11,7 @@
 import { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
 import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store.js";
-import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
+import { retentionSummary, describeRetention, applyRetentionActions, activityIndex } from "../lib/retention.js";
 import { membershipPrice, revenueAtRisk, describeRevenueAtRisk, fmtMoney } from "../lib/revenueAtRisk.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
@@ -34,6 +34,11 @@ export function RosterScreen({ onBack, onNavigate }) {
   const [members, setMembers] = useState(() => store.getMembers());
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [classes, setClasses] = useState(() => store.getClassInstances());
+  // D1: the 1:1 log is a second activity source for the at-risk rules. Read
+  // through `store` rather than `ptClients.js` on purpose — that module is on the
+  // lazy PT chunk, and importing it here would drag the whole 1:1 lens (the seven
+  // PAR-Q question texts included) into this screen's bundle for one array.
+  const [ptSessions] = useState(() => store.getPtSessions());
   const [p6, setP6] = useState(() => p6Summary());
   const [csv, setCsv] = useState("");
   const [dayFirst, setDayFirst] = useState(true);
@@ -60,9 +65,9 @@ export function RosterScreen({ onBack, onNavigate }) {
   // ── At-risk (N3) — the rules engine finally gets a surface ────────────────
   // Arithmetic, not a model: every flag carries the numbers that produced it so
   // the operator can argue with it rather than merely believe it.
-  const retention = retentionSummary(members, attendance);
+  const retention = retentionSummary(members, attendance, { ptSessions });
   const { active: atRiskActive, handled: atRiskHandled } =
-    applyRetentionActions(retention.flags, actions, attendance);
+    applyRetentionActions(retention.flags, actions, attendance, { ptSessions });
   const act = (flag, action) =>
     setActions(store.recordRetentionAction({ memberId: flag.memberId, rule: flag.rule, action }));
   // The win-back draft is signed by the GYM, because the gym is the sender and
@@ -97,10 +102,21 @@ export function RosterScreen({ onBack, onNavigate }) {
   // does the arithmetic — the screen never decides "meets target" itself.
   const speed = describeCheckinSpeed(p6);
 
-  const visitsFor = id => attendance.filter(a => a.memberId === id).length;
+  // ⚠️ ONE definition of "how often has this person been here", shared with the
+  // at-risk rules above. These two used to read `attendance` directly, so a 1:1
+  // client whose flag said "attended 5 times (all one-to-one)" had `0` and
+  // "never" rendered on the row immediately beside it. A screen that contradicts
+  // itself is not one an owner will trust enough to phone a member about.
+  const activity = activityIndex(attendance, ptSessions);
+  const visitsFor = id => activity.get(id)?.visits || 0;
+  // Formatted from LOCAL calendar parts, not `toISOString().slice(0,10)`. A
+  // check-in at 01:00 SGT is the 16th to the coach who recorded it and the 15th
+  // in UTC, and "last seen" is read off a wall calendar.
   const lastSeen = id => {
-    const ts = attendance.filter(a => a.memberId === id).map(a => a.checkedInAt).sort();
-    return ts.length ? ts[ts.length - 1].slice(0, 10) : "";
+    const ms = activity.get(id)?.lastMs;
+    if (ms == null) return "";
+    const d = new Date(ms), p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
   const term = q.trim().toLowerCase();
   const shown = members
@@ -148,7 +164,7 @@ export function RosterScreen({ onBack, onNavigate }) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (_) { /* a blocked download is not worth breaking the screen over */ }
   };
-  const exportRoster = () => download(rosterCsv(members, attendance), rosterCsvFilename(gymName));
+  const exportRoster = () => download(rosterCsv(members, attendance, { ptSessions }), rosterCsvFilename(gymName));
   const exportMember = (m) => {
     // `actions` too, not just attendance: the retention ledger is personal data
     // held about this member — the gym's own record of flagging and contacting
@@ -221,7 +237,7 @@ export function RosterScreen({ onBack, onNavigate }) {
 
           {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
               tell, say so — never a green all-clear over unmeasured data. */}
-          <div style={card}>
+          <div style={card} data-testid="at-risk-panel">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Who&rsquo;s slipping away</div>
               <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
@@ -325,86 +341,8 @@ export function RosterScreen({ onBack, onNavigate }) {
             )}
           </div>
 
-          {/* ── CSV backfill ───────────────────────────────────────────── */}
-          <div style={card}>
-            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
-            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
-              Bring past check-ins across from your previous system. A CSV with a <strong>member name
-              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
-              are used when present. Nothing is written until you review what was read.
-            </p>
-
-            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
-              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
-                <Upload size={14}/> Choose CSV
-                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
-              </label>
-              <label data-tap style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
-                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
-                Dates are day/month (e.g. 03/04 = 3 April)
-              </label>
-            </div>
-
-            <textarea
-              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
-              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
-              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
-            />
-
-            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
-              {/* Btn's prop is `variant` (default "primary") — passing a bare
-                  `primary` leaks an unknown attribute to the DOM. Once a preview
-                  exists, Import is the primary action and the other two step back. */}
-              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
-                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
-              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
-              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
-            </div>
-
-            {/* Preview. Everything the apply will do, before it does any of it. */}
-            {analysis && !analysis.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid #F5576C55",background:"#F5576C14",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
-                {analysis.error}
-              </div>
-            )}
-            {analysis?.ok && (
-              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
-                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
-                {analysis.newMembers.length > 0 && (
-                  <div style={{color:"var(--muted)"}}>
-                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
-                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
-                  </div>
-                )}
-                {analysis.problems.length > 0 && (
-                  <details style={{marginTop:"6px"}}>
-                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
-                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
-                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-            {/* The panel below is derived from `--green`, not Canopy's #7BE3A4: the
-                import-succeeded card was mint on every skin, so a gym on Pulse or
-                Atelier got one Canopy-green card in the middle of their own palette.
-                ⚠️ This comment sits OUTSIDE the conditional on purpose. A JSX comment
-                placed inside a `cond && ( ... )` arm makes two children of a
-                single-expression arm, which is a syntax error — and writing the closing
-                comment delimiter inside a JSX comment ends it early, which is a second
-                one. Both broke the build while this line was being written. */}
-            {result?.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid color-mix(in srgb, var(--green) 33%, transparent)",background:"color-mix(in srgb, var(--green) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
-                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
-                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
-                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
-              </div>
-            )}
-          </div>
-
           {/* ── Roster ─────────────────────────────────────────────────── */}
-          <div style={card}>
+          <div style={card} data-testid="roster-panel">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>
                 Roster · {activeCount}
@@ -445,12 +383,13 @@ export function RosterScreen({ onBack, onNavigate }) {
                 <button onClick={submitAdd} style={primaryBtn}>Add</button>
               </div>
             )}
-            {formErr && <div style={{fontSize:"12px",color:"#EF4444",marginBottom:"10px"}}>{formErr}</div>}
+            {formErr && <div style={{fontSize:"12px",color:"var(--danger)",marginBottom:"10px"}}>{formErr}</div>}
 
             {members.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
-                No members yet. Import a CSV above, or check people in from the Class Runner —
-                a name is all that’s needed and the roster row is created for you.
+                No members yet. <strong>Add member</strong> puts one in by hand — a name is all
+                that’s needed. You can also check people in from the Class Runner, which creates
+                the roster row for you, or import your old attendance history below.
               </p>
             ) : shown.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
@@ -480,7 +419,19 @@ export function RosterScreen({ onBack, onNavigate }) {
                     <button onClick={cancelForm} style={ghostBtn}>Cancel</button>
                   </div>
                 ) : (
-                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",background:"var(--bg)",opacity:m.status&&m.status!=="active"?0.62:1}}>
+                  <div key={m.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 10px",borderRadius:"7px",
+                    // 🔴 An inactive member RECEDES BY LOSING ITS PLATE, not by being
+                    // dimmed. `opacity:0.62` on the whole row was the obvious way
+                    // to say "not active" and it dimmed everything inside it —
+                    // email, last-seen date, status pill and the Edit button that
+                    // is how you reactivate them — from 6.72:1 to **3.36:1 on
+                    // Canopy**, the shipped default. Below AA on four readouts at
+                    // once, and invisible to any sweep that does not composite
+                    // alpha, which is why it survived until session 28.
+                    // Dropping the plate keeps the recession and every token at
+                    // full strength; the badge beside the name is what carries
+                    // the state, the same rule stageConfig.js states for colour.
+                    background:m.status&&m.status!=="active"?"transparent":"var(--bg)"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:"13px",fontWeight:"600",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                         {m.name||"(no name)"}
@@ -517,6 +468,90 @@ export function RosterScreen({ onBack, onNavigate }) {
                   </div>
                 ))}
                 {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── CSV backfill ─────────────────────────────────────────────
+              BELOW the roster on purpose. This panel used to render above it,
+              so the first thing on Members was a file picker and an owner
+              reasonably concluded a CSV was the only way in — while the Add
+              member button sat off the bottom of the fold. This is attendance
+              HISTORY, which is a migration job a gym does once; adding a member
+              is the thing it does every week. Order says which is which. */}
+          <div style={card} data-testid="csv-import-panel">
+            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
+              Bring past check-ins across from your previous system. A CSV with a <strong>member name
+              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
+              are used when present. Nothing is written until you review what was read.
+            </p>
+
+            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
+                <Upload size={14}/> Choose CSV
+                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
+              </label>
+              <label data-tap style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
+                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
+                Dates are day/month (e.g. 03/04 = 3 April)
+              </label>
+            </div>
+
+            <textarea
+              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
+              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
+              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
+            />
+
+            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
+              {/* Btn's prop is `variant` (default "primary") — passing a bare
+                  `primary` leaks an unknown attribute to the DOM. Once a preview
+                  exists, Import is the primary action and the other two step back. */}
+              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
+                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
+              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
+              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
+            </div>
+
+            {/* Preview. Everything the apply will do, before it does any of it. */}
+            {analysis && !analysis.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid var(--danger-border)",background:"color-mix(in srgb, var(--danger) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                {analysis.error}
+              </div>
+            )}
+            {analysis?.ok && (
+              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
+                {analysis.newMembers.length > 0 && (
+                  <div style={{color:"var(--muted)"}}>
+                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
+                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
+                  </div>
+                )}
+                {analysis.problems.length > 0 && (
+                  <details style={{marginTop:"6px"}}>
+                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
+                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
+                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {/* The panel below is derived from `--green`, not Canopy's #7BE3A4: the
+                import-succeeded card was mint on every skin, so a gym on Pulse or
+                Atelier got one Canopy-green card in the middle of their own palette.
+                ⚠️ This comment sits OUTSIDE the conditional on purpose. A JSX comment
+                placed inside a `cond && ( ... )` arm makes two children of a
+                single-expression arm, which is a syntax error — and writing the closing
+                comment delimiter inside a JSX comment ends it early, which is a second
+                one. Both broke the build while this line was being written. */}
+            {result?.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid color-mix(in srgb, var(--green) 33%, transparent)",background:"color-mix(in srgb, var(--green) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
+                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
+                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
               </div>
             )}
           </div>

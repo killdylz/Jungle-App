@@ -5,11 +5,12 @@
 // "tidy" it into the shared import: they are different functions.
 import React, { useEffect } from "react";
 import { SCFG } from "../../data/stageConfig.js";
+import * as store from "../../lib/store.js";
 import { ArrowLeft } from "lucide-react";
 import { FLAGS } from "../../config/flags.js";
 import { floorPacer } from "../../lib/intervalTimer.js";
 import { BrandLogo, useWindowWidth } from "../../ui/primitives.jsx";
-import { prefersReducedMotion, tvFont } from "./displayKit.js";
+import { prefersReducedMotion, tvFont, scaleMultOf } from "./displayKit.js";
 
 // Honest floor board derived from the coach's real class plan. No fabricated
 // member rosters, headcounts, or HR zones — the core is biometric-free (Fable M3)
@@ -27,6 +28,9 @@ export function buildFloorLayout(stages){
 
 export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,idx:0}, nowPlaying=null, onBack }){
   const vw = useWindowWidth(); const isMobile = vw < 700;
+  // The coach's stored S/M/L/XL choice. Read here for the first time: these
+  // `tvFont` calls passed no `mult`, so the setting did nothing on this board.
+  const scaleMult = scaleMultOf(store.getDisplayPrefs().fontScale);
   const reduce = prefersReducedMotion();
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
@@ -62,11 +66,11 @@ export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,
 
       <div style={{...panel,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"20px",flexWrap:"wrap",background:"linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), var(--card))"}}>
         <div style={{display:"flex",alignItems:"baseline",gap:"14px",flexWrap:"wrap"}}>
-          <div style={{fontSize:tvFont(24),fontWeight:"800",letterSpacing:"2px",color:isWork?"var(--accent)":"var(--muted)"}}>{bigLabel}</div>
+          <div style={{fontSize:tvFont(24,scaleMult),fontWeight:"800",letterSpacing:"2px",color:isWork?"var(--accent)":"var(--muted)"}}>{bigLabel}</div>
           {/* PRIMARY member-facing element on the floor board. At the old fixed
               84px it was 7.8% of a 1080p wall — already under the Fable §3 8% floor
-              — and half that on 4K. tvFont(96) holds ~8.9% of height on both. */}
-          <div style={{fontFamily:"var(--display)",fontSize:tvFont(96),fontWeight:"900",lineHeight:"0.9",color:(isInterval&&!isWork)?"var(--muted)":"var(--text)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(bigSec)}</div>
+              — and half that on 4K. tvFont(96,scaleMult) holds ~8.9% of height on both. */}
+          <div style={{fontFamily:"var(--display)",fontSize:tvFont(96,scaleMult),fontWeight:"900",lineHeight:"0.9",color:(isInterval&&!isWork)?"var(--muted)":"var(--text)",fontVariantNumeric:"var(--num)",textShadow:"var(--glow)"}}>{fmt(bigSec)}</div>
           {stage?.name && <div style={{fontSize:"14px",fontWeight:"700",color:"var(--muted)"}}>{stage.name}</div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:"8px",alignItems:"flex-end"}}>
@@ -94,12 +98,12 @@ export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,
           <div key={st.id} style={{background:"var(--card)",border:`2px solid ${on?c:"var(--border)"}`,borderRadius:"14px",padding:"14px",position:"relative",transition:reduce?"none":"transform .3s, box-shadow .3s",transform:on&&!reduce?"scale(1.02)":"none",boxShadow:on?`0 0 24px ${c}55`:"none"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
               <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"9px",height:"9px",borderRadius:"50%",background:c}}/><span style={{fontSize:"12px",fontWeight:"800",color:c,letterSpacing:"1px"}}>{st.label.toUpperCase()}</span></div>
-              {st.isStart&&<span style={{fontSize:"9px",fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
-              {st.isFinish&&<span style={{fontSize:"9px",fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
+              {st.isStart&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
+              {st.isFinish&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
             </div>
-            <div style={{fontFamily:"var(--display)",fontSize:tvFont(26),fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
+            <div style={{fontFamily:"var(--display)",fontSize:tvFont(26,scaleMult),fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
             {st.scheme && <div style={{fontSize:"13px",color:"var(--muted)"}}>{st.scheme}</div>}
-            {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:"9px",fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
+            {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
           </div>
         );})}
       </div>

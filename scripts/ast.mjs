@@ -29,8 +29,8 @@
 // suppressor that fails silently is worse than a noisy report.
 //
 // ⚠️ The component-reachability check needs the RENDER SITE in the scanned set:
-// `deadctl src` sees App.jsx and so knows AnalyticsScreen is unreachable, but
-// `deadctl src/screens/AnalyticsScreen.jsx` alone cannot and will report its
+// `deadctl src` sees App.jsx and so knows a flag-gated screen is unreachable, but
+// `deadctl src/screens/SomeScreen.jsx` alone cannot and will report its
 // three buttons. Scan the tree, not the file, when you want the gated answer.
 
 import fs from "node:fs";
@@ -330,10 +330,12 @@ function inEmptyIteration(p, flags) {
 }
 
 // (A) Reachability: a component whose EVERY render site sits in a dead branch is
-// unreachable, and so is every control inside it. AnalyticsScreen is the live
-// case — App.jsx renders it as `FLAGS.mockAnalytics ? <AnalyticsScreen/> : …`,
-// so its three handler-less buttons are correct and unreachable, and nothing
-// inside that file says so. This is the mechanism a hand-check kept re-deriving.
+// unreachable, and so is every control inside it. The case this was written for
+// was AnalyticsScreen — App.jsx rendered it as `FLAGS.mockAnalytics ?
+// <AnalyticsScreen/> : …`, so its three handler-less buttons were correct and
+// unreachable, and nothing inside that file said so. That screen was deleted in
+// session 29 once the real one had replaced it, so the example is historical; the
+// mechanism is not, and it is what a hand-check kept re-deriving.
 function unreachableComponents(files, flags) {
   if (!flags) return new Set();
   const used = new Map();   // component name → was it rendered anywhere LIVE?
