@@ -68,10 +68,40 @@ describe("the minimum-N gate states what is needed instead of drawing a line", (
     const m = model(cohort("a", 5, JUL_2026 - 6, 4));
     expect(m.ready).toBe(false);
     expect(m.reason).toContain(String(MIN_MEMBERS));
-    expect(m.reason).toContain("So far 5 members do");
+    expect(m.reason).toContain("So far 5 members can");
     // "Not enough data" alone leaves an owner unable to tell whether they are one
     // member short or a hundred, and therefore unable to decide whether to import.
     expect(m.measured).toBe(5);
+    expect(m.withCheckIn).toBe(5);
+  });
+
+  // 🔴 `withCheckIn` and `measured` are DIFFERENT numbers and the gate used to
+  // call both of them the first one. Everyone here is first seen in the import
+  // boundary month, so all five are excluded from the cohort — but all five have
+  // checked in, and the screen's stat card is labelled "WITH A CHECK-IN".
+  // Before this, that card read 0 directly under a sentence counting five.
+  it("separates who has a check-in from who can be measured", () => {
+    // source "import" makes the first month the import BOUNDARY, which is what
+    // excludes everyone first seen in it.
+    const m = model(cohort("a", 5, JUL_2026 - 6, 4, "import"));
+
+    expect(m.withCheckIn, "five members really did check in").toBe(5);
+    expect(m.measured, "and none of them can be measured").toBe(0);
+    expect(m.excluded).toBe(5);
+
+    // The sentence must not claim nobody has checked in while counting five who
+    // have. Both halves are asserted: the false claim is gone AND the true one
+    // is present.
+    expect(m.reason).not.toContain("with a recorded check-in");
+    expect(m.reason).toContain("whose first class can be dated");
+    expect(m.reason).toContain("None can be yet");
+    expect(m.reason).toContain("5 have check-ins but were");
+  });
+
+  it("singularises the excluded count, because '1 have check-ins' stops being read", () => {
+    const m = model(cohort("a", 1, JUL_2026 - 6, 4, "import"));
+    expect(m.reason).toContain("1 has a check-in but was");
+    expect(m.reason).not.toContain("1 have check-ins");
   });
 
   it("refuses a curve when no point clears MIN_POINT_N, even with enough members", () => {

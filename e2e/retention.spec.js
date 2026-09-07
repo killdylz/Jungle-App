@@ -132,13 +132,56 @@ test.describe("studio analytics", () => {
     // The number held AND the number needed. "Not enough data" alone leaves an
     // owner unable to tell whether they are one member short or a hundred.
     await expect(gate).toContainText("at least 12 members");
-    await expect(gate).toContainText("So far 3 members do");
+    await expect(gate).toContainText("So far 3 members can");
     await expect(gate).toContainText(/Members screen/);
+    // Nobody here is behind an import boundary, so the two numbers agree and
+    // the card matches the sentence. That agreement is the control for the test
+    // below, where they legitimately differ.
+    await expect(gate).toContainText("3WITH A CHECK-IN");
 
     // NO chart, and no half-life figure either.
     await expect(page.getByTestId("retention-curve")).toHaveCount(0);
     await expect(page.getByTestId("retention-cohorts")).toHaveCount(0);
     await expect(page.getByTestId("retention-headline")).toHaveCount(0);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // 🔴 The card and the prose used to contradict each other about a plain
+  // English fact. `measured` is the subset of checked-in members whose first
+  // month is not the import boundary; the stat card labelled "WITH A CHECK-IN"
+  // carried it, so a gym whose only members arrived in the import month read
+  // **0 WITH A CHECK-IN** two inches under a sentence counting three of them.
+  // Found by rendering the screen and reading it. Every test passed throughout,
+  // because no test compared the card with the sentence beside it.
+  test("does not say nobody has checked in while counting the ones who have", async ({ page }) => {
+    const errors = watchConsole(page);
+    const now = new Date();
+    const iso = (d) => new Date(now.getFullYear(), now.getMonth() - 2, d, 18, 0).toISOString();
+    await seed(page, {
+      members: [0, 1, 2].map(i => ({ id: `m${i}`, name: NAMES[i], email: "", status: "active", joinedAt: "", externalRef: "" })),
+      // source "import" — every one of them arrives in the boundary month, so
+      // none can be measured and all three have checked in.
+      attendance: [0, 1, 2].map(i => ({ id: `a${i}`, classInstanceId: "c1", memberId: `m${i}`, source: "import", checkedInAt: iso(4 + i) })),
+    });
+    await nav(page, "Analytics");
+
+    const gate = page.getByTestId("retention-not-ready");
+    await expect(gate).toBeVisible();
+
+    // POSITIVE CONTROL: the roster really is three, so "3" below is not a
+    // coincidence of an empty screen.
+    await expect(gate).toContainText("3MEMBERS ON ROSTER");
+
+    // 🔴 The card, which read 0.
+    await expect(gate).toContainText("3WITH A CHECK-IN");
+    await expect(gate).not.toContainText("0WITH A CHECK-IN");
+
+    // And the sentence, which claimed nobody had.
+    await expect(gate).toContainText("whose first class can be dated");
+    await expect(gate).toContainText("None can be yet");
+    await expect(gate).toContainText("3 have check-ins but were first seen");
+    await expect(gate).not.toContainText("with a recorded check-in");
 
     expectNoConsoleErrors(errors);
   });

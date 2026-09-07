@@ -165,7 +165,11 @@ export function RetentionScreen({ onBack, onNavigate }) {
               {/* What IS held, so the sentence above is checkable. */}
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:"12px",marginTop:"14px"}}>
                 <StatCard label="MEMBERS ON ROSTER" value={String(m.roster)}/>
-                <StatCard label="WITH A CHECK-IN" value={String(m.measured)}/>
+                {/* 🔴 withCheckIn, not measured. They are different numbers and this
+                    card carried the wrong one under this label: a gym with three
+                    checked-in members read "0 WITH A CHECK-IN" directly under a
+                    sentence counting three of them. See cohorts.js. */}
+                <StatCard label="WITH A CHECK-IN" value={String(m.withCheckIn)}/>
                 <StatCard label="FULL MONTHS" value={m.window ? String(m.window.months) : "0"}/>
               </div>
               {/* The sentence above names the Members screen; this is the door to

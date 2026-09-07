@@ -115,8 +115,23 @@ export function cohortModel(members = [], attendance = [], opts = {}) {
     withRows.push({ memberId, cohort: monthIndex(e.firstMs), last: monthIndex(e.lastMs), visits: e.visits });
   });
 
+  // 🔴 `withCheckIn` AND `measured` ARE DIFFERENT NUMBERS AND THE SCREEN USED
+  // TO CALL BOTH OF THEM THE FIRST ONE.
+  //
+  // `withCheckIn` is what it says: members with at least one attendance row.
+  // `measured` is the subset whose first month is usable — everyone first seen
+  // in the import boundary month is excluded below, because they cannot be told
+  // apart from members who were already training then.
+  //
+  // They were one field. `mid` overwrote `measured` with the cohort count, and
+  // the gate's stat card kept the label "WITH A CHECK-IN" — so a gym with three
+  // members who had checked in was shown **0 WITH A CHECK-IN**, two inches under
+  // a sentence that said "3 more were first seen in Feb 2026". The card and the
+  // prose contradicted each other about a plain English fact, on the one screen
+  // in this product whose entire job is numbers an owner can trust. Found by
+  // rendering it and reading it; every test passed throughout.
   const base = {
-    ready: false, measured: withRows.length, roster,
+    ready: false, withCheckIn: withRows.length, measured: withRows.length, roster,
     noRows: Math.max(0, roster - withRows.length),
     window: null, curve: [], cohorts: [], halfLifeMonths: null,
     censoredMonth: null, imported: false, excluded: 0,
@@ -144,20 +159,29 @@ export function cohortModel(members = [], attendance = [], opts = {}) {
 
   const cohortMembers = censoredMonth == null ? withRows : withRows.filter(m => m.cohort !== censoredMonth);
   const window = { firstMonth, lastMonth, lastFull, months: lastFull - firstMonth + 1 };
-  const mid = { ...base, window, imported, censoredMonth, measured: cohortMembers.length,
+  const mid = { ...base, window, imported, censoredMonth,
+                withCheckIn: withRows.length, measured: cohortMembers.length,
                 excluded: withRows.length - cohortMembers.length };
 
   if (cohortMembers.length < MIN_MEMBERS) {
     // The number that IS held, next to the number needed. "Not enough data" on
     // its own leaves an owner unable to tell whether they are one member short or
     // a hundred, and therefore unable to decide whether to bother importing.
-    const short = censoredMonth != null
-      ? ` (${withRows.length - cohortMembers.length} more were first seen in ${monthLabel(censoredMonth)}, `
-        + "the month your import starts, and cannot be told apart from members who were already training then)"
+    // 🔴 "MEMBERS WHOSE FIRST CLASS CAN BE DATED", not "members with a
+    // recorded check-in". The requirement was worded as the second and counted
+    // as the first, so the sentence read "…needs at least 12 members with a
+    // recorded check-in. None do yet (3 more were first seen in Feb 2026…)" —
+    // asserting that nobody has checked in and then, in the same breath,
+    // counting three who have. The parenthetical was the only true half.
+    const excluded = withRows.length - cohortMembers.length;
+    const short = censoredMonth != null && excluded > 0
+      ? ` (${excluded} ${excluded === 1 ? "has a check-in but was" : "have check-ins but were"} `
+        + `first seen in ${monthLabel(censoredMonth)}, the month your import starts, `
+        + "and cannot be told apart from members who were already training then)"
       : "";
-    const held = cohortMembers.length === 0 ? "None do yet"
-      : `So far ${cohortMembers.length} ${cohortMembers.length === 1 ? "member does" : "members do"}`;
-    return { ...mid, reason: `A retention curve needs at least ${MIN_MEMBERS} members with a recorded check-in. `
+    const held = cohortMembers.length === 0 ? "None can be yet"
+      : `So far ${cohortMembers.length} ${cohortMembers.length === 1 ? "member can" : "members can"}`;
+    return { ...mid, reason: `A retention curve needs at least ${MIN_MEMBERS} members whose first class can be dated. `
       + `${held}${short}. `
       + "Import more of your attendance history on the Members screen and this fills in." };
   }
