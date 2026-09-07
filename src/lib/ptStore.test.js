@@ -14,6 +14,7 @@ import {
   getParqRecords, appendParqRecord,
   getPtClients, savePtClients, addPtClient, updatePtClient,
   getPtSessions, savePtSessions, assignPtSession, togglePtSessionDone, removePtSession,
+  erasePtClient, describePtErasure, saveMembers,
 } from "./store.js";
 import { parqStatus, PARQ_QUESTIONS } from "./parq.js";
 
@@ -108,6 +109,115 @@ describe("1:1 clients", () => {
   it("has no delete — ending a relationship keeps its history", async () => {
     const store = await import("./store.js");
     expect(store.deletePtClient).toBeUndefined();
+  });
+});
+
+// ── D7 · the orphan erasure ────────────────────────────────────────────────
+//
+// The pair above and this block are the two halves of one decision and they
+// have to be read together: there is no `deletePtClient` because ENDING a
+// relationship must not destroy a delivery record, and there IS an
+// `erasePtClient` because an erasure that leaves seven health answers behind is
+// not an erasure. The refusals below are what keeps them from being the same
+// function.
+describe("erasePtClient — the one hard delete, and everything it refuses", () => {
+  const seed = () => {
+    saveMembers([{ id: "m1", name: "Sarah Chen" }, { id: "m2", name: "Ana Ruiz" }]);
+    const a = addPtClient({ memberId: "m1", goal: "First pull-up" }).client;
+    const b = addPtClient({ memberId: "m2", goal: "Back squat" }).client;
+    appendParqRecord({ memberId: "m1", answers: clean(), screenedAt: "2026-08-01", consent: CONSENT });
+    appendParqRecord({ memberId: "m1", answers: clean(), screenedAt: "2026-08-20", consent: CONSENT });
+    appendParqRecord({ memberId: "m2", answers: clean(), screenedAt: "2026-08-01", consent: CONSENT });
+    assignPtSession({ clientId: a.id, memberId: "m1", date: "2026-09-01" }, CLEARED);
+    assignPtSession({ clientId: a.id, memberId: "m1", date: "2026-09-03" }, CLEARED);
+    assignPtSession({ clientId: b.id, memberId: "m2", date: "2026-09-02" }, CLEARED);
+    return { a, b };
+  };
+
+  beforeEach(() => { localStorage.clear(); });
+
+  it("REFUSES a client whose member row still exists — that is `status: ended`", () => {
+    const { a } = seed();
+    const r = erasePtClient(a.id);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("member-present");
+    // And it stored nothing. A refusal that half-erased would be worse than no
+    // refusal at all.
+    expect(getPtClients()).toHaveLength(2);
+    expect(getParqRecords()).toHaveLength(3);
+    expect(getPtSessions()).toHaveLength(3);
+  });
+
+  it("erases the client, its sessions AND its health answers once the member is gone", () => {
+    const { a } = seed();
+    // The member row is erased under PDPA; the cascade knows nothing about
+    // these three local ledgers, which is the whole defect.
+    saveMembers([{ id: "m2", name: "Ana Ruiz" }]);
+
+    const r = erasePtClient(a.id);
+    expect(r.ok).toBe(true);
+    expect(r.erased).toEqual({ sessions: 2, parqRecords: 2 });
+
+    // 🔴 The assertion that matters: the health answers are GONE from the store,
+    // not merely absent from the returned list.
+    expect(getParqRecords().filter(x => x.memberId === "m1")).toHaveLength(0);
+    expect(getPtSessions().filter(x => x.clientId === a.id)).toHaveLength(0);
+    expect(getPtClients().filter(x => x.id === a.id)).toHaveLength(0);
+  });
+
+  it("takes nothing belonging to any other client", () => {
+    const { a, b } = seed();
+    saveMembers([{ id: "m2", name: "Ana Ruiz" }]);
+    erasePtClient(a.id);
+    expect(getPtClients().map(c => c.id)).toEqual([b.id]);
+    expect(getParqRecords().map(r => r.memberId)).toEqual(["m2"]);
+    expect(getPtSessions().map(s => s.clientId)).toEqual([b.id]);
+  });
+
+  it("ignores an id it does not hold rather than throwing", () => {
+    seed();
+    const r = erasePtClient("nope");
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("not-found");
+    expect(getPtClients()).toHaveLength(2);
+  });
+
+  it("describes exactly what the erase will take, counted from the same reads", () => {
+    const { a } = seed();
+    saveMembers([{ id: "m2", name: "Ana Ruiz" }]);
+    const d = describePtErasure(a.id);
+    expect(d.ok).toBe(true);
+    expect(d.sessions).toBe(2);
+    expect(d.parq).toBe(2);
+    expect(d.text).toContain("2 sessions");
+    expect(d.text).toContain("2 health screens");
+    expect(d.text).toContain("cannot be undone");
+    // The dialog's counts and the erase's counts are the same numbers. A dialog
+    // that promises one thing and deletes another is the failure this pairing
+    // exists to make impossible.
+    const r = erasePtClient(a.id);
+    expect(r.erased.sessions).toBe(d.sessions);
+    expect(r.erased.parqRecords).toBe(d.parq);
+  });
+
+  it("singularises, because '1 sessions' is how a dialog stops being read", () => {
+    saveMembers([{ id: "m1", name: "Sarah Chen" }]);
+    const c = addPtClient({ memberId: "m1" }).client;
+    appendParqRecord({ memberId: "m1", answers: clean(), screenedAt: "2026-08-01", consent: CONSENT });
+    assignPtSession({ clientId: c.id, memberId: "m1", date: "2026-09-01" }, CLEARED);
+    saveMembers([]);
+    const d = describePtErasure(c.id);
+    expect(d.text).toContain("1 session ");
+    expect(d.text).toContain("1 health screen ");
+    expect(d.text).not.toContain("1 sessions");
+  });
+
+  it("refuses to describe a live client, and says why rather than returning a blank", () => {
+    const { a } = seed();
+    const d = describePtErasure(a.id);
+    expect(d.ok).toBe(false);
+    expect(d.reason).toBe("member-present");
+    expect(d.text).toContain("End the 1:1 instead");
   });
 });
 

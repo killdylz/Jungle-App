@@ -1538,6 +1538,90 @@ export function updatePtClient(id, patch = {}) {
 // NOTE: no `deletePtClient`, for the same reason there is no `deleteMember`.
 // A finished 1:1 relationship is `status: 'ended'` — the sessions delivered
 // under it are the record of work the gym was paid for.
+//
+// 🔴 `erasePtClient` IS NOT THAT, AND THE NOTE ABOVE STILL STANDS.
+//
+// The argument above is about ENDING a relationship, and it is right: a coach
+// who taps the wrong row must not be able to destroy a delivery record, and
+// "ended" is the honest state for a client who stopped coming. Erasure is a
+// different act with a different authority behind it, and conflating the two is
+// how a product ends up with either a delete button on a business record or no
+// way to honour a PDPA request. This is neither.
+//
+// WHAT IT IS FOR. `ptClientRows()` already computes `orphan: !member` — a 1:1
+// record whose MEMBER ROW IS ALREADY GONE. PDPA erasure cascades `attendance`
+// and knows nothing about these three local ledgers, so today the gym has
+// deleted the person and kept their goal, their coach's notes, their session
+// history and their SEVEN HEALTH ANSWERS, indefinitely, with no way to reach
+// them: the screen renders the row honestly as "Member record deleted" and
+// offers nothing. An erasure that leaves the most sensitive data in the product
+// behind is not an erasure, and the ledger saying otherwise is worse than no
+// ledger.
+//
+// 🔴 IT REFUSES ANY CLIENT WHOSE MEMBER STILL EXISTS. Conditional, in the
+// same way and for the same reason `deletePersonaMovement` is: the safe case is
+// narrow and the guard belongs in the store, not in the JSX that happens to call
+// it today. A live client is `status: 'ended'`, which is what the note above
+// says and what this function will not do for you. Erasing a CURRENT member's
+// 1:1 record is a member-level act that has to start with the member row, and
+// there is deliberately no path to that either.
+//
+// IT TAKES ALL THREE LEDGERS, because a partial erasure is the failure mode.
+// The client row, its sessions (keyed on `clientId`) and its PAR-Q records
+// (keyed on `memberId`) go together; leaving the health answers behind is
+// precisely the hole this closes. `addPtClient` guarantees one client per
+// member, so the `memberId` sweep cannot reach a second client's records.
+//
+// NO TOMBSTONE, and that is not the oversight `PENDING_DEL_KEY` exists for.
+// These three keys deliberately make no sync call at all (see the block above
+// `getParqRecords`), so there is no server row for a failed DELETE to leave
+// behind. If they are ever synced, this function needs a tombstone in the same
+// commit — an upsert-based pusher cannot remove a server row, so the retry would
+// succeed, clear the error, and leave the answers on the server for good.
+export function erasePtClient(id, members = getMembers()) {
+  const clients = getPtClients();
+  const c = clients.find(x => x && x.id === id);
+  if (!c) return { ok: false, reason: "not-found", clients, sessions: getPtSessions(), parqRecords: getParqRecords() };
+  if ((members || []).some(m => m && m.id === c.memberId)) {
+    return { ok: false, reason: "member-present", clients, sessions: getPtSessions(), parqRecords: getParqRecords() };
+  }
+  const sessions = getPtSessions().filter(s => s && s.clientId !== id);
+  const parqRecords = getParqRecords().filter(r => r && r.memberId !== c.memberId);
+  const erased = {
+    sessions: getPtSessions().length - sessions.length,
+    parqRecords: getParqRecords().length - parqRecords.length,
+  };
+  const out = clients.filter(x => x && x.id !== id);
+  savePtClients(out);
+  savePtSessions(sessions);
+  writeJSON(KEYS.parqRecords, parqRecords);
+  return { ok: true, reason: "", clients: out, sessions, parqRecords, erased };
+}
+
+// The sentence the confirm has to say before any of that happens. Lives beside
+// the arithmetic that decides it for the reason `describePtRoster` does: two
+// places counting one thing is how a dialog and its effect come to disagree.
+// It counts what WOULD go, from the same three reads the erase uses.
+export function describePtErasure(id, members = getMembers()) {
+  const c = getPtClients().find(x => x && x.id === id);
+  if (!c) return { ok: false, reason: "not-found", text: "" };
+  if ((members || []).some(m => m && m.id === c.memberId)) {
+    return { ok: false, reason: "member-present",
+             text: "This client's member record still exists, so this is not an erasure. End the 1:1 instead." };
+  }
+  const sessions = getPtSessions().filter(s => s && s.clientId === id).length;
+  const parq = getParqRecords().filter(r => r && r.memberId === c.memberId).length;
+  const bits = [`the 1:1 record`];
+  if (sessions) bits.push(`${sessions} session${sessions === 1 ? "" : "s"}`);
+  if (parq) bits.push(`${parq} health screen${parq === 1 ? "" : "s"}`);
+  const list = bits.length > 1 ? `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}` : bits[0];
+  return {
+    ok: true, reason: "", sessions, parq,
+    // Names what goes and says it cannot be undone, because it cannot: this is
+    // the one destructive action in the product with no prior list to restore.
+    text: `Permanently erase ${list} left behind when this member was deleted? This cannot be undone.`,
+  };
+}
 
 export function getPtSessions() { return readJSON(KEYS.ptSessions, []); }
 export function savePtSessions(list) { writeJSON(KEYS.ptSessions, list || []); return list || []; }

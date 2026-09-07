@@ -47,6 +47,19 @@ const today = () => {
 // stops sending, which is the D6 shape all over again.
 const EMPTY_DETAIL = { goal: "", coachName: "", startedAt: "", notes: "" };
 
+// What an orphan row is CALLED, in one place because three things say it: the
+// list row's visible text, that row's accessible name, and the detail heading.
+//
+// 🔴 It used to be two of those three. The visible text said "Member record
+// deleted" and the `aria-label` fell back to `r.name || "Client"` — and `r.name`
+// is "" for exactly this row, so a screen-reader user heard "Client, unscreened"
+// on the one row in the list whose whole meaning is that the client is gone.
+// Sighted and non-sighted readers were given different facts by the same
+// control. Found by an e2e test that could not select the row by its own visible
+// name; selecting it by text instead would have made the test pass and left the
+// defect, which is the trap CLAUDE.md names for `<div onClick>` controls.
+const ORPHAN_LABEL = "Member record deleted";
+
 export function PTScreen({ onBack, onNavigate, onLoadSession }) {
   const vw = useWindowWidth();
   const isMobile = vw < 640;
@@ -159,6 +172,33 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
     toast(`Session planned for ${selected.name || "this client"} on ${r.session.date}`);
   };
 
+  // ── D7 · the erasure the orphan row could not offer ──────────────────────
+  //
+  // 🔴 `window.confirm`, not a toast undo, and the difference is the point.
+  // Every other destructive action here is UNDOABLE and so needs no dialog; this
+  // one destroys health answers on purpose and holds no prior list, because a
+  // PDPA erasure that can be undone has not happened. The repo's rule is that
+  // the guard scales with what is destroyed, and nothing else in the product
+  // destroys this much.
+  //
+  // The store refuses any client whose member row still exists, so this button
+  // is reachable only on an orphan. The check is repeated here anyway — a coach
+  // must not be offered a dialog for something that will then be refused.
+  //
+  // ⚠ The confirm text is `store.describePtErasure`, not a sentence written
+  // here: the dialog names counts, and a dialog counting one thing while the
+  // erase deletes another is exactly the disagreement that rule exists to stop.
+  const eraseClient = (row) => {
+    const d = store.describePtErasure(row.id);
+    if (!d.ok) { toast(d.text || "That record cannot be erased."); return; }
+    if (!window.confirm(d.text)) return;
+    const r = store.erasePtClient(row.id);
+    if (!r.ok) { toast("That record cannot be erased."); return; }
+    setClients(r.clients); setSessions(r.sessions); setParqs(r.parqRecords);
+    setSelectedId("");
+    toast(`Erased. ${r.erased.parqRecords} health screen${r.erased.parqRecords === 1 ? "" : "s"} and ${r.erased.sessions} session${r.erased.sessions === 1 ? "" : "s"} removed.`);
+  };
+
   const removeSession = (s) => {
     const { sessions: after, undo } = store.removePtSession(s.id);
     setSessions(after);
@@ -265,7 +305,7 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
               <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 {rows.map(r => (
                   <button key={r.id} onClick={()=>setSelectedId(r.id === selectedId ? "" : r.id)}
-                    aria-label={`${r.name || "Client"} — ${r.parq.label}${parqExpiryShort(r.parq) ? `, ${parqExpiryShort(r.parq)}` : ""}`}
+                    aria-label={`${r.orphan ? ORPHAN_LABEL : (r.name || "Client")} — ${r.parq.label}${parqExpiryShort(r.parq) ? `, ${parqExpiryShort(r.parq)}` : ""}`}
                     style={{textAlign:"left",width:"100%",padding:"11px 13px",borderRadius:"10px",cursor:"pointer",
                             border:`1px solid ${r.id===selectedId?"var(--accent)":"var(--border)"}`,
                             background:r.id===selectedId?"color-mix(in srgb, var(--accent) 10%, transparent)":"var(--bg)",
@@ -277,7 +317,7 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
                              rendering bug and gets ignored, and this one is a
                              real state — the member was erased under PDPA and
                              the cascade knows nothing about this local ledger. */
-                          ? "Member record deleted"
+                          ? ORPHAN_LABEL
                           : (r.name || "Unnamed member")}
                       </div>
                       <div style={{fontSize:"11px",color:"var(--muted)"}}>
@@ -299,12 +339,41 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
           {selected && (
             <div style={card} data-testid="pt-detail">
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:"10px",flexWrap:"wrap"}}>
-                <div style={h}>{selected.orphan ? "Member record deleted" : (selected.name || "Unnamed member")}</div>
+                <div style={h}>{selected.orphan ? ORPHAN_LABEL : (selected.name || "Unnamed member")}</div>
                 <div style={{fontSize:"11px",color:"var(--muted)"}}>
                   {selected.startedAt ? `1:1 since ${selected.startedAt}` : "No start date recorded"}
                   {` · ${selected.sessionsDone} delivered`}
                 </div>
               </div>
+
+              {/* ── D7 · an orphan is the one row a hard delete is right for ────
+                  Shown ONLY when the member row is already gone. `ptClientRows`
+                  has computed `orphan` since this screen shipped and the list
+                  renders it honestly as "Member record deleted"; what it could
+                  not do was act on it. PDPA erasure cascades `attendance` and
+                  knows nothing about these three local ledgers, so the gym had
+                  deleted the person and kept their goal, their notes, their
+                  session history and their seven health answers — with the
+                  screen saying so and offering nothing.
+                  ⚠ There is deliberately NO equivalent for a live client. That
+                  is `status: 'ended'`, and `store.erasePtClient` refuses it
+                  rather than trusting this condition to stay true. */}
+              {selected.orphan && (
+                <div data-testid="pt-orphan-erase"
+                     style={{marginTop:"12px",padding:"12px",borderRadius:"10px",
+                             border:"1px solid var(--danger-border)",
+                             background:"color-mix(in srgb, var(--danger) 6%, transparent)"}}>
+                  <p style={note}>
+                    This member was deleted, and their 1:1 record was left behind — the erasure
+                    did not reach this device&rsquo;s 1:1 ledgers. Their health answers are still here.
+                  </p>
+                  <button onClick={()=>eraseClient(selected)} data-tap
+                    style={{...ghost,marginTop:"10px",borderColor:"var(--danger-border)",color:"var(--danger)",
+                            display:"inline-flex",alignItems:"center",gap:"6px"}}>
+                    <Trash2 size={13}/> Erase this record permanently
+                  </button>
+                </div>
+              )}
 
               {/* ── The gate, stated before anything that depends on it ───── */}
               <div style={{marginTop:"12px",padding:"12px",borderRadius:"10px",background:"var(--bg)",

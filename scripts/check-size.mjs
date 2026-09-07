@@ -192,6 +192,17 @@ const KB = 1000;
 // Both additions are user-facing text and app code on the LAZY side of the seam,
 // which is exactly where this repo wants them.
 //
+// 🔴 39 → 41 credential-less, 41 → 43 prod (D7, session 36). What bought the
+// bytes: the ERASURE PATH for a 1:1 record whose member row was already deleted.
+// `ptClientRows` has computed `orphan` since the screen shipped and the list has
+// always rendered it honestly — what it could not do was act on it, so a PDPA
+// erasure that reached `members` left the client's goal, their session history
+// and their seven health answers behind with no way to reach any of them.
+// Closing it needs the panel that says what happened, the confirm text that
+// counts what would go, and the handler. Measured 38.28 KB, which is 1.8% of
+// headroom against 39 — the same one-byte-under tripwire session 34 raised this
+// ceiling to escape, so the ceiling moves with the feature rather than after it.
+//
 // ─── MERGE NOTE (integrating the S29–S33 stack onto main) ───────────────
 // Both sides rewrote BUDGETS and neither superseded the other, so this is the
 // UNION, not a pick. From main: PTScreens (F1's 1:1 lens). From the stack:
@@ -203,8 +214,8 @@ const KB = 1000;
 // chunks above. Taking its numbers wholesale would have silently deleted five
 // ceilings; an unlisted chunk has no ceiling at all.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 41, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 39, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 43, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 41, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }
