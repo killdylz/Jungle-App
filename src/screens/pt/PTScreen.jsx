@@ -289,11 +289,36 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
             </button>
             {livesOpen && (
               <>
-                <p style={note}>
-                  1:1 clients, health screens and 1:1 sessions are stored <strong>on this device only</strong>.
-                  The server has no table for them yet, so they do not sync between devices and are not
-                  in your backups. Your member roster is unaffected &mdash; it syncs as it always has.
-                </p>
+                {/* 🔴 THE REASON IS NOT THE SAME ON BOTH BUILDS, and this card said
+                    only one of them. "The server has no table for them yet ... your
+                    member roster is unaffected, it syncs as it always has" is true of
+                    a gym WITH a Jungle server. On the shipped credential-less build
+                    `saveMembers` returns before it ever reaches `_bgUpsertDelta`, so
+                    the roster does not sync either — and a coach reading this card was
+                    told the one thing on this screen that is backed up is the one
+                    thing that is not.
+
+                    Same class of defect as the check-in footer session 37 fixed
+                    ("Saved on this device, synced when online" with no server), one
+                    screen along and one paragraph away from the sentence that fix was
+                    modelled on. ⚠️ `store.syncEnabled()`, not `supabaseEnabled`: a
+                    build with credentials that has not resolved a gym syncs nothing
+                    either, and keying on the env var alone repeats the defect one
+                    layer in. */}
+                {store.syncEnabled() ? (
+                  <p style={note}>
+                    1:1 clients, health screens and 1:1 sessions are stored <strong>on this device only</strong>.
+                    The server has no table for them yet, so they do not sync between devices and are not
+                    in your backups. Your member roster is unaffected &mdash; it syncs as it always has.
+                  </p>
+                ) : (
+                  <p style={note}>
+                    1:1 clients, health screens and 1:1 sessions are stored <strong>on this device only</strong>
+                    &mdash; and so is everything else here. <strong>No server is connected to this copy of
+                    Jungle</strong>, so nothing syncs between devices and nothing is backed up, your member
+                    roster included. 1:1 data has a second reason besides: the server has no table for it yet.
+                  </p>
+                )}
                 <p style={{...note,marginTop:"6px"}}>
                   1:1 sessions are also <strong>not counted in studio analytics</strong>. A one-person session
                   is not a class, and folding it into the class numbers would move every figure on the

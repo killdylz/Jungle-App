@@ -211,8 +211,41 @@ test.describe("1:1 clients", () => {
       const lives = page.getByTestId("pt-local-only");
       await lives.getByRole("button").click();
       await expect(page.getByTestId("pt-local-only-short")).toHaveCount(0);
-      await expect(lives).toContainText("The server has no table for them yet");
+      await expect(lives).toContainText("nothing is backed up");
       await expect(lives).toContainText("would move every figure on the");
+    });
+
+    // ── The one thing on this screen it said WAS backed up ──────────────────
+    //
+    // 🔴 The card told every coach "Your member roster is unaffected — it syncs
+    // as it always has". `saveMembers` returns before `_bgUpsertDelta` whenever
+    // `_synced()` is false, and on the shipped build it always is. So the single
+    // sentence on the screen that promised a copy somewhere was the false one,
+    // one paragraph below a sentence that is the house standard for saying the
+    // opposite.
+    //
+    // ⚠️ The test is against the CREDENTIAL-LESS build, which is what
+    // playwright.config.js targets and what is deployed. The server-connected
+    // branch cannot be driven here — there is no server to connect — so it is a
+    // source-level claim, said plainly rather than implied by a passing test.
+    test("🔴 does not promise a roster backup on a build with no server", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+      const lives = page.getByTestId("pt-local-only");
+      await lives.getByRole("button").click();
+
+      // POSITIVE CONTROL: the card really opened and is showing its detail.
+      await expect(lives).toContainText("stored");
+      await expect(lives).toContainText("on this device only");
+
+      // The claim that was there and could not be true.
+      await expect(lives, "the card still promises the member roster syncs")
+        .not.toContainText("it syncs as it always has");
+      await expect(lives, "the card still implies a server exists")
+        .not.toContainText("The server has no table for them yet, so");
+      // And it says what IS true, rather than saying nothing.
+      await expect(lives).toContainText("No server is connected");
+      await expect(lives).toContainText("your member roster included");
     });
 
     test("a gym with nothing on this screen still gets it in full", async ({ page }) => {
@@ -226,7 +259,8 @@ test.describe("1:1 clients", () => {
       await navAnyWidth(page, PT);
       const lives = page.getByTestId("pt-local-only");
       await expect(page.getByTestId("pt-local-only-short")).toHaveCount(0);
-      await expect(lives).toContainText("The server has no table for them yet");
+      await expect(lives).toContainText("nothing is backed up");
+      await expect(lives).toContainText("not counted in studio analytics");
       await expect(lives.getByRole("button")).toHaveAttribute("aria-expanded", "true");
     });
   });
