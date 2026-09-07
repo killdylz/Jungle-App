@@ -244,3 +244,46 @@ describe("externalRef — the field that had a reader and no writer", () => {
     expect(a.newMembers[0].externalRef).toBe("");
   });
 });
+
+
+// ─── A separator is not a missing column ────────────────────────────────────
+//
+// 🔴 A `;`-separated export — what Excel writes in most of Europe, and what
+// several booking systems produce — parses as ONE column called `Name;Date`, so
+// the header check said "No member column found" and listed a dozen header
+// names to try. Every word of that is precise and none of it is the problem:
+// renaming columns cannot fix a separator, so the coach's next move is
+// guaranteed not to work. Driven through the Members screen before it was fixed.
+describe("a file separated by something other than commas says so", () => {
+  const roster = [];
+
+  it("🔴 names the separator instead of blaming the columns", () => {
+    const r = analyzeAttendanceCsv("Name;Date\nSarah Chen;03/04/2026\n", roster);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/semicolons/i);
+    // The sentence that sent a coach the wrong way must be gone.
+    expect(r.error).not.toMatch(/No member column found/i);
+    // And it says what to actually do.
+    expect(r.error).toMatch(/comma-separated|Save As/i);
+  });
+
+  it("covers tabs and pipes, which arrive from the same kind of export", () => {
+    expect(analyzeAttendanceCsv("Name\tDate\nSarah Chen\t03/04/2026\n", roster).error).toMatch(/tabs/i);
+    expect(analyzeAttendanceCsv("Name|Date\nSarah Chen|03/04/2026\n", roster).error).toMatch(/pipes/i);
+  });
+
+  it("does not accuse a one-column file whose header merely contains one", () => {
+    // The false positive this guards: a single real column is not a delimiter
+    // problem, and telling a coach to re-export would waste their time.
+    const r = analyzeAttendanceCsv("Attendee;\nSarah Chen\n", roster);
+    expect(r.error || "").not.toMatch(/semicolons/i);
+  });
+
+  it("🔴 POSITIVE CONTROL — a comma file is still read, and still reads correctly", () => {
+    // Without this the whole block passes on an import that refuses everything.
+    const ok = analyzeAttendanceCsv("Name,Date\nSarah Chen,03/04/2026\n", roster);
+    expect(ok.ok).toBe(true);
+    expect(ok.rows).toHaveLength(1);
+    expect(ok.newMembers.map(m => m.name)).toEqual(["Sarah Chen"]);
+  });
+});
