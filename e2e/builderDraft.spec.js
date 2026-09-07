@@ -100,3 +100,85 @@ test.describe("the Builder's draft is not in-memory state", () => {
     await expect(page.getByRole("button", { name: /Resume building/ })).toBeVisible();
   });
 });
+
+// ─── The duration box, and the "-5m" it put on the room's TV ─────────────────
+//
+// 🔴 `<input type="number" min="1" max="60">` DOES NOT CLAMP. min and max are
+// validation hints; nothing stops the value reaching `e.target.value`, and the
+// handler was `parseInt(e.target.value || "1") * 60` — which defends the empty
+// string and nothing else. Typing `-5` stored `dur: -300`.
+//
+// The reason this is an e2e and not only a unit test is that the unit test
+// cannot see where the number GOES. Driven and measured before the fix:
+// the Builder header read "30 min · 5 stages" for a class whose five stages are
+// 35 minutes of work — a negative stage silently subtracts from every total —
+// and the Room TV, one of the two surfaces `UI-UX-DIRECTION` §1 ranks above
+// every staff screen, rendered "Warm-Up · -5m" in front of the room.
+test.describe("a stage's duration cannot be zero, negative, or NaN", () => {
+  const setFirstStage = async (page, value) => {
+    await nav(page, "Class Builder");
+    const box = page.locator("#stage-duration");
+    await expect(box).toBeVisible();
+    await box.fill(value);
+    await box.blur();
+    // A store write, not a timeout: the assertions below read the STORED object,
+    // so they must run after the write has demonstrably happened.
+    await expect
+      .poll(async () => (await stored(page, "jungle_draft_class"))?.stages?.[0]?.dur)
+      .not.toBe(undefined);
+  };
+
+  for (const [typed, why] of [["-5", "negative"], ["0", "zero"], ["", "cleared"]]) {
+    test(`typing ${JSON.stringify(typed)} (${why}) floors the stage at one minute`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await freshApp(page);
+
+      // POSITIVE CONTROL. The seeded draft really is the five-stage CrossFit
+      // class, and its first stage really is five minutes — without this, every
+      // assertion below would pass against an empty Builder.
+      await nav(page, "Class Builder");
+      const before = (await stored(page, "jungle_draft_class"))?.stages || [];
+      expect(before.length).toBe(5);
+      expect(before[0].dur).toBe(300);
+
+      await setFirstStage(page, typed);
+
+      const after = (await stored(page, "jungle_draft_class")).stages;
+      // 🔴 The stored object, which is where -300 actually lived.
+      expect(after[0].dur).toBe(60);
+      expect(after[0].dur).toBeGreaterThan(0);
+      // Nothing else moved.
+      expect(after.slice(1).map(s => s.dur)).toEqual([600, 900, 300, 300]);
+
+      expectNoConsoleErrors(errors);
+    });
+  }
+
+  test("a long stage is kept, because 75 minutes is a class a studio runs", async ({ page }) => {
+    await freshApp(page);
+    await setFirstStage(page, "75");
+    // ⚠ In the SAME run as the refusals above, so "floors at 60" cannot quietly
+    // become "clamps everything to the control's max".
+    expect((await stored(page, "jungle_draft_class")).stages[0].dur).toBe(4500);
+  });
+
+  test("and the Room TV never shows a negative stage", async ({ page }) => {
+    await freshApp(page);
+    await setFirstStage(page, "-5");
+
+    await nav(page, "Class Runner");
+    await page.getByRole("button", { name: /Room TV/ }).click();
+    await page.mouse.move(640, 400);
+
+    // POSITIVE CONTROL: the board really rendered its plan strip.
+    const board = page.locator("body");
+    await expect(board).toContainText(/\d+ stages · \d+m/);
+    await expect(board).toContainText("Circuit Blast · 10m");
+
+    // 🔴 What shipped: "Warm-Up · -5m", on the biggest screen in the gym.
+    await expect(board).toContainText("Warm-Up · 1m");
+    await expect(board).not.toContainText("-5m");
+    // And the class total is the sum of five real stages, not five minutes short.
+    await expect(board).not.toContainText("· 30m ·");
+  });
+});

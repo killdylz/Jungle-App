@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr, fmtSessionDay } from "./format.js";
+import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr, fmtSessionDay, stageDurSec } from "./format.js";
 
 // These three became a SHARED module in I6 stage 5. Before that they were
 // module-scope consts in App.jsx, read by the Builder and the Runner alike, and
@@ -200,5 +200,52 @@ describe("fmtSessionDay", () => {
   it("handles a month and year boundary without going off by one", () => {
     expect(fmtSessionDay("2025-12-31", new Date(2026, 0, 1, 9).getTime())).toBe("yesterday");
     expect(fmtSessionDay("2025-12-25", new Date(2026, 0, 1, 9).getTime())).toBe("Thu 25 Dec");
+  });
+});
+
+// ─── stageDurSec — the box that let a coach put "-5m" on the room's TV ───────
+//
+// 🔴 `<input type="number" min="1" max="60">` DOES NOT CLAMP: min and max are
+// validation hints, not limits on what reaches `e.target.value`. The Builder's
+// handler was `parseInt(e.target.value || "1") * 60`, which defends the empty
+// string and nothing else — so `-5` stored `dur: -300`, the Builder header
+// silently SUBTRACTED five minutes from a class whose stages are 35, and the
+// Room TV rendered "Warm-Up · -5m" in front of the room. Driven and measured
+// before the fix, not inferred.
+describe("stageDurSec", () => {
+  it("refuses zero and negative — a stage of -5 minutes is not a duration", () => {
+    expect(stageDurSec("0")).toBe(60);
+    expect(stageDurSec("-5")).toBe(60);
+    expect(stageDurSec("-1")).toBe(60);
+    // 🔴 The number that reached the wall. -300 is what shipped.
+    expect(stageDurSec("-5")).not.toBe(-300);
+  });
+
+  it("keeps every value a coach could have meant, including a long one", () => {
+    expect(stageDurSec("1")).toBe(60);
+    expect(stageDurSec("5")).toBe(300);
+    expect(stageDurSec("45")).toBe(2700);
+    // ⚠ NO CEILING, deliberately. The control says max="60", but a 75-minute
+    // open-gym block is a real thing a studio programmes, and rewriting a
+    // coach's 75 to 60 would destroy input rather than reject it. Refusing the
+    // impossible and allowing the merely long is the split.
+    expect(stageDurSec("75")).toBe(4500);
+    expect(stageDurSec("999")).toBe(59940);
+  });
+
+  it("floors anything unparseable at one minute, the way the old fallback did", () => {
+    // The one behaviour the old expression got right — clearing the box gives a
+    // minute rather than NaN — and it has to survive the fix.
+    for (const junk of ["", "   ", "abc", null, undefined, NaN, {}, []]) {
+      expect(stageDurSec(junk), String(junk)).toBe(60);
+    }
+  });
+
+  it("never returns NaN, which would render as an empty clock and stop the class", () => {
+    for (const v of ["", "-", "e", "0x10", "1.9", "  7  "]) {
+      const out = stageDurSec(v);
+      expect(Number.isFinite(out), `${v} -> ${out}`).toBe(true);
+      expect(out).toBeGreaterThanOrEqual(60);
+    }
   });
 });

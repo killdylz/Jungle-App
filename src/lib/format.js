@@ -97,3 +97,44 @@ export const fmtSessionDay = (dateStr, now = Date.now()) => {
   if (diff === 1) return "yesterday";
   return `${DAY3[d.getDay()]} ${d.getDate()} ${MON3[d.getMonth()]}`;
 };
+
+// ── A stage's duration, from whatever a coach typed into the box ─────────────
+//
+// 🔴 `<input type="number" min="1" max="60">` DOES NOT CLAMP. `min` and `max`
+// are validation hints the browser reports through `:invalid` and constraint
+// validation; nothing stops a value outside them reaching `e.target.value`, and
+// the Builder's handler was `parseInt(e.target.value || "1") * 60` — an
+// expression that defends only the EMPTY string.
+//
+// So typing `-5` stored `dur: -300`, and the consequences ran the length of the
+// product. Measured by driving it:
+//
+//   • the Builder's own header read "30 min · 5 stages" for a class whose five
+//     stages are 35 minutes of work — the negative silently SUBTRACTS from every
+//     total, and nothing on screen says a stage is the reason;
+//   • the Room TV — the biggest screen in the gym, and one of the two surfaces
+//     `UI-UX-DIRECTION` §1 ranks above every staff screen — rendered
+//     **"Warm-Up · -5m"** in its plan strip and again as the running stage's
+//     duration, in front of paying members;
+//   • `summaryContent` drops a `durMin` that rounds below a minute, which is how
+//     the member link came to report a 60-minute class as 25.
+//
+// A stage of zero or negative minutes is not a short stage; it is not a
+// duration. The floor is the `min="1"` the control already declares and the `1`
+// its own empty-string fallback already used, so this changes no value a coach
+// could have meant.
+//
+// ⚠ NO CEILING, deliberately, even though the control says `max="60"`. 999
+// stores 59,940 seconds and that IS absurd — but a 75-minute open-gym block is
+// a real thing a studio programmes, and silently rewriting a coach's 75 to 60
+// would destroy input rather than reject it. Refusing the impossible and
+// allowing the merely long is the honest split. The control's `max="60"` is now
+// the only part still making a claim it does not enforce; whether it should warn
+// or be raised is a product call, and it is written up in session 36's handoff
+// as a proposal rather than decided here.
+export const MIN_STAGE_SEC = 60;
+export function stageDurSec(raw) {
+  const mins = parseInt(raw, 10);
+  if (!Number.isFinite(mins)) return MIN_STAGE_SEC;   // "", "abc", "1e5"'s tail
+  return Math.max(MIN_STAGE_SEC, mins * 60);
+}

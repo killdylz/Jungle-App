@@ -39,7 +39,7 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec } from "./lib/format.js";
 // Only the field names and the currency table — the arithmetic that reads them
 // lives on the Members screen, which is the only surface that shows the figure.
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
@@ -1470,7 +1470,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   <div>
                     <label htmlFor="stage-duration" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
                     <input id="stage-duration" type="number" min="1" max="60" value={Math.round(stage.dur/60)}
-                      onChange={e=>onStageChange(selIdx,{...stage,dur:parseInt(e.target.value||"1")*60})}
+                      onChange={e=>onStageChange(selIdx,{...stage,dur:stageDurSec(e.target.value)})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div>
