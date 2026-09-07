@@ -96,14 +96,26 @@ export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,
         {floor.map((st,i)=>{ const c=(SCFG[st.type]||SCFG.circuit).color; const on=i===spotlight;
           return (
           <div key={st.id} style={{background:"var(--card)",border:`2px solid ${on?c:"var(--border)"}`,borderRadius:"14px",padding:"14px",position:"relative",transition:reduce?"none":"transform .3s, box-shadow .3s",transform:on&&!reduce?"scale(1.02)":"none",boxShadow:on?`0 0 24px ${c}55`:"none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"9px",height:"9px",borderRadius:"50%",background:c}}/><span style={{fontSize:"12px",fontWeight:"800",color:c,letterSpacing:"1px"}}>{st.label.toUpperCase()}</span></div>
-              {st.isStart&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
-              {st.isFinish&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
+            {/* 🔴 ONE ROW, NOT A ROW PLUS AN ABSOLUTE CORNER. `FOLLOW` used to be
+                `position:absolute; top:10px; right:10px` — the same corner the
+                START and FINISH badges land in via `space-between`. Station 1 is
+                the start station AND the live station at the moment every class
+                begins, so the studio floor board opened every single class with
+                "START" and "FOLLOW" printed on top of each other, both in the
+                stage's own colour, neither readable. The finish station hits the
+                same collision on the last stage. Laying all three out as flex
+                siblings is what makes the collision structurally impossible
+                rather than something the next badge has to remember. */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px",gap:"8px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"6px",minWidth:0}}><div style={{width:"9px",height:"9px",borderRadius:"50%",background:c,flexShrink:0}}/><span style={{fontSize:"12px",fontWeight:"800",color:c,letterSpacing:"1px"}}>{st.label.toUpperCase()}</span></div>
+              <div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}>
+                {on&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</span>}
+                {st.isStart&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:"var(--bg)",background:c,padding:"2px 6px",borderRadius:"4px"}}>START</span>}
+                {st.isFinish&&<span style={{fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,border:`1px solid ${c}`,padding:"2px 6px",borderRadius:"4px"}}>FINISH</span>}
+              </div>
             </div>
             <div style={{fontFamily:"var(--display)",fontSize:tvFont(26,scaleMult),fontWeight:"800",color:"var(--text)",marginBottom:"6px",lineHeight:"1.1"}}>{st.move}</div>
             {st.scheme && <div style={{fontSize:"13px",color:"var(--muted)"}}>{st.scheme}</div>}
-            {on&&<div style={{position:"absolute",top:"10px",right:"10px",fontSize:tvFont(11,scaleMult),fontWeight:"800",color:c,letterSpacing:"1px"}}>FOLLOW</div>}
           </div>
         );})}
       </div>

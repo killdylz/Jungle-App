@@ -717,3 +717,95 @@ test.describe("the Room TV's layout presets, rendered and read", () => {
     await expect(page.getByRole("button", { name: /^Music Focus/ })).toHaveCount(0);
   });
 });
+
+// ─── Two labels in one corner, on the board the room reads ──────────────────
+//
+// 🔴 WHAT SHIPPED, and it was the DEFAULT state at the start of every class.
+// The Floor board's station card laid out its `START` / `FINISH` badge in a
+// `space-between` header row — so the badge sits at the card's right edge — and
+// then drew `FOLLOW` at `position:absolute; top:10px; right:10px`. The same
+// corner. Station 1 is the START station AND the live station at the moment a
+// class begins, so the studio floor board opened every class with "START" and
+// "FOLLOW" printed on top of each other, both in the stage's own colour, 45px
+// of overlap wide. Neither was readable. The finish station collides the same
+// way on the last stage.
+//
+// Found by driving the Floor board at 1280x720 and looking at the screenshot;
+// no assertion in this repo could have noticed, because every one of those
+// strings was present and visible — they were simply in the same place.
+//
+// ⚠️ THE SWEEP IS DELIBERATELY NARROW: leaf elements that directly contain
+// text, overlapping by more than 2px on BOTH axes. Measured across all three
+// boards before it was written — Plan and Coach were already clean and Floor had
+// exactly this one hit — so it is a rule with a known-zero baseline rather than
+// a threshold picked to fit.
+test.describe("no two labels on a room board are drawn in the same place", () => {
+  const OVERLAP_SCAN = () => {
+    const leaves = [];
+    document.querySelectorAll("body *").forEach((el) => {
+      if (el.children.length) return;
+      const t = (el.textContent || "").trim(); if (!t) return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === "hidden" || cs.opacity === "0") return;
+      leaves.push({ t: t.slice(0, 30), x: r.x, y: r.y, w: r.width, h: r.height });
+    });
+    const hits = [];
+    for (let i = 0; i < leaves.length; i++) {
+      for (let j = i + 1; j < leaves.length; j++) {
+        const a = leaves[i], b = leaves[j];
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (ox > 2 && oy > 2) hits.push(`"${a.t}" x "${b.t}" (${Math.round(ox)}x${Math.round(oy)}px)`);
+      }
+    }
+    return { count: leaves.length, hits };
+  };
+
+  for (const mode of ["Plan", "Floor", "Coach"]) {
+    test(`${mode}, at the moment a class starts`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await freshApp(page);
+      await gotoDisplay(page, mode);
+      // ⚠️ WAIT FOR THE MODE PILL TO GO. `gotoDisplay` ends one click after
+      // waking the transient Plan/Floor/Coach control, and that pill floats OVER
+      // the stage-journey strip by design — it is a control the coach summons
+      // with a mouse move and it hides itself after 4.5s. Scanning while it is
+      // up measures the overlay, not the board, and reports five hits on a Coach
+      // board that is fine. What a member looks at is the board after it goes.
+      await expect(page.getByRole("button", { name: /^Plan$/ })).toBeHidden({ timeout: 8_000 });
+
+      const r = await page.evaluate(OVERLAP_SCAN);
+      // POSITIVE CONTROL: an empty board has no overlapping labels either. The
+      // three boards render 21-22 text leaves on the seeded class.
+      expect(r.count, `${mode}: only ${r.count} text nodes — the board is empty`).toBeGreaterThan(10);
+      await expect(page.getByText(MODES[mode].ready()).first()).toBeVisible();
+
+      expect(r.hits, `${mode} draws two labels in the same place:\n${r.hits.join("\n")}`).toEqual([]);
+      expectNoConsoleErrors(errors);
+    });
+  }
+
+  test("the Floor board's live station shows FOLLOW and START side by side", async ({ page }) => {
+    // The specific claim, stated as itself so a future refactor that merely
+    // hides one of them cannot pass the overlap sweep above.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await freshApp(page);
+    await gotoDisplay(page, "Floor");
+    await expect(page.getByRole("button", { name: /^Plan$/ })).toBeHidden({ timeout: 8_000 });
+
+    const follow = page.getByText("FOLLOW", { exact: true }).first();
+    const start  = page.getByText("START", { exact: true }).first();
+    await expect(follow).toBeVisible();
+    await expect(start).toBeVisible();
+
+    const f = await follow.boundingBox();
+    const s = await start.boundingBox();
+    expect(f).not.toBeNull();
+    expect(s).not.toBeNull();
+    const ox = Math.min(f.x + f.width, s.x + s.width) - Math.max(f.x, s.x);
+    expect(ox, `FOLLOW and START overlap by ${Math.round(ox)}px`).toBeLessThanOrEqual(0);
+  });
+});
