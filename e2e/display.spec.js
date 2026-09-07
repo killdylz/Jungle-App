@@ -504,3 +504,42 @@ test.describe("nothing on a room-facing board is smaller than the wall allows", 
   });
 });
 
+
+// ─── A source comment rendered on the wall, in front of paying members ───────
+//
+// 🔴 WHAT SHIPPED. `DisplayScreen.jsx` carried a bare `/* … */` in the CHILDREN
+// of a JSX element, and in JSX that is TEXT, not a comment — braces are what
+// make a comment a comment. So the Coach board's Tempo Guide rendered
+//
+//   "/* a sub-component: no scaleMult in scope, and the absolute floor is what
+//    this needed */"
+//
+// wrapped over eight lines and straight through the BPM ring, on the biggest
+// screen in the gym. It compiled, `lint:crash` was 0, and every one of 1290 unit
+// and 534 e2e tests passed with it on screen — because nothing looked at what
+// the board rendered. It was found by driving the board and READING it.
+//
+// `src/ui/jsxText.test.js` is the source-level sweep. This is the other half:
+// the claim about the SHIPPED SCREEN, which is the one a member is standing in
+// front of.
+test.describe("nothing on a room board is a note the author left themselves", () => {
+  for (const mode of ["Plan", "Floor", "Coach"]) {
+    test(`the ${mode} board renders no comment delimiter`, async ({ page }) => {
+      const errors = watchConsole(page);
+      // 1280x720 — a projector, or a laptop on HDMI. The size a gym's wall
+      // actually is, and the one the defect was seen at.
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await freshApp(page);
+      await gotoDisplay(page, mode);
+
+      // POSITIVE CONTROL: the board really rendered. An empty screen contains no
+      // comment delimiter either, and this repo has been fooled by that twice.
+      const text = await page.locator("body").innerText();
+      expect(text.length, `${mode}: the board rendered nothing`).toBeGreaterThan(80);
+      await expect(page.getByText(MODES[mode].ready()).first()).toBeVisible();
+
+      expect(text, `${mode} board is rendering a source comment`).not.toMatch(/\/\*|\*\//);
+      expectNoConsoleErrors(errors);
+    });
+  }
+});
