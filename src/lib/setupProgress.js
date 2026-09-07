@@ -28,7 +28,8 @@
 // The order is the order a gym actually does them, and each step's `done` test is
 // the cheapest honest one. "Bring in your classes" is satisfied by ANY route in —
 // importing a deck, or building one by hand — because insisting on a particular
-// route would be Jungle telling a coach how to work.
+// route would be Jungle telling a coach how to work. ⚠️ THAT RULE APPLIES TO EVERY
+// STEP, and the members step was the one that broke it — see the note on it below.
 export const SETUP_STEPS = [
   {
     key: "classes",
@@ -47,9 +48,18 @@ export const SETUP_STEPS = [
   },
   {
     key: "members",
+    // ⚠️ This step named ONE route and it is the only place the product gives
+    // instructions, so a new gym read "Import members", concluded a CSV was how
+    // members get in, and never found the three routes that already exist: the
+    // Add member button on the roster, the inline row edit, and the mid-class
+    // quick-add in the Class Runner. Nothing was missing from the product — the
+    // checklist was describing a smaller one than had been built.
+    //
+    // The `done` test is `members > 0`, which any of the routes satisfies, so
+    // the copy naming only one was never even consistent with the tick beside it.
     title: "Bring your members across",
-    body: "Import the attendance history from your old system so Jungle can tell you who is slipping away, from day one.",
-    cta: "Import members",
+    body: "Add them by hand as they join, or import the attendance history from your old system so Jungle can tell you who is slipping away, from day one.",
+    cta: "Add members",
     view: "member",
   },
 ];

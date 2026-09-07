@@ -221,7 +221,7 @@ export function RosterScreen({ onBack, onNavigate }) {
 
           {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
               tell, say so — never a green all-clear over unmeasured data. */}
-          <div style={card}>
+          <div style={card} data-testid="at-risk-panel">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",flexWrap:"wrap",marginBottom:"4px"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>Who&rsquo;s slipping away</div>
               <div style={{fontFamily:"var(--display)",fontSize:"26px",fontWeight:"800",
@@ -325,86 +325,8 @@ export function RosterScreen({ onBack, onNavigate }) {
             )}
           </div>
 
-          {/* ── CSV backfill ───────────────────────────────────────────── */}
-          <div style={card}>
-            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
-            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
-              Bring past check-ins across from your previous system. A CSV with a <strong>member name
-              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
-              are used when present. Nothing is written until you review what was read.
-            </p>
-
-            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
-              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
-                <Upload size={14}/> Choose CSV
-                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
-              </label>
-              <label data-tap style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
-                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
-                Dates are day/month (e.g. 03/04 = 3 April)
-              </label>
-            </div>
-
-            <textarea
-              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
-              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
-              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
-            />
-
-            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
-              {/* Btn's prop is `variant` (default "primary") — passing a bare
-                  `primary` leaks an unknown attribute to the DOM. Once a preview
-                  exists, Import is the primary action and the other two step back. */}
-              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
-                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
-              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
-              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
-            </div>
-
-            {/* Preview. Everything the apply will do, before it does any of it. */}
-            {analysis && !analysis.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid var(--danger-border)",background:"color-mix(in srgb, var(--danger) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
-                {analysis.error}
-              </div>
-            )}
-            {analysis?.ok && (
-              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
-                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
-                {analysis.newMembers.length > 0 && (
-                  <div style={{color:"var(--muted)"}}>
-                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
-                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
-                  </div>
-                )}
-                {analysis.problems.length > 0 && (
-                  <details style={{marginTop:"6px"}}>
-                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
-                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
-                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-            {/* The panel below is derived from `--green`, not Canopy's #7BE3A4: the
-                import-succeeded card was mint on every skin, so a gym on Pulse or
-                Atelier got one Canopy-green card in the middle of their own palette.
-                ⚠️ This comment sits OUTSIDE the conditional on purpose. A JSX comment
-                placed inside a `cond && ( ... )` arm makes two children of a
-                single-expression arm, which is a syntax error — and writing the closing
-                comment delimiter inside a JSX comment ends it early, which is a second
-                one. Both broke the build while this line was being written. */}
-            {result?.ok && (
-              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid color-mix(in srgb, var(--green) 33%, transparent)",background:"color-mix(in srgb, var(--green) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
-                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
-                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
-                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
-              </div>
-            )}
-          </div>
-
           {/* ── Roster ─────────────────────────────────────────────────── */}
-          <div style={card}>
+          <div style={card} data-testid="roster-panel">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",marginBottom:"12px",flexWrap:"wrap"}}>
               <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)"}}>
                 Roster · {activeCount}
@@ -449,8 +371,9 @@ export function RosterScreen({ onBack, onNavigate }) {
 
             {members.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6}}>
-                No members yet. Import a CSV above, or check people in from the Class Runner —
-                a name is all that’s needed and the roster row is created for you.
+                No members yet. <strong>Add member</strong> puts one in by hand — a name is all
+                that’s needed. You can also check people in from the Class Runner, which creates
+                the roster row for you, or import your old attendance history below.
               </p>
             ) : shown.length === 0 ? (
               <p style={{fontSize:"12px",color:"var(--muted)"}}>No member matches “{q}”.</p>
@@ -529,6 +452,90 @@ export function RosterScreen({ onBack, onNavigate }) {
                   </div>
                 ))}
                 {shown.length > 200 && <p style={{fontSize:"11px",color:"var(--muted)",padding:"8px 10px"}}>Showing the first 200 of {shown.length}.</p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── CSV backfill ─────────────────────────────────────────────
+              BELOW the roster on purpose. This panel used to render above it,
+              so the first thing on Members was a file picker and an owner
+              reasonably concluded a CSV was the only way in — while the Add
+              member button sat off the bottom of the fold. This is attendance
+              HISTORY, which is a migration job a gym does once; adding a member
+              is the thing it does every week. Order says which is which. */}
+          <div style={card} data-testid="csv-import-panel">
+            <div style={{fontFamily:"var(--display)",fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"4px"}}>Import attendance history</div>
+            <p style={{fontSize:"12px",color:"var(--muted)",lineHeight:1.6,marginBottom:"12px"}}>
+              Bring past check-ins across from your previous system. A CSV with a <strong>member name
+              (or email)</strong> and a <strong>date</strong> is enough; a class name, type and coach
+              are used when present. Nothing is written until you review what was read.
+            </p>
+
+            <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"10px"}}>
+              <label style={{display:"inline-flex",alignItems:"center",gap:"7px",padding:"8px 14px",borderRadius:"8px",border:`1px solid var(--border)`,cursor:"pointer",fontSize:"13px",fontWeight:"600",color:"var(--text)"}}>
+                <Upload size={14}/> Choose CSV
+                <input type="file" accept=".csv,text/csv" onChange={onFile} style={{display:"none"}}/>
+              </label>
+              <label data-tap style={{display:"inline-flex",alignItems:"center",gap:"7px",fontSize:"12px",color:"var(--muted)",cursor:"pointer"}}>
+                <input type="checkbox" checked={dayFirst} onChange={e=>{setDayFirst(e.target.checked); setAnalysis(null);}}/>
+                Dates are day/month (e.g. 03/04 = 3 April)
+              </label>
+            </div>
+
+            <textarea
+              value={csv} onChange={e=>{setCsv(e.target.value); setAnalysis(null); setResult(null);}}
+              placeholder={"…or paste CSV here:\n\nMember Name,Email,Date,Class\nSarah Chen,sarah@example.com,2026-03-04,Tuesday 6pm"}
+              style={{width:"100%",minHeight:"110px",padding:"10px 12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"transparent",color:"var(--text)",fontSize:"12px",fontFamily:"ui-monospace,monospace",outline:"none",resize:"vertical"}}
+            />
+
+            <div style={{display:"flex",gap:"8px",marginTop:"10px",flexWrap:"wrap"}}>
+              {/* Btn's prop is `variant` (default "primary") — passing a bare
+                  `primary` leaks an unknown attribute to the DOM. Once a preview
+                  exists, Import is the primary action and the other two step back. */}
+              <Btn onClick={analyze} variant={analysis?.ok?"ghost":"primary"} disabled={!csv.trim()}
+                   style={!csv.trim()?{opacity:.45,cursor:"not-allowed"}:{}}>Read the file</Btn>
+              {analysis?.ok && <Btn onClick={apply}>Import {analysis.rows.length} check-in{analysis.rows.length===1?"":"s"}</Btn>}
+              {analysis && <Btn variant="ghost" onClick={()=>{setAnalysis(null);setResult(null);}}>Cancel</Btn>}
+            </div>
+
+            {/* Preview. Everything the apply will do, before it does any of it. */}
+            {analysis && !analysis.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid var(--danger-border)",background:"color-mix(in srgb, var(--danger) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                {analysis.error}
+              </div>
+            )}
+            {analysis?.ok && (
+              <div style={{marginTop:"12px",padding:"12px",borderRadius:"8px",border:`1px solid var(--border)`,background:"var(--bg)",fontSize:"12px",color:"var(--text)",lineHeight:1.7}}>
+                <div style={{fontWeight:"700",marginBottom:"6px"}}>{describeImport(analysis)}</div>
+                {analysis.newMembers.length > 0 && (
+                  <div style={{color:"var(--muted)"}}>
+                    New members: {analysis.newMembers.slice(0,8).map(m=>m.name).join(", ")}
+                    {analysis.newMembers.length>8?` +${analysis.newMembers.length-8} more`:""}
+                  </div>
+                )}
+                {analysis.problems.length > 0 && (
+                  <details style={{marginTop:"6px"}}>
+                    <summary style={{cursor:"pointer",color:"var(--accent)"}}>{analysis.problems.length} row(s) couldn’t be read — they will be skipped</summary>
+                    <div style={{marginTop:"6px",color:"var(--muted)",maxHeight:"140px",overflowY:"auto"}}>
+                      {analysis.problems.slice(0,40).map(p => <div key={p.line}>Line {p.line}: {p.why}</div>)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {/* The panel below is derived from `--green`, not Canopy's #7BE3A4: the
+                import-succeeded card was mint on every skin, so a gym on Pulse or
+                Atelier got one Canopy-green card in the middle of their own palette.
+                ⚠️ This comment sits OUTSIDE the conditional on purpose. A JSX comment
+                placed inside a `cond && ( ... )` arm makes two children of a
+                single-expression arm, which is a syntax error — and writing the closing
+                comment delimiter inside a JSX comment ends it early, which is a second
+                one. Both broke the build while this line was being written. */}
+            {result?.ok && (
+              <div style={{marginTop:"12px",padding:"10px 12px",borderRadius:"8px",border:"1px solid color-mix(in srgb, var(--green) 33%, transparent)",background:"color-mix(in srgb, var(--green) 8%, transparent)",fontSize:"12px",color:"var(--text)",lineHeight:1.6}}>
+                Imported <strong>{result.attendance}</strong> check-in{result.attendance===1?"":"s"} across {result.classes} new class{result.classes===1?"":"es"}
+                {result.members>0?`, adding ${result.members} member${result.members===1?"":"s"}`:""}.
+                {result.duplicates>0?` ${result.duplicates} were already recorded and were skipped.`:""}
               </div>
             )}
           </div>

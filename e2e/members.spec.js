@@ -72,8 +72,16 @@ test.describe("Members — the owner's morning number", () => {
     // people. Rita has been in this week and must not be on it.
     expect(body).toContain("Lapsed Larry");
     expect(body).toContain("Quiet Quinn");
-    const slice = body.slice(body.indexOf("Who’s slipping away"), body.indexOf("Who’s slipping away") + 700);
-    expect(slice, "a member who came in this week is not slipping away").not.toContain("Regular Rita");
+    // ⚠️ Read from the PANEL, not from a fixed-width window of body text. This
+    // was `body.slice(indexOf("Who’s slipping away"), +700)`, which only worked
+    // while the next 700 characters happened to be the CSV panel's prose. Moving
+    // the roster above that panel put every member's name — Rita included —
+    // inside the window, and the test failed on its own selector rather than on
+    // the thing it tests. The claim was always "Rita is not in the at-risk
+    // panel"; now that is what it asks.
+    const atRisk = await page.getByTestId("at-risk-panel").innerText();
+    expect(atRisk, "the panel under test rendered").toContain("Who’s slipping away");
+    expect(atRisk, "a member who came in this week is not slipping away").not.toContain("Regular Rita");
 
     // The per-flag "why", with its numbers — an owner acts on the reason, not a
     // label, and this is the sentence they act on.
@@ -217,6 +225,73 @@ test.describe("Members — editing the roster", () => {
 
     await expect(page.getByText(/needs a name/i)).toBeVisible();
     expect((await stored(page))[0].name).toBe("Ada");
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── §2.4 — manual add exists three times over, and nothing said so ───────────
+//
+// This is a DISCOVERABILITY defect, not a missing feature. Add member, the
+// inline row edit and the mid-class quick-add were all shipped and all worked;
+// what an owner met on opening Members was an "Import attendance history" panel
+// with a file picker, rendered above the roster, with the Add member button
+// below the fold on a laptop.
+//
+// ⚠️ Every string these tests look for was present on the broken screen too.
+// The defect was ORDER, so these assert geometry and the position of a route
+// within a sentence — a `toBeVisible` on "Add member" passed before this change
+// and would pass again if it were reverted.
+test.describe("adding a member by hand is findable", () => {
+  for (const [state, seed] of [
+    ["an empty roster", async (page) => { await freshApp(page); }],
+    ["a seeded roster", async (page) => { await seedRoster(page); }],
+  ]) {
+    test(`the roster sits above the CSV import — ${state}`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await seed(page);
+      await nav(page, "Members");
+
+      // Positive control. An empty screen satisfies any ordering claim
+      // trivially, and this repo has been fooled by exactly that twice.
+      const roster = page.getByTestId("roster-panel");
+      const csv = page.getByTestId("csv-import-panel");
+      await expect(roster).toBeVisible();
+      await expect(csv).toBeVisible();
+
+      const rosterBox = await roster.boundingBox();
+      const csvBox = await csv.boundingBox();
+      expect(rosterBox).not.toBeNull();
+      expect(csvBox).not.toBeNull();
+      expect(rosterBox.y).toBeLessThan(csvBox.y);
+
+      // The button is in the panel that comes first, not merely somewhere.
+      await expect(roster.getByRole("button", { name: "Add member", exact: true })).toBeVisible();
+
+      expectNoConsoleErrors(errors);
+    });
+  }
+
+  test("the empty state names the button above it before the import below it", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Members");
+
+    const empty = page.getByTestId("roster-panel").getByText(/No members yet/);
+    await expect(empty).toBeVisible();
+
+    const copy = await empty.innerText();
+    // The manual route is named, and named FIRST. The old copy opened with
+    // "Import a CSV above" and never mentioned the button at all.
+    expect(copy).toContain("Add member");
+    expect(copy.indexOf("Add member")).toBeLessThan(copy.search(/import/i));
+
+    // And the direction it gives is the direction the screen is now in. This is
+    // the assertion that fails if the panels are reordered without the copy.
+    expect(copy).toMatch(/import your old attendance history below/i);
+    const rosterBox = await page.getByTestId("roster-panel").boundingBox();
+    const csvBox = await page.getByTestId("csv-import-panel").boundingBox();
+    expect(csvBox.y).toBeGreaterThan(rosterBox.y);
 
     expectNoConsoleErrors(errors);
   });

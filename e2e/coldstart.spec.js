@@ -63,7 +63,7 @@ test.describe("a brand-new gym never sees four zeros", () => {
   const CTAS = [
     ["Add a class",       /Every coach's classes, style and formats/],
     ["Open Class Runner", /Room TV|Check in/],
-    ["Import members",    /Your roster and the attendance history behind it/],
+    ["Add members",       /Your roster and the attendance history behind it/],
   ];
   for (const [cta, landed] of CTAS) {
     test(`"${cta}" navigates somewhere real`, async ({ page }) => {
@@ -77,6 +77,33 @@ test.describe("a brand-new gym never sees four zeros", () => {
       expectNoConsoleErrors(errors);
     });
   }
+
+  // §2.4 — the checklist is the ONE place this product gives instructions, and
+  // its third step used to read "Import members" over a body describing only a
+  // CSV. Three manual routes already existed (the roster's Add member button,
+  // the inline row edit, the Class Runner quick-add) and the step named none of
+  // them, so a new gym concluded importing was how members get in. The `done`
+  // test is `members > 0`, which any route satisfies — the copy was never even
+  // consistent with the tick beside it.
+  //
+  // Read off the rendered card rather than off SETUP_STEPS: the unit test owns
+  // the strings, this owns the claim that a coach can see them.
+  test("names adding members by hand, not only importing them", async ({ page }) => {
+    await freshApp(page);
+
+    const card = page.locator(CHECKLIST);
+    // Positive control — an absent card would pass every claim below trivially.
+    await expect(card).toBeVisible();
+    await expect(card.getByText(/Bring your members across/)).toBeVisible();
+
+    const copy = await card.innerText();
+    expect(copy).toMatch(/by hand/i);
+    // Both routes, and the manual one first: an owner reads until they find a
+    // route they can use, and importing is the one that needs an old system.
+    expect(copy.search(/by hand/i)).toBeLessThan(copy.search(/import the attendance/i));
+
+    await expect(card.getByRole("button", { name: "Add members", exact: true })).toBeVisible();
+  });
 
   test("ticks a step off once the gym has done it", async ({ page }) => {
     await freshApp(page);
@@ -126,7 +153,7 @@ test.describe("a running gym gets its numbers back", () => {
 
     await expect(page.locator(NUDGE)).toBeVisible();
     await expect(page.locator(NUDGE).getByText(/Bring your members across/)).toBeVisible();
-    await page.locator(NUDGE).getByRole("button", { name: "Import members", exact: true }).click();
+    await page.locator(NUDGE).getByRole("button", { name: "Add members", exact: true }).click();
     await expect(page.getByText(/Your roster and the attendance history behind it/).first()).toBeVisible();
   });
 });
