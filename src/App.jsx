@@ -2227,7 +2227,16 @@ export default function App() {
   const navGroups = ["Main","Insights","Tools","Studio"].filter(g => allNavItems.some(n => n.group===g));
   const navTo = key => {
     if ((view==="live"||view==="room-tv") && player) player.pause().catch(()=>{});
-    if (view==="live"||view==="room-tv") setLiveState(ls=>({...ls,playing:false}));
+    // 🔴 SAVE THE SESSION ON THE WAY OUT. This already knew it was leaving the
+    // runner — it pauses the stereo and stops the clock — and did not record the
+    // class. The Back arrow and Escape both call `saveSession`; the sidebar and
+    // the bottom bar did not, so a coach who finished a class and tapped
+    // "Dashboard" lost it. Measured: same class, same two stages, Back arrow
+    // wrote one row into `jungle_history` and the sidebar wrote none.
+    // `saveSession` is idempotent per run (see `savedRunRef`) and refuses
+    // anything under ten seconds, so merely opening the runner and leaving still
+    // records nothing.
+    if (view==="live"||view==="room-tv") { setLiveState(ls=>({...ls,playing:false})); saveSession(); }
     setView(key); setShowNav(false);
   };
 
@@ -2388,7 +2397,17 @@ export default function App() {
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
-        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
+        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>{
+          // The third way out of the runner, and the third one that did not
+          // record the class. Coach and Floor exit back to "live" — still inside
+          // the runner, so there is nothing to save yet. The Plan board exits to
+          // the BUILDER, which leaves the runner exactly as the Back arrow does,
+          // and the Back arrow has always saved. `saveSession` is idempotent per
+          // run and floors at ten seconds, so opening the plan overview from the
+          // Builder and pressing Esc still records nothing.
+          if (roomTvMode==="studio") { setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder"); }
+          else setView("live");
+        }} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {/* The mock branch is kept, and stays folded away while the flag is false
             — its layout is what this screen was built against. What changed is
             no longer a branch at all. It was `FLAGS.mockAnalytics ? <AnalyticsScreen/>
