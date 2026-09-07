@@ -301,6 +301,10 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
               <p style={{...note,margin:"4px 0 12px"}}>
                 Ordered the way a coach reads a day: training first, whoever is booked soonest at
                 the top, then the ones still needing a decision.
+                {/* Said only when there IS one. A sentence about erased records
+                    on a screen with none is noise, and this list is read every
+                    day. */}
+                {rows.some(r => r.orphan) && " Records whose member was deleted sit at the bottom."}
               </p>
               <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                 {rows.map(r => (

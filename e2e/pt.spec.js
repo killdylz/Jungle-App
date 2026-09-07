@@ -591,6 +591,45 @@ test.describe("erasing a 1:1 record whose member was deleted (D7)", () => {
     await nav(page, "1:1 Clients");
   }
 
+  // 🔴 The orphan sorted to the TOP of the coach's day. `_byCoachDay` fell
+  // through to `localeCompare` on `name`, an orphan's name is "", and "" sorts
+  // before every real name — so on a screen a trainer opens daily, the one row
+  // they can only erase sat above every client they are actually training.
+  test("the orphan is the LAST row, not the first one a coach reads", async ({ page }) => {
+    await seedOrphan(page);
+
+    // POSITIVE CONTROL: both rows really rendered, and this fixture really is
+    // the case that produced the defect — same status, same booked date, so the
+    // name tiebreak is what decides the order.
+    const list = page.getByTestId("pt-list").getByRole("button");
+    await expect(list).toHaveCount(2);
+    const names = await list.evaluateAll(els => els.map(e => e.textContent || ""));
+    expect(names.some(n => n.includes("Marcus Lee")), names.join(" | ")).toBe(true);
+    expect(names.some(n => n.includes("Member record deleted")), names.join(" | ")).toBe(true);
+
+    // What shipped: "Member record deleted" was names[0].
+    expect(names[0]).toContain("Marcus Lee");
+    expect(names[1]).toContain("Member record deleted");
+
+    // …and the list says where it put them, rather than leaving a coach to
+    // notice that one row moved.
+    await expect(page.getByTestId("pt-list"))
+      .toContainText("Records whose member was deleted sit at the bottom");
+  });
+
+  test("and a gym with no erased record is not told about erased records", async ({ page }) => {
+    await seedOrphan(page);
+    // Erase the orphan, which is the only one, and the sentence must go with it.
+    await expect(page.getByTestId("pt-list"))
+      .toContainText("Records whose member was deleted sit at the bottom");
+    page.once("dialog", d => d.accept());
+    await page.getByRole("button", { name: /Member record deleted/ }).click();
+    await page.getByTestId("pt-orphan-erase").getByRole("button", { name: /Erase/ }).click();
+    await expect(page.getByRole("button", { name: /Member record deleted/ })).toHaveCount(0);
+    await expect(page.getByTestId("pt-list"))
+      .not.toContainText("Records whose member was deleted sit at the bottom");
+  });
+
   test("the orphan says what happened, and offers the one action that fixes it", async ({ page }) => {
     const errors = watchConsole(page);
     await seedOrphan(page);
