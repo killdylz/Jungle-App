@@ -1847,7 +1847,10 @@ export default function App() {
   // wants the bottom bar but not phone-sized text.
   const isCompact = vw < COMPACT_NAV_PX;
   // Available here because ToastProvider moved up into StaffApp.jsx. Used by
-  // handleNewClass, which is this component's only destructive action.
+  // handleNewClass and handleRemoveStage — this component's two destructive
+  // actions. (It said "only" until session 38, which is how the second one went
+  // unguarded: the note was accurate when it was written and stopped being a
+  // description of the file the moment a stage could be removed.)
   const { toast } = useToast();
 
   // `spPaused` is deliberately NOT destructured. useSpotify still returns it —
@@ -2013,7 +2016,34 @@ export default function App() {
   const handleRemoveTrack  = (si, ti)       => setStages(ss => { const n=[...ss]; n[si]={...n[si],tracks:n[si].tracks.filter((_,i)=>i!==ti)};  return n; });
   const handleReorderTrack = (si, from, to) => setStages(ss => { const n=[...ss]; const tr=[...n[si].tracks]; const [mv]=tr.splice(from,1); tr.splice(to,0,mv); n[si]={...n[si],tracks:tr}; return n; });
   const handleAddStage     = ()             => setStages(ss => [...ss, {id:uid(),type:"circuit",name:`Stage ${ss.length+1}`,dur:600,exercises:[],tracks:[]}]);
-  const handleRemoveStage  = i             => setStages(ss => ss.filter((_,j)=>j!==i));
+  // 🔴 THE ONE DESTRUCTIVE ACTION IN THIS PRODUCT THAT HAD NO GUARD AT ALL, and
+  // the argument for the guard it now has is written out in `handleNewClass`
+  // thirty lines below: the guard scales with what is destroyed, and a confirm
+  // dialog's cost is paid on the success path — the 99 times the coach meant it.
+  //
+  // What this destroys is a stage AND every exercise in it, written straight to
+  // `jungle_draft_class` and surviving a reload. More than New class destroys per
+  // press, less than the coach cascade, which keeps both a confirm and an undo.
+  // So it lands on the same guard as New class, which is also the guard the
+  // Schedule uses to remove a class, the Library to remove a movement, and the
+  // 1:1 screen to remove a session. It was the outlier, not the house style.
+  //
+  // ⚠️ The closure holds the PRIOR LIST, not the removed stage. Position is part
+  // of what was lost: putting a warm-up back at the END of the class is not
+  // putting the class back. Same reason `handleNewClass` holds `before.stages`.
+  //
+  // The count is in the sentence because it is what makes the undo worth reading
+  // — "Removed Strength Block" and "Removed Strength Block and its 2 exercises"
+  // are different amounts of alarm, and the second one is the true one.
+  const handleRemoveStage  = i             => {
+    const before = stages;
+    const gone = stages[i];
+    setStages(ss => ss.filter((_,j)=>j!==i));
+    const exN = (gone?.exercises || []).length;
+    const what = gone?.name || "stage";
+    toast(`Removed “${what}”${exN ? ` and its ${exN} exercise${exN === 1 ? "" : "s"}` : ""}`,
+      { undo: () => { setStages(before); toast(`“${what}” is back`); } });
+  };
   // (handleNextStage / handlePrevStage / handleSkipTimer moved into
   //  useClassRunner — they only ever move the runner's clock.)
   const handleStageChange   = (i, s)  => setStages(ss => { const n=[...ss]; n[i]=s; return n; });

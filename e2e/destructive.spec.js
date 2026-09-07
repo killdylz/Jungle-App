@@ -275,3 +275,99 @@ test.describe("the toast primitive", () => {
     expect(pe).toBe("none");
   });
 });
+
+// ── The Class Builder's stage removal — the one that had no guard at all ─────
+//
+// 🔴 THE SWEEP ABOVE MISSED IT FOR TWENTY SESSIONS, and the shape of the miss is
+// worth more than the fix. This file enumerates the destructive actions somebody
+// thought of; a stage removal that writes straight to `jungle_draft_class` was
+// never on the list, so "every destructive action, reversed" was true of the list
+// and not of the product.
+//
+// `handleRemoveStage` was one line — `setStages(ss => ss.filter((_,j)=>j!==i))`
+// — thirty lines above `handleNewClass`, which carries a paragraph explaining why
+// destroying ONE draft needs an undo. Removing a stage destroys part of that same
+// draft plus every exercise in it, on a single click, with no confirm, no undo
+// and no toast. It survived a reload.
+//
+// ⚠️ THE POSITION IS THE ASSERTION. An undo that restores the stage to the END of
+// the class has not restored the class — the repo's rule is that the closure
+// holds the PRIOR LIST, not the deleted row, and a test that only counted stages
+// would pass on the version that appends.
+test.describe("removing a stage from the Class Builder", () => {
+  const names = (d) => (d.stages || []).map(s => s.name);
+
+  test("🔴 says what it took, and Undo puts it back where it was", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+
+    // POSITIVE CONTROL: the default class really is on screen, and the stage
+    // about to be removed really has exercises in it.
+    const before = await stored(page, "jungle_draft_class");
+    expect(names(before)).toEqual(["Warm-Up", "Circuit Blast", "Strength Block", "Active Recovery", "Cool-Down"]);
+    expect(before.stages[2].exercises.length).toBe(2);
+
+    await page.getByRole("button", { name: "Remove Strength Block" }).click();
+
+    // It NAMES what went, and counts what went with it. "Removed Strength Block"
+    // and "Removed Strength Block and its 2 exercises" are different amounts of
+    // alarm and only the second is true.
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText("Strength Block");
+    await expect(toast).toContainText("2 exercises");
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(names(after)).toEqual(["Warm-Up", "Circuit Blast", "Active Recovery", "Cool-Down"]);
+
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    // 🔴 IN ITS OWN PLACE, third of five. An undo that appends passes a count.
+    const back = await stored(page, "jungle_draft_class");
+    expect(names(back)).toEqual(["Warm-Up", "Circuit Blast", "Strength Block", "Active Recovery", "Cool-Down"]);
+    expect(back.stages[2].exercises.map(e => e.n)).toEqual(["Back Squat", "Overhead Press"]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the removal is a real write, and so is the undo", async ({ page }) => {
+    // The store, across a reload, on both sides. A removal held only in React
+    // state would look identical until the coach came back to it.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+
+    await page.getByRole("button", { name: "Remove Cool-Down" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(names(await stored(page, "jungle_draft_class"))).not.toContain("Cool-Down");
+
+    // And the undo, taken before a reload, survives one.
+    await page.getByRole("button", { name: "Remove Warm-Up" }).click();
+    await page.getByTestId("toast").getByRole("button", { name: "Undo" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    const back = names(await stored(page, "jungle_draft_class"));
+    expect(back[0]).toBe("Warm-Up");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a stage with nothing in it is not accused of holding exercises", async ({ page }) => {
+    // The count is real arithmetic, not a fixed sentence. A new stage is empty,
+    // and "and its 0 exercises" would be the confident wrong number this repo
+    // ranks below no number at all.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+    await page.getByRole("button", { name: "Add stage" }).click();
+
+    const added = await stored(page, "jungle_draft_class");
+    const last = added.stages[added.stages.length - 1];
+    expect(last.exercises).toEqual([]);          // positive control
+
+    await page.getByRole("button", { name: `Remove ${last.name}` }).click();
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText(last.name);
+    await expect(toast).not.toContainText("exercise");
+    expectNoConsoleErrors(errors);
+  });
+});
