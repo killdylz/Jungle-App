@@ -15,10 +15,10 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 36: **`lint:crash` 0 · 1261 unit (45 files) · 519 e2e (48 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,425 lines**. StaffApp **327.25 / 360 kB — 32.7 kB
-left.** A new screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an
-unlisted chunk has no ceiling at all.
+Green as of session 36: **`lint:crash` 0 · 1277 unit (45 files) · 534 e2e (48 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,425 lines**. StaffApp **331.41 / 360 kB — 28.6 kB
+left.** PTScreens **38.28 / 41**, RetentionScreen **17.13 / 18**. A new screen goes in a `lazy()`
+chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
 
 ⚠️ **These numbers were `@@UNIT@@`-shaped placeholders for two sessions.** The S29–33 merge
 commit (`d6c0270`) wrote the gate line as a template and substituted nothing, so the one line a
@@ -119,6 +119,11 @@ chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk has no
   `.toLowerCase()`. `grep -rn MUTATION src/` does not help either when the mutation is a
   DELETION. **Re-read the function you mutated**, not the diff.
 - Raise a size ceiling **only** in the commit that needs it, and say what bought the bytes.
+  🔴 **A ceiling is NOT mergeable by taking the max.** Two branches that each grow a chunk and
+  each raise its ceiling to the same number produce a tree over that number — session 36's merge
+  measured 37.19 against a 36 both sides had independently called sufficient, because the two
+  additions were disjoint and added up. **Re-measure after any merge that touches a budgeted
+  chunk.** `npm run size` is the only thing that knows.
 - **No infra changes without asking Dylan.**
 - ⚠️ **Do not edit source while the e2e suite is running.** Vite HMR fires, `main.jsx`
   re-executes, and specs fail on `createRoot() on a container that has already been passed to

@@ -1,8 +1,8 @@
-# Jungle — Session Handoff ARCHIVE (sessions 6–32, plus 28-PT)
+# Jungle — Session Handoff ARCHIVE (sessions 6–33, plus 28-PT)
 
 _Split out of `SESSION-HANDOFF.md` in session 20, at commit `e81e793`. Sessions 24 and 25 moved
 here in session 27; session 26 in session 28; session 27 in session 29; session 28 in session 30;
-session 29 in session 31; session 30 in session 32; session 31 in session 33; session 32 in session 36.
+session 29 in session 31; session 30 in session 32; session 31 in session 33; sessions 32 and 33 in session 36.
 The live file keeps the two most recent blocks, and
 they are filed here **newest-first**, which is not where a naive append puts them._
 
@@ -28,6 +28,164 @@ without checking it still exists. The same caveat the trust ranking puts on
 `SESSION-*-PROMPT.md` at repo root · spec §12, which is the backlog of record.
 
 ---
+
+---
+
+## Session 33 — cover stops being permanent, and starts with "I'm away" instead of "cover this class"
+
+> **Gates green at `HEAD`.** `lint:crash` **0** · **1162 unit** (41 files) · **486 e2e**
+> (47 spec files) · 12-chunk build · **0 over budget**. `StaffApp.js` **322.76 / 360 kB**
+> (10.3%), `index.js` **203.06 / 215 kB** (5.6%, still the tightest). Five commits, each pushed
+> after its own green run.
+> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only.
+> ⚠️ **TWO full runs, 484/2 each, and the two pairs of failures share no test between them** —
+> `responsive` + `schedule` in one, `display` + `responsive`-at-a-different-width in the other.
+> Every one passed on its own. That is the load flake, and the fact that it moved between runs
+> is the strongest evidence available that it is not a regression. See trap 5 below: one of the
+> four was NOT the known mount flake and the documented check for it misreads that case.
+> ⚠️ Running two specs together straight after a full run failed **36 of 44** — the stale
+> dev-server pattern CLAUDE.md names. The identical re-run passed 44/44. Re-run once before
+> reading anything into a broad failure.
+
+### What Dylan asked for, and the four decisions that shaped it
+
+"A scheduler all coaches can use to get a sub if they are away." Most of the flow already
+existed after sessions 30–32; what it could not do was the thing the sentence actually
+describes. Four choices, made explicitly:
+
+| | chosen | over |
+|---|---|---|
+| Entry point | **"I'm away these dates"** | pick one class at a time |
+| Who is asked | **everyone free, first to claim** | one named coach |
+| What a cover changes | **that day only** | the recurring class |
+| Notifying | **in-app only for now** | email (needs a domain + sender, ~a day) |
+
+---
+
+### 🔴 The defect underneath all of it: approving a cover was permanent
+
+`onAssignCoach` rewrote the RULE's coach field. A rule has no dates, so covering one ill Monday
+moved that class to somebody else **every** Monday until a human noticed and edited it back.
+S32 found this and could only fix the SENTENCE — there was nowhere else for the assignment to
+go, because a cover request carried `classDay` and `classSlot` and no date at all.
+
+**Now nothing writes to the schedule.** A request is raised against an OCCURRENCE, carries
+`classDate`, and `applyCovers` overlays approved covers onto the derived occurrences. Since
+occurrences are re-derived on every render, a cover lasts exactly as long as the day it names.
+`assignCoach` is gone from `CalendarScreen` and its absence is the feature.
+
+The grid shows the OCCURRENCE's coach rather than the rule's — the same name on every ordinary
+day, and on a covered day the person actually teaching, with "covering for Mara" under it.
+`publishWeek` reads the same covered occurrences, so a week published after a cover was agreed
+writes the right `coach_name` into `class_instances` and attendance credits the right person.
+
+### An absence is a person over dates, not a flag on a class
+
+A coach away next week does not have "a class that needs cover" — they have six, and the gym
+had nothing that said "Mara is away Mon–Fri and two of hers still have nobody". One absence is
+recorded and the affected classes are **derived**, walking `occurrencesForWeek` week by week
+rather than re-reading the repeat rules: a second opinion about which classes a rule produces
+is how the grid and the board would come to disagree about what a coach teaches.
+
+⚠️ **The classes are deliberately NOT stored on the absence.** Storing the list would freeze
+it — a class added or moved afterwards would be missing from a list that looked complete. The
+cover requests carry their own denormalised copy because those are answers somebody agreed to;
+the absence stays a question.
+
+### Broadcast: `to_coach_id` changed meaning and the column did not
+
+It was "who is being asked", set at creation. It is now "who is covering", NULL until somebody
+claims it. One field, one meaning, set at the moment it becomes true. `inboxFor` is gone — an
+inbox needs an addressee — and `openCovers` replaces it with one board everyone sees the same.
+
+⚠️ **The board does not hide classes from coaches whose grid says they are busy.** Same decision
+`coachesFreeAt` documents from the other end: a grid is a claim somebody typed weeks ago, not a
+rota, and hiding a class from someone who could have taken it is how it goes uncovered. Rows
+carry whether *you* said you were free; nothing is filtered out.
+
+`rejected` is gone from `COVER_STATUSES` and from the migration's CHECK — with a board, not
+claiming something IS declining it, and a value the client can never write is exactly what
+`dbConstraints.test.js` reports as drift.
+
+### Migration 0010, amended rather than followed by an 0011
+
+It has never been applied, and a second migration the client depends on is a second thing that
+can be half-run. It gains `coach_absences`, `cover_requests.class_date`, `.absence_id`, the
+narrowed CHECK and a board index.
+
+🔴 **`create table if not exists` DOES NOT ADD A COLUMN** to a table that already exists, so a
+project that ran the S32 copy would silently keep a `cover_requests` with no `class_date` and
+then fail every cover push with a message naming only the table. The file now ends with
+`alter table … add column if not exists` for both columns and a rebuild of the CHECK: a no-op
+on a fresh database, the fix on a stale one.
+
+---
+
+### Four things the tests found that reading the code did not
+
+1. 🔴 **Withdrawing an absence lost withdrawals.** `cancelAbsence` fired a settle per open cover
+   without awaiting them, so each read `getCoverRequests()` before any of them wrote and each
+   saved a list containing only its own change — last write wins, one class silently left on
+   the board, no error anywhere. With a server every settle is a round trip, so the race is
+   wide open and completely invisible on a fast connection. Sequential and awaited now.
+2. 🔴 **The DST test proved nothing, twice over.** Written without a timezone it was vacuous
+   (the suite runs in UTC, which has no DST). Moved into `Europe/London` it *still* could not
+   be made to fail: mutating `daysInclusive`'s local-noon anchor back to midnight leaves it
+   green, because `Math.round` absorbs the missing hour, and so does rewriting the parse as
+   `new Date(str)` since a UTC-parsed pair shifts equally. The comment claiming the anchor was
+   the fix is corrected to name `Math.round`, and the test block says in its own header that it
+   is a regression guard and not mutation-checked. Kept, because the behaviour a coach depends
+   on is worth a guard even when no single edit breaks it.
+3. ⚠️ **My own e2e fixtures broke on my own fix.** Once past classes stopped being asked about,
+   a fixture anchored on *this* Monday raised fewer asks than the test expected on every day but
+   Monday. Moved to next week, which is entirely ahead whenever the suite runs.
+4. ⚠️ **The grid shows only one class per cell**, and the shared fixture has two at Mon 06:00, so
+   Strength Lab is not rendered at all there. Documented behaviour older than this feature; the
+   grid assertions moved to an uncontested slot rather than a cover test being the thing that
+   trips over it.
+5. 🔴 **THE FULL-SUITE FLAKE HAS A SECOND SHAPE, and the documented check for the first one
+   misreads it.** This run failed two specs. `responsive.spec.js` was the known mount flake —
+   error context with no page content at all. `schedule.spec.js` › "unpinning takes the
+   scheduled-type notice" was NOT: its snapshot showed a fully rendered app, the click had
+   landed, and a 5-second `expect.timeout` was simply not enough for the next screen under two
+   workers on a loaded box. **A populated snapshot means it is not the mount flake**, so it is
+   either a slow render or a real defect and only the spec run separates them — both passed
+   alone (28/28 and 18/18). CLAUDE.md's `grep -c "ref="` recipe also had to be corrected: not
+   every snapshot carries `ref=` attributes, so an empty count proved nothing. Match on page
+   content.
+
+### Two defects found by rendering the panel and reading it — the seventh session running
+
+- 🔴 **The board offered cover for a class that had already been taught.** On a Tuesday, a coach
+  marking themselves away Mon–Fri got Monday's 06:00 put on the board. An ask nobody can act on
+  is worse than no ask: it sits there, counts against the absence, and teaches people to ignore
+  the board. Skipped now; the absence still records Monday, because they were away on Monday.
+- The progress line read **"0 of 2 covered — 2 still have nobody"** — the same number twice in
+  one sentence. Exactly the defect `availSummary` was fixed for two sessions ago.
+
+---
+
+### What is genuinely left
+
+- 🔴 **A15 is now a bigger unblock than it was**, and still ten minutes. Until 0010 runs, an
+  absence and its board live on one device and the panel says so.
+- 🔴 **Nobody's phone rings.** After 0010 a coach sees the board when they next open Jungle.
+  **This is now the only thing between the feature and the case it exists for** — a coach ill at
+  5am. Email is a sender, a domain and about a day; it is written up in A15 and not assumed.
+- 🔴 **`compareAndSet` still has not run against a real Postgres** — and it now decides who gets
+  a class, not just a status. The first real race will be the first real run.
+- 🔴 **A16 question 3 is unanswered and free to answer.** The booking payload now carries `date`,
+  so a real adapter would push one occurrence rather than a recurring change — which makes the
+  cancel-and-recreate question *more* answerable, not less.
+- ⚠️ **"self" and "unlinked" panel modes still have no e2e** and cannot, against the
+  credential-less build. The claim path is exercised through manager mode only.
+- ⚠️ **A coach cannot cover part of a day.** An absence is whole days; a coach who can't make
+  their 06:00 but can teach their 18:00 has to withdraw one ask by hand afterwards. The
+  "Not needed" button does that, and it is the honest seam rather than a half-built one.
+- ⚠️ **`hydratePersonas`' seed branch still has the delta hole** §2.1 fixed for the roster.
+- ⚠️ **`main` is SEVEN sessions stale.** 28–33 live only on their own branches.
+- ⚠️ 0005 and 0006 unapplied; N4 member links built and undeployed; A1 region unconfirmed; A14
+  open; 10 Dependabot PRs; two checkboxes still browser-default blue.
 
 ---
 

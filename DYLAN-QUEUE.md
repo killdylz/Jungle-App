@@ -50,6 +50,7 @@ undo it. Nothing in Part A needs me.
 | **A17** | **Run migration 0011** — or the away/cover board stays on one phone | **10 min** | low, fully revertible |
 | **A18** | **You said yes. Four facts before anyone signs anything: Mindbody** | 20 min | none — a decision |
 | **A19** | **Decide the `health_screen` consent scope** — one CHECK constraint, and the health screen is already collecting the consent locally | **10 min to decide** | none until you write it |
+| **A20** | **A gym cannot enter a 07:00 class.** The Schedule supports five fixed times, full stop — a decision, then ~2 days of work | **15 min to decide** | none until you say yes |
 
 ---
 
@@ -1119,3 +1120,48 @@ entry exists to refuse.
 ⚠️ The PAR-Q ledger itself is still **local-only and unsynced** (`jungle_parq_records`), so mirroring
 consent alone would put a consent trail on a server for health answers that are not there. Sequence
 this **after** the 1:1 tables (B10), not before.
+
+---
+
+## A20 · A gym cannot enter a 07:00 class  ·  added 2026-09-07 (session 36)
+
+**This is the most likely thing to stop a studio on day one, and it is a decision before it is
+work.** Nothing is broken; the product simply does not support it.
+
+### The finding
+
+`src/screens/CalendarScreen.jsx` line 123:
+
+```js
+const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
+```
+
+That one array is BOTH the week grid's rows AND the Add-class form's `<select>` options. Verified
+across `src/`: there is no other writer of a schedule rule's `slot` anywhere, so those five times
+are the complete set of times a class can be scheduled at.
+
+Most boutique timetables run 07:00, 07:30, 17:30 and 19:00. An owner setting up their real week
+finds three of their classes have nowhere to go.
+
+### What it would take, if you say yes  ·  ~2 days
+
+The grid derives its rows from the distinct times the gym's own rules actually use, seeded with
+the current five for an empty gym; the form's `<select>` becomes a `type="time"` input. It touches
+`CalendarScreen`, `lib/scheduleInstances.js` and `lib/coachRoster.js` (availability answers in
+`day`/`slot` pairs). **No migration** — `class_rules.slot` is already free text, so this is client
+work only.
+
+### The decision underneath it, which is yours
+
+**Does the grid stay a grid?** A gym running eleven distinct times gets an eleven-row wall, mostly
+empty. A day-column list ordered by time scales properly and is a bigger change. Answering "keep
+the grid" makes this two days; answering "list" makes it four or five.
+
+### The adjacent one, and it can wait
+
+Two classes at the same time (two rooms) is a separate limit: the grid holds one class per cell,
+so the second is stored, counted, published — and until session 36 it was invisible. It now says
+so out loud, which is honest but is not support. Whether Jungle models concurrent classes needs a
+room or studio field, and that IS a migration. See `SESSION-36-HANDOFF.md` §4.3 and §5.2.
+
+**What I need from you:** yes / no on entering arbitrary times, and if yes, grid or list.
