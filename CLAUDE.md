@@ -15,10 +15,33 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of the S29-33 merge: **`lint:crash` 0 · @@UNIT@@ unit (@@UNITF@@ files) · @@E2E@@ e2e
-(@@E2EF@@ spec files) · @@CHUNKS@@-chunk build · 0 over budget.** App.jsx is **@@APPLINES@@ lines**.
-StaffApp **@@STAFF@@ / @@STAFFB@@ kB**. A new screen goes in a `lazy()` chunk **with its own budget
-line in `check-size.mjs`**: an unlisted chunk has no ceiling at all.
+Green as of session 36: **`lint:crash` 0 · 1261 unit (45 files) · 519 e2e (48 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,425 lines**. StaffApp **327.25 / 360 kB — 32.7 kB
+left.** A new screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an
+unlisted chunk has no ceiling at all.
+
+⚠️ **These numbers were `@@UNIT@@`-shaped placeholders for two sessions.** The S29–33 merge
+commit (`d6c0270`) wrote the gate line as a template and substituted nothing, so the one line a
+session is told to check its position against read `@@UNIT@@ unit (@@UNITF@@ files)` — and the
+line before that, still on `main`, claimed 935 unit / 466 e2e / a 7-chunk build and an App.jsx of
+3,857 lines, every one of which is now wrong. **Re-measure before trusting this block**; it is a
+handoff claim like any other.
+
+⚠️ **`npm run test:e2e` needs a browser some sandboxes do not have.** `@playwright/test` 1.61.1
+wants chromium build **1228**; the cloud image ships **1194**, so every spec fails at ~2 ms with
+`Executable doesn't exist` — which looks exactly like the stale-dev-server symptom below and is
+not. Do NOT run `playwright install` (the image forbids it). Run against the installed binary
+instead, with a throwaway config under the gitignored `/.e2e-scratch/` (session 34 wrote this and
+session 36 re-measured it on a fresh container — still exact):
+`export default { ...base, use: { ...base.use, launchOptions: { executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" } } }`.
+Set `testDir` to an absolute path when the config lives in a subdirectory. CI is unaffected — it
+installs its own browsers.
+
+🔴 **`npm run test:e2e | tail -25` reports the exit code of `tail`, which is always 0.**
+Session 36 read a fully red suite as a green baseline that way and only caught it on the second
+run, when the log was written to a file instead of a pipe. **Redirect, never pipe, and grep the
+count line** — a summary that does not say `N passed` is not a pass.
+
 ⚠️ **Two screens that share libraries want ONE barrel module, lazy-imported twice** — two dynamic
 imports of two files emit a third chunk for the shared code, under a generated name no budget
 covers. `src/screens/pt/PTScreens.js` is the shape. And a definition `store.js` needs must live on

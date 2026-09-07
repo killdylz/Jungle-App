@@ -151,28 +151,60 @@ const KB = 1000;
 // credential-less when it landed: two full screens, the seven PAR-Q question
 // texts, and lib/parq.js + lib/ptClients.js, none of which the eager bundle
 // pays for.
-// 🔴 PTScreens 34 → 36 credential-less, 36 → 38 prod (D6). What bought the
-// bytes: the 1:1 client detail EDITOR. `updatePtClient` accepted `goal`,
-// `coachName`, `notes` and `startedAt` and the app's only call sent `{ status }`
-// — four stored fields with no way in, two of which (`coachName`, `notes`) no
-// screen rendered at all. Closing that needs both halves: a read-only summary
-// that names an empty field in words rather than leaving a blank, and the form
-// behind "Edit details" with its four inputs, the roster datalist that keeps a
-// typed coach name in step with `resolveCoach`, and the save handler.
-// Measured 34.83 KB, up from 31.63 — 0.83 over the old ceiling, which is why
-// this line moves rather than the feature shipping on the edge of it.
-// `src/lib/storeWriters.test.js` is what made the gap visible; it could not be
-// closed for less.
+// 🔴 PTScreens 34 → 36 credential-less, 36 → 38 prod. TWO commits moved this
+// ceiling to the same pair of numbers from two branches, and the reasons are
+// additive rather than competing, so they are recorded as one:
 //
-// ─── MERGE NOTE (integrating the S29–S33 stack onto main) ───────────────────
+//   • Session 34 — the chunk measured 34.00 KB against a 34 KB ceiling, passing
+//     by ONE BYTE, which is a ceiling that has stopped being a guard and become a
+//     tripwire for whoever edits a PT screen next. What put the bytes there was
+//     PROSE, which is the point of both features that added it: D4's expiry
+//     warning (`_expiryNote` and `parqExpiryShort` in lib/parq.js, the sentences
+//     that stop a health screen going valid → blocking overnight) and D5's
+//     consent (`PARQ_CONSENT_NOTICE`, the notice a client actually reads before
+//     their health answers are kept, plus the checkbox and its refusal).
+//   • D6, on the integration branch — the 1:1 client detail EDITOR.
+//     `updatePtClient` accepted `goal`, `coachName`, `notes` and `startedAt` and
+//     the app's only call sent `{ status }`: four stored fields with no way in,
+//     two of which (`coachName`, `notes`) no screen rendered at all. Closing that
+//     needs both halves — a read-only summary that names an empty field in words
+//     rather than leaving a blank, and the form behind "Edit details" with its
+//     four inputs, the roster datalist that keeps a typed coach name in step with
+//     `resolveCoach`, and the save handler. `src/lib/storeWriters.test.js` is what
+//     made the gap visible; it could not be closed for less.
+//
+// 🔴 AND THE UNION NEEDS 39, NOT 36. Each branch measured only its OWN
+// addition against the 34 it started from — session 34 saw 34.00, D6 saw 34.83 —
+// and both concluded 36 was enough. Together they measure **37.19 KB**, because
+// the two additions are disjoint and add up exactly (31.63 base + 2.37 + 3.20).
+// So the ceiling both sides agreed on is the one number in this merge that could
+// not be resolved by taking the higher of two equal values: 36 was right for
+// either branch alone and wrong for the tree that has both. Raised to 39
+// credential-less (4.6% headroom, the margin this file uses elsewhere), 41 prod,
+// which stays two wider than credential-less for the reason stated above.
+//
+// ⚠ The general shape, worth naming because this repo merges long-lived
+// branches: A SIZE CEILING IS NOT MERGEABLE BY TAKING THE MAX. Two branches that
+// each grow a chunk and each raise its ceiling to the same number produce a tree
+// over that number. Re-measure after any merge that touches a budgeted chunk;
+// `npm run size` is the only thing that knows.
+//
+// Both additions are user-facing text and app code on the LAZY side of the seam,
+// which is exactly where this repo wants them.
+//
+// ─── MERGE NOTE (integrating the S29–S33 stack onto main) ───────────────
 // Both sides rewrote BUDGETS and neither superseded the other, so this is the
 // UNION, not a pick. From main: PTScreens (F1's 1:1 lens). From the stack:
 // BrandStudioScreen, LibraryBrowserModal, ProfileModal, brandGenerator, and
 // RetentionScreen 14 -> 18 (the class-type return-rate panel bought those
 // bytes; main's 14 predates it). Every other ceiling is identical on both sides.
+// ⚠ Session 34's branch reached the SAME PTScreens pair (36/38) from main's
+// pre-stack table, which still had RetentionScreen at 14 and none of the four
+// chunks above. Taking its numbers wholesale would have silently deleted five
+// ceilings; an unlisted chunk has no ceiling at all.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 38, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 36, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 41, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 39, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }

@@ -1,8 +1,8 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-08-25 (session 33)_
+_Last updated: 2026-09-01 (session 34)_
 
-> 📁 **Sessions 6–29 are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–32 (plus 28-PT) are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
@@ -10,6 +10,175 @@ _Last updated: 2026-08-25 (session 33)_
 
 ---
 
+## Session 34 — three defects fixed, and three claims in the brief that were not true
+
+> **Gates green.** `lint:crash` **0** · **964 unit** (33 files) · **469 e2e** (45 spec files) ·
+> seven-chunk build, **0 over budget**. StaffApp **355.19 / 360 kB** (4.8 kB left, still the
+> binding constraint). `PTScreens.js` **34.00 / 36 kB** — ceiling raised from 34 in this commit,
+> see below. App.jsx unchanged at **3,857 lines**.
+
+**The brief was session 34's own prompt.** Its §2 is blocked on Dylan; its §5 says so and names the
+fallback: *"Build §2.4's D1, D4 and D5 instead; none depend on it."* That is what this session did,
+plus the verification §0.1 and §0.3 ask for. **§2.1 and §2.2 were deliberately not actioned** — see
+"What is still Dylan's" below.
+
+### 🔴 Three false premises, in order of how much they mattered
+
+The prompt's §0.3 says a prompt is wrong somewhere and §5 says to record it explicitly. It was
+wrong in three places, and the first one would have shipped a compliance defect.
+
+1. 🔴 **D5 asked for `store.recordConsent()` with a `health_screen` scope. Both halves are wrong.**
+   - `consent_records.scope` carries a CHECK constraint (migration `0007`) listing exactly
+     `roster_attendance`, `biometric_live`, `biometric_store`, `coach_view`, `export`.
+     **`health_screen` is not in it, so every insert would have been REJECTED by Postgres** — this
+     repo's recurring data-loss bug, three prior occurrences, and the reason `RETENTION_RULES`
+     exists as one exported constant. Adding the scope needs a migration, which §3 forbids.
+   - Worse, and the reason this is not merely a bug: **a `consent_records` row asserts that a person
+     consented.** `CheckInPanel` already refuses to write one, in its own words — *"in a coach
+     sweep, none was [shown]... writing one anyway would fabricate a compliance record, which is
+     worse than an empty ledger."* The prompt's other half ("and so is attendance") asked for
+     exactly that fabrication, for health data.
+
+   **So the letter of D5 was refused and its intent was built instead.** The health screen, unlike
+   a coach sweep, is a form somebody sits and fills in — so a notice can actually be shown and
+   actually agreed to. `PARQ_CONSENT_NOTICE` is on the page, the checkbox starts unticked, and
+   `appendParqRecord` **refuses to write health answers without it**. Nothing is sent to a column
+   that would reject it. Filed as **DYLAN-QUEUE A16**.
+
+2. 🔴 **§2.3: the sessions 29→33 stack does NOT merge cleanly.** The prompt says *"At `4bf138e` it
+   had zero conflict hunks with `main`. That number only goes up."* `main` is still `4bf138e`, so
+   nothing decayed — **the measurement was wrong.** The legacy `git merge-tree base ours theirs`
+   form emits no conflict markers here, which reads as "clean"; `git merge-tree --write-tree` exits
+   **1** and names **seven conflicted files**:
+
+   `CLAUDE.md` · `SESSION-HANDOFF.md` · `docs/history/HANDOFF-ARCHIVE.md` ·
+   `e2e/brandTokens.spec.js` · `scripts/check-size.mjs` · `src/App.jsx` · `src/lib/store.js`
+
+   Four are prose and mechanical. **Three are code or config**, and the overlap with §2.2's stated
+   PT collision set is not a coincidence: the stack was cut before session 28's PT work landed on
+   `main`, so it collides with exactly that. ✅ The prompt's *other* §2.3 claim IS true —
+   `gracious-hopper`, `session-29`, `-30` and `-31` are all ancestors of `prompt-32-verification`,
+   so it is **one merge, not five**. This session made those three files worse, unavoidably: the
+   gate numbers in `CLAUDE.md` and the `PTScreens` ceiling in `check-size.mjs` had to move.
+
+3. **§2.5 undercounts the Dependabot PRs: there are TEN open, not nine.** The prompt lists
+   `#2–#6, #8–#11`. **`#1` (actions/checkout 4→7) is also open.** `CLAUDE.md` said ten and was
+   right. Still Dylan's call, unchanged.
+
+**And one the prompt flagged as unknowable, now measured:** §0.3 says to test A15 by pushing a
+`claude/**` branch and seeing if a PR appears. **That test cannot work yet.** `auto-pr.yml` lives
+only on PR #14's branch, and a `push` event runs the workflow files present *on the pushed ref* —
+so a branch cut from `main` never triggers it. PR #14's own `open` job did run and went green, but
+its log shows it exited early with *"PR #14 is already open… the new commits are on it"* — it never
+reached `gh pr create`. **A15's state was therefore unknown — and is now MEASURED, because #14 was merged
+later in this session and the next push tested it for real.** The answer is **OFF**. Pushing this
+branch ran `auto-pr.yml` from `main` for the first time, and the log says it exactly:
+
+```
+pull request create failed: GraphQL: GitHub Actions is not permitted to
+create or approve pull requests (createPullRequest)
+```
+
+The job then warned and exited **clean**, which is the behaviour `af56d07` designed on purpose — a
+workflow that is always red is one everybody learns to ignore, and the next real failure hides
+behind it. So **A15 is confirmed outstanding, with the API's own words**, and until Dylan ticks the
+box every `claude/**` branch still needs its PR opened by hand.
+
+### What shipped
+
+**D1 — a 1:1 client trained twice a week and was flagged for not turning up.** `addMember` always
+stamps `joinedAt`, so rule 1 runs on every hand-added member; 1:1 sessions are deliberately never
+written into `attendance`; so `visits` was **0** for someone in the gym twice a week. The flag fired
+at the highest severity it carries, and `revenueAtRisk` priced it as money walking out. The member
+never sees it, which is what made it expensive — the coach phones someone they trained on Tuesday.
+
+`activityIndex(attendance, ptSessions)` merges both sources; **only DELIVERED sessions count**, because
+a booking is an intention and counting it would let a client who books and never turns up look like
+the most engaged member on the roster. Every flag's `reason` now names which kind it counted
+("all one-to-one", or "1 in class, 2 one-to-one").
+
+Three decisions inside it worth keeping:
+- ⚠️ **`studioActivity` stays attendance-only, deliberately.** It answers a question about the
+  STUDIO — "would firing the absence rule now produce a wall of false alarms?" — and a gym that
+  imported two years of history and then ran one 1:1 must not have its whole back-catalogue flagged
+  on the strength of that session. The cost is a silence, and the summary says so on screen.
+- The 1:1 log is passed as **raw rows**, not via a helper. `store.js` imports `RETENTION_RULES` from
+  `retention.js`, so importing `ptSessionStatus` back would close a cycle; and mapping it in
+  `ptClients.js` would put a lazy module on RosterScreen's import graph — the seam CLAUDE.md warns
+  about. A mirror test pins that the literal `"done"` matches store.js's own coercion.
+- **The same index now feeds the roster rows AND the CSV export.** They used to count attendance
+  directly, so a client whose flag said "attended 5 times (all one-to-one)" had `0` and "never"
+  beside it, and the export — headed with the same two words, "Visits" and "Last seen" — said the
+  same. That artefact is what a gym takes when it leaves and what a member gets when they ask what
+  is held about them: the worst place in the product for a disagreement to live.
+
+**D4 — a health screen went valid → blocking overnight.** `expiresOn` fed the hard cliff and nothing
+else, so the first thing that ever mentioned an expiry was the refusal, discovered with the client
+in the room. There is now a **30-day warning window**: `expiring` + `daysToExpiry`, a `warn` tone, a
+deadline sentence with the date on it, a count on the 1:1 roster summary, and the chip saying
+"expires in 12d". `blocksLoad` stays **false** throughout — a warning that blocked would just move
+the cliff thirty days earlier.
+
+⚠️ **It is a MODIFIER, not the "sixth state" the prompt asked for**, and that is deliberate:
+`assignPtSession` writes `parqStateAtAssign: parq.state` as the audit trail, and `cleared` vs
+`gp_cleared` are different assurances. A state that overwrote either near an expiry date would erase
+which one applied *for exactly the sessions taken closest to the edge*. A test pins `"expiring"` out
+of `PARQ_STATES`. (The prompt also miscounts: there were already six states, not five.)
+
+The expiry warning is **text, not colour**. There is no `--warn` token — `colors.js` has accent,
+green and danger, and danger is deliberately not skin-derived — so the options were to invent a
+fourth global colour or say it in words. Words win twice: WCAG 1.4.1 forbids colour as the only
+carrier, and `brandTokens.spec.js` sweeps opaque text for AA on a light skin, where a new amber
+would have to earn 4.5:1 against a white card that `--danger` (3.8:1) already cannot.
+
+**D5 — see false premise 1.** The consent is real, local, dated, versioned, and enforced in the
+store as well as the screen, because a gate that lives only in JSX is one the next caller walks
+through. An **amendment** (`amends`) inherits the prior row's consent rather than asking again —
+a doctor's clearance appends a note against answers already given, and the client is not in the
+room. A legacy record with no consent **inherits nothing, honestly**: back-filling today's date
+would assert an agreement nobody was ever asked for.
+
+### The size ceiling moved, and what bought it
+
+`PTScreens.js` measured **34.00 KB against a 34 KB ceiling — passing by ONE BYTE** (33,999 of
+34,000). That is a tripwire, not a guard. Raised to **36** (prod 36 → 38, keeping prod two wider as
+the file's own note requires). What bought the bytes is prose, on the lazy side of the seam where
+this repo wants prose: D4's expiry sentences and D5's consent notice. StaffApp absorbed **+1.03 kB**
+(354.16 → 355.19) for `activityIndex` and the export's use of it, and needed no raise.
+
+### The residual D1 does NOT fix, and it is a product decision
+
+Rule 1 asks for **4 visits in the first month**, a threshold written for class attendance. A 1:1
+client on a **weekly** cadence has 3 visits at day 21 and is still flagged. The prompt's stated
+case — *"training twice a week"* — is fixed (≈5 visits by day 20, no flag), and the count is now
+honest either way. But whether a weekly 1:1 cadence should trip a rule calibrated on classes is a
+question about the product, not the arithmetic, and inventing a second threshold silently is exactly
+the kind of number this repo refuses. **Left for Dylan, stated here rather than guessed at.**
+
+### What is still Dylan's
+
+- **§2.1 was NOT done autonomously — it was put to Dylan first, and he said land them.** The
+  prompt's header says *"Do NOT run this session fully autonomously"* and its intro puts all of §2
+  on him, and merging to `main` triggers a Pages deploy, so this was asked rather than assumed.
+  **#14 is merged** (`bd04de0`), which put `ci.yml` and `auto-pr.yml` on `main` and made A15
+  measurable — see above.
+
+  ⚠️ **The prompt's step 2 does not work as written.** `workflow_dispatch` against
+  `claude/rls-staff-read-boundary` cannot run `ci.yml`, because a dispatch runs the workflow file
+  **from the chosen ref** and that branch was cut before `ci.yml` existed — there is no file there
+  to dispatch. What works: merge `main` into it (no history rewritten, migration untouched) and let
+  the `push` trigger fire. Done in `ec6cd89`, and **#13 has a running CI check for the first time in
+  its life** — the gap the prompt's §2.1 exists to close.
+
+  🔴 **Merging #13 still changes NOTHING on the server.** The policies move when **A14** is run in
+  the SQL editor, not when the file lands. Do not report the RLS hole as closed on a merge.
+- **§2.2 (which PT implementation survives) is untouched**, as instructed. No PT surface was added;
+  D1/D4/D5 are all repairs to what is already on `main`, so none of them is wasted work if the
+  rival implementation wins — the PAR-Q gate and the at-risk rules are shared either way.
+- **A14 / A15 / B10 / A16** — unchanged, plus A16 is new (the `health_screen` consent scope).
+- **`0005` and `0006` still unapplied.** Unchanged for several sessions.
+
+---
 
 > 🔴 **THE SESSION NUMBERING IS FORKED, AND BOTH HALVES ARE REAL.** `main` and the S29–33 stack
 > diverged after session 27 and each numbered its next session **28**: main's built the 1:1 /
@@ -173,265 +342,3 @@ on a fresh database, the fix on a stale one.
 - ⚠️ **`main` is SEVEN sessions stale.** 28–33 live only on their own branches.
 - ⚠️ 0005 and 0006 unapplied; N4 member links built and undeployed; A1 region unconfirmed; A14
   open; 10 Dependabot PRs; two checkboxes still browser-default blue.
-
----
-
-## Session 32 — the roster leaves the device, and the panel learns who is holding the phone
-
-> **Gates green at `HEAD`.** `lint:crash` **0** · **1109 unit** (40 files) · **488 e2e**
-> (47 spec files) · 12-chunk build · **0 over budget**. `StaffApp.js` **315.22 / 360 kB**
-> (12.4%), `index.js` **203.06 / 215 kB** (5.6%, still the tightest). Six commits, each pushed
-> after its own green run (the sixth is this block plus one last fix, below).
-> ⚠️ **The full run was 487 passed / 1 failed, and the failure was the documented mount flake**
-> — but it landed on `responsive.spec.js` › "Analytics fits" @390px, **not** on
-> `syncBanner.spec.js`, which is where CLAUDE.md had recorded it for three sessions. Error
-> context had **zero page snapshots** (the app never mounted) and the spec passed **28/28
-> alone**. CLAUDE.md is corrected: the flake is in the app mount under full-suite load, not in
-> one spec. The run took **30.4 minutes**.
-> ⚠️ **CI does not run on this branch** — `Deploy to GitHub Pages` triggers on `main` only. The
-> local suite is the only gate and every number here is from it.
-> 🔴 **The branch this session started on was `main` at `30520f2`, 20 commits behind — the
-> fourth session in a row to pay for it.** `git merge --ff-only 2098cc4` was clean, and the
-> position was then confirmed with `npm test` (1069/39, matching the prompt's table) rather
-> than with the log, which is the check that actually proves it.
-
-### What this session was
-
-Dylan asked for three things: coaches enter their own availability, the app matches them to a
-class that needs cover, and Mindbody updates immediately. Two of those are code, one is not,
-and the ordering mattered more than any of them — because everything asked for sat on top of a
-sync layer that did not exist.
-
----
-
-### 🔴 §2.1 — the roster and cover requests had NO sync path, and the queue said otherwise
-
-**Verified before building, and it was the prompt's central claim: `coach_roster` and
-`cover_requests` appeared in ZERO push calls and ZERO hydrate reads across the whole of `src/`.**
-The only references anywhere were comments. `saveCoaches` and `saveCoverRequests` were plain
-`writeJSON` one-liners. Running migration 0010 would have created two empty tables that nothing
-ever wrote to or read from, and the roster would have stayed on one phone with a tick next to
-it in `DYLAN-QUEUE`.
-
-⚠️ **A15 was less wrong than the prompt said, and wrong in a way that matters more.** It did
-carry a note that the settle still needed wiring — the prompt claims it omitted that. What it
-got wrong was the FRAMING: a 10-minute migration headlined "run this or coach cover stays on
-one phone", with the client half relegated to a footnote about one function. A15 now says what
-actually changes on screen when the migration lands, which is the real test rather than two
-empty tables.
-
-**The client half is built.** The two tables are written differently and the difference IS the
-feature:
-
-- **`coach_roster`** is an ordinary id-keyed list domain on the delta writer every other one
-  uses. `removeCoach` deletes explicitly (an upsert of the remaining list cannot express a
-  removal), and `_bgDelete`'s `_unmark` makes the toast's undo actually reach Postgres for free.
-- **`cover_requests` must NOT use `_bgUpsertDelta`,** and this is the part to read before
-  touching it. Device A holds request R as `open`. Device B approves it. Device A hydrates —
-  writing no delta marks, because nothing does — then raises an unrelated request. The delta is
-  "every row whose fingerprint has no mark", which after a hydrate is ALL OF THEM, so the list
-  upsert re-sends R as `open` and the approval is gone. Nothing fails, nothing logs, the ledger
-  says the table synced. So a cover request has exactly the two writes its RLS policies allow:
-  an INSERT with `ignoreDuplicates` (the append-log shape `attendance` already uses — **the flag
-  is load-bearing, not an optimisation**), and the conditional UPDATE that settles it.
-
-**`compareAndSet` has made its first real call.** The settle is the only write in `store.js`
-that is not local-first, and the justification is the only one that could be: two coaches both
-pressing Approve both read `open` and both are right when they read, so there is no local fact
-to be first about. The server decides and the local write follows. The loser is told WHAT won,
-with a second read on that branch — "somebody beat you" without saying whether the class is
-covered withholds the one fact they came for. A settle that cannot be confirmed writes nothing
-at all. It falls back to the S30 device-only path when there is no server or no table, so a gym
-using this locally today is not regressed into being unable to settle anything.
-
-#### Hydrate is server-wins for one table and not the other, decided rather than inherited
-
-`_guardList` protects a row the server has never heard of and a row the coach deleted. It does
-not protect the third case, which did not exist before coach availability: **a row the server
-HAS, whose local copy is newer.** A coach ticks Thursday on the way to the gym and the push is
-still in flight; server-wins silently restores the older grid.
-
-⚠️ **The obvious fix is wrong here, and `availabilityAt` sits right there looking like a version
-clock.** It is a LOCAL CALENDAR DATE. Two edits on the same day are indistinguishable by it and
-two devices in two timezones do not agree which day it is. The signal used instead was already
-in the file: a delta mark is written only from `_bgUpsert`'s success path, so "fingerprint ≠
-mark" means exactly "the server has never confirmed this content". No clocks, no timezones, no
-new storage. Stated plainly it is last-writer-wins **biased toward the device with unsynced
-work** — two coaches editing between two hydrates still lose one edit. What it removes is the
-case where the losing edit is the one you just typed and watched save.
-
-`cover_requests` stays server-wins with no exception, because a local status is never
-legitimately ahead of the server's.
-
-#### A table the database has not got is not a failed write
-
-Both belong in the ledger and both are there. What differs is what the product may CLAIM
-meanwhile, and this turned up a shipped honesty defect: **`deliveryTruth` answered "waiting" —
-documented as "the row can reach their device when they next open Jungle" — for any gym with
-credentials, and that was false for every one of them**, because nothing pushed the row
-anywhere. The comment described a push that did not exist. There is now a fourth state,
-`unstored`, read from a missing-table observation the hydrate probe records and the first
-successful write clears. **It does not suppress the push**: nothing would ever clear a latch
-that stopped writing, since the only evidence a migration has run is a write that succeeds.
-
-#### Found while testing
-
-The seed-from-local branch pushed **nothing** when the device held marks the server does not
-honour — a gym whose Supabase project was re-provisioned would have kept its roster to itself
-for ever, no request made and no error recorded. It drops the marks first now. That is
-`restorePersonaCascade`'s lesson arriving from the other direction, and **the same latent hole
-exists in `hydratePersonas`' seed branch** (`savePersonas(local)` also goes through the delta
-writer). Not touched this session; noted below.
-
----
-
-### §2.2 — a coach editing their own availability, and the identity that finally exists
-
-**Verified: `ROLE_DEFAULTS.coach` has `schedule:*`,** the panel lives on the Schedule screen,
-and every roster entry rendered Edit / Availability / Remove for whoever was looking. So the
-moment a gym turns its server on, every coach can edit everyone's availability and delete their
-colleagues.
-
-⚠️ **This could not have been fixed before now, and the panel's own comment said so:** "with no
-server there is no signed-in user, so the product genuinely cannot tell who is holding the
-phone. Scoping the buttons would require inventing an identity we do not have." True — and it
-stopped being true in S31, which built the control that writes `userId`.
-
-`rosterViewerMode` has three answers. **"manage" is also the no-server answer, checked first
-and deliberately:** a panel that locked itself down because it could not tell who you are would
-break the single-device gym to protect it from a second person who does not exist. A bug in the
-identity link therefore fails toward what shipped. **"unlinked" is not folded into "manage"** —
-on day one a manager has linked nobody, so that fold would hand every coach the full roster.
-
-The split is one line: name, aliases, account link and removal are the gym's to set (a coach
-renaming their own entry would silently unlink every class typed under the old name);
-availability is the one thing only the person themselves knows. Approve/Turn down now belong to
-the coach who was ASKED, Withdraw to the one who RAISED it. The capability is `members:manage`,
-reused rather than invented — it already gates the Team screen.
-
-🔴 **THE E2E GAP, and it is real.** `playwright.config.js` targets the credential-less build, so
-`AuthGate` never mounts and there is no signed-in user to be. **The harness can drive "manage"
-and cannot drive "self" or "unlinked" at all.** Inventing an identity for a test to hold would
-be inventing the exact thing the panel spent two sessions refusing to invent. So the decision is
-a pure function pinned exhaustively in unit tests, and what went into e2e is the branch that
-ships. Neither half is sufficient alone. **If a future session gives the e2e target a way to be
-signed in, these two modes are the first thing to point it at.**
-
----
-
-### §2.3 — the matcher needed nothing, and approval was doing something worse than the prompt said
-
-**`coachesFreeAt` is correct and needs no work.** It matches on the grid, sorts fresh above
-stale, excludes `active === false`, returns `reach`. Read against the code and its tests; the
-three things its header says it deliberately does not do are each right.
-
-🔴 **What I found instead: `onAssignCoach` rewrites the RULE's coach field.** Approving cover
-for one ill Monday moves Strength Lab to Dev **every Monday, for ever**, until a human notices.
-The mechanism is deliberate and correctly tested, and there is nowhere else the assignment could
-go — `class_instances` carries `coach_name` but only exists for a class already published or
-started. **What was wrong is the sentence.** "Dev now teaches Strength Lab" was the whole
-message, and everyone who has ever asked for cover reads that as "this Monday".
-
-The recurrence is now stated on the request card BEFORE the button and in the toast after. A
-one-off rule gets neither, and that control is what proves the warning is derived rather than
-printed unconditionally.
-
-**Dated cover was considered and deliberately not built.** It is a feature, not a field:
-there is no per-occurrence coach override anywhere (future occurrences are DERIVED by
-`occurrencesForWeek`), the column would have to go into the migration this session just made
-the client depend on and Dylan has not yet run, and CLAUDE.md's rule about the sibling feature
-applies with more force — a cover that LOOKS one-off and silently is not is worse than one
-honestly permanent.
-
----
-
-### §2.4 — the outbox, and why it is not a second adapter
-
-**Nothing calls Mindbody. No endpoint, no credential, no `fetch`, no panel.** Dylan's yes is
-recorded in A16 as answering the decision and not the four facts, with **question 3 marked as
-free to answer and decisive**: if instructor substitution is cancel-and-recreate only, approving
-a cover deletes members' existing bookings, which is worse than never integrating.
-
-Every approval now leaves a durable record of the exact payload, keyed so the same substitution
-can never be posted twice.
-
-🔴 **It is NOT the "second adapter implementation" §2.4 asked for, and `bookingAdapter.test.js`
-already said why:** "shipping a fake adapter in the bundle would put a second implementation one
-import away from being wired up by accident". A second implementation also forces
-`bookingAdapter()` to choose between two, needing the registry its header bans in capitals.
-Recording is a ledger OF pushes, not an alternative way of pushing, so it wraps the call. When a
-real adapter lands it keeps working and starts recording real pushes — which is where a
-double-post has to be stopped anyway.
-
-**Idempotency now rather than later**, because a key added afterwards has to be back-filled onto
-records written without one. It is DERIVED from the pinned payload (`approvedAt` is what makes
-two approvals of the same class distinct, and `settleCover` guarantees it) rather than minted,
-and the request id is deliberately not added to the payload — that would widen a pinned contract
-for our own bookkeeping. On a duplicate the adapter is not called again and the PRIOR outcome is
-re-reported, because a call that was never made has no new answer.
-
-⚠️ **No screen for it, deliberately.** "3 changes waiting to reach Mindbody" is the coming-soon
-panel this repo bans, on a queue that may never be sent at all.
-
----
-
-### Traps paid for, in the order they cost time
-
-1. 🔴 **`lint:crash` is BLIND to the temporal dead zone.** Reading `auth` above its
-   `useJungleAuth()` declaration put the whole Schedule screen into its error boundary and timed
-   out all 17 coachCover specs looking for a button that never rendered — with `lint:crash` at
-   0 and 1095 unit tests green. It resolves identifiers, and the binding genuinely exists in
-   scope. **A broad e2e failure in ONE spec file, right after a render-order change, is a crash
-   and not the stale-dev-server flake** — the tell is `Something went wrong` / an error-boundary
-   heading in the page snapshot, and the fastest route to the cause is a throwaway spec with
-   `page.on("pageerror")`, not the trace viewer.
-2. 🔴 **A test that could not fail, caught by mutating for it.** "Re-pushing a stale list cannot
-   un-approve a settled request", written the obvious way, passed with `ignoreDuplicates`
-   REMOVED — `_retryNow` only pushes tables in the ledger, the ledger was empty, so nothing was
-   pushed and nothing was asserted, in green. It now fails a write first so the pusher really
-   runs, and carries a positive control that the whole list really was re-sent. **Every one of
-   this session's claims was mutation-checked; this is the one that was hollow.**
-3. ⚠️ **`navAnyWidth` opens with `sidebar.count()`, which does NOT auto-wait.** A scratch probe
-   reading the panel straight after `page.reload()` decided there was no sidebar at 1280px and
-   went looking for a "More" button. Wait for `aside, nav` first.
-4. ⚠️ **A scratch spec needs its own config**, not `--testDir` (not a Playwright flag) and not a
-   path argument against a config whose `testDir` is `e2e/`.
-
----
-
-### What is genuinely left
-
-- 🔴 **`main` is SIX sessions stale.** 28–32 live only on their own branches. Five sessions have
-  now paid the same twenty minutes at startup. **A session cannot fix this from inside.**
-- 🔴 **A15 is now a real 10-minute unblock** — the client half exists, so running 0010 does what
-  the queue says. Until then a gym with credentials sees "your Jungle server is connected but
-  has no coach storage set up", which is the honest version of what it used to claim.
-- ✅ **One late fix, after the full run:** the hydrate probe cleared a known-missing table on
-  ANY error, so an outage would have put "waiting for Dev to open Jungle" back on screen for a
-  gym that has never run 0010 — a claim that was false either way. Absence is now asserted only
-  by the error that means it, and only a successful read clears it. Mutation-checked.
-- 🔴 **`compareAndSet` still has not run against a real Postgres.** Everything asserted about it
-  — including this session's settle — is against a fake modelling PostgREST's documented
-  contract. The first real race will be the first real run; the two assumptions to check are at
-  the top of the file.
-- 🔴 **A16 question 3 is unanswered and free to answer**, and it decides whether §2.4 ever
-  becomes an integration or stays an outbox permanently.
-- 🔴 **0005 and 0006 have never been applied.** ⚠️ The coach-delete dialog TELLS the coach so and
-  `e2e/destructive.spec.js` asserts the string — applying them makes a shipped sentence a lie in
-  the same session.
-- 🔴 **N4 member links are built and undeployed — thirteen sessions.** A12/A13, 35 minutes.
-- 🔴 **Nobody's phone rings.** After 0010 a cover request reaches the other coach only when they
-  next open Jungle. **This is now the binding limit on the feature**, not the storage.
-- ⚠️ **`hydratePersonas`' seed branch has the same delta hole §2.1 fixed for the roster** —
-  `savePersonas(local)` sends a delta, so a re-provisioned server would not be seeded. One
-  `_unmark` loop, and a test that the seed actually pushes.
-- ⚠️ **A class's own coach is still offered as cover for it**, producing a request whose from
-  and to are one id. The one-line filter was written and REVERTED: it turns a 🔴 e2e assertion
-  red (`coachCover.spec.js` seeds a stale claim on the class's own coach to prove a stale claim
-  is offered WITH its age). It needs its own commit and its own fixture decision.
-- ⚠️ **"self" and "unlinked" have no e2e** and cannot have one against the credential-less build.
-- ⚠️ A14 is open and is a yes/no. **A1 — the Supabase region — has never been confirmed**, and
-  it is the only item that gets dramatically more expensive with age.
-- ⚠️ **10 unmerged Dependabot PRs**, five major GitHub-Actions bumps. Ask Dylan first.
-- ⚠️ **Two checkboxes render browser-default blue on a gym's palette** — `RosterScreen.jsx:343`,
-  `PersonasScreen.jsx:1009`. Wants its own change with a token test.

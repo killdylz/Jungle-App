@@ -35,6 +35,11 @@
 //    standard mitigation: spreadsheets treat the cell as text and hide it, and a
 //    plain CSV reader sees one extra character rather than an executed formula.
 //    Applied BEFORE quoting so the guard cannot itself be quoted out.
+// The at-risk rules' own view of who has been in and when. Imported rather than
+// recomputed so this file cannot drift from what the screen shows — see the note
+// in `rosterCsv`. `retention.js` imports nothing, so there is no cycle.
+import { activityIndex } from "./retention.js";
+
 const RISKY_FIRST = /^[=+\-@\t\r]/;
 
 export function csvCell(value) {
@@ -64,6 +69,15 @@ const statusLabel = s => MEMBER_STATUS_LABEL[s] || (s ? String(s) : "Active");
 // treats ISO as the one unambiguous form. A time is included only where the
 // exact moment is the point — a check-in.
 const isoDate = ts => (ts ? String(ts).slice(0, 10) : "");
+// A timestamp in milliseconds as the LOCAL calendar day. `activityIndex` holds
+// instants, and a check-in at 01:00 SGT is the 16th to the coach who recorded it
+// and the 15th in UTC — `toISOString().slice(0,10)` would silently pick the
+// second one, moving a "last seen" date a day earlier for every late class.
+const lastSeenDay = ms => {
+  if (ms == null) return "";
+  const d = new Date(ms), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
 const isoMinute = ts => {
   if (!ts) return "";
   const s = String(ts);
@@ -195,15 +209,17 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
  * meant to be re-imported, and `analyzeAttendanceCsv`'s header aliases are what
  * the column names below are chosen to match.
  */
-export function rosterCsv(members = [], attendance = [], { includeCancelled = true } = {}) {
-  const visits = new Map();
-  const last = new Map();
-  for (const a of attendance || []) {
-    if (!a || !a.memberId) continue;
-    visits.set(a.memberId, (visits.get(a.memberId) || 0) + 1);
-    const cur = last.get(a.memberId) || "";
-    if (String(a.checkedInAt || "") > cur) last.set(a.memberId, String(a.checkedInAt || ""));
-  }
+export function rosterCsv(members = [], attendance = [], { includeCancelled = true, ptSessions = [] } = {}) {
+  // ⚠️ D1 · the SAME index the screen and the at-risk rules use.
+  //
+  // These two columns are headed "Visits" and "Last seen" — the exact words the
+  // Members screen puts beside each row. Counting only `attendance` here while
+  // the screen counts 1:1 sessions too would let a gym export a file saying a
+  // client has 0 visits and has never been seen, about someone the screen above
+  // it shows training twice a week. This artefact is what a gym takes with them
+  // when they leave, and what a member gets if they ask what is held about them,
+  // so it is the worst place in the product for that disagreement to live.
+  const index = activityIndex(attendance, ptSessions);
 
   const list = (members || []).filter(m => m && (includeCancelled || m.status !== "cancelled"));
   // `Reference` last, after the derived columns: this file is read by humans far
@@ -219,8 +235,8 @@ export function rosterCsv(members = [], attendance = [], { includeCancelled = tr
       m.email || "",
       statusLabel(m.status),
       isoDate(m.joinedAt),
-      String(visits.get(m.id) || 0),
-      isoDate(last.get(m.id)),
+      String(index.get(m.id)?.visits || 0),
+      lastSeenDay(index.get(m.id)?.lastMs),
       m.externalRef || "",
     ]);
   }

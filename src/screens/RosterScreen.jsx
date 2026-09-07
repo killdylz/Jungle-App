@@ -11,7 +11,7 @@
 import { useState, useEffect } from "react";
 import * as store from "../lib/store.js";
 import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store.js";
-import { retentionSummary, describeRetention, applyRetentionActions } from "../lib/retention.js";
+import { retentionSummary, describeRetention, applyRetentionActions, activityIndex } from "../lib/retention.js";
 import { membershipPrice, revenueAtRisk, describeRevenueAtRisk, fmtMoney } from "../lib/revenueAtRisk.js";
 import { winBackLink, winBackBlockedReason } from "../lib/winback.js";
 import { analyzeAttendanceCsv, describeImport } from "../lib/csvImport.js";
@@ -34,6 +34,11 @@ export function RosterScreen({ onBack, onNavigate }) {
   const [members, setMembers] = useState(() => store.getMembers());
   const [attendance, setAttendance] = useState(() => store.getAttendance());
   const [classes, setClasses] = useState(() => store.getClassInstances());
+  // D1: the 1:1 log is a second activity source for the at-risk rules. Read
+  // through `store` rather than `ptClients.js` on purpose — that module is on the
+  // lazy PT chunk, and importing it here would drag the whole 1:1 lens (the seven
+  // PAR-Q question texts included) into this screen's bundle for one array.
+  const [ptSessions] = useState(() => store.getPtSessions());
   const [p6, setP6] = useState(() => p6Summary());
   const [csv, setCsv] = useState("");
   const [dayFirst, setDayFirst] = useState(true);
@@ -60,9 +65,9 @@ export function RosterScreen({ onBack, onNavigate }) {
   // ── At-risk (N3) — the rules engine finally gets a surface ────────────────
   // Arithmetic, not a model: every flag carries the numbers that produced it so
   // the operator can argue with it rather than merely believe it.
-  const retention = retentionSummary(members, attendance);
+  const retention = retentionSummary(members, attendance, { ptSessions });
   const { active: atRiskActive, handled: atRiskHandled } =
-    applyRetentionActions(retention.flags, actions, attendance);
+    applyRetentionActions(retention.flags, actions, attendance, { ptSessions });
   const act = (flag, action) =>
     setActions(store.recordRetentionAction({ memberId: flag.memberId, rule: flag.rule, action }));
   // The win-back draft is signed by the GYM, because the gym is the sender and
@@ -97,10 +102,21 @@ export function RosterScreen({ onBack, onNavigate }) {
   // does the arithmetic — the screen never decides "meets target" itself.
   const speed = describeCheckinSpeed(p6);
 
-  const visitsFor = id => attendance.filter(a => a.memberId === id).length;
+  // ⚠️ ONE definition of "how often has this person been here", shared with the
+  // at-risk rules above. These two used to read `attendance` directly, so a 1:1
+  // client whose flag said "attended 5 times (all one-to-one)" had `0` and
+  // "never" rendered on the row immediately beside it. A screen that contradicts
+  // itself is not one an owner will trust enough to phone a member about.
+  const activity = activityIndex(attendance, ptSessions);
+  const visitsFor = id => activity.get(id)?.visits || 0;
+  // Formatted from LOCAL calendar parts, not `toISOString().slice(0,10)`. A
+  // check-in at 01:00 SGT is the 16th to the coach who recorded it and the 15th
+  // in UTC, and "last seen" is read off a wall calendar.
   const lastSeen = id => {
-    const ts = attendance.filter(a => a.memberId === id).map(a => a.checkedInAt).sort();
-    return ts.length ? ts[ts.length - 1].slice(0, 10) : "";
+    const ms = activity.get(id)?.lastMs;
+    if (ms == null) return "";
+    const d = new Date(ms), p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
   const term = q.trim().toLowerCase();
   const shown = members
@@ -148,7 +164,7 @@ export function RosterScreen({ onBack, onNavigate }) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (_) { /* a blocked download is not worth breaking the screen over */ }
   };
-  const exportRoster = () => download(rosterCsv(members, attendance), rosterCsvFilename(gymName));
+  const exportRoster = () => download(rosterCsv(members, attendance, { ptSessions }), rosterCsvFilename(gymName));
   const exportMember = (m) => {
     // `actions` too, not just attendance: the retention ledger is personal data
     // held about this member — the gym's own record of flagging and contacting

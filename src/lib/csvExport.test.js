@@ -316,3 +316,24 @@ describe("SWEEP — the roster export is portable, not just readable", () => {
     expect(csv).toMatch(/GYMPASS-88213/);
   });
 });
+// ─── D1 · the export cannot contradict the screen ────────────────────────────
+describe("rosterCsv counts 1:1 sessions as visits", () => {
+  it("agrees with the Members screen about a client who only trains 1:1", () => {
+    const members = [{ id: "m1", name: "Ana", email: "a@x.com", status: "active", joinedAt: "2026-08-01" }];
+    const pt = [
+      { memberId: "m1", date: "2026-08-20", status: "done" },
+      { memberId: "m1", date: "2026-08-27", status: "done" },
+      { memberId: "m1", date: "2026-09-10", status: "planned" },  // booked, not attended
+    ];
+    // The control: with no 1:1 log this row reads 0 / never, which is exactly
+    // the contradiction the change removes.
+    const before = rosterCsv(members, []);
+    expect(before).toContain(",0,,");
+
+    const after = rosterCsv(members, [], { ptSessions: pt });
+    const row = after.split("\r\n").find(l => l.startsWith("Ana"));
+    // Two DELIVERED sessions. The planned one is a booking, not a visit.
+    expect(row).toContain(",2,");
+    expect(row).toContain("2026-08-27");
+  });
+});
