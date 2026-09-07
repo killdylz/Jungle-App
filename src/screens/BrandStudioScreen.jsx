@@ -714,8 +714,28 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
               border:`1px solid ${a11yTextFails===0?"rgba(123,227,164,.4)":"rgba(245,158,11,.4)"}`}}>
               <span style={{fontSize:"15px",flexShrink:0}}>{a11yTextFails===0?"✓":"⚠️"}</span>
               <span style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",lineHeight:1.4}}>
+                {/* 🔴 THIS PANEL MEASURES CONTRAST, AND CONTRAST IS NOT
+                    LEGIBILITY. "Legible at room-display size" and, in the note
+                    below, "the room TV read at 8 m — legible" both promise
+                    something a ratio cannot deliver: WCAG AA says nothing at all
+                    about type SIZE, and size is the half that decides whether a
+                    wall can be read from the floor.
+
+                    It is not hypothetical here. Session 38 measured the three
+                    room boards: the Fable spec (§3, P2) asks for a primary
+                    element at 8-12% of screen height and secondary at ~3%, and
+                    the Plan board's LARGEST element is 2.4%. So a gym can pass
+                    every row in this panel and still have a board nobody at the
+                    back can read — and the panel told them the opposite, in the
+                    owner's own words, on the screen where they are choosing what
+                    to pay for.
+
+                    `brandAudit.js`'s own header records this sentence being too
+                    confident once before, when the audit was five rows wide and
+                    presented that as "member-visible text". Same sentence, the
+                    other axis. */}
                 {a11yTextFails===0
-                  ? "Member-visible text meets WCAG AA — legible at room-display size."
+                  ? "Member-visible text has the contrast WCAG AA asks for, at every size it is drawn."
                   : `${a11yTextFails} text pair${a11yTextFails>1?"s":""} below AA — may be hard to read from the back of the floor.`}
               </span>
             </div>
@@ -747,7 +767,7 @@ export function BrandStudioScreen({onBack, gymBranding={}, onBrandingChange, act
             </div>
 
             <div style={{fontSize:"10px",color:"var(--muted)",marginTop:"11px",lineHeight:1.5}}>
-              Live against your draft tokens. AA needs 4.5:1 for body text, 3:1 for large/graphic marks. Passing keeps every branded member surface — including the room TV read at 8&nbsp;m — legible.
+              Live against your draft tokens. AA needs 4.5:1 for body text, 3:1 for large/graphic marks. Passing means every branded member surface has the contrast to be read, the room TV included. How BIG the room TV draws its type is the other half of reading a wall at 8&nbsp;m, and these colours do not decide it.
               {/* Says which rows have no Fix and why. A derived row without an
                   explanation reads as a control that is broken rather than one
                   that would have to rewrite a token the row does not name. */}
