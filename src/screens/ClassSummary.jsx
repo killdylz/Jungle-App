@@ -132,7 +132,14 @@ export default function ClassSummary({ token }) {
 
   const totals = summaryTotals(content);
   const facts = [
-    totals.minutes ? `${totals.minutes} min` : (klass.durationMin ? `${klass.durationMin} min` : ""),
+    // 🔴 The stage sum is the class length ONLY when every stage was timed.
+    // See `summaryTotals`: a partial sum used to be printed as a total, and a
+    // 60-minute class with one untimed stage read as "25 min" to the member. When the sum cannot be trusted the class's own booked duration is
+    // the honest number; when there is neither, this fact is DROPPED rather
+    // than guessed, which is what `.filter(Boolean)` below is for.
+    totals.minutesComplete
+      ? `${totals.minutes} min`
+      : (klass.durationMin ? `${klass.durationMin} min` : ""),
     totals.movementCount ? `${totals.movementCount} movement${totals.movementCount === 1 ? "" : "s"}` : "",
     klass.coachName ? `with ${klass.coachName}` : "",
   ].filter(Boolean);
@@ -154,7 +161,12 @@ export default function ClassSummary({ token }) {
         </h1>
 
         {facts.length ? (
-          <div style={{ color: tokens.muted, fontSize: "14px", marginBottom: "26px" }}>{facts.join("  ·  ")}</div>
+          // Named so a test can assert on THIS line rather than on the page.
+          // "no `min` anywhere" matches "rest 3 min" in a movement's detail
+          // column, so a duration assertion written against the page passes and
+          // fails for reasons that have nothing to do with the duration.
+          <div data-testid="summary-facts"
+               style={{ color: tokens.muted, fontSize: "14px", marginBottom: "26px" }}>{facts.join("  ·  ")}</div>
         ) : null}
 
         {content && content.stages?.length ? (

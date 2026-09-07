@@ -131,14 +131,65 @@ describe("summaryTotals / isPublishable", () => {
       runnerStage({ dur: 300, exercises: [{ n: "Row" }, { n: "Burpee" }] }),
       runnerStage({ dur: 600, exercises: [{ n: "row" }, { n: "Squat" }] }),   // "row" repeats
     ] });
-    expect(summaryTotals(doc)).toEqual({ minutes: 15, stageCount: 2, movementCount: 3 });
+    expect(summaryTotals(doc)).toEqual({ minutes: 15, stageCount: 2, movementCount: 3,
+                                         timedStages: 2, minutesComplete: true });
   });
 
   it("reads zeroes off a document with nothing in it, without throwing", () => {
-    expect(summaryTotals(summaryContent({}))).toEqual({ minutes: 0, stageCount: 0, movementCount: 0 });
+    expect(summaryTotals(summaryContent({}))).toEqual({ minutes: 0, stageCount: 0, movementCount: 0,
+                                                       timedStages: 0, minutesComplete: false });
     for (const junk of [null, undefined, {}, { stages: "no" }]) {
       expect(() => summaryTotals(junk), String(junk)).not.toThrow();
     }
+  });
+
+  // 🔴 A PARTIAL SUM IS NOT A TOTAL, and this is the shape it arrives in.
+  //
+  // `durMin` is optional per stage and a strength block usually has none — "work
+  // up to a heavy five" has no minute count — so a coach times the warm-up and
+  // the conditioning piece and leaves the middle alone. Summing anyway printed a
+  // sixty-minute class as "25 min" on the member link, which is the one surface
+  // in this product a member ever reads.
+  it("says the minutes CANNOT be trusted when a stage carries no duration", () => {
+    const doc = summaryContent({ stages: [
+      runnerStage({ name: "Warm-Up", dur: 600, exercises: [{ n: "Row" }] }),
+      runnerStage({ name: "Strength", dur: 0, exercises: [{ n: "Back Squat" }] }),   // untimed
+      runnerStage({ name: "Conditioning", dur: 900, exercises: [{ n: "Bike" }] }),
+    ] });
+    const t = summaryTotals(doc);
+    // The sum is still reported — a caller may want it — but it is 25 for a
+    // class that was not 25 minutes long, and `minutesComplete` is what says so.
+    expect(t.minutes).toBe(25);
+    expect(t.timedStages).toBe(2);
+    expect(t.stageCount).toBe(3);
+    expect(t.minutesComplete).toBe(false);
+  });
+
+  it("trusts the sum when every stage is timed, and not when none is", () => {
+    const all = summaryContent({ stages: [
+      runnerStage({ name: "A", dur: 300, exercises: [{ n: "Row" }] }),
+      runnerStage({ name: "B", dur: 300, exercises: [{ n: "Squat" }] }),
+    ] });
+    expect(summaryTotals(all).minutesComplete).toBe(true);
+
+    const none = summaryContent({ stages: [
+      runnerStage({ name: "A", dur: 0, exercises: [{ n: "Row" }] }),
+      runnerStage({ name: "B", dur: 0, exercises: [{ n: "Squat" }] }),
+    ] });
+    expect(summaryTotals(none).minutes).toBe(0);
+    expect(summaryTotals(none).minutesComplete).toBe(false);
+  });
+
+  // A stage under 30 seconds rounds to 0 in `summaryContent`, which drops
+  // `durMin` entirely — so it is untimed as far as this is concerned, and
+  // counting it as timed would put the trap back with a smaller lever.
+  it("does not count a stage whose duration rounded away as timed", () => {
+    const doc = summaryContent({ stages: [
+      runnerStage({ name: "Blink", dur: 20, exercises: [{ n: "Row" }] }),
+      runnerStage({ name: "Real", dur: 600, exercises: [{ n: "Squat" }] }),
+    ] });
+    expect(summaryTotals(doc).timedStages).toBe(1);
+    expect(summaryTotals(doc).minutesComplete).toBe(false);
   });
 
   it("refuses to publish a class with no movements, and allows one with any", () => {
