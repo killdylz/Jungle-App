@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { occurrencesForWeek, diffOccurrences, occurrenceKey, describePublish,
-         parseDurationMin, parseSlot, startOfWeek, weekKeyOf, RULE_DAYS,
+         parseDurationMin, parseSlot, startOfWeek, weekKeyOf, RULE_DAYS, RULE_SLOTS,
          isStartable, CLASS_WINDOW_MS } from "./scheduleInstances.js";
+import { readFileSync } from "node:fs";
 
 // The bridge between a RULE ("Tuesday 6pm, weekly") and an OCCURRENCE ("the
 // Tuesday 6pm of 14 July"). Attendance hangs off the occurrence, so a duplicate
@@ -310,5 +311,48 @@ describe("occurrencesForWeek — locating the cell an occurrence came from", () 
   // string and not a tidied version of it, or the lookup silently misses.
   it("reports the slot exactly as the rule stores it", () => {
     expect(occurrencesForWeek([rule({ slot: "6:05" })], midWeek())[0].slot).toBe("6:05");
+  });
+});
+
+
+// ─── One list of times, because two of them have to agree ───────────────────
+//
+// 🔴 THERE WERE TWO. `CalendarScreen.jsx` held these five as a component-local
+// const — its own file header reasoned that nothing else referenced them — and
+// `CoachCoverPanel.jsx` held the same five again at module scope for the coach
+// availability grid. A schedule rule's `slot` is written against the first list;
+// a coach's availability is stated in `day`/`slot` pairs against the second; and
+// `coachesFreeAt` compares one to the other. They agreed only because two
+// literals in two files happened to match, with nothing enforcing it.
+//
+// Edit either alone and a coach who IS free at a time has no column to say so
+// in, while a class scheduled at that time finds nobody free — and every gate
+// stays green, because each file is internally consistent. No behavioural test
+// can see it: the two lists are identical today, so there is no failing case to
+// write. The only assertion that bites is about the SOURCE.
+describe("the schedule's slots are defined once", () => {
+  const SCREENS = ["src/screens/CalendarScreen.jsx", "src/screens/CoachCoverPanel.jsx"];
+  const read = f => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+
+  it("🔴 finds the screens at all — the positive control", () => {
+    // A path that stopped resolving would make every assertion below vacuous.
+    for (const f of SCREENS) expect(read(f).length, f).toBeGreaterThan(1000);
+  });
+
+  it("🔴 no screen declares its own list of class times", () => {
+    for (const f of SCREENS) {
+      const src = read(f);
+      // The shape that shipped, twice: a literal array of "HH:MM" strings.
+      const local = src.match(/SLOTS\s*=\s*\[\s*"\d\d:\d\d"/);
+      expect(local, `${f} declares its own slot list: ${local?.[0]}`).toBeNull();
+      expect(src, `${f} must import the shared list`).toContain("RULE_SLOTS");
+    }
+  });
+
+  it("is the five times the product actually supports", () => {
+    // Stated so a change to this array is a deliberate act with a test to
+    // update, not a silent one. Answering DYLAN-QUEUE A20 changes this line —
+    // and now ONLY this line.
+    expect(RULE_SLOTS).toEqual(["06:00", "09:00", "12:00", "18:00", "19:30"]);
   });
 });

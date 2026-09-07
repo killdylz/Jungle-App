@@ -30,6 +30,28 @@
 // and the two lists agree again.
 export const RULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+// The times a class can be scheduled at, and the times a coach can say they are
+// free at. ONE list, because those two things have to be the same list.
+//
+// 🔴 IT WAS TWO. `CalendarScreen.jsx` declared these five as a component-local
+// const — its file header says so, and reasons that nothing else referenced them
+// — and `CoachCoverPanel.jsx` declared the same five again at module scope for
+// its availability grid. That header had rotted: a rule's `slot` is written
+// against the first list and a coach's availability is stated against the
+// second, and `coachesFreeAt` compares one to the other. They agreed only
+// because two literals in two files happened to match, with nothing enforcing
+// it. Edit either alone and a coach who IS free at a time has no column to say
+// so in, while a class at that time finds nobody free — and every gate stays
+// green, because both files are internally consistent.
+//
+// ⚠️ THESE FIVE ARE ALSO THE WHOLE PRODUCT. A gym cannot enter a 07:00 class;
+// that is `DYLAN-QUEUE` A20, a decision rather than a defect, and it is not
+// taken here. What IS fixed is that answering it now means changing ONE array.
+// A20's costing named `CalendarScreen`, `scheduleInstances.js` and
+// `coachRoster.js` and did not mention `CoachCoverPanel.jsx`, which is where
+// half of it actually lived.
+export const RULE_SLOTS = ["06:00", "09:00", "12:00", "18:00", "19:30"];
+
 // How far either side of its slot a class still counts as "the same class".
 //
 // ONE constant for two questions that must not drift apart: which published
