@@ -1,8 +1,9 @@
-# Jungle — Session Handoff ARCHIVE (sessions 6–33, plus 28-PT)
+# Jungle — Session Handoff ARCHIVE (sessions 6–34, plus 28-PT)
 
 _Split out of `SESSION-HANDOFF.md` in session 20, at commit `e81e793`. Sessions 24 and 25 moved
 here in session 27; session 26 in session 28; session 27 in session 29; session 28 in session 30;
-session 29 in session 31; session 30 in session 32; session 31 in session 33; sessions 32 and 33 in session 36.
+session 29 in session 31; session 30 in session 32; session 31 in session 33; sessions 32 and 33 in session 36;
+session 34 in session 37.
 The live file keeps the two most recent blocks, and
 they are filed here **newest-first**, which is not where a naive append puts them._
 
@@ -28,6 +29,183 @@ without checking it still exists. The same caveat the trust ranking puts on
 `SESSION-*-PROMPT.md` at repo root · spec §12, which is the backlog of record.
 
 ---
+
+## Session 34 — three defects fixed, and three claims in the brief that were not true
+
+> **Gates green.** `lint:crash` **0** · **964 unit** (33 files) · **469 e2e** (45 spec files) ·
+> seven-chunk build, **0 over budget**. StaffApp **355.19 / 360 kB** (4.8 kB left, still the
+> binding constraint). `PTScreens.js` **34.00 / 36 kB** — ceiling raised from 34 in this commit,
+> see below. App.jsx unchanged at **3,857 lines**.
+
+**The brief was session 34's own prompt.** Its §2 is blocked on Dylan; its §5 says so and names the
+fallback: *"Build §2.4's D1, D4 and D5 instead; none depend on it."* That is what this session did,
+plus the verification §0.1 and §0.3 ask for. **§2.1 and §2.2 were deliberately not actioned** — see
+"What is still Dylan's" below.
+
+### 🔴 Three false premises, in order of how much they mattered
+
+The prompt's §0.3 says a prompt is wrong somewhere and §5 says to record it explicitly. It was
+wrong in three places, and the first one would have shipped a compliance defect.
+
+1. 🔴 **D5 asked for `store.recordConsent()` with a `health_screen` scope. Both halves are wrong.**
+   - `consent_records.scope` carries a CHECK constraint (migration `0007`) listing exactly
+     `roster_attendance`, `biometric_live`, `biometric_store`, `coach_view`, `export`.
+     **`health_screen` is not in it, so every insert would have been REJECTED by Postgres** — this
+     repo's recurring data-loss bug, three prior occurrences, and the reason `RETENTION_RULES`
+     exists as one exported constant. Adding the scope needs a migration, which §3 forbids.
+   - Worse, and the reason this is not merely a bug: **a `consent_records` row asserts that a person
+     consented.** `CheckInPanel` already refuses to write one, in its own words — *"in a coach
+     sweep, none was [shown]... writing one anyway would fabricate a compliance record, which is
+     worse than an empty ledger."* The prompt's other half ("and so is attendance") asked for
+     exactly that fabrication, for health data.
+
+   **So the letter of D5 was refused and its intent was built instead.** The health screen, unlike
+   a coach sweep, is a form somebody sits and fills in — so a notice can actually be shown and
+   actually agreed to. `PARQ_CONSENT_NOTICE` is on the page, the checkbox starts unticked, and
+   `appendParqRecord` **refuses to write health answers without it**. Nothing is sent to a column
+   that would reject it. Filed as **DYLAN-QUEUE A16**.
+
+2. 🔴 **§2.3: the sessions 29→33 stack does NOT merge cleanly.** The prompt says *"At `4bf138e` it
+   had zero conflict hunks with `main`. That number only goes up."* `main` is still `4bf138e`, so
+   nothing decayed — **the measurement was wrong.** The legacy `git merge-tree base ours theirs`
+   form emits no conflict markers here, which reads as "clean"; `git merge-tree --write-tree` exits
+   **1** and names **seven conflicted files**:
+
+   `CLAUDE.md` · `SESSION-HANDOFF.md` · `docs/history/HANDOFF-ARCHIVE.md` ·
+   `e2e/brandTokens.spec.js` · `scripts/check-size.mjs` · `src/App.jsx` · `src/lib/store.js`
+
+   Four are prose and mechanical. **Three are code or config**, and the overlap with §2.2's stated
+   PT collision set is not a coincidence: the stack was cut before session 28's PT work landed on
+   `main`, so it collides with exactly that. ✅ The prompt's *other* §2.3 claim IS true —
+   `gracious-hopper`, `session-29`, `-30` and `-31` are all ancestors of `prompt-32-verification`,
+   so it is **one merge, not five**. This session made those three files worse, unavoidably: the
+   gate numbers in `CLAUDE.md` and the `PTScreens` ceiling in `check-size.mjs` had to move.
+
+3. **§2.5 undercounts the Dependabot PRs: there are TEN open, not nine.** The prompt lists
+   `#2–#6, #8–#11`. **`#1` (actions/checkout 4→7) is also open.** `CLAUDE.md` said ten and was
+   right. Still Dylan's call, unchanged.
+
+**And one the prompt flagged as unknowable, now measured:** §0.3 says to test A15 by pushing a
+`claude/**` branch and seeing if a PR appears. **That test cannot work yet.** `auto-pr.yml` lives
+only on PR #14's branch, and a `push` event runs the workflow files present *on the pushed ref* —
+so a branch cut from `main` never triggers it. PR #14's own `open` job did run and went green, but
+its log shows it exited early with *"PR #14 is already open… the new commits are on it"* — it never
+reached `gh pr create`. **A15's state was therefore unknown — and is now MEASURED, because #14 was merged
+later in this session and the next push tested it for real.** The answer is **OFF**. Pushing this
+branch ran `auto-pr.yml` from `main` for the first time, and the log says it exactly:
+
+```
+pull request create failed: GraphQL: GitHub Actions is not permitted to
+create or approve pull requests (createPullRequest)
+```
+
+The job then warned and exited **clean**, which is the behaviour `af56d07` designed on purpose — a
+workflow that is always red is one everybody learns to ignore, and the next real failure hides
+behind it. So **A15 is confirmed outstanding, with the API's own words**, and until Dylan ticks the
+box every `claude/**` branch still needs its PR opened by hand.
+
+### What shipped
+
+**D1 — a 1:1 client trained twice a week and was flagged for not turning up.** `addMember` always
+stamps `joinedAt`, so rule 1 runs on every hand-added member; 1:1 sessions are deliberately never
+written into `attendance`; so `visits` was **0** for someone in the gym twice a week. The flag fired
+at the highest severity it carries, and `revenueAtRisk` priced it as money walking out. The member
+never sees it, which is what made it expensive — the coach phones someone they trained on Tuesday.
+
+`activityIndex(attendance, ptSessions)` merges both sources; **only DELIVERED sessions count**, because
+a booking is an intention and counting it would let a client who books and never turns up look like
+the most engaged member on the roster. Every flag's `reason` now names which kind it counted
+("all one-to-one", or "1 in class, 2 one-to-one").
+
+Three decisions inside it worth keeping:
+- ⚠️ **`studioActivity` stays attendance-only, deliberately.** It answers a question about the
+  STUDIO — "would firing the absence rule now produce a wall of false alarms?" — and a gym that
+  imported two years of history and then ran one 1:1 must not have its whole back-catalogue flagged
+  on the strength of that session. The cost is a silence, and the summary says so on screen.
+- The 1:1 log is passed as **raw rows**, not via a helper. `store.js` imports `RETENTION_RULES` from
+  `retention.js`, so importing `ptSessionStatus` back would close a cycle; and mapping it in
+  `ptClients.js` would put a lazy module on RosterScreen's import graph — the seam CLAUDE.md warns
+  about. A mirror test pins that the literal `"done"` matches store.js's own coercion.
+- **The same index now feeds the roster rows AND the CSV export.** They used to count attendance
+  directly, so a client whose flag said "attended 5 times (all one-to-one)" had `0` and "never"
+  beside it, and the export — headed with the same two words, "Visits" and "Last seen" — said the
+  same. That artefact is what a gym takes when it leaves and what a member gets when they ask what
+  is held about them: the worst place in the product for a disagreement to live.
+
+**D4 — a health screen went valid → blocking overnight.** `expiresOn` fed the hard cliff and nothing
+else, so the first thing that ever mentioned an expiry was the refusal, discovered with the client
+in the room. There is now a **30-day warning window**: `expiring` + `daysToExpiry`, a `warn` tone, a
+deadline sentence with the date on it, a count on the 1:1 roster summary, and the chip saying
+"expires in 12d". `blocksLoad` stays **false** throughout — a warning that blocked would just move
+the cliff thirty days earlier.
+
+⚠️ **It is a MODIFIER, not the "sixth state" the prompt asked for**, and that is deliberate:
+`assignPtSession` writes `parqStateAtAssign: parq.state` as the audit trail, and `cleared` vs
+`gp_cleared` are different assurances. A state that overwrote either near an expiry date would erase
+which one applied *for exactly the sessions taken closest to the edge*. A test pins `"expiring"` out
+of `PARQ_STATES`. (The prompt also miscounts: there were already six states, not five.)
+
+The expiry warning is **text, not colour**. There is no `--warn` token — `colors.js` has accent,
+green and danger, and danger is deliberately not skin-derived — so the options were to invent a
+fourth global colour or say it in words. Words win twice: WCAG 1.4.1 forbids colour as the only
+carrier, and `brandTokens.spec.js` sweeps opaque text for AA on a light skin, where a new amber
+would have to earn 4.5:1 against a white card that `--danger` (3.8:1) already cannot.
+
+**D5 — see false premise 1.** The consent is real, local, dated, versioned, and enforced in the
+store as well as the screen, because a gate that lives only in JSX is one the next caller walks
+through. An **amendment** (`amends`) inherits the prior row's consent rather than asking again —
+a doctor's clearance appends a note against answers already given, and the client is not in the
+room. A legacy record with no consent **inherits nothing, honestly**: back-filling today's date
+would assert an agreement nobody was ever asked for.
+
+### The size ceiling moved, and what bought it
+
+`PTScreens.js` measured **34.00 KB against a 34 KB ceiling — passing by ONE BYTE** (33,999 of
+34,000). That is a tripwire, not a guard. Raised to **36** (prod 36 → 38, keeping prod two wider as
+the file's own note requires). What bought the bytes is prose, on the lazy side of the seam where
+this repo wants prose: D4's expiry sentences and D5's consent notice. StaffApp absorbed **+1.03 kB**
+(354.16 → 355.19) for `activityIndex` and the export's use of it, and needed no raise.
+
+### The residual D1 does NOT fix, and it is a product decision
+
+Rule 1 asks for **4 visits in the first month**, a threshold written for class attendance. A 1:1
+client on a **weekly** cadence has 3 visits at day 21 and is still flagged. The prompt's stated
+case — *"training twice a week"* — is fixed (≈5 visits by day 20, no flag), and the count is now
+honest either way. But whether a weekly 1:1 cadence should trip a rule calibrated on classes is a
+question about the product, not the arithmetic, and inventing a second threshold silently is exactly
+the kind of number this repo refuses. **Left for Dylan, stated here rather than guessed at.**
+
+### What is still Dylan's
+
+- **§2.1 was NOT done autonomously — it was put to Dylan first, and he said land them.** The
+  prompt's header says *"Do NOT run this session fully autonomously"* and its intro puts all of §2
+  on him, and merging to `main` triggers a Pages deploy, so this was asked rather than assumed.
+  **#14 is merged** (`bd04de0`), which put `ci.yml` and `auto-pr.yml` on `main` and made A15
+  measurable — see above.
+
+  ⚠️ **The prompt's step 2 does not work as written.** `workflow_dispatch` against
+  `claude/rls-staff-read-boundary` cannot run `ci.yml`, because a dispatch runs the workflow file
+  **from the chosen ref** and that branch was cut before `ci.yml` existed — there is no file there
+  to dispatch. What works: merge `main` into it (no history rewritten, migration untouched) and let
+  the `push` trigger fire. Done in `ec6cd89`, and **#13 has a running CI check for the first time in
+  its life** — the gap the prompt's §2.1 exists to close.
+
+  🔴 **Merging #13 still changes NOTHING on the server.** The policies move when **A14** is run in
+  the SQL editor, not when the file lands. Do not report the RLS hole as closed on a merge.
+- **§2.2 (which PT implementation survives) is untouched**, as instructed. No PT surface was added;
+  D1/D4/D5 are all repairs to what is already on `main`, so none of them is wasted work if the
+  rival implementation wins — the PAR-Q gate and the at-risk rules are shared either way.
+- **A14 / A15 / B10 / A16** — unchanged, plus A16 is new (the `health_screen` consent scope).
+- **`0005` and `0006` still unapplied.** Unchanged for several sessions.
+
+---
+
+> 🔴 **THE SESSION NUMBERING IS FORKED, AND BOTH HALVES ARE REAL.** `main` and the S29–33 stack
+> diverged after session 27 and each numbered its next session **28**: main's built the 1:1 /
+> PAR-Q path, the stack's rebuilt the white-label generator. Neither knew about the other. On
+> merging, main's is filed in the archive as **`28-PT`** and the stack's keeps **28**. If a
+> handoff, prompt or commit refers to "session 28", check which of the two it means — the commit
+> is the only unambiguous reference. Sessions 29–33 are the stack's alone.
 
 ---
 
