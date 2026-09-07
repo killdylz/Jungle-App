@@ -80,19 +80,25 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                 display:"flex",alignItems:"center",gap:"6px",padding:"7px 13px",
                 background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
                 cursor:"pointer",color:"var(--muted)",fontSize:"12px",fontWeight:"600",flexShrink:0
-              }}>← {!isMobile && <span style={{color:"var(--muted)",fontSize:"11px"}}>Esc</span>}</button>
+              }} data-tv-chrome>← {!isMobile && <span style={{color:"var(--muted)",fontSize:"11px"}}>Esc</span>}</button>
               {/* The mark the other two boards already carried. Floor uses the
                   same call, so a member switching modes sees one identity rather
                   than three. Safe here only because the background above is now a
                   brand token: BrandLogo draws the name in `--text`, which on a
                   light brand is dark ink and was invisible on the old near-black. */}
-              <BrandLogo size={24} showName/>
+              <span data-tv-chrome><BrandLogo size={24} showName/></span>
               <div>
                 <p style={{fontSize:tvFont(26,scaleMult),fontWeight:"700",color:"var(--text)",lineHeight:1,marginBottom:"4px",fontFamily:"var(--display)"}}>
                   {sessionName||"Class Plan Overview"}
                 </p>
                 {/* "0 tracks" was printed here on the room's TV before a class,
                     in front of members, every time (audit 2.1 / UI-UX §1). */}
+                {/* ⚠️ STAYS A LITERAL, and the reason is the finding. `tvFont(12)` on a
+                    720p wall renders at 11px, because TV_MIN_PX floors it — so moving
+                    this onto the scale would make the board a member reads SMALLER on
+                    the projector this repo measures on. The absolute floor blocks its
+                    own fix at every base below 16. Named in display.spec.js's
+                    invariance sweep rather than quietly skipped. */}
                 <p style={{fontSize:"12px",color:"var(--muted)"}}>
                   {stages.length} stages · {fmtDur(totalDur)}{FLAGS.music ? ` · ${totalTracks} tracks` : ""} · {totalExs} exercises
                   {isLive && <span style={{color:"var(--accent)",fontWeight:"800"}}> · ● Stage {curIdx+1}/{stages.length}</span>}
@@ -134,7 +140,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                         the Class Runner, not a nav destination, so it was outside
                         `ALL_SCREENS` and outside every screen sweep in the
                         suite. `brandTokens.spec.js` now visits it. */}
-                    <span style={{fontSize:"11px",fontWeight:"700",color:chipCur?"var(--on-accent)":hueInk(cfg.color),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                    <span style={{fontSize:tvFont(11,scaleMult),fontWeight:"700",color:chipCur?"var(--on-accent)":hueInk(cfg.color),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                       {s.name || cfg.label} · {fmtDur(s.dur)}
                     </span>
                   </div>
@@ -180,7 +186,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                           textTransform:"uppercase",letterSpacing:"1px"}}>
                           {cfg.label}{isPeak?" · PEAK":""}
                         </span>
-                        {isCur && <span style={{marginLeft:"auto",fontSize:"11px",fontWeight:"900",letterSpacing:"1px",color:"var(--on-accent)",background:"var(--accent)",padding:"2px 9px",borderRadius:"999px"}}>NOW</span>}
+                        {isCur && <span style={{marginLeft:"auto",fontSize:tvFont(11,scaleMult),fontWeight:"900",letterSpacing:"1px",color:"var(--on-accent)",background:"var(--accent)",padding:"2px 9px",borderRadius:"999px"}}>NOW</span>}
                       </div>
                       {/* Stage name */}
                       <p style={{fontSize:tvFont(16,scaleMult),fontWeight:"800",color:"var(--text)",lineHeight:1.2,marginBottom:"6px",fontFamily:"var(--display)"}}>{s.name}</p>
@@ -188,7 +194,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                           with no music to match it is noise on a member-facing
                           card. TempoGuide is the survivor of the BPM UI — it needs
                           no licence and earns its place on the live display. */}
-                      <p style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600"}}>
+                      <p style={{fontSize:"12px",color:"var(--muted)",fontWeight:"600"}}>  {/* a literal for the same reason as the class summary above */}
                         {fmtDur(s.dur)}{FLAGS.music && cfg.bpmMin ? ` · ${cfg.bpmMin}–${cfg.bpmMax} BPM` : ""}
                       </p>
                     </div>
@@ -196,7 +202,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                     {/* Body */}
                     <div style={{flex:1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:"7px"}}>
                       {exList.length===0 && trList.length===0 && grpList.length===0 && (
-                        <p style={{fontSize:"11px",color:"var(--muted)",fontStyle:"italic"}}>No content added yet</p>
+                        <p style={{fontSize:tvFont(11,scaleMult),color:"var(--muted)",fontStyle:"italic"}}>No content added yet</p>
                       )}
 
                       {/* Exercises */}
@@ -206,7 +212,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                           marginBottom:"4px"
                         }}>
                           <p style={{fontSize:tvFont(13,scaleMult),fontWeight:"700",color:"var(--text)",lineHeight:1.2,marginBottom:"2px"}}>{ex.n}</p>
-                          <p style={{fontSize:"11px",color:"var(--muted)"}}>
+                          <p style={{fontSize:tvFont(11,scaleMult),color:"var(--muted)"}}>
                             {[ex.s&&`${ex.s}×`,ex.r,ex.rest&&`· ${ex.rest} rest`].filter(Boolean).join(" ")||"—"}
                           </p>
                         </div>
@@ -216,7 +222,7 @@ export function OverviewDisplayScreen({ stages, sessionName, onBack, liveState }
                       {grpList.map((g,gi)=>(
                         <div key={g.id} style={{display:"flex",alignItems:"center",gap:"7px"}}>
                           <div style={{width:"8px",height:"8px",borderRadius:"50%",flexShrink:0,background:grpColor(g.id)}}/>
-                          <p style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</p>
+                          <p style={{fontSize:"12px",fontWeight:"600",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</p>  {/* a literal for the same reason as the class summary above */}
                         </div>
                       ))}
                     </div>
