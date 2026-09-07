@@ -252,48 +252,6 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
             </div>
           </div>
 
-          {/* ── Add a client ─────────────────────────────────────────────────
-              From the roster, never a second name field. A 1:1 client IS a
-              member; letting a coach type a name here would give the gym two
-              rosters that disagree, which is the drift `isCurrentMember` exists
-              to prevent one screen at a time. */}
-          <div style={card} data-testid="pt-add">
-            <div style={h}>Add a 1:1 client</div>
-            {!members.length ? (
-              <>
-                <p style={{...note,marginTop:"6px"}}>
-                  Your roster is empty, and a 1:1 client is someone already on it. Add people on the
-                  Members screen first &mdash; that keeps one list of who trains here rather than two.
-                </p>
-                {onNavigate && (
-                  <button onClick={()=>onNavigate("member")} data-tap style={{...primary,marginTop:"12px"}}>Go to Members</button>
-                )}
-              </>
-            ) : !pickable.length ? (
-              <p style={{...note,marginTop:"6px"}} data-testid="pt-all-added">
-                Everyone on your roster already has a 1:1 record. To restart with someone who
-                finished, set them back to Training below rather than adding a second record &mdash;
-                their session history is on the first one.
-              </p>
-            ) : (
-              <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:"10px",alignItems:isMobile?"stretch":"flex-end",marginTop:"12px"}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <label style={label} htmlFor="pt-member">Member</label>
-                  <Select id="pt-member" value={pickMember} onChange={e=>setPickMember(e.target.value)}>
-                    <option value="">Choose someone&hellip;</option>
-                    {pickable.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </Select>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <label style={label} htmlFor="pt-goal">What are they working towards?</label>
-                  <Input id="pt-goal" value={goal} placeholder="First pull-up" onChange={e=>setGoal(e.target.value)}/>
-                </div>
-                <button onClick={addClient} data-tap style={primary}><Plus size={14}/> Add client</button>
-              </div>
-            )}
-            {addErr && <p style={{...note,color:"var(--text)",marginTop:"10px"}} role="alert">{addErr}</p>}
-          </div>
-
           {/* ── The list ─────────────────────────────────────────────────── */}
           {rows.length > 0 && (
             <div style={card} data-testid="pt-list">
@@ -338,6 +296,57 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
               </div>
             </div>
           )}
+
+          {/* ── Add a client ─────────────────────────────────────────────────
+              From the roster, never a second name field. A 1:1 client IS a
+              member; letting a coach type a name here would give the gym two
+              rosters that disagree, which is the drift `isCurrentMember` exists
+              to prevent one screen at a time.
+
+              🔴 BELOW THE LIST, and that is the point of the ordering. This is
+              the panel for the occasional thing — a coach takes on a new 1:1
+              client now and then and reads their client list every single day.
+              Above the list it pushed the daily read below the fold on a 390px
+              phone, which is the exact shape session 35 fixed on Members
+              (an import panel sitting above the roster). Same argument, same
+              fix. The list only renders when there is one, so a gym with no 1:1
+              clients still meets this panel first. */}
+          <div style={card} data-testid="pt-add">
+            <div style={h}>Add a 1:1 client</div>
+            {!members.length ? (
+              <>
+                <p style={{...note,marginTop:"6px"}}>
+                  Your roster is empty, and a 1:1 client is someone already on it. Add people on the
+                  Members screen first &mdash; that keeps one list of who trains here rather than two.
+                </p>
+                {onNavigate && (
+                  <button onClick={()=>onNavigate("member")} data-tap style={{...primary,marginTop:"12px"}}>Go to Members</button>
+                )}
+              </>
+            ) : !pickable.length ? (
+              <p style={{...note,marginTop:"6px"}} data-testid="pt-all-added">
+                Everyone on your roster already has a 1:1 record. To restart with someone who
+                finished, set them back to Training above rather than adding a second record &mdash;
+                their session history is on the first one.
+              </p>
+            ) : (
+              <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:"10px",alignItems:isMobile?"stretch":"flex-end",marginTop:"12px"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <label style={label} htmlFor="pt-member">Member</label>
+                  <Select id="pt-member" value={pickMember} onChange={e=>setPickMember(e.target.value)}>
+                    <option value="">Choose someone&hellip;</option>
+                    {pickable.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </Select>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <label style={label} htmlFor="pt-goal">What are they working towards?</label>
+                  <Input id="pt-goal" value={goal} placeholder="First pull-up" onChange={e=>setGoal(e.target.value)}/>
+                </div>
+                <button onClick={addClient} data-tap style={primary}><Plus size={14}/> Add client</button>
+              </div>
+            )}
+            {addErr && <p style={{...note,color:"var(--text)",marginTop:"10px"}} role="alert">{addErr}</p>}
+          </div>
 
           {/* ── One client ───────────────────────────────────────────────── */}
           {selected && (

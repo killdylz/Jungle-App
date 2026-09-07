@@ -44,6 +44,28 @@ async function seedUnscreenedClient(page) {
   await waitForAppAnyWidth(page);
 }
 
+// A gym that has actually been used: two members, both already 1:1 clients, one
+// with a session booked. Used by the ordering tests, which need a list with rows
+// in it — an empty screen satisfies any ordering claim trivially.
+async function seedTwoClients(page) {
+  await freshApp(page);
+  await page.evaluate(() => {
+    localStorage.setItem("jungle_members", JSON.stringify([
+      { id: "m0", name: "Sarah Chen", email: "sarah@example.com", status: "active" },
+      { id: "m1", name: "Marcus Lee", email: "marcus@example.com", status: "active" },
+    ]));
+    localStorage.setItem("jungle_pt_clients", JSON.stringify([
+      { id: "c0", memberId: "m0", goal: "First pull-up",  status: "active", startedAt: "2026-06-01" },
+      { id: "c1", memberId: "m1", goal: "Return to sport", status: "active", startedAt: "2026-07-15" },
+    ]));
+  });
+  await page.reload();
+  await waitForAppAnyWidth(page);
+  // ⚠️ `navAnyWidth`, not `nav`: below 900px there is no sidebar, and these
+  // tests run at 390 as well as 1280. Three nav vocabularies, one helper.
+  await navAnyWidth(page, PT);
+}
+
 // Answer all seven, then save. `only` names the questions to answer YES.
 async function completeScreen(page, only = []) {
   for (const short of ["Heart condition", "Chest pain when active", "Chest pain at rest",
@@ -77,6 +99,63 @@ test.describe("1:1 clients", () => {
     await expect(banner).toContainText("not counted in studio analytics");
 
     expectNoConsoleErrors(errors);
+  });
+
+  // ── The panel for the occasional thing sat above the list read every day ──
+  //
+  // The exact shape session 35 fixed on Members: an "Import attendance history"
+  // panel rendered above the roster pushed "Add member" below the fold on a
+  // laptop. Here it was "Add a 1:1 client" above the client list — a coach takes
+  // on a new 1:1 client now and then and reads the list every session.
+  //
+  // ⚠️ Every string these look for was on the broken screen too. The defect was
+  // ORDER, so these assert GEOMETRY: a `toBeVisible` on either panel passed
+  // before this change and would pass again if it were reverted.
+  test.describe("the client list is what a coach meets first", () => {
+    for (const [width, name] of [[1280, "1280px"], [390, "390px"]]) {
+      test(`the list sits above "Add a 1:1 client" at ${name}`, async ({ page }) => {
+        // ⚠️ Fresh load at the stated width — resizing without reloading shows a
+        // stale render, and every responsive claim in this repo is on a reload.
+        await page.setViewportSize({ width, height: 800 });
+        await seedTwoClients(page);
+
+        // POSITIVE CONTROL. Both panels really rendered, and the list really has
+        // clients in it — an empty screen satisfies any ordering claim
+        // trivially, and this repo has been fooled by exactly that twice.
+        const list = page.getByTestId("pt-list");
+        const add  = page.getByTestId("pt-add");
+        await expect(list).toBeVisible();
+        await expect(add).toBeVisible();
+        await expect(list.getByRole("button")).toHaveCount(2);
+
+        const listBox = await list.boundingBox();
+        const addBox  = await add.boundingBox();
+        expect(listBox).not.toBeNull();
+        expect(addBox).not.toBeNull();
+        expect(listBox.y, `list ${listBox.y} must be above add ${addBox.y}`).toBeLessThan(addBox.y);
+      });
+    }
+
+    test("and on a 390px phone the list starts above the fold", async ({ page }) => {
+      // The consequence, not the cause. 844 is an iPhone 14's viewport height;
+      // the add panel above the list put the first client row past it.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+      const first = page.getByTestId("pt-list").getByRole("button").first();
+      await expect(first).toBeVisible();
+      const box = await first.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box.y, `first client row at y=${box?.y} is below the 844px fold`).toBeLessThan(844);
+    });
+
+    test("a gym with no 1:1 clients still meets the add panel first", async ({ page }) => {
+      // The list only renders when there is one, so the ordering must not hide
+      // the only route in from a coach who has never used the screen.
+      await freshApp(page);
+      await nav(page, "1:1 Clients");
+      await expect(page.getByTestId("pt-list")).toHaveCount(0);
+      await expect(page.getByTestId("pt-add")).toBeVisible();
+    });
   });
 
   test("a member becomes a 1:1 client, and the roster is not forked", async ({ page }) => {
