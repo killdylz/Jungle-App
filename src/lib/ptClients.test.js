@@ -100,6 +100,45 @@ describe("ptClientRows", () => {
     expect(rows.map(r => r.id)).toEqual(["c1", "c2", "c3"]);
   });
 
+  it("🔴 sorts an orphan LAST, not first, however its stored status reads", () => {
+    // The defect: `_byCoachDay` fell through to `localeCompare` on `name`, and
+    // an orphan's name is "". Empty string sorts before every real name, so the
+    // one row a coach can only erase sat above every client they are training,
+    // on a screen a trainer opens daily.
+    const withOrphan = ptClientRows(
+      [...CLIENTS, { id: "cX", memberId: "gone", status: "active", startedAt: "2026-01-01" }],
+      MEMBERS, PARQS, SESSIONS, { now: NOW });
+
+    // POSITIVE CONTROL: the orphan really is in the list and really is an
+    // orphan — without this the ordering assertion passes on a row that was
+    // never built.
+    expect(withOrphan).toHaveLength(4);
+    expect(withOrphan.find(r => r.id === "cX").orphan).toBe(true);
+    expect(withOrphan.find(r => r.id === "cX").name).toBe("");
+
+    expect(withOrphan.map(r => r.id)).toEqual(["c1", "c2", "c3", "cX"]);
+    // Stated the other way round, because this is the sentence that was false:
+    expect(withOrphan[0].id).not.toBe("cX");
+  });
+
+  it("puts an orphan below a PAUSED client, not merely below the active ones", () => {
+    // An orphan's stored status is usually `active`, so a rank-only fix would
+    // have left it above c3. A dead row is not information about the week.
+    const rows2 = ptClientRows(
+      [{ id: "cX", memberId: "gone", status: "active" }, CLIENTS[2]],
+      MEMBERS, PARQS, SESSIONS, { now: NOW });
+    expect(rows2.map(r => r.id)).toEqual(["c3", "cX"]);
+  });
+
+  it("keeps two orphans in a stable order between themselves", () => {
+    // Both are nameless, so nothing distinguishes them; the sort must not
+    // reshuffle them between renders.
+    const two = [{ id: "cY", memberId: "gone1", status: "active" },
+                 { id: "cZ", memberId: "gone2", status: "active" }];
+    expect(ptClientRows(two, MEMBERS, PARQS, SESSIONS, { now: NOW }).map(r => r.id))
+      .toEqual(ptClientRows(two, MEMBERS, PARQS, SESSIONS, { now: NOW }).map(r => r.id));
+  });
+
   it("shows a client whose member row has been erased as an orphan, not a blank", () => {
     const orphaned = ptClientRows(
       [{ id: "cX", memberId: "gone", status: "active" }], MEMBERS, PARQS, SESSIONS, { now: NOW });

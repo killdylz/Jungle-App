@@ -292,13 +292,43 @@ test.describe("the coach's side of the link", () => {
 
     // This build has no Supabase, so the honest answer is that links cannot be
     // minted — not a spinner forever, and not a link that goes nowhere.
-    await expect(page.getByTestId("memberlink-error-offline-only")).toBeVisible();
+    await expect(page.getByTestId("memberlink-error-not-configured")).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Member link" })).toBeVisible();
 
     // Escape closes it through useDialog, like every other overlay.
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "Member link" })).toHaveCount(0);
     expectNoConsoleErrors(errors);
+  });
+
+  // 🔴 WHAT A COACH WAS TOLD ON THE SHIPPED BUILD. `supabaseEnabled` is
+  // `!!(VITE_SUPABASE_URL && ANON_KEY)` — a build-time constant that never
+  // consults the network — and it returned `offline-only`, so the dialog said
+  // "Not available offline … Reconnect and try again" to a coach whose wifi was
+  // fine. That is the deployed product's only answer today: A12/A17 are
+  // outstanding, so the GitHub Pages bundle carries no credentials. The coach
+  // reconnects, retries, and gets it again forever. A remedy that cannot work is
+  // worse than saying plainly that there is nothing to do from here.
+  test("an online coach is never told to reconnect", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Class Runner");
+
+    // The evidence, gathered in the same run: the browser reports itself online
+    // while the dialog is open. Without this the assertion below is a claim
+    // about copy rather than about a misdiagnosis.
+    expect(await page.evaluate(() => navigator.onLine),
+      "precondition: this browser must be online for the finding to mean anything").toBe(true);
+
+    await page.getByRole("button", { name: "Member link" }).click();
+    const err = page.getByTestId("memberlink-error-not-configured");
+    await expect(err).toBeVisible();
+
+    const copy = await err.innerText();
+    expect(copy, "the dialog is diagnosing a connection problem that does not exist")
+      .not.toMatch(/offline|reconnect/i);
+    // It says what IS true, and that the coach cannot fix it from here.
+    expect(copy).toMatch(/switched on/i);
+    expect(copy).toMatch(/isn.t a connection problem/i);
   });
 
   test("opening the dialog mints exactly one occurrence, and reopening reuses it", async ({ page }) => {
@@ -310,13 +340,13 @@ test.describe("the coach's side of the link", () => {
 
     expect(await ids()).toEqual([]);
     await page.getByRole("button", { name: "Member link" }).click();
-    await expect(page.getByTestId("memberlink-error-offline-only")).toBeVisible();
+    await expect(page.getByTestId("memberlink-error-not-configured")).toBeVisible();
     const first = await ids();
     expect(first).toHaveLength(1);
 
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "Member link" }).click();
-    await expect(page.getByTestId("memberlink-error-offline-only")).toBeVisible();
+    await expect(page.getByTestId("memberlink-error-not-configured")).toBeVisible();
     // A second row here would split one class's check-ins across two
     // occurrences — the exact failure ensureClassInstance exists to prevent.
     expect(await ids()).toEqual(first);

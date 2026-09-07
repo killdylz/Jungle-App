@@ -21,7 +21,13 @@ import react from 'eslint-plugin-react'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `.e2e-scratch/` is GITIGNORED and is where sessions are told to put the
+  // throwaway Playwright config they use to look at rendered screens
+  // (SESSION-37-PROMPT §4.1). One `process.env` in such a file turned this gate
+  // red — the gate whose entire meaning is "zero means nothing crashes in the
+  // shipped product". A directory git will never carry cannot reach a user, so
+  // linting it can only produce false red. `dist` is here for the same reason.
+  globalIgnores(['dist', '.e2e-scratch']),
   {
     files: ['**/*.{js,jsx}'],
     // Registered but with NO rules enabled: the source carries inline

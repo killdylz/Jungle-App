@@ -504,3 +504,308 @@ test.describe("nothing on a room-facing board is smaller than the wall allows", 
   });
 });
 
+
+// ─── A source comment rendered on the wall, in front of paying members ───────
+//
+// 🔴 WHAT SHIPPED. `DisplayScreen.jsx` carried a bare `/* … */` in the CHILDREN
+// of a JSX element, and in JSX that is TEXT, not a comment — braces are what
+// make a comment a comment. So the Coach board's Tempo Guide rendered
+//
+//   "/* a sub-component: no scaleMult in scope, and the absolute floor is what
+//    this needed */"
+//
+// wrapped over eight lines and straight through the BPM ring, on the biggest
+// screen in the gym. It compiled, `lint:crash` was 0, and every one of 1290 unit
+// and 534 e2e tests passed with it on screen — because nothing looked at what
+// the board rendered. It was found by driving the board and READING it.
+//
+// `src/ui/jsxText.test.js` is the source-level sweep. This is the other half:
+// the claim about the SHIPPED SCREEN, which is the one a member is standing in
+// front of.
+test.describe("nothing on a room board is a note the author left themselves", () => {
+  for (const mode of ["Plan", "Floor", "Coach"]) {
+    test(`the ${mode} board renders no comment delimiter`, async ({ page }) => {
+      const errors = watchConsole(page);
+      // 1280x720 — a projector, or a laptop on HDMI. The size a gym's wall
+      // actually is, and the one the defect was seen at.
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await freshApp(page);
+      await gotoDisplay(page, mode);
+
+      // POSITIVE CONTROL: the board really rendered. An empty screen contains no
+      // comment delimiter either, and this repo has been fooled by that twice.
+      const text = await page.locator("body").innerText();
+      expect(text.length, `${mode}: the board rendered nothing`).toBeGreaterThan(80);
+      await expect(page.getByText(MODES[mode].ready()).first()).toBeVisible();
+
+      expect(text, `${mode} board is rendering a source comment`).not.toMatch(/\/\*|\*\//);
+      expectNoConsoleErrors(errors);
+    });
+  }
+});
+
+// ─── §3.5 · the three LAYOUT PRESETS, which nothing had ever rendered ────────
+//
+// 🔴 A DIFFERENT AXIS FROM THE MODES ABOVE. `gotoDisplay` picks a MODE — Plan,
+// Floor or Coach — and everything before this point drives those. Full, Minimal
+// and Timer Only are the Coach board's LAYOUT presets, chosen from its own
+// settings panel, and until this suite no test had ever selected one and read
+// what came back. The single test that touched them (`mountWrites.spec.js`)
+// clicks "Minimal" to prove the choice is WRITTEN to localStorage and asserts
+// nothing about the board — so a preset that rendered a blank wall would have
+// passed it. A coach picking "Timer Only" was putting a screen on the wall
+// nothing had ever looked at.
+//
+// What these assert is the preset's own promise, in both directions: the label
+// in `DISPLAY_PRESETS` says what each one shows, and "Timer + stage name ONLY"
+// is a claim about what is NOT there. A preset that quietly rendered the full
+// board would satisfy every positive assertion.
+//
+// 1280x720 throughout — a projector or a laptop on HDMI, which is what a
+// boutique studio actually plugs in, and where `tvFont` sizes are smallest.
+test.describe("the Room TV's layout presets, rendered and read", () => {
+  const STAGES = [
+    { id:"s1", type:"warmup",   name:"Warm-Up",        dur:300, exercises:[{n:"World's Greatest Stretch",s:"",r:"5 min",rest:""}], tracks:[] },
+    { id:"s2", type:"strength", name:"Strength Block", dur:900, exercises:[{n:"Conventional Deadlift",s:"5",r:"5",rest:"3m"}], tracks:[] },
+    { id:"s3", type:"circuit",  name:"Circuit Blast",  dur:600, exercises:[{n:"Kettlebell Swing",s:"3",r:"15",rest:"30s"}], tracks:[] },
+  ];
+
+  async function seedAndOpenCoach(page, prefs = null) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("./");
+    await page.evaluate(({ st, pf }) => {
+      localStorage.clear();
+      sessionStorage.setItem("jungle_pin_ok", "1");
+      localStorage.setItem("jungle_draft_class", JSON.stringify({ name: "Sunrise Strength", classChoice: null, stages: st }));
+      if (pf) localStorage.setItem("jungle_disp_prefs", JSON.stringify(pf));
+    }, { st: STAGES, pf: prefs });
+    await page.reload();
+    await page.getByRole("button", { name: "Class Runner", exact: true }).click();
+    await page.getByRole("button", { name: /^Room TV$/ }).first().click();
+    await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+    await page.getByRole("button", { name: "Coach", exact: true }).click();
+  }
+
+  // The settings panel is one click past the board, behind a gear that only
+  // appears once the transient mode overlay is awake.
+  async function choosePreset(page, label) {
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Display settings" }).first().click();
+    await expect(page.getByText(/Layout Preset/i)).toBeVisible();
+    await page.getByRole("button", { name: new RegExp(`^${label}`) }).first().click();
+    // Dismiss the panel by clicking the board itself. ⚠️ NOT Escape — Escape is
+    // wired to `onBack` and leaves display mode entirely, which is how the first
+    // draft of this suite ended up reading the Class Runner instead of the wall.
+    await page.mouse.click(8, 360);
+  }
+
+  // What each preset PROMISES, from `DISPLAY_PRESETS`, and what that promise
+  // rules out. `absent` is the half that makes these real assertions: every
+  // `present` string is also on the Full board, so a preset that silently fell
+  // back to Full would pass a positive-only test.
+  const PRESETS = [
+    { label: "Full",       claim: "Timer + exercises",
+      present: [/Warm-Up/, /remaining/, /DOING NOW/i, /World's Greatest Stretch/], absent: [] },
+    { label: "Minimal",    claim: "Timer + stage name only",
+      present: [/Warm-Up/, /remaining/, /Next: ?/], absent: [/DOING NOW/i, /World's Greatest Stretch/] },
+    { label: "Timer Only", claim: "Giant full-screen clock",
+      present: [/Warm-Up/i, /Stage 1 of 3/], absent: [/DOING NOW/i, /World's Greatest Stretch/, /remaining/] },
+  ];
+
+  for (const p of PRESETS) {
+    test(`"${p.label}" renders ${p.claim}`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await seedAndOpenCoach(page);
+      if (p.label !== "Full") await choosePreset(page, p.label);
+
+      // POSITIVE CONTROL: a board rendered at all, and it is showing the SEEDED
+      // class rather than an empty runner. An empty screen satisfies every
+      // `absent` assertion below trivially — this repo has shipped that mistake
+      // in this very file's sibling sweep.
+      const text = await page.locator("body").innerText();
+      expect(text.length, `${p.label}: the board rendered nothing`).toBeGreaterThan(40);
+      await expect(page.getByText(/^5:00$/).first(),
+        `${p.label}: no clock on the board`).toBeVisible();
+
+      for (const re of p.present) expect(text, `${p.label} must show ${re}`).toMatch(re);
+      for (const re of p.absent)  expect(text, `${p.label} claims "${p.claim}" but shows ${re}`).not.toMatch(re);
+
+      expectNoConsoleErrors(errors);
+    });
+
+    test(`"${p.label}" keeps the room's type above the wall floor`, async ({ page }) => {
+      // The 11px floor is asserted for the three MODES above, all in the default
+      // preset. Two of the three presets had never been measured at all.
+      await seedAndOpenCoach(page);
+      if (p.label !== "Full") await choosePreset(page, p.label);
+
+      const r = await page.evaluate(() => {
+        const small = []; let measured = 0;
+        document.querySelectorAll("body *").forEach((el) => {
+          if (el.children.length) return;
+          const t = (el.textContent || "").trim(); if (!t) return;
+          const rc = el.getBoundingClientRect(); if (rc.width < 2 || rc.height < 2) return;
+          measured++;
+          const fs = parseFloat(getComputedStyle(el).fontSize);
+          if (fs < 11) small.push(`${fs}px "${t.slice(0, 30)}"`);
+        });
+        return { measured, small };
+      });
+      expect(r.measured, `${p.label}: only ${r.measured} text nodes — the board is empty`).toBeGreaterThan(5);
+      expect(r.small, `${p.label} renders text below 11px on a 720p wall:\n${r.small.join("\n")}`).toEqual([]);
+    });
+  }
+
+  test("the clock is the biggest thing on the wall in every preset", async ({ page }) => {
+    // P2's 10-foot rule, per preset rather than per mode. The floor is what
+    // matters — a member reads the clock from 8m — and "Timer Only" is allowed
+    // to be far above it, because a giant full-screen clock is its whole
+    // description. The assertion is therefore a FLOOR plus "it is the clock",
+    // not a band that would fail the preset for doing its job.
+    for (const label of ["Full", "Minimal", "Timer Only"]) {
+      await seedAndOpenCoach(page);
+      if (label !== "Full") await choosePreset(page, label);
+      const biggest = await page.evaluate(() => {
+        const vh = window.innerHeight;
+        let best = null;
+        document.querySelectorAll("*").forEach((el) => {
+          const own = [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+          if (!own) return;
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height || r.bottom <= 0 || r.top >= vh) return;
+          const fp = parseFloat(getComputedStyle(el).fontSize);
+          if (!best || fp > best.fp) best = { fp, text: el.textContent.trim().slice(0, 20) };
+        });
+        return best ? { ...best, frac: best.fp / vh } : null;
+      });
+      expect(biggest, `${label}: nothing measurable on the board`).not.toBeNull();
+      expect(biggest.text, `${label}: the biggest element is "${biggest.text}", not the clock`).toMatch(/^\d+:\d\d$/);
+      expect(biggest.frac, `${label}: clock is ${(biggest.frac * 100).toFixed(1)}% of a 720p wall`).toBeGreaterThan(0.08);
+    }
+  });
+
+  test("the preset a coach chose is the one the wall comes back in", async ({ page }) => {
+    await seedAndOpenCoach(page);
+    await choosePreset(page, "Timer Only");
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("jungle_disp_prefs") || "{}").preset),
+      { message: "choosing a preset must persist it" }).toBe("timer");
+
+    // 🔴 And the board RESTORES it. The stored value was already asserted by
+    // `mountWrites.spec.js`; what nothing checked is that the wall comes back in
+    // that layout after the TV is power-cycled, which is the only reason to
+    // store it.
+    await seedAndOpenCoach(page, { preset: "timer", fontScale: "m" });
+    const text = await page.locator("body").innerText();
+    expect(text).toMatch(/Stage 1 of 3/);
+    expect(text, "restored board is not Timer Only").not.toMatch(/DOING NOW/i);
+  });
+
+  test("a preset that no longer exists falls back to Full, not to a blank wall", async ({ page }) => {
+    // 🔴 `preset:"music"` is what a display that ran before the music quarantine
+    // has in localStorage. That preset is filtered out of `DISPLAY_PRESETS`, and
+    // restoring it blindly would put an empty album-art panel on the gym's TV.
+    // The guard has been in the code since the quarantine with a comment saying
+    // so and no test behind it.
+    await seedAndOpenCoach(page, { preset: "music", fontScale: "m" });
+    const text = await page.locator("body").innerText();
+    expect(text, "a retired preset must not survive into the room").toMatch(/DOING NOW/i);
+    expect(text).toMatch(/World's Greatest Stretch/);
+    // The settings panel must not offer it either.
+    await page.mouse.move(640, 400);
+    await page.getByRole("button", { name: "Display settings" }).first().click();
+    await expect(page.getByText(/Layout Preset/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Music Focus/ })).toHaveCount(0);
+  });
+});
+
+// ─── Two labels in one corner, on the board the room reads ──────────────────
+//
+// 🔴 WHAT SHIPPED, and it was the DEFAULT state at the start of every class.
+// The Floor board's station card laid out its `START` / `FINISH` badge in a
+// `space-between` header row — so the badge sits at the card's right edge — and
+// then drew `FOLLOW` at `position:absolute; top:10px; right:10px`. The same
+// corner. Station 1 is the START station AND the live station at the moment a
+// class begins, so the studio floor board opened every class with "START" and
+// "FOLLOW" printed on top of each other, both in the stage's own colour, 45px
+// of overlap wide. Neither was readable. The finish station collides the same
+// way on the last stage.
+//
+// Found by driving the Floor board at 1280x720 and looking at the screenshot;
+// no assertion in this repo could have noticed, because every one of those
+// strings was present and visible — they were simply in the same place.
+//
+// ⚠️ THE SWEEP IS DELIBERATELY NARROW: leaf elements that directly contain
+// text, overlapping by more than 2px on BOTH axes. Measured across all three
+// boards before it was written — Plan and Coach were already clean and Floor had
+// exactly this one hit — so it is a rule with a known-zero baseline rather than
+// a threshold picked to fit.
+test.describe("no two labels on a room board are drawn in the same place", () => {
+  const OVERLAP_SCAN = () => {
+    const leaves = [];
+    document.querySelectorAll("body *").forEach((el) => {
+      if (el.children.length) return;
+      const t = (el.textContent || "").trim(); if (!t) return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === "hidden" || cs.opacity === "0") return;
+      leaves.push({ t: t.slice(0, 30), x: r.x, y: r.y, w: r.width, h: r.height });
+    });
+    const hits = [];
+    for (let i = 0; i < leaves.length; i++) {
+      for (let j = i + 1; j < leaves.length; j++) {
+        const a = leaves[i], b = leaves[j];
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (ox > 2 && oy > 2) hits.push(`"${a.t}" x "${b.t}" (${Math.round(ox)}x${Math.round(oy)}px)`);
+      }
+    }
+    return { count: leaves.length, hits };
+  };
+
+  for (const mode of ["Plan", "Floor", "Coach"]) {
+    test(`${mode}, at the moment a class starts`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await freshApp(page);
+      await gotoDisplay(page, mode);
+      // ⚠️ WAIT FOR THE MODE PILL TO GO. `gotoDisplay` ends one click after
+      // waking the transient Plan/Floor/Coach control, and that pill floats OVER
+      // the stage-journey strip by design — it is a control the coach summons
+      // with a mouse move and it hides itself after 4.5s. Scanning while it is
+      // up measures the overlay, not the board, and reports five hits on a Coach
+      // board that is fine. What a member looks at is the board after it goes.
+      await expect(page.getByRole("button", { name: /^Plan$/ })).toBeHidden({ timeout: 8_000 });
+
+      const r = await page.evaluate(OVERLAP_SCAN);
+      // POSITIVE CONTROL: an empty board has no overlapping labels either. The
+      // three boards render 21-22 text leaves on the seeded class.
+      expect(r.count, `${mode}: only ${r.count} text nodes — the board is empty`).toBeGreaterThan(10);
+      await expect(page.getByText(MODES[mode].ready()).first()).toBeVisible();
+
+      expect(r.hits, `${mode} draws two labels in the same place:\n${r.hits.join("\n")}`).toEqual([]);
+      expectNoConsoleErrors(errors);
+    });
+  }
+
+  test("the Floor board's live station shows FOLLOW and START side by side", async ({ page }) => {
+    // The specific claim, stated as itself so a future refactor that merely
+    // hides one of them cannot pass the overlap sweep above.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await freshApp(page);
+    await gotoDisplay(page, "Floor");
+    await expect(page.getByRole("button", { name: /^Plan$/ })).toBeHidden({ timeout: 8_000 });
+
+    const follow = page.getByText("FOLLOW", { exact: true }).first();
+    const start  = page.getByText("START", { exact: true }).first();
+    await expect(follow).toBeVisible();
+    await expect(start).toBeVisible();
+
+    const f = await follow.boundingBox();
+    const s = await start.boundingBox();
+    expect(f).not.toBeNull();
+    expect(s).not.toBeNull();
+    const ox = Math.min(f.x + f.width, s.x + s.width) - Math.max(f.x, s.x);
+    expect(ox, `FOLLOW and START overlap by ${Math.round(ox)}px`).toBeLessThanOrEqual(0);
+  });
+});

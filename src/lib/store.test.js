@@ -24,7 +24,7 @@ import {
   _clearLedgerIfSettled, syncErrorSignature,
   restorePersonaCascade, getPersonas, getPersonaPlans, getPersonaMovements,
   addCoach, updateCoach, removeCoach, getCoaches, saveCoaches, coachAccountFor,
-  connect,
+  connect, syncEnabled,
 } from "./store.js";
 import { analyzeAttendanceCsv, describeImport } from "./csvImport.js";
 import { atRiskMembers } from "./retention.js";
@@ -1506,5 +1506,31 @@ describe("🔴 class_instances.coach_id names the person who TEACHES, not the on
     expect(coachAccountFor("Mara")).toBeNull();
     expect(coachAccountFor("")).toBeNull();
     expect(coachAccountFor(null)).toBeNull();
+  });
+});
+
+
+// ─── syncEnabled — the question a screen must ask before it promises a server ─
+//
+// 🔴 THE CHECK-IN PANEL DID NOT ASK IT. Its footer said "Saved on this device,
+// synced when online" with nothing behind the claim, and on the shipped build
+// there is no server at all: `supabaseEnabled` is
+// `!!(VITE_SUPABASE_URL && ANON_KEY)`, A12/A17 are outstanding, and the deployed
+// bundle carries no credentials. A gym was told its attendance was backed up
+// while the only copy in existence was one phone.
+describe("syncEnabled", () => {
+  it("🔴 is false in a build with no credentials, which is the shipped build", () => {
+    // The unit runner has no Supabase env either, so this is the same answer the
+    // deployed bundle gives — and it is why the panel's promise was false.
+    expect(syncEnabled()).toBe(false);
+  });
+
+  it("stays false after connect() when there is no client to connect to", () => {
+    // ⚠️ The reason a screen must not key on `supabaseEnabled` alone: a gym id
+    // is also required, and either half missing means nothing leaves the device.
+    connect({ gymId: "g1", userId: "u1" });
+    expect(syncEnabled()).toBe(false);
+    connect({});
+    expect(syncEnabled()).toBe(false);
   });
 });

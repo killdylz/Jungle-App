@@ -1140,6 +1140,15 @@ That one array is BOTH the week grid's rows AND the Add-class form's `<select>` 
 across `src/`: there is no other writer of a schedule rule's `slot` anywhere, so those five times
 are the complete set of times a class can be scheduled at.
 
+> ⚠️ **Corrected in session 37.** There was a SECOND copy of the same five times, at
+> `src/screens/CoachCoverPanel.jsx:40`, and it is the one a coach's **availability** is stated
+> against — `coachesFreeAt` compares a rule's slot to it. The two agreed only because two
+> literals in two files happened to match. Session 37 consolidated them into `RULE_SLOTS` in
+> `lib/scheduleInstances.js`, with a test that fails if either screen grows its own copy again.
+> **Nothing about the decision below changes; the work below got smaller and safer.** Had A20
+> been built to the scope originally written here, it would have shipped a Schedule that accepts
+> 07:00 and an availability grid that still had no 07:00 column.
+
 Most boutique timetables run 07:00, 07:30, 17:30 and 19:00. An owner setting up their real week
 finds three of their classes have nowhere to go.
 
@@ -1147,9 +1156,10 @@ finds three of their classes have nowhere to go.
 
 The grid derives its rows from the distinct times the gym's own rules actually use, seeded with
 the current five for an empty gym; the form's `<select>` becomes a `type="time"` input. It touches
-`CalendarScreen`, `lib/scheduleInstances.js` and `lib/coachRoster.js` (availability answers in
-`day`/`slot` pairs). **No migration** — `class_rules.slot` is already free text, so this is client
-work only.
+`CalendarScreen`, `lib/scheduleInstances.js` (where `RULE_SLOTS` now lives — the seed for an empty
+gym), `CoachCoverPanel` (the availability grid's columns) and `lib/coachRoster.js` (availability
+answers in `day`/`slot` pairs). **No migration** — `class_rules.slot` is already free text, so this
+is client work only.
 
 ### The decision underneath it, which is yours
 

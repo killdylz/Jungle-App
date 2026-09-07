@@ -196,7 +196,19 @@ export function CheckInPanel({ sessionName, classType, durationMin, coachName, c
         </div>
 
         <div style={{padding:"12px 18px",borderTop:`1px solid var(--border)`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px"}}>
-          <span style={{fontSize:"11px",color:"var(--muted)"}}>Saved on this device, synced when online</span>
+          {/* 🔴 THIS USED TO PROMISE SYNC UNCONDITIONALLY. "Saved on this
+              device, synced when online" is true only where there is a server
+              to sync to, and on the shipped build there is not — A12/A17 are
+              outstanding, so the deployed bundle has no Supabase credentials at
+              all. A gym was told its attendance was backed up while the only
+              copy in existence was one phone, which is the one claim in this
+              product it costs the most to get wrong. Every other local-only
+              surface here says so out loud. */}
+          <span data-testid="checkin-storage-note" style={{fontSize:"11px",color:"var(--muted)"}}>
+            {store.syncEnabled()
+              ? "Saved on this device, synced when online"
+              : "Saved on this device only — no server is connected, so check-ins are not backed up"}
+          </span>
           <Btn variant="ghost" onClick={()=>onClose(ci.id)} style={{padding:"7px 14px"}}>Done</Btn>
         </div>
       </div>

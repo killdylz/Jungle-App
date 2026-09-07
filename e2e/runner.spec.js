@@ -297,3 +297,116 @@ test.describe("the runner announces itself", () => {
     expect(box.height).toBeLessThanOrEqual(2);
   });
 });
+
+// ─── The class a coach just taught, and whether it was written down ─────────
+//
+// 🔴 TWO DEFECTS, ONE CONSEQUENCE. The Dashboard tells a new gym, in its
+// three-step onboarding, that "the class history — and every number on this
+// page — writes itself from here". Measured in the running app, it did not.
+//
+//   1. A CLASS RUN TO ITS NATURAL END RECORDED NOTHING. `saveSession` read
+//      `liveState` out of a closure, and the timer effect that calls it depends
+//      on `[view, liveState.playing, player]` — so the copy the interval
+//      captured is the one from the render where playback STARTED: idx 0,
+//      elapsed 0. `totalElapsed` was 0 and the ten-second floor threw the class
+//      away. Driven on a two-stage class: the board said "Stage 2 of 2", the
+//      transport had stopped, and `jungle_history` was `[]`.
+//   2. LEAVING BY THE SIDEBAR RECORDED NOTHING. The Back arrow and Escape both
+//      call `saveSession`; `navTo` — which already knew it was leaving the
+//      runner, since it pauses the stereo and stops the clock — did not. Nor did
+//      the Plan board's Esc, which exits to the Builder exactly as Back does.
+//
+// What hid both is that the Back arrow works. A coach who backs out gets their
+// session; a coach who lets the class end, or who taps "Dashboard", does not.
+//
+// ⚠️ These assert the STORED array, not a rendered list. The record feeds the
+// Dashboard's Recent Sessions, ProfileModal's streak and the server insert in
+// `appendSessionHistory`, and a screen that renders correctly over a missing
+// row is a different defect wearing the same face.
+test.describe("the session a coach taught is written down", () => {
+  const history = (page) => page.evaluate(() =>
+    JSON.parse(localStorage.getItem("jungle_history") || "[]"));
+
+  // Two stages of seven seconds. Long enough to clear `saveSession`'s
+  // ten-second floor (14s), short enough to run to its natural end in a test.
+  const TINY = [
+    { id:"a", type:"warmup",   name:"A", dur:7, exercises:[{n:"X",r:"1"}], tracks:[] },
+    { id:"b", type:"cooldown", name:"B", dur:7, exercises:[{n:"Y",r:"1"}], tracks:[] },
+  ];
+
+  async function openRunner(page, stages = null) {
+    await freshApp(page);
+    if (stages) {
+      await page.evaluate((st) => localStorage.setItem("jungle_draft_class",
+        JSON.stringify({ name: "Tiny", classChoice: null, stages: st })), stages);
+      await page.reload();
+    }
+    await nav(page, "Class Runner");
+    await expect(page.getByRole("button", { name: "Start class" })).toBeVisible();
+  }
+
+  // Advance one whole stage so `totalElapsed` clears the floor without waiting.
+  async function advanceOneStage(page) {
+    await page.getByRole("button", { name: "Next stage" }).click();
+    await expect(page.locator("body")).toContainText("Stage 2 of 5");
+  }
+
+  test("🔴 a class run to its natural end is recorded", async ({ page }) => {
+    await openRunner(page, TINY);
+    expect(await history(page), "precondition: nothing recorded yet").toEqual([]);
+
+    await page.getByRole("button", { name: "Start class" }).click();
+    // POSITIVE CONTROL: the class really finished — last stage, and the
+    // transport is back to "Start class" because the runner stopped itself.
+    await expect(page.getByRole("button", { name: "Start class" })).toBeVisible({ timeout: 25_000 });
+    await expect(page.locator("body")).toContainText("Stage 2 of 2");
+
+    const h = await history(page);
+    expect(h, "the class ended and nothing was written").toHaveLength(1);
+    expect(h[0].name).toBe("Tiny");
+    expect(h[0].stages).toBe(2);
+  });
+
+  test("🔴 finishing and then closing writes ONE record, not two", async ({ page }) => {
+    // The other side of the same fix: `saveSession` now has two live callers, so
+    // without a per-run guard a finished class would be counted twice — in
+    // Recent Sessions, in the streak, and on the server.
+    await openRunner(page, TINY);
+    await page.getByRole("button", { name: "Start class" }).click();
+    await expect(page.getByRole("button", { name: "Start class" })).toBeVisible({ timeout: 25_000 });
+    expect(await history(page)).toHaveLength(1);
+
+    await page.getByRole("button", { name: "Back to class plan" }).click();
+    expect(await history(page), "the finished class was recorded twice").toHaveLength(1);
+  });
+
+  for (const [name, leave] of [
+    ["the Back arrow", async (page) => page.getByRole("button", { name: "Back to class plan" }).click()],
+    ["Escape",         async (page) => page.keyboard.press("Escape")],
+    ["the sidebar",    async (page) => nav(page, "Dashboard")],
+    ["the Room TV plan board", async (page) => {
+      await page.getByRole("button", { name: /Room TV/ }).click();
+      await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+      await page.keyboard.press("Escape");
+    }],
+  ]) {
+    test(`leaving the runner by ${name} records the class`, async ({ page }) => {
+      await openRunner(page);
+      await advanceOneStage(page);
+      expect(await history(page), "precondition: nothing recorded yet").toEqual([]);
+
+      await leave(page);
+      await expect.poll(() => history(page).then(h => h.length),
+        { message: `leaving by ${name} lost the class` }).toBe(1);
+    });
+  }
+
+  test("opening the runner and leaving again records nothing", async ({ page }) => {
+    // The ten-second floor still holds. A coach who looks at the plan and walks
+    // away has not taught a class, and a row saying they did is worse than none.
+    await openRunner(page);
+    await nav(page, "Dashboard");
+    await page.waitForTimeout(300);
+    expect(await history(page)).toEqual([]);
+  });
+});

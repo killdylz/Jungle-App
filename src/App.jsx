@@ -39,7 +39,7 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec, stageDurNote } from "./lib/format.js";
 // Only the field names and the currency table — the arithmetic that reads them
 // lives on the Members screen, which is the only surface that shows the figure.
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
@@ -1469,9 +1469,27 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   </div>
                   <div>
                     <label htmlFor="stage-duration" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
-                    <input id="stage-duration" type="number" min="1" max="60" value={Math.round(stage.dur/60)}
+                    {/* ⚠ NO `max`, deliberately. It said 60, it enforced nothing
+                        (999 still stores 16h 39m) and 60 was the wrong number
+                        anyway — a 75-minute open-gym block is real. `min="1"`
+                        stays because `stageDurSec` genuinely enforces it. What
+                        replaces the fiction is a warning the coach can act on
+                        and a value the store keeps either way. See
+                        `stageDurNote` in lib/format.js. */}
+                    <input id="stage-duration" type="number" min="1" value={Math.round(stage.dur/60)}
+                      aria-describedby={stageDurNote(stage.dur) ? "stage-duration-note" : undefined}
                       onChange={e=>onStageChange(selIdx,{...stage,dur:stageDurSec(e.target.value)})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                    {/* `role="status"` and not `alert`: a long stage is legal and
+                        the coach may have meant it, so this is a remark, not an
+                        error. Announced politely, and never stealing focus from
+                        the box it is about. */}
+                    {stageDurNote(stage.dur) && (
+                      <p id="stage-duration-note" role="status" data-testid="stage-duration-note"
+                        style={{fontSize:"11px",color:"var(--muted)",lineHeight:1.5,marginTop:"6px"}}>
+                        {stageDurNote(stage.dur)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="stage-type" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>
@@ -2209,7 +2227,16 @@ export default function App() {
   const navGroups = ["Main","Insights","Tools","Studio"].filter(g => allNavItems.some(n => n.group===g));
   const navTo = key => {
     if ((view==="live"||view==="room-tv") && player) player.pause().catch(()=>{});
-    if (view==="live"||view==="room-tv") setLiveState(ls=>({...ls,playing:false}));
+    // 🔴 SAVE THE SESSION ON THE WAY OUT. This already knew it was leaving the
+    // runner — it pauses the stereo and stops the clock — and did not record the
+    // class. The Back arrow and Escape both call `saveSession`; the sidebar and
+    // the bottom bar did not, so a coach who finished a class and tapped
+    // "Dashboard" lost it. Measured: same class, same two stages, Back arrow
+    // wrote one row into `jungle_history` and the sidebar wrote none.
+    // `saveSession` is idempotent per run (see `savedRunRef`) and refuses
+    // anything under ten seconds, so merely opening the runner and leaving still
+    // records nothing.
+    if (view==="live"||view==="room-tv") { setLiveState(ls=>({...ls,playing:false})); saveSession(); }
     setView(key); setShowNav(false);
   };
 
@@ -2370,7 +2397,17 @@ export default function App() {
             {FLAGS.music&&runnerTab==="dj"&&(token?<MusicHubScreen onBack={()=>setRunnerTab("run")} stages={stages} nowPlaying={nowPlaying} liveState={liveState} player={player}/>:<ConnectSpotifyPrompt onConnect={redirectToSpotify} onBack={()=>setRunnerTab("run")}/>)}
           </div>
         )}
-        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>setView(roomTvMode==="studio"?"builder":"live")} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
+        {view==="room-tv"&&<RoomTV mode={roomTvMode} onMode={setRoomTvMode} onExit={()=>{
+          // The third way out of the runner, and the third one that did not
+          // record the class. Coach and Floor exit back to "live" — still inside
+          // the runner, so there is nothing to save yet. The Plan board exits to
+          // the BUILDER, which leaves the runner exactly as the Back arrow does,
+          // and the Back arrow has always saved. `saveSession` is idempotent per
+          // run and floors at ten seconds, so opening the plan overview from the
+          // Builder and pressing Esc still records nothing.
+          if (roomTvMode==="studio") { setLiveState(ls=>({...ls,playing:false})); saveSession(); setView("builder"); }
+          else setView("live");
+        }} stages={stages} sessionName={sessionName} liveState={liveState} nowPlaying={nowPlaying} player={player} deviceId={deviceId} onPlayPause={()=>setLiveState(ls=>({...ls,playing:!ls.playing}))} canFollow={!!roomGymId} follow={followRoom} onFollow={setFollowRoom} remote={remoteRoom}/>}
         {/* The mock branch is kept, and stays folded away while the flag is false
             — its layout is what this screen was built against. What changed is
             no longer a branch at all. It was `FLAGS.mockAnalytics ? <AnalyticsScreen/>

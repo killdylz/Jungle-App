@@ -22,6 +22,33 @@
 //   · a field written only through `saveX(wholeList)` after being built inline.
 // Every one of those is a reason to read the report rather than trust a count.
 
+// ─── The three that are supposed to be here ─────────────────────────────────
+//
+// 🔴 WHY THIS LIVES IN THE SCRIPT NOW. Every run printed three `🔴 NO WRITER`
+// lines and all three were documented, reasoned, permanent seams — the triage
+// was written up in `docs/STORE-WRITER-AUDIT.md` and then had to be re-read from
+// scratch every time somebody ran the script. A red flag that is always wrong is
+// not a weak signal; it is an ignored one, and after enough runs "the same three
+// as always" becomes indistinguishable from a regression hiding among them.
+//
+// ⚠️ ADDING A LINE HERE IS A PRODUCT DECISION, NOT A WAY TO GREEN THE BUILD.
+// Each entry asserts "nothing in `src/` can set this field, and that is correct".
+// It is not a suppression: the audit still FINDS these keys — they stay in
+// `writers[].missing` — and `storeWriters.test.js` uses exactly that to prove the
+// sweep still works. The allowlist IS the positive control, so an entry that
+// stops being found fails the suite rather than quietly shrinking the check.
+//
+// Exported so the script and the test cannot disagree about what is accepted;
+// the prose is the whole point and belongs where the flag is raised.
+export const KNOWN_SEAMS = {
+  "addCoach.id":
+    "caller-supplies-id seam (`extra.id || newId()`), used by tests and seeds. No gym types a coach's internal id.",
+  "addMember.externalRef":
+    "API symmetry with updateMember. The FIELD has a writer — the CSV import builds the member row directly and `applyAttendanceImport` stores it — just not through this function.",
+  "updateMember.externalRef":
+    "Deliberately not hand-editable. The roster form edits the four things a human knows (name, email, joined, status); an external reference is another system's key, and a hand-typed one that does not match that system is a confident wrong answer where a blank was merely empty. Its writer is the CSV import.",
+};
+
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import * as espree from "espree";
@@ -237,16 +264,33 @@ for (const f of appFiles) {
 // ── 3. The result, as data ──────────────────────────────────────────────────
 // Exported so `storeWriters.test.js` can assert the rule without re-parsing, and
 // so the CLI below and the test can never disagree about what was found.
+const auditWriters = [...writers].map(([name, info]) => ({
+  name, line: info.line,
+  accepts: [...info.keys].sort(),
+  passed: [...(passed.get(name) || new Set())].sort(),
+  // ⚠️ `missing` stays the RAW answer, allowlist and all. Filtering it here
+  // would take the allowlist's own positive control away from the test that
+  // depends on still finding these three.
+  missing: [...info.keys].filter(k => !(passed.get(name) || new Set()).has(k)).sort(),
+  opaque: opaque.get(name) || [],
+  sites: sites.get(name) || [],
+})).sort((a, b) => a.name.localeCompare(b.name));
+
+// Only writers whose keys are actually resolvable count as "found missing" — an
+// opaque call site hides the keys rather than proving them absent, and the CLI
+// has always reported those separately.
+const allMissing = auditWriters.flatMap(w => (w.opaque.length ? [] : w.missing.map(k => `${w.name}.${k}`)));
+
 export const audit = {
-  writers: [...writers].map(([name, info]) => ({
-    name, line: info.line,
-    accepts: [...info.keys].sort(),
-    passed: [...(passed.get(name) || new Set())].sort(),
-    missing: [...info.keys].filter(k => !(passed.get(name) || new Set()).has(k)).sort(),
-    opaque: opaque.get(name) || [],
-    sites: sites.get(name) || [],
-  })).sort((a, b) => a.name.localeCompare(b.name)),
+  writers: auditWriters,
   wholeObjWriters,
+  // The three the allowlist explains, and the ones it does not. `unexplained` is
+  // the number that should be zero; `staleSeams` is the other direction — an
+  // allowlist entry the sweep no longer finds, which means either the field grew
+  // a control (delete the line) or the parser stopped seeing it (fix the script).
+  explained: allMissing.filter(k => k in KNOWN_SEAMS).sort(),
+  unexplained: allMissing.filter(k => !(k in KNOWN_SEAMS)).sort(),
+  staleSeams: Object.keys(KNOWN_SEAMS).filter(k => !allMissing.includes(k)).sort(),
 };
 
 // ── 4. The report ───────────────────────────────────────────────────────────
@@ -267,8 +311,13 @@ for (const [name, info] of [...writers].sort()) {
   console.log(`   accepts: ${[...info.keys].sort().join(", ") || "(none found)"}`);
   console.log(`   passed : ${[...got].sort().join(", ") || "(nothing)"}`);
   if (missing.length && !isOpaque) {
-    unwritten += missing.length;
-    console.log(`   🔴 NO WRITER: ${missing.join(", ")}`);
+    // Split, so the line that means "look at this" is only ever printed for
+    // something worth looking at.
+    const seams = missing.filter(k => `${name}.${k}` in KNOWN_SEAMS);
+    const real  = missing.filter(k => !(`${name}.${k}` in KNOWN_SEAMS));
+    unwritten += real.length;
+    if (real.length) console.log(`   🔴 NO WRITER: ${real.join(", ")}`);
+    for (const k of seams) console.log(`   🟢 no writer, and that is the decision: ${k} — ${KNOWN_SEAMS[`${name}.${k}`]}`);
   } else if (missing.length && isOpaque) {
     console.log(`   ⚠️  unresolved (spread hides them): ${missing.join(", ")}`);
   }
@@ -279,5 +328,17 @@ for (const [name, info] of [...writers].sort()) {
 console.log("── not checked: writers that take a whole object or list, not a patch ──");
 for (const w of wholeObjWriters) console.log(`   ${w.name}(${w.params.join(", ")})  store.js:${w.line}`);
 
-console.log(`\n${writers.size} patch-shaped writers · ${unwritten} accepted keys with no writer`);
+// An allowlist that has drifted is worth as much noise as an unwritten field,
+// and in the opposite direction: it means the sweep has stopped finding
+// something it is supposed to find.
+if (audit.staleSeams.length) {
+  console.log(`\n⚠️  ALLOWLIST IS STALE — the sweep no longer finds: ${audit.staleSeams.join(", ")}`);
+  console.log("   Either the field grew a control (delete the line) or the parser stopped seeing it (fix the script).");
+}
+
+console.log(`\n${writers.size} patch-shaped writers · ${audit.explained.length} accepted keys with no writer and explained · ${unwritten} unexplained`);
+// A non-zero exit so a clean run can be asserted by something other than a human
+// reading the last line. `storeWriters.test.js` is still the gate; this is for
+// the times the script is run on its own, which is how D6 was found.
+if (unwritten || audit.staleSeams.length) process.exitCode = 1;
 }

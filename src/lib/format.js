@@ -128,13 +128,56 @@ export const fmtSessionDay = (dateStr, now = Date.now()) => {
 // stores 59,940 seconds and that IS absurd — but a 75-minute open-gym block is
 // a real thing a studio programmes, and silently rewriting a coach's 75 to 60
 // would destroy input rather than reject it. Refusing the impossible and
-// allowing the merely long is the honest split. The control's `max="60"` is now
-// the only part still making a claim it does not enforce; whether it should warn
-// or be raised is a product call, and it is written up in session 36's handoff
-// as a proposal rather than decided here.
+// allowing the merely long is the honest split. The control's `max="60"` was
+// the only part still making a claim it does not enforce; session 37 removed the
+// attribute and replaced it with `stageDurNote` below, which warns without
+// destroying the value.
 export const MIN_STAGE_SEC = 60;
 export function stageDurSec(raw) {
   const mins = parseInt(raw, 10);
   if (!Number.isFinite(mins)) return MIN_STAGE_SEC;   // "", "abc", "1e5"'s tail
   return Math.max(MIN_STAGE_SEC, mins * 60);
+}
+
+// ── The other half of that same box: a stage nobody could have meant ─────────
+//
+// Session 36 floored the input and deliberately left `max="60"` on the control.
+// It is now the only attribute on that field still making a claim nothing
+// enforces, and two separate things are wrong with it, pulling opposite ways:
+//
+//   • as a LIMIT it is fiction. `max` is a validation hint, exactly as `min`
+//     was, so `999` still reaches `stage.dur` and stores 16h 39m;
+//   • as a FACT it is wrong. A 75-minute open-gym block is a real thing a
+//     studio programmes, so 60 would be the WRONG ceiling even if the browser
+//     did enforce it — which is why `stageDurSec` has no ceiling at all.
+//
+// Clamping is not the fix. Rewriting a coach's 75 to 60 destroys input rather
+// than rejecting it, and that is the argument `stageDurSec`'s own comment
+// already makes about the floor. So the false attribute goes and the box says
+// out loud what it stored instead: a warning is honest at every value, and a
+// ceiling that lies is not honest at any of them.
+//
+// 🔴 THE THRESHOLD IS TWO HOURS, AND ONE HOUR IS THE WRONG ANSWER. Written
+// first at 60 minutes, which fired on 75 — the exact value session 36 refused to
+// clamp because a studio really does programme a 75-minute open-gym block.
+// A warning that cries on a legitimate value is the same defect as a ceiling
+// that lies, one screen later: it teaches a coach to ignore the line. Caught by
+// the e2e that asserts 75 is left unremarked, not by reading the code.
+//
+// Two hours clears every real block (60, 75, a 90-minute workshop) and still
+// catches every slip that matters, because the slip is an extra digit: 30→300,
+// 45→450, 60→600, and the 999 that started this. Nothing between 90 minutes and
+// two hours is worth interrupting someone over.
+//
+// Returns "" — not null, not a boolean — so a caller renders it or does not,
+// with no second rule about which falsy value means "say nothing".
+export const LONG_STAGE_SEC = 2 * 60 * 60;
+export function stageDurNote(durSec) {
+  const s = Number(durSec);
+  if (!Number.isFinite(s) || s <= LONG_STAGE_SEC) return "";
+  const mins = Math.round(s / 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const len = m ? `${h}h ${m}m` : `${h}h`;
+  return `That is ${len} for one stage — longer than most whole classes. Saved as you typed it; change it if it was a slip.`;
 }

@@ -287,3 +287,52 @@ test.describe("a gym's own class type reaches the attendance record", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ─── The one claim in this product it costs most to get wrong ────────────────
+//
+// 🔴 WHAT SHIPPED. The check-in dialog's footer read "Saved on this device,
+// synced when online" — unconditionally, with nothing behind it. On the deployed
+// build there is no server to sync to: `supabaseEnabled` is
+// `!!(VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY)`, A12 and A17 are
+// outstanding, and the GitHub Pages bundle carries no credentials at all. So a
+// gym checking members in was told its attendance was backed up while the only
+// copy in existence was one phone.
+//
+// It is the outlier, not the house style. The 1:1 screen's "Where this lives"
+// card, the persona delete confirmation and the plan-sync banner all say plainly
+// when data is local-only; this one panel promised the opposite on the same
+// build, about the record a gym would least like to lose.
+test.describe("the check-in panel does not promise a server it does not have", () => {
+  test("says the check-in is local only, because on this build it is", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedRoster(page);
+    await openCheckIn(page);
+
+    // POSITIVE CONTROL: the dialog really rendered its roster. An empty dialog
+    // makes any claim about its footer vacuous.
+    await expect(memberRows(page)).not.toHaveCount(0);
+
+    const note = page.getByTestId("checkin-storage-note");
+    await expect(note).toBeVisible();
+    const text = await note.innerText();
+    expect(text, "this build has no Supabase, so nothing can sync").not.toMatch(/synced when online/i);
+    expect(text).toMatch(/not backed up/i);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("and the check-in it took really is only on this device", async ({ page }) => {
+    // The other half: the claim is not merely worded honestly, it is TRUE. The
+    // row lands in localStorage and there is no server behind it.
+    await seedRoster(page);
+    await openCheckIn(page);
+    await memberRows(page).first().click();
+
+    await expect.poll(() => stored(page, "jungle_attendance").then(a => (a || []).length))
+      .toBeGreaterThan(0);
+    // The two facts side by side in one run: the row exists ONLY in
+    // localStorage, and the panel says so. Asserted together because the defect
+    // was the gap between them, not either one alone.
+    await expect(page.getByTestId("checkin-storage-note")).toContainText(/not backed up/i);
+  });
+});

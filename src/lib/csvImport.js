@@ -191,6 +191,34 @@ export function analyzeAttendanceCsv(text, members = [], opts = {}) {
   const grid = parseCsv(text);
   if (!grid.length) return fail("That file has no rows.");
   const headers = grid[0];
+
+  // 🔴 THE WRONG DIAGNOSIS, CAUGHT BEFORE IT IS GIVEN. A `;`-separated export —
+  // which is what Excel writes in most of Europe, and what several booking
+  // systems produce — parses as ONE column called `Name;Date`, so the next check
+  // says "No member column found" and lists a dozen header names to try. Every
+  // word of that is precise and none of it is the problem: renaming the columns
+  // cannot fix a separator. Driven on `Name;Date\nSarah Chen;03/04/2026`.
+  //
+  // The comment above `COLUMNS` says header aliasing "removes the single most
+  // common reason an import fails on the first try". This is the other one, and
+  // it deserves the same treatment: say what is wrong and what to do about it.
+  //
+  // ⚠️ NOT A PARSER CHANGE. Accepting semicolons would be a different decision —
+  // `parseCsv` is deliberately small, and a delimiter it guessed wrong would
+  // split names containing the guess. This only replaces a wrong sentence with a
+  // right one; the file is still refused.
+  const ODD_DELIMS = [[";", "semicolons"], ["\t", "tabs"], ["|", "pipes"]];
+  if (headers.length === 1) {
+    for (const [ch, word] of ODD_DELIMS) {
+      // Two non-empty parts, so a single-column file whose one header merely
+      // contains the character is not accused of anything.
+      if (headers[0].split(ch).filter(x => x.trim()).length >= 2) {
+        return fail(`This file separates its columns with ${word}, not commas, so Jungle reads it as one column. `
+          + `Re-export it as a comma-separated CSV — in Excel that is File → Save As → "CSV UTF-8 (Comma delimited)".`);
+      }
+    }
+  }
+
   const map = mapHeaders(headers);
   if (map.member == null && map.email == null)
     return fail(`No member column found. Expected one of: ${COLUMNS.member.concat(COLUMNS.email).join(", ")}. Found: ${headers.join(", ")}`);

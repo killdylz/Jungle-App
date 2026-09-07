@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr, fmtSessionDay, stageDurSec } from "./format.js";
+import { fmt, fmtSec, fmtOccurrence, fmtAgo, localDateStr, fmtSessionDay, stageDurSec, stageDurNote, LONG_STAGE_SEC } from "./format.js";
 
 // These three became a SHARED module in I6 stage 5. Before that they were
 // module-scope consts in App.jsx, read by the Builder and the Runner alike, and
@@ -246,6 +246,70 @@ describe("stageDurSec", () => {
       const out = stageDurSec(v);
       expect(Number.isFinite(out), `${v} -> ${out}`).toBe(true);
       expect(out).toBeGreaterThanOrEqual(60);
+    }
+  });
+});
+
+// ─── stageDurNote — what replaced the ceiling that was not a ceiling ─────────
+//
+// `max="60"` was the last attribute on that control still claiming something
+// nothing enforced. It is gone; this is what says the thing instead. The rule it
+// encodes: WARN at a length nobody meant, KEEP the value either way, and never
+// warn about a 75-minute open-gym block that a studio really does programme.
+describe("stageDurNote", () => {
+  it("says nothing about a stage a class could actually contain", () => {
+    for (const mins of [1, 5, 20, 45, 60]) {
+      expect(stageDurNote(mins * 60), `${mins} min`).toBe("");
+    }
+  });
+
+  it("🔴 says nothing about 75, which is the value the no-clamp decision protects", () => {
+    // Written first at a one-hour threshold, which fired here. A warning that
+    // cries on a legitimate open-gym block is the same defect as a ceiling that
+    // lies, one screen later — it teaches a coach to ignore the line.
+    expect(stageDurNote(75 * 60)).toBe("");
+    expect(stageDurNote(90 * 60)).toBe("");
+  });
+
+  it("says nothing at exactly the threshold, and something one minute past it", () => {
+    expect(stageDurNote(LONG_STAGE_SEC)).toBe("");
+    expect(stageDurNote(LONG_STAGE_SEC + 60)).not.toBe("");
+  });
+
+  it("catches the slip that actually happens — one extra digit", () => {
+    // 30→300, 45→450, 60→600. Every one of these is above two hours; every
+    // plausible value they came from is below it.
+    for (const mins of [300, 450, 600, 999]) {
+      expect(stageDurNote(mins * 60), `${mins} min`).not.toBe("");
+    }
+  });
+
+  it("names the real length, because that is the fact a typo cannot survive", () => {
+    // 999 minutes is what `max=\"60\"` let through and what nothing on screen
+    // ever mentioned. 59,940 seconds is 16h 39m.
+    const note = stageDurNote(59940);
+    expect(note).toContain("16h 39m");
+    // …and it does NOT claim the value was changed, because it was not.
+    expect(note).toMatch(/Saved as you typed it/);
+  });
+
+  it("drops the minutes when there are none, rather than saying '3h 0m'", () => {
+    expect(stageDurNote(3 * 60 * 60)).toContain("3h");
+    expect(stageDurNote(3 * 60 * 60)).not.toContain("3h 0m");
+  });
+
+  it("warns about a long stage without ever proposing to shorten it", () => {
+    // 🔴 The one thing this must not become. Clamping destroys a coach's 75;
+    // `stageDurSec` keeps it and this sentence is the whole of the response.
+    expect(stageDurSec("999")).toBe(59940);
+    expect(stageDurNote(stageDurSec("999"))).not.toMatch(/60 minutes|shortened|reduced to/i);
+  });
+
+  it("stays quiet on the garbage `stageDurSec` already floors", () => {
+    // A negative or unparseable value never reaches the store — it becomes 60 —
+    // so a note about it would be a warning about a state that cannot exist.
+    for (const junk of [null, undefined, NaN, "abc", {}, [], -300, 0]) {
+      expect(stageDurNote(junk), String(junk)).toBe("");
     }
   });
 });

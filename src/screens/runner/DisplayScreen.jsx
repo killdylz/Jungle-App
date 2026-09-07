@@ -41,7 +41,15 @@ export function TempoGuide({ bpm, color, reduce, hasTracks }) {
         {!reduce && <span style={{position:"absolute",inset:"6px",borderRadius:"50%",border:`3px solid ${color}`,animation:`jg-tempo ${beat}s ease-out infinite`}}/>}
         <div style={{width:"92px",height:"92px",borderRadius:"50%",background:`color-mix(in srgb, ${color} 16%, transparent)`,border:`2px solid ${color}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <span style={{fontSize:"32px",fontWeight:"900",color:"var(--text)",lineHeight:"1",fontVariantNumeric:"var(--num)"}}>{bpm}</span>
-          <span style={{fontSize:tvFont(11),fontWeight:"700",color:"var(--muted)",letterSpacing:"1px"}}>BPM</span>  /* a sub-component: no scaleMult in scope, and the absolute floor is what this needed */
+          {/* `tvFont(11)` with no scaleMult: this is a sub-component and the
+              coach's font-scale is not in scope here, so the absolute floor is
+              what this needed.
+              🔴 THIS USED TO BE A BARE `/* … *\/` AFTER THE SPAN, which in JSX
+              children is TEXT, not a comment — so the sentence you are reading
+              rendered on the Room TV, in body copy, straight through the BPM
+              ring, in front of paying members. Braces are what make a comment a
+              comment inside JSX. */}
+          <span style={{fontSize:tvFont(11),fontWeight:"700",color:"var(--muted)",letterSpacing:"1px"}}>BPM</span>
         </div>
       </div>
       <div>

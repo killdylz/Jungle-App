@@ -113,7 +113,20 @@ export function ptClientRows(clients = [], members = [], parqRecords = [], sessi
 // within those, whoever is on today's page first, then whoever has no session
 // booked (the ones needing a decision), then alphabetically so the list does not
 // reshuffle between renders.
+//
+// 🔴 ORPHANS SORT LAST, BEFORE ANY OTHER KEY, and this is the one place the
+// order is not about the coach's day at all. An orphan is a 1:1 record whose
+// member row was erased under PDPA; the only thing a coach can now do with it is
+// erase it too (D7). Its `status` is whatever the record last said — usually
+// `active` — and its `name` is `""`, which `localeCompare` sorts BEFORE every
+// real name. So the one row that is not a client the coach is training sat at
+// the top of a screen a trainer opens daily, above everyone they actually see.
+//
+// Ranking it last rather than by status is deliberate: a dead row's stored
+// status is not information about the coach's week, and sorting on it would put
+// an orphan above a paused client the coach may well restart.
 function _byCoachDay(a, b) {
+  if (!!a.orphan !== !!b.orphan) return a.orphan ? 1 : -1;
   const rank = s => PT_CLIENT_STATUSES.indexOf(s);
   if (rank(a.status) !== rank(b.status)) return rank(a.status) - rank(b.status);
   if (!!a.nextPlanned !== !!b.nextPlanned) return a.nextPlanned ? -1 : 1;

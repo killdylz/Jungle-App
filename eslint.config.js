@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // See the note in eslint.crash.config.js: `.e2e-scratch/` is gitignored
+  // scratch for looking at screens and can never reach the shipped artifact.
+  globalIgnores(['dist', '.e2e-scratch']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

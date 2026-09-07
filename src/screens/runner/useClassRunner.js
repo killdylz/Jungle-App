@@ -53,27 +53,66 @@ export function useClassRunner({
   const [remoteRoom, setRemoteRoom] = useState(null);      // last broadcast { stages, sessionName, liveState, nowPlaying, at }
   const [liveState,  setLiveState]  = useState({ playing:false, idx:0, elapsed:0 });
 
+  // The refs the timer already needed, hoisted above `saveSession` because it
+  // needs them for the same reason. See the block on `saveSession` below.
+  const stagesRef = useRef(stages);
+  stagesRef.current = stages;
+  const liveStateRef = useRef(liveState);
+  liveStateRef.current = liveState;
+  const sessionHistoryRef = useRef(sessionHistory);
+  sessionHistoryRef.current = sessionHistory;
+
+  // One record per run. `saveSession` is called from TWO places — the timer,
+  // when the last stage ends, and every exit out of the runner — so without
+  // this a class that finishes AND is then closed writes itself twice. Reset
+  // whenever a run is back at its start, which is what a restart looks like.
+  const savedRunRef = useRef(false);
+  useEffect(() => {
+    if (liveState.idx === 0 && liveState.elapsed === 0) savedRunRef.current = false;
+  }, [liveState.idx, liveState.elapsed]);
+
+  // ── Writing the session a coach just taught ───────────────────────────────
+  //
+  // 🔴 THIS READ ITS OWN STATE OUT OF A STALE CLOSURE, AND THE CONSEQUENCE WAS
+  // THAT A CLASS RUN TO ITS NATURAL END RECORDED NOTHING. The timer effect below
+  // depends on `[view, liveState.playing, player]`, so the `saveSession` its
+  // interval captured is the one from the render where playback STARTED —
+  // `{ idx: 0, elapsed: 0 }`. `totalElapsed` was therefore 0, the ten-second
+  // floor rejected it, and the class the coach had just finished teaching was
+  // never written. Measured by driving a two-stage class to completion: the
+  // board said stage 2 of 2 and the transport had stopped, and
+  // `jungle_history` was `[]`.
+  //
+  // What hid it is that the OTHER caller works. Leaving through the Back arrow
+  // or Escape calls `saveSession` from a fresh render, with the real elapsed
+  // time — so a coach who backs out gets their session and a coach who lets the
+  // class end does not. The Dashboard tells a new gym "the class history — and
+  // every number on this page — writes itself from here".
+  //
+  // `sessionHistory` was stale by the same mechanism: a natural end would have
+  // prepended to whatever the list was when playback began, dropping anything
+  // written since.
   const saveSession = () => {
-    const totalElapsed = stages.slice(0, liveState.idx).reduce((a,s)=>a+s.dur,0) + liveState.elapsed;
+    if (savedRunRef.current) return;
+    const ls = liveStateRef.current;
+    const ss = stagesRef.current;
+    const totalElapsed = ss.slice(0, ls.idx).reduce((a,s)=>a+s.dur,0) + ls.elapsed;
     if (totalElapsed < 10) return;
     // 🔴 LOCAL calendar date (S31 §2.4). This was `toISOString().slice(0,10)`,
     // and `ProfileModal` DISPLAYS it — so a coach teaching at 7am in Singapore
     // saw yesterday's date against the session they had just finished. It must
     // move together with the streak reader in ProfileModal, which compares
     // against it: changing either alone breaks the count.
-    const record = { date:localDateStr(), name:sessionName, stages:stages.length,
-      durMin:Math.round(totalElapsed/60), ts:Date.now(), stageTypes:[...new Set(stages.map(s=>s.type))] };
-    const updated = [record, ...sessionHistory].slice(0,100);
+    const record = { date:localDateStr(), name:sessionName, stages:ss.length,
+      durMin:Math.round(totalElapsed/60), ts:Date.now(), stageTypes:[...new Set(ss.map(s=>s.type))] };
+    const updated = [record, ...sessionHistoryRef.current].slice(0,100);
+    savedRunRef.current = true;
     setSessionHistory(updated);
     store.saveHistory(updated);        // local: whole capped array
     store.appendSessionHistory(record); // server: immutable insert of this session
   };
 
   // ── Session timer ─────────────────────────────────────────────────────────
-  const stagesRef = useRef(stages);
-  stagesRef.current = stages;
-  const liveStateRef = useRef(liveState);
-  liveStateRef.current = liveState;
   const crossfadeRef = useRef(crossfade);
   crossfadeRef.current = crossfade;
   useEffect(() => {

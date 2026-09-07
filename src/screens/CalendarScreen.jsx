@@ -1,10 +1,13 @@
 // ─── Planning & schedule (AUDIT-FINDINGS §3.1, decomposition stage 2) ────────
 // A leaf screen: one prop (`onBack`), and everything else it needs it imports.
 //
-// Its constants (DAYS, SLOTS) are LOCAL to the component and came with it —
-// nothing else in the app referenced them, which is what made this a leaf
-// despite its size. `CAT_COLOR` was the third; it is gone, because being a leaf
-// is not a reason to keep a private copy of the gym's class-type catalogue.
+// Its constant DAYS is LOCAL to the component and came with it — nothing else in
+// the app references it, which is what made this a leaf despite its size.
+// `CAT_COLOR` was the second; it is gone, because being a leaf is not a reason
+// to keep a private copy of the gym's class-type catalogue. SLOTS was the third
+// and went the same way in session 37, for the same reason: `CoachCoverPanel`'s
+// availability grid had grown its own copy of the same five times, and the two
+// literals agreed only by luck.
 //
 // The mock analytics below (suggested slots, trainer load, "AI tips") are gated
 // behind `FLAGS.mockAnalytics`, which is false: they evaluate to empty arrays
@@ -20,7 +23,7 @@ import { ArrowLeft, X, Pencil } from "lucide-react";
 import { FLAGS } from "../config/flags.js";
 import * as store from "../lib/store.js";
 import { occurrencesForWeek, diffOccurrences, describePublish, isStartable,
-         startOfWeek as mondayOf, weekKeyOf } from "../lib/scheduleInstances.js";
+         startOfWeek as mondayOf, weekKeyOf, RULE_SLOTS } from "../lib/scheduleInstances.js";
 import { applyCovers } from "../lib/coverRequests.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useToast } from "../ui/toast.jsx";
@@ -120,7 +123,11 @@ export function CalendarScreen({onBack, onStartClass}) {
   // at all. Kept in the same order as `RULE_DAYS`, which is what dates an
   // occurrence, so the two can never disagree about which column Sunday is.
   const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const SLOTS = ["06:00","09:00","12:00","18:00","19:30"];
+  // ⚠️ SHARED, not component-local. This file's header used to say DAYS and
+  // SLOTS were local because nothing else referenced them; that stopped being
+  // true when `CoachCoverPanel` grew an availability grid keyed to the same five
+  // times and declared its own copy. See `RULE_SLOTS` in scheduleInstances.js.
+  const SLOTS = RULE_SLOTS;
   // `SLOT_LABELS` (["Morning","Mid-Morning","Lunch","Evening","Late"]) lived here
   // unreferenced from decomposition stage 2 until session 18. The grid labels
   // slots by time, not by name, and nothing ever read it. Its own comment asked

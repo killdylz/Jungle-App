@@ -121,6 +121,24 @@ export function connect({ gymId, userId } = {}) {
 }
 function _synced() { return supabaseEnabled && !!supabase && !!_ctx.gymId; }
 
+// The same question a SCREEN has to ask before it promises anything about a
+// server, exported so it is asked once rather than re-derived per panel.
+//
+// 🔴 THE CHECK-IN PANEL PROMISED SYNC UNCONDITIONALLY. Its footer read "Saved on
+// this device, synced when online" with no reference to whether a server exists
+// — and on the shipped build none does: `supabaseEnabled` is
+// `!!(VITE_SUPABASE_URL && ANON_KEY)`, and A12/A17 are outstanding, so the
+// deployed bundle carries no credentials. A gym was told its attendance was
+// backed up while the only copy in existence was one phone. Every other
+// local-only surface in this product says so out loud — the 1:1 screen's "Where
+// this lives" card, the persona delete confirmation, the plan-sync banner —
+// which is what made this one an outlier rather than a house style.
+//
+// ⚠️ IT IS `_synced()`, NOT `supabaseEnabled`. A build WITH credentials that has
+// not resolved a gym syncs nothing either, and a screen that keyed on the env
+// var alone would make the same promise one layer further in.
+export function syncEnabled() { return _synced(); }
+
 // Sync-failure ledger. "A failure just leaves localStorage as the source of truth"
 // was only half true: a hydrate that is server-wins will then happily overwrite that
 // localStorage with a server list which never received the failed rows — silently

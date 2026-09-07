@@ -67,8 +67,25 @@ export async function publishSummary({
   // perfectly good publish reported as a server error.
   origin = typeof window !== "undefined" ? window.location.origin : "",
   basePath = import.meta.env.BASE_URL || "/",
+  // Injected for the same reason `origin` is, and because the two failures
+  // below have to be told apart. Defaults to `true` off-browser: a unit runner
+  // is not "offline", and guessing that it is would make every test hit the
+  // wrong branch.
+  online = typeof navigator !== "undefined" && "onLine" in navigator ? navigator.onLine : true,
 }) {
-  if (!supabaseEnabled || !supabase) return { ok: false, reason: "offline-only" };
+  // 🔴 THESE ARE TWO DIFFERENT FAILURES AND THEY USED TO SHARE ONE NAME.
+  // `supabaseEnabled` is `!!(VITE_SUPABASE_URL && VITE_SUPABASE_ANON_KEY)` —
+  // a BUILD-TIME constant. It has nothing whatever to do with connectivity.
+  // Returning `offline-only` for it made the dialog tell a coach on perfect wifi
+  // "Not available offline … Reconnect and try again", which is the shipped
+  // build's ONLY answer today (A12/A17 are outstanding, so the deployed bundle
+  // carries no credentials). A coach reconnects, retries, and gets it again
+  // forever. That is a confident wrong diagnosis, and it sends them to their
+  // router for a problem in the build.
+  if (!supabaseEnabled || !supabase) return { ok: false, reason: "not-configured" };
+  // The genuine one, which nothing used to reach: the studio HAS a server and
+  // the device cannot see it. The old copy is true here and only here.
+  if (!online) return { ok: false, reason: "offline" };
   if (!classInstanceId) return { ok: false, reason: "no-class" };
 
   const content = summaryContent({ stages, sessionName });

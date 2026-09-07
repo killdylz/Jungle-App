@@ -33,11 +33,16 @@ import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
 import { openCovers, deliveryTruth, reachableCoaches } from "../lib/coverRequests.js";
 import { absenceError, classesAffectedBy, absencesFor, isAwayOn } from "../lib/coachAbsence.js";
 import { coverApprovedPayload, pushCoverApproved } from "../lib/bookingAdapter.js";
-import { RULE_DAYS } from "../lib/scheduleInstances.js";
+import { RULE_DAYS, RULE_SLOTS } from "../lib/scheduleInstances.js";
 import { useToast } from "../ui/toast.jsx";
 import { localDateStr } from "../lib/format.js";
 
-const SLOTS = ["06:00", "09:00", "12:00", "18:00", "19:30"];
+// ⚠️ NOT A LOCAL COPY ANY MORE. A coach's availability is stated in `day`/`slot`
+// pairs against THIS list, and a schedule rule's `slot` is written against the
+// Schedule grid's — and `coachesFreeAt` compares the two. Two literals in two
+// files that must agree, with nothing enforcing it, is a defect waiting for
+// whichever one gets edited first. See `RULE_SLOTS` in scheduleInstances.js.
+const SLOTS = RULE_SLOTS;
 
 const card = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", padding: "18px" };
 const h    = { fontFamily: "var(--display)", fontSize: "14px", fontWeight: "700", color: "var(--text)" };
