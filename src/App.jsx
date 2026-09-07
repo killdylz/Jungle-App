@@ -39,7 +39,7 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec, stageDurNote } from "./lib/format.js";
 // Only the field names and the currency table — the arithmetic that reads them
 // lives on the Members screen, which is the only surface that shows the figure.
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
@@ -1469,9 +1469,27 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                   </div>
                   <div>
                     <label htmlFor="stage-duration" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Duration (minutes)</label>
-                    <input id="stage-duration" type="number" min="1" max="60" value={Math.round(stage.dur/60)}
+                    {/* ⚠ NO `max`, deliberately. It said 60, it enforced nothing
+                        (999 still stores 16h 39m) and 60 was the wrong number
+                        anyway — a 75-minute open-gym block is real. `min="1"`
+                        stays because `stageDurSec` genuinely enforces it. What
+                        replaces the fiction is a warning the coach can act on
+                        and a value the store keeps either way. See
+                        `stageDurNote` in lib/format.js. */}
+                    <input id="stage-duration" type="number" min="1" value={Math.round(stage.dur/60)}
+                      aria-describedby={stageDurNote(stage.dur) ? "stage-duration-note" : undefined}
                       onChange={e=>onStageChange(selIdx,{...stage,dur:stageDurSec(e.target.value)})}
                       style={{width:"100%",padding:"8px 12px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--text)",fontSize:"13px",marginTop:"5px",outline:"none",boxSizing:"border-box"}}/>
+                    {/* `role="status"` and not `alert`: a long stage is legal and
+                        the coach may have meant it, so this is a remark, not an
+                        error. Announced politely, and never stealing focus from
+                        the box it is about. */}
+                    {stageDurNote(stage.dur) && (
+                      <p id="stage-duration-note" role="status" data-testid="stage-duration-note"
+                        style={{fontSize:"11px",color:"var(--muted)",lineHeight:1.5,marginTop:"6px"}}>
+                        {stageDurNote(stage.dur)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="stage-type" style={{fontSize:"11px",color:"var(--muted)",fontWeight:"600",textTransform:"uppercase",letterSpacing:"0.5px"}}>Stage type</label>

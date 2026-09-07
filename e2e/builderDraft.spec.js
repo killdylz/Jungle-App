@@ -160,6 +160,53 @@ test.describe("a stage's duration cannot be zero, negative, or NaN", () => {
     // ⚠ In the SAME run as the refusals above, so "floors at 60" cannot quietly
     // become "clamps everything to the control's max".
     expect((await stored(page, "jungle_draft_class")).stages[0].dur).toBe(4500);
+    // 🔴 …and it is left UNREMARKED. Session 37's long-stage warning was
+    // written at a one-hour threshold and fired here, on the exact value session
+    // 36 refused to clamp. A warning that cries on a legitimate open-gym block
+    // is the same defect as a ceiling that lies, one screen later.
+    await expect(page.getByTestId("stage-duration-note")).toHaveCount(0);
+    // The room gets the real number, not a rounded-down one.
+    await nav(page, "Class Runner");
+    await page.getByRole("button", { name: /Room TV/ }).click();
+    await page.mouse.move(640, 400);
+    await expect(page.locator("body")).toContainText("Warm-Up · 75m");
+  });
+
+  // ── The ceiling that was not a ceiling ─────────────────────────────────────
+  //
+  // Session 36 floored this box and left `max="60"` on it deliberately, saying
+  // so out loud: clamping destroys a coach's legitimate 75. That left the
+  // attribute as the last thing on the control claiming something nothing
+  // enforced — 999 sailed past it and stored 16h 39m with nothing on screen
+  // saying a word. Session 37 removed the attribute and made the box speak.
+  test("999 minutes is kept, and the box says out loud that it is 16h 39m", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+
+    // POSITIVE CONTROL, twice over. The field exists, and BEFORE the long value
+    // it says nothing — without this the assertion below passes on a note that
+    // was always there, and on a Builder that never rendered.
+    await nav(page, "Class Builder");
+    await expect(page.locator("#stage-duration")).toBeVisible();
+    await expect(page.getByTestId("stage-duration-note")).toHaveCount(0);
+    expect((await stored(page, "jungle_draft_class")).stages[0].dur).toBe(300);
+
+    await setFirstStage(page, "999");
+
+    // The value is KEPT — the whole reason a clamp was refused.
+    expect((await stored(page, "jungle_draft_class")).stages[0].dur).toBe(59940);
+    // And the coach is told what they just stored, in the unit they can read.
+    await expect(page.getByTestId("stage-duration-note")).toContainText("16h 39m");
+    // The note is attached to the field, not merely near it.
+    await expect(page.locator("#stage-duration")).toHaveAttribute("aria-describedby", "stage-duration-note");
+
+    // 🔴 The attribute that made the claim is gone. Raising it to another
+    // unenforced number would have been the same defect with a bigger digit.
+    expect(await page.locator("#stage-duration").getAttribute("max")).toBeNull();
+    // …while `min`, which `stageDurSec` genuinely enforces, stays.
+    await expect(page.locator("#stage-duration")).toHaveAttribute("min", "1");
+
+    expectNoConsoleErrors(errors);
   });
 
   test("and the Room TV never shows a negative stage", async ({ page }) => {
