@@ -3,6 +3,13 @@
 **Session 31 §2.2.** Run it yourself: `node scripts/audit-store-writers.mjs`.
 The rule it generalises into is pinned by `src/lib/storeWriters.test.js`.
 
+> **Session 37:** the triage below is no longer only prose. The three permanent seams live in
+> `KNOWN_SEAMS` in `scripts/audit-store-writers.mjs`, each with its reason, and the script prints
+> them **green** instead of raising three `🔴 NO WRITER` lines every run. It exits non-zero on an
+> unexplained key or on an allowlist entry the sweep no longer finds. `storeWriters.test.js`
+> imports that same object rather than keeping a second copy — the allowlist is still the sweep's
+> positive control, and it is now also self-checking in the other direction.
+
 ## Why this exists
 
 Session 30 shipped `updateCoach` accepting five keys while the app passed exactly
@@ -86,6 +93,11 @@ control.** The known-unwritten keys must still be found, every writer must resol
 at least one accepted key, and at least four writers must be located. If the parser
 breaks or a path moves, those assertions fail rather than the suite going green on
 an audit that is reading nothing.
+
+Session 37 added the other direction, because an allowlist rots quietly: `audit.staleSeams`
+names any entry the sweep can no longer find, and both the script and the suite fail on it.
+An entry that stops matching means either the field grew a control — delete the line — or the
+parser stopped seeing it, which would turn the whole audit into a no-op that reports success.
 
 Verified end to end: run against `fa54c4a` (the commit before §2.1) the audit
 reports exactly `active, aliases, name, userId` on `updateCoach` — the known-good

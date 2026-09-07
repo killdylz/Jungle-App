@@ -464,8 +464,12 @@ not. **Assert the STORED object, not only what was rendered.**
 **A field nothing writes breaks nothing, so no test can notice it.** Session 30 shipped four
 `updateCoach` keys with no control and 1019 tests passed. `node scripts/audit-store-writers.mjs`
 is the check that finds the next one; `docs/STORE-WRITER-AUDIT.md` has the classified list and —
-more usefully — what the sweep **cannot** see. Its allowlist in `storeWriters.test.js` is its
-positive control: adding a line there is a product decision, not a way to green the build.
+more usefully — what the sweep **cannot** see. **A clean run means something now**: the three
+permanent seams live in `KNOWN_SEAMS` in the script itself, printed green with their reasons, so
+a 🔴 line is a finding rather than "the same three as always", and the script exits non-zero on an
+unexplained key OR a stale allowlist entry. That allowlist is also its positive control
+(`storeWriters.test.js` imports it): adding a line is a product decision, not a way to green the
+build, and an entry the sweep stops finding fails the suite rather than silently shrinking it.
 
 ⚠️ **A test that cannot be made to fail is not automatically deletable.** Session 33's DST test
 could not be killed by any single mutation (`Math.round` absorbs the missing hour that the

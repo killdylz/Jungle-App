@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { audit } from "../../scripts/audit-store-writers.mjs";
+import { audit, KNOWN_SEAMS } from "../../scripts/audit-store-writers.mjs";
 
 // ─── S31 §2.2 · every key a store writer accepts must have a way in ─────────
 //
@@ -17,14 +17,14 @@ import { audit } from "../../scripts/audit-store-writers.mjs";
 // could not see. A check that has to be argued with every time it runs gets
 // deleted, so this pins only what it can state exactly.
 
-// Keys that legitimately have no control, each with the reason it is not a
-// defect. 🔴 ADDING A LINE HERE IS A PRODUCT DECISION, not a way to green the
-// build: it says "nothing can set this and that is correct".
-const KNOWN_SEAMS = {
-  "addCoach.id":          "caller-supplies-id seam (`extra.id || newId()`), used by tests and seeds. No gym types a coach's internal id.",
-  "addMember.externalRef": "API symmetry with updateMember. The FIELD has a writer — the CSV import builds the member row directly and `applyAttendanceImport` stores it — just not through this function.",
-  "updateMember.externalRef": "Deliberately not hand-editable. The roster form edits the four things a human knows (name, email, joined, status); an external reference is another system's key, and a hand-typed one that does not match that system is a confident wrong answer where a blank was merely empty. Its writer is the CSV import.",
-};
+// 🔴 THE ALLOWLIST NOW LIVES IN THE SCRIPT, and is imported rather than copied.
+// It used to be duplicated here while `audit-store-writers.mjs` printed three
+// `🔴 NO WRITER` lines on every run for the same three keys — so the script's
+// loudest signal was permanently wrong, the reasoning lived in a third place
+// (`docs/STORE-WRITER-AUDIT.md`), and nothing stopped the two lists drifting.
+// One definition, in the file that raises the flag; this file asserts the rule
+// about it. See `KNOWN_SEAMS` in the script for what each entry means and for
+// why adding one is a product decision rather than a way to green the build.
 
 describe("store writers — no key without a way in", () => {
   // POSITIVE CONTROL, and it is the allowlist itself. A sweep that matched
@@ -45,14 +45,32 @@ describe("store writers — no key without a way in", () => {
   it("🔴 still finds the known unwritten keys — the sweep can fail", () => {
     const found = audit.writers.flatMap(w => w.missing.map(k => `${w.name}.${k}`));
     for (const seam of Object.keys(KNOWN_SEAMS)) expect(found).toContain(seam);
+    // Stated a second way, off the script's OWN split, so the CLI's green line
+    // and this suite cannot disagree about which keys were explained.
+    expect(audit.explained.sort()).toEqual(Object.keys(KNOWN_SEAMS).sort());
+  });
+
+  it("🔴 the allowlist has not gone stale — an entry the sweep stops finding", () => {
+    // The other direction, and the one an allowlist rots in: a line here that no
+    // longer matches anything means either the field grew a control (delete the
+    // line) or the parser stopped seeing it (fix the script). Both are silent
+    // otherwise, and the second one turns the whole audit into a no-op.
+    expect(audit.staleSeams).toEqual([]);
   });
 
   it("🔴 no store writer accepts a key nothing in src/ can pass", () => {
-    const offenders = audit.writers.flatMap(w =>
-      w.missing.map(k => `${w.name}.${k}`)).filter(k => !(k in KNOWN_SEAMS));
     // Named in the message, so a failure says WHICH field lost its control
     // rather than only that a count moved.
-    expect(offenders).toEqual([]);
+    expect(audit.unexplained).toEqual([]);
+  });
+
+  it("every allowlisted seam carries a reason, not just a name", () => {
+    // An allowlist of bare keys is a suppression list. The prose is what makes
+    // adding a line a decision somebody has to defend.
+    for (const [key, why] of Object.entries(KNOWN_SEAMS)) {
+      expect(key, `${key} must be writer.field`).toMatch(/^[A-Za-z]+\.[A-Za-z]+$/);
+      expect(String(why).length, `${key} has no reason`).toBeGreaterThan(40);
+    }
   });
 
   it("§2.1's fields stay reachable — the regression this was written for", () => {
