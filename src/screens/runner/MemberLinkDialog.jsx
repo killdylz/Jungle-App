@@ -55,8 +55,18 @@ export function MemberLinkDialog({ classInstanceId, stages, sessionName, onClose
     }
   };
 
+  // 🔴 "NOT CONFIGURED" AND "OFFLINE" ARE NOT THE SAME SENTENCE. They shared one
+  // for as long as this dialog has existed, and the one they shared was the
+  // wrong one: `supabaseEnabled` is a build-time constant, so a coach on perfect
+  // wifi — which is every coach on the shipped build today, because A12/A17 are
+  // outstanding and the deployed bundle carries no credentials — was told to
+  // reconnect and try again. They reconnect. They try again. They get it again.
+  // A remedy that cannot work is worse than saying there is nothing to do.
   const errorCopy = {
-    "offline-only": ["Not available offline", "Member links are created by your studio's server. Reconnect and try again."],
+    "not-configured": ["Member links aren't switched on yet",
+      "This needs setting up once on your studio's server. It isn't a connection problem, and nothing you do here will change it — ask whoever set Jungle up for you."],
+    offline: ["Not available offline",
+      "Member links are created by your studio's server. Reconnect and try again."],
     empty: ["Nothing to share yet", "Add some movements to the class before sending it out."],
   }[state.reason] || ["Couldn't create the link", state.detail || "Try again in a moment."];
 

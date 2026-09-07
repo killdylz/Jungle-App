@@ -87,11 +87,39 @@ describe("publishSummary", () => {
     expect(fake.calls).toHaveLength(0);
   });
 
-  it("says offline rather than failing obscurely when the studio has no server", async () => {
+  // 🔴 THE OLD NAME OF THIS TEST WAS THE DEFECT, WRITTEN DOWN. It said "says
+  // offline … when the studio has no server", and those are two different
+  // sentences: `supabaseEnabled` is `!!(VITE_SUPABASE_URL && ANON_KEY)`, a
+  // BUILD-TIME constant that never consults the network. The dialog therefore
+  // told a coach on perfect wifi to reconnect and try again — which is what the
+  // shipped build says to every coach today, because A12/A17 are outstanding and
+  // the deployed bundle carries no credentials.
+  it("says NOT CONFIGURED, not offline, when the build has no credentials", async () => {
     expect(await publishSummary({ classInstanceId: CI, stages, supabaseEnabled: false }))
-      .toEqual({ ok: false, reason: "offline-only" });
+      .toEqual({ ok: false, reason: "not-configured" });
     expect(await publishSummary({ classInstanceId: CI, stages, supabase: null, supabaseEnabled: true }))
-      .toEqual({ ok: false, reason: "offline-only" });
+      .toEqual({ ok: false, reason: "not-configured" });
+    // 🔴 And it says it even when the device IS offline: the build still has no
+    // credentials, so reconnecting fixes nothing and telling them to is a remedy
+    // that cannot work.
+    expect(await publishSummary({ classInstanceId: CI, stages, supabaseEnabled: false, online: false }))
+      .toEqual({ ok: false, reason: "not-configured" });
+  });
+
+  it("says offline only when the studio HAS a server and the device cannot see it", async () => {
+    const fake = fakeSupabase({ data: { token: "t", stored: true } });
+    expect(await publishSummary({
+      classInstanceId: CI, stages, supabase: fake.client, supabaseEnabled: true, online: false,
+    })).toEqual({ ok: false, reason: "offline" });
+    // …and it does not spend a round trip finding out.
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  it("assumes online off-browser, so a unit runner is never called disconnected", () => {
+    // `navigator` does not exist in the node runner. Defaulting `online` to
+    // false there would send every other test in this file down the offline
+    // branch and quietly stop testing what they name.
+    expect(typeof navigator === "undefined" || !("onLine" in navigator)).toBe(true);
   });
 
   it("reports a function error instead of handing back a broken link", async () => {
