@@ -100,6 +100,11 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
     () => ptClientRows(clients, members, parqs, sessions, { now: new Date() }),
     [clients, members, parqs, sessions]);
   const summary = ptRosterSummary(rows);
+  // Open on a screen with nothing to read off it, collapsed once there is a
+  // roster — see the card itself for why this is derived and not persisted.
+  // Evaluated once per mount, so a coach who adds their FIRST client keeps the
+  // full notice on screen for that visit, which is the visit it matters most.
+  const [livesOpen, setLivesOpen] = useState(() => rows.length === 0);
   const selected = rows.find(r => r.id === selectedId) || null;
   const pickable = availableMembers(members, clients);
   const draft = store.getDraftClass();
@@ -225,19 +230,77 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
           {/* ── What this data is, before anything is read off it ────────────
               An owner who thinks 1:1 sessions are in the studio numbers will draw
               wrong conclusions from a perfectly correct screen. Stated first,
-              once, rather than footnoted under each panel. */}
+              once, rather than footnoted under each panel.
+
+              🔴 IT COLLAPSES, AND IT IS NEVER DISMISSED. Measured at 390×844 with
+              two clients on the roster: this card was 211px of the fold and the
+              client list — the thing a coach opens this screen to read, every
+              session — started at y=635, so one row of it was visible. Session 35
+              moved the import panel below the Members roster and session 37 moved
+              this screen's add panel below this list for the same reason. This is
+              that argument one card further along.
+
+              What it deliberately does NOT grow is a "never show again". This is
+              the only sentence in the product telling a coach their 1:1 data
+              exists on one device, and `SYNC_DISMISS_KEY` in App.jsx says in its
+              own comment why a warning of that class gets no permanent dismiss.
+              So the COLLAPSED state still states both claims, in one line: it
+              costs a line instead of 211px and it is never off the screen. The
+              paragraphs are the detail, not the warning.
+
+              The default is derived from the roster rather than a new storage key
+              — `setupProgress.js`'s "once, without a key to migrate and get
+              wrong". A gym with no 1:1 clients has read nothing off this screen
+              yet, so the notice IS the screen; a gym with a roster came for the
+              list. */}
           <div style={{...card,background:"var(--bg)"}} data-testid="pt-local-only">
-            <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.2px",marginBottom:"8px"}}>Where this lives</div>
-            <p style={note}>
-              1:1 clients, health screens and 1:1 sessions are stored <strong>on this device only</strong>.
-              The server has no table for them yet, so they do not sync between devices and are not
-              in your backups. Your member roster is unaffected &mdash; it syncs as it always has.
-            </p>
-            <p style={{...note,marginTop:"6px"}}>
-              1:1 sessions are also <strong>not counted in studio analytics</strong>. A one-person session
-              is not a class, and folding it into the class numbers would move every figure on the
-              Analytics screen with nothing saying why.
-            </p>
+            {/* ⚠️ COLLAPSED, THE WHOLE CARD IS THE CONTROL, and `data-tap` is on
+                it only in that state. Two things forced that, both measured:
+
+                · A `data-tap` control must clear 44px, and the header row is 21px.
+                  Forcing it to 44 in the OPEN state grew the card by 23px, which
+                  pushed the empty screen's "Go to Members" from y=748 to y=771 —
+                  under the bottom nav at 390×844. The mobile sweep caught it.
+                · A 44px overlay laid over a 21px row is failure mode 2 in
+                  `index.css`: it reaches 12px past the row and steals from
+                  whatever is there.
+
+                Collapsed, the card is 86px of its own accord, so the thumb target
+                is free and the row a coach taps every day is the one that has it.
+                Open, the header is exactly the height the old static label was,
+                so this change costs the empty screen nothing. */}
+            <button onClick={()=>setLivesOpen(o=>!o)} aria-expanded={livesOpen} data-tap={livesOpen ? undefined : ""}
+              style={{width:"100%",background:"none",border:"none",padding:0,margin:0,
+                      cursor:"pointer",textAlign:"left",display:"block",color:"inherit",font:"inherit"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:livesOpen?"8px":0}}>
+                <div style={{fontSize:"10px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1.2px"}}>Where this lives</div>
+                <div style={{flex:1}}/>
+                <div style={{fontSize:"11px",fontWeight:"700",color:"var(--accent)"}}>{livesOpen ? "Hide" : "Read more"}</div>
+              </div>
+              {/* Both claims, still said, in the space of one line. A collapsed
+                  state that said only "Where this lives" would be the warning
+                  hidden behind a control, which is the thing this must not be. */}
+              {!livesOpen && (
+                <p style={{...note,marginTop:"4px"}} data-testid="pt-local-only-short">
+                  Stored <strong>on this device only</strong> &mdash; no sync, no backup &mdash; and
+                  <strong> not counted in studio analytics</strong>.
+                </p>
+              )}
+            </button>
+            {livesOpen && (
+              <>
+                <p style={note}>
+                  1:1 clients, health screens and 1:1 sessions are stored <strong>on this device only</strong>.
+                  The server has no table for them yet, so they do not sync between devices and are not
+                  in your backups. Your member roster is unaffected &mdash; it syncs as it always has.
+                </p>
+                <p style={{...note,marginTop:"6px"}}>
+                  1:1 sessions are also <strong>not counted in studio analytics</strong>. A one-person session
+                  is not a class, and folding it into the class numbers would move every figure on the
+                  Analytics screen with nothing saying why.
+                </p>
+              </>
+            )}
           </div>
 
           {/* ── The numbers, and the sentence that reads them ─────────────── */}
