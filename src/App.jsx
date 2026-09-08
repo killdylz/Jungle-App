@@ -882,10 +882,10 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   // `handleExportClass` into the saved .json, and it is what Smart Distribute
   // reads — so the two buttons beside each other disagreed about what class this
   // is. Setting it here is idempotent for the picker path, which already set it.
-  const applyTemplate = (classType, subType, { confirmed = false } = {}) => {
+  const applyTemplate = (classType, subType, { confirmed = false, revertTo = null } = {}) => {
     const newStages = buildStagesFromTemplate(classType, subType, LIB);
     if (!newStages) return;
-    if (!confirmed && anyCustom) { setTemplatePrompt({ classType, subType }); return; }
+    if (!confirmed && anyCustom) { setTemplatePrompt({ classType, subType, revertTo }); return; }
     // The PRIOR list and the prior label, together: restoring the stages under
     // the wrong type would be a different class, not the coach's one back.
     const before = { stages, classChoice };
@@ -937,14 +937,16 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     // the coach has already moved; leaving it on the old value while the confirm
     // bar underneath says "Apply Yoga template?" reads as the control having
     // failed. `applyTemplate` raises the prompt and sets it again on Apply.
+    const revertTo = classChoice;
     onClassChoiceChange({classType, subType:firstSub});
-    applyTemplate(classType, firstSub);
+    applyTemplate(classType, firstSub, { revertTo });
   };
 
   // Handle sub-type change from the selector
   const handleSubChange = (subType) => {
+    const revertTo = classChoice;
     onClassChoiceChange({classType:selectedClass, subType});
-    applyTemplate(selectedClass, subType);   // the guard is inside it now
+    applyTemplate(selectedClass, subType, { revertTo });   // the guard is inside it now
   };
   const runSmartBuild = async () => {
     const pr = (smartPrompt||"").trim(); if (!pr) return;
@@ -1225,7 +1227,21 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             {" "}This will replace your current stages.
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
-            <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Keep Current</button>
+            {/* 🔴 KEEP CURRENT HAS TO KEEP THE LABEL TOO. This used to be
+                `setTemplatePrompt(null)` and nothing else, and the two pickers set
+                `classChoice` BEFORE raising the prompt — so a coach who pressed
+                the button that says "keep my class" got their stages kept and
+                their class renamed. Driven: pick Yoga on a CrossFit draft, press
+                Keep Current, and the header reads "Yoga · target RPE 7–8" over
+                the CrossFit stages. It is the same defect as the dialog doors
+                above, arriving through the one control that exists to say no —
+                and it is the same field, so it reaches
+                `class_instances.class_type` the same way.
+
+                `revertTo` is what the picker overwrote. It is null for the
+                dialog doors, which never set it in the first place, so those
+                paths are already consistent and this is a no-op for them. */}
+              <button onClick={()=>{ if (templatePrompt.revertTo) onClassChoiceChange(templatePrompt.revertTo); setTemplatePrompt(null); }} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Keep Current</button>
             <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType,{confirmed:true})} style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--bg)",fontSize:"11px",fontWeight:"700"}}>Apply</button>
           </div>
         </div>

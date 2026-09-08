@@ -456,10 +456,20 @@ test.describe("Smart Distribute over a class the coach wrote", () => {
     expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([[]]);   // positive control
 
     await page.getByRole("button", { name: "Smart Distribute" }).click();
-    const toast = page.getByTestId("toast");
-    await expect(toast).toContainText("exercises across 1 stage");
-    await expect(toast).not.toContainText("Replaced");
-    await expect(toast.getByRole("button", { name: "Undo" })).toHaveCount(0);
+
+    // 🔴 ONE READ, NOT THREE ASSERTIONS, and the reason is this file's own
+    // subject. A toast with no undo lives 2500ms; `not.toContainText("Replaced")`
+    // and `toHaveCount(0)` on the Undo button, evaluated a moment later, are both
+    // satisfied by the toast having EXPIRED. That is CLAUDE.md's toHaveCount(0)
+    // trap in its "already gone" form, and it would go green on exactly the
+    // version this test exists to catch. `innerText()` auto-waits for the element,
+    // so a toast that never rendered fails instead of passing quietly, and the
+    // three claims are read off one snapshot. The Undo button is a child of
+    // `[data-testid="toast"]`, so its label is in that text if it is there at all.
+    const said = await page.getByTestId("toast").innerText();
+    expect(said, "the toast did not report the fill").toContain("exercises across 1 stage");
+    expect(said).not.toContain("Replaced");
+    expect(said).not.toContain("Undo");
     expect(exOf(await stored(page, "jungle_draft_class"))[0].length).toBeGreaterThan(1);
     expectNoConsoleErrors(errors);
   });
@@ -584,10 +594,81 @@ test.describe("replacing the whole class from the Build dialog", () => {
     const after = await stored(page, "jungle_draft_class");
     expect(names(after)).toContain("Sun Salutation");
     expect(after.classChoice.classType).toBe("yoga");
-    // Nothing was lost, so nothing is offered back.
-    await expect(page.getByTestId("toast")).toContainText("loaded");
-    await expect(page.getByTestId("toast")).not.toContainText("replaced");
-    await expect(page.getByTestId("toast").getByRole("button", { name: "Undo" })).toHaveCount(0);
+    // Nothing was lost, so nothing is offered back. One read — see the note in
+    // "filling EMPTY stages" above for why three assertions here would pass on a
+    // toast that had simply gone.
+    const said = await page.getByTestId("toast").innerText();
+    expect(said, "the toast did not report the template load").toContain("loaded");
+    expect(said).not.toContain("replaced");
+    expect(said).not.toContain("Undo");
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── "Keep Current" is the one control that exists to say no ──────────────────
+//
+// 🔴 IT KEPT THE STAGES AND RENAMED THE CLASS. The two pickers set `classChoice`
+// BEFORE raising the confirm — deliberately, so the `<select>` the coach just
+// moved does not snap back while the bar underneath asks about it. But the
+// button was `setTemplatePrompt(null)` and nothing else, so pressing the one
+// control that means "do not touch my class" left the draft holding its own
+// stages under the new type's name.
+//
+// Driven on a CrossFit draft: pick Yoga, press Keep Current, and the Builder
+// header reads "Yoga · target RPE 7–8" above "MY OWN WARMUP". It is the same
+// field and the same route to the database as the Build-dialog finding above —
+// `classChoice` reaches `LiveScreen`, `ensureClassInstance` writes it to
+// `class_instances.class_type`, and `classTypeRetention.js` reads it there.
+test.describe("declining a template change", () => {
+  const AUTHORED = {
+    name: "Dylan’s Tuesday", classChoice: { classType: "crossfit", subType: "wod" },
+    stages: [{ id:"s1", type:"warmup", name:"Warm-Up", dur:300,
+               exercises:[{ n:"MY OWN WARMUP", s:"", r:"5 min", rest:"" }], tracks:[] }],
+  };
+
+  test("🔴 Keep Current keeps the class AND the class type", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), AUTHORED);
+    await page.reload();
+    await nav(page, "Class Builder");
+
+    // POSITIVE CONTROL: the authored draft loaded and the picker really moved.
+    expect((await stored(page, "jungle_draft_class")).classChoice.classType).toBe("crossfit");
+    await page.locator("select").first().selectOption("yoga");
+    await expect(page.getByText(/Apply .* template\?/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Keep Current" }).click();
+    await expect(page.getByText(/Apply .* template\?/)).toHaveCount(0);
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.stages[0].exercises[0].n).toBe("MY OWN WARMUP");   // the stages, obviously
+    // 🔴 The half that used to change anyway, and the half that reaches the
+    // gym's attendance history.
+    expect(after.classChoice.classType,
+      "Keep Current kept the stages and renamed the class").toBe("crossfit");
+    expect(after.classChoice.subType).toBe("wod");
+    // And the picker agrees with the store, so the coach is not looking at a
+    // control that disagrees with what it controls.
+    expect(await page.locator("select").first().inputValue()).toBe("crossfit");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("Apply still applies — declining is a choice, not a broken button", async ({ page }) => {
+    // The control. A "Keep Current" that reverted everything unconditionally, or
+    // a prompt that could no longer apply, would pass the test above.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), AUTHORED);
+    await page.reload();
+    await nav(page, "Class Builder");
+
+    await page.locator("select").first().selectOption("yoga");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.classChoice.classType).toBe("yoga");
+    expect((after.stages || []).map(s => s.name)).toContain("Sun Salutation");
     expectNoConsoleErrors(errors);
   });
 });
