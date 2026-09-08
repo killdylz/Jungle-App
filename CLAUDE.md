@@ -15,8 +15,8 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 583 e2e (48 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,523 lines**. StaffApp **332.74 / 360 kB — 27.3 kB
+Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 588 e2e (48 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,565 lines**. StaffApp **333.00 / 360 kB — 27.0 kB
 left.** PTScreens **39.31 / 41**, RetentionScreen **17.13 / 18**, index **203.06 / 215**. A new
 screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk
 has no ceiling at all.
@@ -429,9 +429,17 @@ not. **Assert the STORED object, not only what was rendered.**
 - **Destructive actions are CONFIRMED or UNDOABLE**, and the guard scales with what is destroyed.
   An undo holds the **prior list**, not the deleted row — position is part of what was lost.
   ⚠️ `e2e/destructive.spec.js` enumerates the ones somebody thought of, so "every destructive action,
-  reversed" has been true of the LIST and not of the product: session 38 found the Builder's stage
-  removal and **Smart Distribute** (which replaces every exercise in the class) both unguarded. When
-  you add a control that writes, add it to that file in the same commit.
+  reversed" has been true of the LIST and not of the product: session 38 found **four** unguarded in
+  one file — the Builder's stage removal, **Smart Distribute**, and both doors of the Build dialog.
+  When you add a control that writes, add it to that file in the same commit.
+- 🔴 **WHEN A GUARD HAS ONE CALLER THAT SKIPPED IT, COUNT THE CALLERS.** `applyTemplate` replaces a
+  whole class; the confirm lived in `handleClassChange` and **three** other callers walked past it,
+  one of them the only reachable "Build for me" path on the shipped build. Same shape as
+  `parqStatus`/`blocksLoad`: a gate that lives in one caller is one the next caller walks through, so
+  it belongs in the function they all pass through. ⚠️ And a replaced class must carry its LABEL with
+  it — `classChoice` was set by the guarded caller alone, so the dialog doors left a Yoga class
+  stored as `crossfit`, which `ensureClassInstance` writes to `class_instances.class_type` and
+  `classTypeRetention.js` then reads.
 - **A confident wrong number is worse than no number**, and a panel promising a feature that
   cannot arrive is worse than no panel.
 - **`isViewEnabled` maps some views to a MOCK flag**, so "the route exists and is in three nav
