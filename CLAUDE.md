@@ -15,9 +15,9 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 590 e2e (48 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,565 lines**. StaffApp **333.00 / 360 kB — 27.0 kB
-left.** PTScreens **39.31 / 41**, RetentionScreen **17.13 / 18**, index **203.06 / 215**. A new
+Green as of session 39: **`lint:crash` 0 · 1310 unit (46 files) · 615 e2e (53 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,646 lines**. StaffApp **333.81 / 360 kB — 26.2 kB
+left.** PTScreens **39.31 / 41**, RetentionScreen **17.22 / 18**, index **203.06 / 215**. A new
 screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk
 has no ceiling at all.
 
@@ -361,6 +361,13 @@ not. **Assert the STORED object, not only what was rendered.**
   matches nothing, and the test then fails on its selector rather than on the thing it tests.
 - ⚠️ **The "Exercise Library" nav entry opens a MODAL, not a screen.** It covers the sidebar and
   traps focus, so any loop visiting every screen must visit it **last**.
+- 🔴 **`LIB[key]?.label || key` LEAKS A STORAGE KEY the day the catalogue loses that entry**, which
+  "Reset to Defaults" in the Exercise Library does to every gym-authored class type while leaving the
+  schedule rules pointing at it. `rawValues.spec.js` exists for exactly this defect and could not
+  catch it: every fixture in it KEEPS the label, so the `|| key` half was never exercised. Display a
+  class type through `classTypeLabel` (`libraryStore.js`), never through the raw fallback — and note
+  the shape of the miss, because it generalises: **a sweep whose fixture cannot reach the failing
+  state is a sweep that will pass forever.**
 - 🔴 **A LEGIBILITY FLOOR MUST BE ABSOLUTE, NOT PROPORTIONAL.** `tvFont`'s floor was
   `scaled * 0.7` — 70% of the thing it was protecting, which shrinks the small end of the scale
   by exactly 30%. On a **1280×720** wall (a projector, or a laptop on HDMI) every room-facing
@@ -443,6 +450,15 @@ not. **Assert the STORED object, not only what was rendered.**
   reversed" has been true of the LIST and not of the product: session 38 found **four** unguarded in
   one file — the Builder's stage removal, **Smart Distribute**, and both doors of the Build dialog.
   When you add a control that writes, add it to that file in the same commit.
+  🔴 **`e2e/destructiveSweep.spec.js` (S39) is the instrument that finds the next one.** It presses
+  every control on every screen, one level down into what a press reveals, and fails a press that
+  destroyed something with no confirm and no undo. It found **four more** on its first run — every
+  whole-class replacement in App.jsx except `handleNewClass`. Its header states what it cannot see:
+  a SOFT delete (a scalar change is a write, not a loss), anything needing typing or a file, and
+  controls more than one level below a screen. ⚠️ It costs **~4m40s** of the e2e run.
+  `e2e/usedGym.js` is its fixture — a gym that has been used — and is meant to be shared: an empty
+  roster has no delete buttons, and the coach corpus in it is captured by pressing "Load sample
+  coach" rather than typed.
 - 🔴 **A CONTROL THAT DECLINES MUST UNDO WHAT ASKING COST.** The class picker sets `classChoice`
   before raising its confirm, so "Keep Current" — the button that means *do not touch my class* —
   kept the stages and left them renamed. Anything that mutates state in order to ASK has to hand the
