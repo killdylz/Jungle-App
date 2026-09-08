@@ -432,6 +432,10 @@ not. **Assert the STORED object, not only what was rendered.**
   reversed" has been true of the LIST and not of the product: session 38 found **four** unguarded in
   one file — the Builder's stage removal, **Smart Distribute**, and both doors of the Build dialog.
   When you add a control that writes, add it to that file in the same commit.
+- 🔴 **A CONTROL THAT DECLINES MUST UNDO WHAT ASKING COST.** The class picker sets `classChoice`
+  before raising its confirm, so "Keep Current" — the button that means *do not touch my class* —
+  kept the stages and left them renamed. Anything that mutates state in order to ASK has to hand the
+  decline path a way back; the prompt carries `revertTo` for exactly that.
 - 🔴 **WHEN A GUARD HAS ONE CALLER THAT SKIPPED IT, COUNT THE CALLERS.** `applyTemplate` replaces a
   whole class; the confirm lived in `handleClassChange` and **three** other callers walked past it,
   one of them the only reachable "Build for me" path on the shipped build. Same shape as

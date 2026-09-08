@@ -17,13 +17,13 @@ _Last updated: 2026-09-07 (session 38)_
 
 _2026-09-07. Branch `claude/session-38-two-boards-seams-tx19ce`, based on
 `claude/session-37-unexplored-surfaces-8pas4o` (both PR #15 and PR #16 were still open and
-unmerged, and `main` was still `7508de1`). 9 commits ahead of it._
+unmerged, and `main` was still `7508de1`). 10 commits ahead of it._
 
 Position confirmed by gate, not by log: `npm test` reported **1304 unit (46 files)** and
 `npx playwright test --list` **567 in 48 files** at the branch point, exactly as the brief said.
 
-**Everything in §3 of the brief landed. Then §4 ran and found five more things, four of which a
-gym would have felt.** The largest is that "Smart Distribute" deleted a coach's written class on
+**Everything in §3 of the brief landed. Then §4 ran and found six more things, five of which a
+gym would have felt.** Three of them were one defect wearing three faces. The largest is that "Smart Distribute" deleted a coach's written class on
 one click and reported it as a gain.
 
 ---
@@ -40,6 +40,7 @@ one click and reported it as a gain.
 | 6 | `58e3a1b` | **Smart Distribute is undoable, and says what it did.** |
 | 7 | `e1cb9c4` | **The Brand Studio stops selling a contrast ratio as an 8-metre read.** |
 | 8 | `72b7867` | **The Build dialog's two doors ask before replacing a class, and the stored class type follows the stages.** |
+| 9 | `24ee4d5` | **“Keep Current” keeps the class type as well as the class.** |
 
 Every one carries its mutation in its commit message: the source was broken, the test confirmed
 red, the change reverted with the inverse edit, and `grep -rn MUTATION src/ e2e/` is clean at
@@ -102,7 +103,7 @@ it there, so converting them to win 4K would cost a pixel at 720p on the board t
 Every base below 16 has the same problem. They are named in `KNOWN_LITERAL` in the sweep, checked in
 **both** directions — an entry that stops drifting fails too.
 
-### 1.4–1.8
+### 1.4–1.9
 
 Covered as findings in §4 below, which is where they were found.
 
@@ -249,7 +250,42 @@ next caller walks through.* `applyTemplate` also sets `classChoice` itself, whic
 the picker path and corrective for the other three, and the undo restores **both** — putting the
 stages back under the new label would be a different class, not the coach's one back.
 
-### 4.3 🔴 Removing a stage took its exercises with it, on one click, with no way back · FIXED (`6c45e41`)
+### 4.3 🔴 "Keep Current" kept the class and renamed it anyway · FIXED (`24ee4d5`)
+
+**What is wrong.** The third instance of §4.1/§4.2's defect, and the worst of them, because it
+arrives through the one control that exists to decline.
+
+Both pickers set `classChoice` **before** raising the "replace your stages?" bar — deliberately, so
+the `<select>` the coach just moved does not snap back while the bar underneath asks about it.
+`Keep Current` was `setTemplatePrompt(null)` and nothing else.
+
+**The evidence.** A CrossFit draft, driven:
+
+```
+pick "Yoga" → press "Keep Current"
+  stages   MY OWN WARMUP             kept
+  header   "Yoga · target RPE 7–8"   🔴
+  stored   classChoice.classType: "yoga"
+```
+
+**What it costs a gym.** The same route to the database as §4.2 — `classChoice` reaches
+`LiveScreen`, `ensureClassInstance` writes it to `class_instances.class_type`, and
+`classTypeRetention.js` reads it there. A coach who **declined** a class-type change would have had
+every class they ran afterwards attributed to the type they refused.
+
+**The fix.** The prompt carries `revertTo` — what the picker overwrote — and Keep Current puts it
+back. It is null for the two Build-dialog doors, which never set `classChoice`, so this is a no-op
+for them.
+
+⚠️ **And two of my own control tests were hardened in the same commit**, for a reason that belongs
+in this list rather than in a footnote. They asserted a toast across three separate calls:
+`toContainText` to prove it rendered, then `not.toContainText("Replaced")` and `toHaveCount(0)` on
+the Undo button. A toast with no undo lives 2500ms, so **both negatives are satisfied by the toast
+having expired** — CLAUDE.md's `toHaveCount(0)` trap in its "already gone" form, and it would have
+gone green on exactly the regression those tests exist to catch. One `innerText()` read now, three
+assertions on one snapshot.
+
+### 4.4 🔴 Removing a stage took its exercises with it, on one click, with no way back · FIXED (`6c45e41`)
 
 **What is wrong.** `handleRemoveStage` was one line:
 
@@ -273,7 +309,7 @@ stale comment helped: `const { toast } = useToast()` was annotated *"used by han
 this component's only destructive action"* — accurate when written, and it reads as permission not to
 look. Both corrected in place.
 
-### 4.4 🔴 The one sentence on the 1:1 screen that promised a backup was the false one · FIXED (`5fb7235`)
+### 4.5 🔴 The one sentence on the 1:1 screen that promised a backup was the false one · FIXED (`5fb7235`)
 
 **What is wrong.** The "Where this lives" card ended with *"Your member roster is unaffected — it
 syncs as it always has."* `saveMembers` writes localStorage and then returns before reaching
@@ -292,7 +328,7 @@ build with credentials that has not resolved a gym syncs nothing either.
 **The sweep this came from** (§4.2.1 of the brief): every sentence in the JSX claiming syncing,
 backups, sharing or another device, read against `_synced()`. The rest came back clean.
 
-### 4.5 🔴 The Brand Studio sold a contrast ratio as a wall you can read from eight metres · FIXED (`e1cb9c4`)
+### 4.6 🔴 The Brand Studio sold a contrast ratio as a wall you can read from eight metres · FIXED (`e1cb9c4`)
 
 **What is wrong.** The accessibility panel ticked green and said *"Member-visible text meets WCAG AA
 — legible at room-display size"*, with a note that passing *"keeps every branded member surface —
@@ -308,7 +344,7 @@ this exact sentence being too confident **once before** — until session 29 the
 wide and presented that as "member-visible text" while a nine-defect sweep passed through it. Same
 sentence, the other axis. **A sentence already caught over-claiming once is where to look second.**
 
-### 4.6 🟡 The Plan board's largest type is 2.4% of a wall the spec wants at 3% minimum
+### 4.7 🟡 The Plan board's largest type is 2.4% of a wall the spec wants at 3% minimum
 
 Measured, on the class that seeds `display.spec.js`, at two resolutions:
 
@@ -324,7 +360,7 @@ reads** — has nothing on it that reaches even the spec's **secondary** floor, 
 wall empty. This is §5.1 below rather than a defect taken here, because closing it has a measured
 cost.
 
-### 4.7 🟢 The near-misses — things I chased that were not defects
+### 4.8 🟢 The near-misses — things I chased that were not defects
 
 Recorded because the next session will look at the same places.
 
@@ -349,7 +385,7 @@ Recorded because the next session will look at the same places.
 - **`node scripts/audit-store-writers.mjs` exits 0** with `5 patch-shaped writers · 3 accepted keys
   with no writer and explained · 0 unexplained`. Its three permanent seams still resolve.
 
-### 4.8 🟢 The e2e flakes did not appear — and one lesson about how I ran the suite
+### 4.9 🟢 The e2e flakes did not appear — and one lesson about how I ran the suite
 
 **No flake of any kind, in any run, plus perhaps forty single-spec runs.** With session 36's six
 clean full runs and session 37's two, and this session's, the mount flake and the slow-render
@@ -701,7 +737,7 @@ which is the harder case to notice because it is the *normal* one.
 it. That gives it two live callers, so it also needed `savedRunRef` — one record per run — or a
 finished-then-closed class would be counted **twice**. Four mutations, each driven and reverted.
 
-### 4.3 🔴 The Room TV rendered a source comment, in body copy, in front of the room · FIXED (`1238149`)
+### 4.4 🔴 The Room TV rendered a source comment, in body copy, in front of the room · FIXED (`1238149`)
 
 **What is wrong.** `DisplayScreen.jsx` carried
 
@@ -726,7 +762,7 @@ node — with its own positive control, running the detector against the shape t
 against the correct `{/* */}` form before trusting it to report zero — and an e2e asserting the
 same of all three rendered room boards. **Swept the whole of `src/`: this was the only one.**
 
-### 4.4 🔴 Every class opened with START and FOLLOW printed on top of each other · FIXED (`d852b8d`)
+### 4.5 🔴 Every class opened with START and FOLLOW printed on top of each other · FIXED (`d852b8d`)
 
 **What is wrong.** The Floor board's station card lays its `START`/`FINISH` badge out in a
 `space-between` header row — right edge — and then drew `FOLLOW` at `position:absolute; top:10px;
@@ -755,7 +791,7 @@ clean, Floor had exactly this one hit.
 over the stage-journey strip **by design**, and scanning while it is up reports five hits on a
 Coach board that is fine.
 
-### 4.5 🔴 The check-in panel promised a backup that does not exist · FIXED (`a9fb39c`)
+### 4.6 🔴 The check-in panel promised a backup that does not exist · FIXED (`a9fb39c`)
 
 **What is wrong.** The dialog's footer read "Saved on this device, synced when online",
 unconditionally. `CheckInPanel.jsx` does not import `supabase` and never asked whether a server
@@ -770,7 +806,7 @@ all say plainly when data is local-only.
 `supabaseEnabled` — a build *with* credentials that has not resolved a gym syncs nothing either,
 and a screen keyed on the env var alone would make the same promise one layer further in.
 
-### 4.6 🔴 The shipped build tells every online coach to reconnect · FIXED (`fcdc288`)
+### 4.7 🔴 The shipped build tells every online coach to reconnect · FIXED (`fcdc288`)
 
 **What is wrong.** `publishSummary` returned `reason: "offline-only"` when `supabaseEnabled` is
 false — and that is a **build-time constant** that never consults the network. The member-link
@@ -792,13 +828,13 @@ cannot see it — a branch nothing used to reach). ⚠️ `not-configured` wins 
 The old unit test was called *"says offline rather than failing obscurely when the studio has no
 server"* — the defect written down as a name.
 
-### 4.7 🔴 Two files each held their own copy of the five class times · FIXED (`100be9f`)
+### 4.8 🔴 Two files each held their own copy of the five class times · FIXED (`100be9f`)
 
 Covered in §3 above. The part that matters as a *finding*: **no behavioural test could have caught
 it**, because the two arrays are identical today — there is no failing case to write. The only
 assertion that bites is about the source, so that is what the test asserts.
 
-### 4.8 🔴 A semicolon CSV was told to rename its columns · FIXED (`b266830`)
+### 4.9 🔴 A semicolon CSV was told to rename its columns · FIXED (`b266830`)
 
 **What is wrong.** Excel writes `;`-separated CSVs in most of Europe. Such a file parses as one
 column called `Name;Date`, and the header check answered *"No member column found. Expected one
@@ -813,7 +849,7 @@ semicolons is a different decision, and a delimiter guessed wrong would split me
 containing the guess. The file is still refused; only the sentence changed. The guard requires two
 non-empty parts after the split, so a genuine one-column file is not accused of anything.
 
-### 4.8 🟢 §3.1–§3.5, all five verified against the code and all five real
+### 4.9 🟢 §3.1–§3.5, all five verified against the code and all five real
 
 None of the five named in the brief turned out to be false. Notes on two:
 
