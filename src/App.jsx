@@ -34,7 +34,7 @@ import { getLibrary, saveLibrary, resetLibrary, BUILT_IN_LIBRARY,
 // Pure, zero imports — the one place that decides what a stored class type MEANS.
 // Read directly rather than through libraryAccess so the Dashboard heals a legacy
 // rule by exactly the rule the Schedule heals it by, and not by a second copy.
-import { resolveClassType } from "./lib/libraryStore.js";
+import { resolveClassType, classTypeLabel } from "./lib/libraryStore.js";
 import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
@@ -228,7 +228,7 @@ function getDayClasses(dayAbbrev){
     // described two ways by two screens looking at the same row.
     const type = resolveClassType(uc.type, LIB);
     out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type,
-              typeLabel:LIB[type]?.label||type,dur:uc.dur||"45m",fill:uc.fill||0,
+              typeLabel:classTypeLabel(type, LIB),dur:uc.dur||"45m",fill:uc.fill||0,
               // Unlike the Schedule grid this appends no alpha, so a gym-authored
               // type's `var(--accent)` is a usable value here and is the gym's
               // own colour — which is what `makeClassType` means by it.
@@ -1056,7 +1056,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
               </button>
             </div>
             {!isMobile && <div style={{fontSize:"12px",color:"var(--muted)"}}>
-              {Math.round(totalDur/60)} min · {stages.length} stages · {LIB[selectedClass]?.label||selectedClass} · target RPE 7–8
+              {Math.round(totalDur/60)} min · {stages.length} stages · {classTypeLabel(selectedClass, LIB)} · target RPE 7–8
             </div>}
           </div>
         </div>

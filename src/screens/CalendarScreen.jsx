@@ -30,7 +30,7 @@ import { useToast } from "../ui/toast.jsx";
 import { useDialog } from "../ui/dialog.js";
 import { useAfterMount } from "../ui/useAfterMount.js";
 import { getLibrary } from "../lib/libraryAccess.js";
-import { resolveClassType } from "../lib/libraryStore.js";
+import { resolveClassType, classTypeLabel } from "../lib/libraryStore.js";
 import { hueInk } from "../lib/colors.js";
 // Not lazy: this screen is already in the StaffApp chunk and a `lazy()` here
 // would add a chunk that needs its own line in check-size.mjs to have a
@@ -639,7 +639,7 @@ export function CalendarScreen({onBack, onStartClass}) {
                           a non-colour cue for what the border hue means. */}
                       {/* The cell shows the catalogue's LABEL; `cls.type` is now
                           a key, and a gym-authored one reads `gym-barre-ms4pk827`. */}
-                      {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{LIB[cls.type]?.label || cls.type}</div>}
+                      {cls.type && <div style={{fontSize:"9px",color:"var(--muted)",fontWeight:"700",marginTop:"3px",textTransform:"uppercase",letterSpacing:"0.4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{classTypeLabel(cls.type, LIB)}</div>}
                       {/* §3A. Pressing this is what makes the Runner's check-ins
                           land on the occurrence the Schedule published, instead
                           of on a second row nobody looks at: the occurrence is

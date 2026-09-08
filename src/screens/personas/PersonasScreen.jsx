@@ -21,6 +21,7 @@ import * as store from "../../lib/store.js";
 import { uid } from "../../lib/ids.js";
 import { SEED_PERSONAS } from "../../data/personas.seed.js";
 import { getLibrary } from "../../lib/libraryAccess.js";
+import { classTypeLabel } from "../../lib/libraryStore.js";
 import { classTypeOf, classTypesOf, aggregateClassType, aggregateMovements, classCategory,
          renameClassType, renameClassTypeInGenerations, totalCount } from "../../lib/personaAggregate.js";
 import { CATEGORIES, categoryOf } from "../../lib/movementTaxonomy.js";
@@ -1118,7 +1119,7 @@ export function PersonasScreen({ onBack, onDraftToBuilder }) {
                         <p style={{fontSize:"12px",fontWeight:"700",color:"var(--muted)",textTransform:"uppercase",letterSpacing:"1px"}}>{curCT} — learned style <span style={{color:"var(--text)"}}>· {prof.planCount} class{prof.planCount===1?"":"es"}</span></p>
                         {/* `Tag` paints a FILLED plate, so this is a background, not ink. */}
                       <Tag color={category==="strength"?"var(--accent)":"#8B5CF6"}>{CLASS_CATEGORY_LABEL[category]}</Tag>
-                        <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{getLibrary()[builderClass]?.label||builderClass}</b></span>
+                        <span style={{fontSize:"11px",color:"var(--muted)"}}>Drafts as: <b style={{color:"var(--text)"}}>{classTypeLabel(builderClass, getLibrary())}</b></span>
                       </div>
                       <Btn onClick={()=>{setGenErr("");setShowGen(s=>!s);}} style={{padding:"7px 14px"}}><Zap size={14}/> Generate draft</Btn>
                     </div>

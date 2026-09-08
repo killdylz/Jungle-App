@@ -28,7 +28,7 @@ import { useState, useEffect, useMemo } from "react";
 import { cohortModel, describeCohorts, monthLabel, MIN_POINT_N } from "../lib/cohorts.js";
 import { classTypeRetention, describeClassTypes } from "../lib/classTypeRetention.js";
 import { getLibrary } from "../lib/libraryAccess.js";
-import { resolveClassType } from "../lib/libraryStore.js";
+import { resolveClassType, classTypeLabel } from "../lib/libraryStore.js";
 import { useWindowWidth, StatCard } from "../ui/primitives.jsx";
 
 export function RetentionScreen({ onBack, onNavigate }) {
@@ -69,7 +69,7 @@ export function RetentionScreen({ onBack, onNavigate }) {
     // deliberately returns the RAW string when nothing matches — a legacy
     // "Mobility" rule the catalogue never had — so that string is shown as
     // itself rather than mapped to a near neighbour that invents programming.
-    return classTypeRetention(attendance, norm, { label: k => lib[k]?.label || k });
+    return classTypeRetention(attendance, norm, { label: k => classTypeLabel(k, lib) });
   }, [attendance, instances]);
 
   const card = { border:"1px solid var(--border)", borderRadius:"12px", background:"var(--card)", padding:isMobile?"14px":"18px" };
