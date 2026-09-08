@@ -106,9 +106,20 @@ export function RetentionScreen({ onBack, onNavigate }) {
           <div style={card} data-testid="class-type-retention">
             <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:"10px",flexWrap:"wrap"}}>
               <div style={h}>Which classes members come back to</div>
+              {/* 🔴 `studioMembers`, NOT `studioOf`. The average's denominator
+                  counts a member once per class type they tried, so on a
+                  200-member gym whose members try three types it reads 562 — and
+                  this label called it "members measured", a headcount larger than
+                  the roster. The weighting is right and stays; what changed is
+                  that the sentence says which of the two numbers it is quoting,
+                  and says out loud that a member is counted once per type.
+                  ⚠️ This comment sits OUTSIDE the `&& (` — a parenthesised JSX
+                  expression holds exactly one element, and putting it inside made
+                  the whole file unparseable. `jsxText.test.js` said so before the
+                  crash lint did. */}
               {ct.ready && ct.studioRate != null && (
                 <div style={{fontSize:"11px",color:"var(--muted)"}}>
-                  studio average {ct.studioRate}% · {ct.studioOf} members measured
+                  studio average {ct.studioRate}% · {ct.studioMembers} members, once per class type they tried
                 </div>
               )}
             </div>
