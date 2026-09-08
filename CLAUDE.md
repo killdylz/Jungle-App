@@ -275,7 +275,18 @@ gh run list --repo killdylz/Jungle-App --workflow "Deploy to GitHub Pages" --lim
   parallel PT implementations at once because that check was never made.
 - ⚠️ **`cancelled` is usually not a failure.** GitHub Pages uses a concurrency group that kills
   an in-flight deploy when a newer push arrives, so several pushes in a row leave one `success`
-  and a trail of `cancelled`. **Judge the run whose SHA is `HEAD`.**
+  and a trail of `cancelled`. `ci.yml` has the same `cancel-in-progress` group. **Judge the run
+  whose SHA is `HEAD`.**
+- 🔴 **A PR SUBSCRIPTION WILL TELL YOU A CANCELLED RUN IS AN ALL-CLEAR.** Watching a PR delivers
+  `check_suite.completed` events reading *"No third-party check suite on the PR's head_sha is still
+  running or failed"* — and its own small print says cancelled suites are **not covered**. Because
+  `cancel-in-progress` kills the previous run on every push, that is the NORMAL case here: session
+  38 got five such events and four named a SHA whose suite had been cancelled by its own next push.
+  Taken at face value, each one says a PR is green when nothing has run on it.
+  **Never act on the event. Read the run list and check `conclusion` against the CURRENT head**
+  (`actions_list` → `list_workflow_runs`, filtered to the branch), because the event's `head_sha`
+  is also routinely one or two pushes behind. A full gate here takes **~20 minutes**; a run that
+  has been going nine is not slow, and pushing again restarts the clock.
 - `gh` resolves on `PATH` only in a shell started *after* it was installed; otherwise call
   `"C:\Program Files\GitHub CLI\gh.exe"`. Outside the repo it needs `--repo killdylz/Jungle-App`.
 
