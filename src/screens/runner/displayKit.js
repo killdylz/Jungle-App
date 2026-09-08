@@ -51,11 +51,41 @@ export const scaleMultOf = (fontScale) => FONT_SCALES.find(f => f.id === fontSca
 // the 720p wall in the room they render at **9px**. The surface
 // `UI-UX-DIRECTION` §1 says must be flawless, read at 8 metres, at nine pixels.
 //
-// `TV_MIN_PX` is the type scale's own smallest step (§1: 11 = meta), applied as
-// what it should always have been: text on a wall never goes below it, whatever
-// the display. The proportional floor is kept as well, so a 160px timer still
-// scales down sensibly — this only ever raises, never lowers, and `Math.max` is
-// the whole change.
+// `TV_MIN_PX` is the type scale's own smallest step (§1: 11 = meta). The
+// proportional floor is kept as well, so a 160px timer still scales down
+// sensibly — this only ever raises, never lowers, and `Math.max` is the whole
+// change.
+//
+// 🔴 WHAT THIS FLOOR IS, AND WHAT IT IS NOT. It used to say here that "text on a
+// wall never goes below it, whatever the display", which reads as a legibility
+// guarantee and is not one. A px is a SIGNAL pixel: its size in the room depends
+// on the panel, so no px number can carry a claim about reading distance. What
+// 11px actually buys, measured on the boards at HEAD:
+//
+//     720p wall   11px = 1.53% of screen height
+//    1080p wall   11px = 1.02%
+//       4K wall   11px = 0.51%   (for anything NOT on `tvFont`)
+//
+// The Fable spec states the requirement in the only unit that can carry it
+// (`Stress-Test Verdict & Architecture Spec` §3, P2): "legible at 8 meters …
+// primary element ~8-12% of screen height, SECONDARY ~3%". So this floor is
+// under half the spec's secondary minimum, and it is not even a constant
+// fraction — which produces an inversion worth stating plainly:
+//
+// 🔴 THE SAME BOARD IS SMALLER IN THE ROOM ON THE BETTER PROJECTOR. At 720p the
+// Plan board's exercise names are floored up to 11px = 1.53% of the wall; at
+// 1080p they render at their designed 13px = 1.20%. A studio that upgrades its
+// projector gets less readable exercise names on the same wall. That is what an
+// ABSOLUTE floor does at the bottom of a scale keyed to viewport height, and it
+// is the argument for putting room-facing text on `tvFont` rather than on a
+// literal — see `display.spec.js`'s "holds its share of the wall" sweep.
+//
+// The floor is still worth having for the case it is actually good at: a board
+// mirrored onto something physically small, where a fraction of viewport height
+// is a few pixels. It is a collapse guard, not a distance guarantee. Raising it
+// to the spec's 3% is a real proposal with a real cost — measured, it truncates
+// the Coach board's stage-journey strip — and it is written up in
+// SESSION-38-HANDOFF.md rather than taken here.
 export const TV_MIN_PX = 11;
 export function tvFont(basePx, mult = 1) {
   const scaled = basePx * mult;

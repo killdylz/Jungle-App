@@ -15,9 +15,9 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 37: **`lint:crash` 0 · 1304 unit (46 files) · 567 e2e (48 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,462 lines**. StaffApp **332.80 / 360 kB — 27.2 kB
-left.** PTScreens **38.41 / 41**, RetentionScreen **17.13 / 18**, index **203.06 / 215**. A new
+Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 590 e2e (48 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,565 lines**. StaffApp **333.00 / 360 kB — 27.0 kB
+left.** PTScreens **39.31 / 41**, RetentionScreen **17.13 / 18**, index **203.06 / 215**. A new
 screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk
 has no ceiling at all.
 
@@ -57,6 +57,12 @@ writable but ephemeral** — the container is reclaimed, so this is a per-sessio
 A scratch config with `launchOptions.executablePath` still works for *throwaway* runs (set
 `testDir` to an absolute path when the config lives in a subdirectory).
 
+⚠️ **DO NOT EDIT `src/` WHILE A FULL RUN IS IN FLIGHT.** Playwright loads the spec files at start
+and the dev server serves the app with HMR, so later specs run your NEW code against the OLD tests.
+Session 38 threw away two full runs to this — one reported `566 passed / 1 failed` for a failure
+that was real but landed mid-run, and one exited 0 while meaning nothing. **Only a run started on a
+quiet tree counts.**
+
 🔴 **`npm run test:e2e | tail -25` reports the exit code of `tail`, which is always 0.**
 Session 36 read a fully red suite as a green baseline that way and only caught it on the second
 run, when the log was written to a file instead of a pipe. **Redirect, never pipe, and grep the
@@ -74,6 +80,13 @@ screen fell into its error boundary. It resolves identifiers, and the binding ge
 in scope. ⚠️ **A broad failure confined to ONE spec file, straight after a render-order change,
 is a crash — not the stale-server flake below.** The tell is an error-boundary heading in the
 page snapshot; the fastest route to the cause is a throwaway spec with `page.on("pageerror")`.
+
+⚠️ **NOT SEEN SINCE SESSION 33.** Sessions 36, 37 and 38 ran the full suite ten times between
+them with no flake of any kind — session 38's one red run was a real regression its author had just
+introduced, and the sweep that caught it named the control. That is data, not a fix: nobody has found
+a root cause. **Treat the paragraph below as folklore until something reproduces it**, and do not
+spend a session defending against it. The next session that DOES see one has the best chance anyone
+has had.
 
 ⚠️ **ONE SPEC FLAKES UNDER FULL-SUITE LOAD, and it is not always the same spec.** Recorded here
 for three sessions as a `syncBanner.spec.js` problem; **session 32's full run failed
@@ -262,7 +275,18 @@ gh run list --repo killdylz/Jungle-App --workflow "Deploy to GitHub Pages" --lim
   parallel PT implementations at once because that check was never made.
 - ⚠️ **`cancelled` is usually not a failure.** GitHub Pages uses a concurrency group that kills
   an in-flight deploy when a newer push arrives, so several pushes in a row leave one `success`
-  and a trail of `cancelled`. **Judge the run whose SHA is `HEAD`.**
+  and a trail of `cancelled`. `ci.yml` has the same `cancel-in-progress` group. **Judge the run
+  whose SHA is `HEAD`.**
+- 🔴 **A PR SUBSCRIPTION WILL TELL YOU A CANCELLED RUN IS AN ALL-CLEAR.** Watching a PR delivers
+  `check_suite.completed` events reading *"No third-party check suite on the PR's head_sha is still
+  running or failed"* — and its own small print says cancelled suites are **not covered**. Because
+  `cancel-in-progress` kills the previous run on every push, that is the NORMAL case here: session
+  38 got five such events and four named a SHA whose suite had been cancelled by its own next push.
+  Taken at face value, each one says a PR is green when nothing has run on it.
+  **Never act on the event. Read the run list and check `conclusion` against the CURRENT head**
+  (`actions_list` → `list_workflow_runs`, filtered to the branch), because the event's `head_sha`
+  is also routinely one or two pushes behind. A full gate here takes **~20 minutes**; a run that
+  has been going nine is not slow, and pushing again restarts the clock.
 - `gh` resolves on `PATH` only in a shell started *after* it was installed; otherwise call
   `"C:\Program Files\GitHub CLI\gh.exe"`. Outside the repo it needs `--repo killdylz/Jungle-App`.
 
@@ -398,6 +422,11 @@ not. **Assert the STORED object, not only what was rendered.**
   it.** `blocksLoad` is read by the screen AND by `store.assignPtSession` — a gate that lives only
   in JSX is one the next caller walks through. Expiry is evaluated BEFORE a doctor's clearance, an
   undated clearance is ignored, and an unanswered question is never a "no".
+- **A CONTRAST RATIO IS NOT LEGIBILITY, and the product has claimed it was twice.** WCAG AA says
+  nothing about type SIZE. `TV_MIN_PX = 11` is a collapse guard, not an 8-metre floor: it is 1.53%
+  of a 720p wall, 1.02% of a 1080p one and 0.51% of 4K, against a spec (Fable §3, P2) asking for
+  8–12% primary and **~3% secondary**. Read `displayKit.js`'s header before quoting it. The absolute
+  px floor also **inverts**: the same board is physically SMALLER on the higher-resolution signal.
 - **`--danger` and `--warn` are deliberately not skin-derived.** A gym whose accent is red
   must not get a delete button matching its primary action. Both are FILLS; used as INK they
   still go through `hueInk`.
@@ -410,6 +439,22 @@ not. **Assert the STORED object, not only what was rendered.**
   exactly one menu.
 - **Destructive actions are CONFIRMED or UNDOABLE**, and the guard scales with what is destroyed.
   An undo holds the **prior list**, not the deleted row — position is part of what was lost.
+  ⚠️ `e2e/destructive.spec.js` enumerates the ones somebody thought of, so "every destructive action,
+  reversed" has been true of the LIST and not of the product: session 38 found **four** unguarded in
+  one file — the Builder's stage removal, **Smart Distribute**, and both doors of the Build dialog.
+  When you add a control that writes, add it to that file in the same commit.
+- 🔴 **A CONTROL THAT DECLINES MUST UNDO WHAT ASKING COST.** The class picker sets `classChoice`
+  before raising its confirm, so "Keep Current" — the button that means *do not touch my class* —
+  kept the stages and left them renamed. Anything that mutates state in order to ASK has to hand the
+  decline path a way back; the prompt carries `revertTo` for exactly that.
+- 🔴 **WHEN A GUARD HAS ONE CALLER THAT SKIPPED IT, COUNT THE CALLERS.** `applyTemplate` replaces a
+  whole class; the confirm lived in `handleClassChange` and **three** other callers walked past it,
+  one of them the only reachable "Build for me" path on the shipped build. Same shape as
+  `parqStatus`/`blocksLoad`: a gate that lives in one caller is one the next caller walks through, so
+  it belongs in the function they all pass through. ⚠️ And a replaced class must carry its LABEL with
+  it — `classChoice` was set by the guarded caller alone, so the dialog doors left a Yoga class
+  stored as `crossfit`, which `ensureClassInstance` writes to `class_instances.class_type` and
+  `classTypeRetention.js` then reads.
 - **A confident wrong number is worse than no number**, and a panel promising a feature that
   cannot arrive is worse than no panel.
 - **`isViewEnabled` maps some views to a MOCK flag**, so "the route exists and is in three nav

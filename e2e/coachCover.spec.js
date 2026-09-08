@@ -551,3 +551,141 @@ test.describe("editing a roster entry", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ─── The seam between the two screens that both name a time ─────────────────
+//
+// 🔴 WHAT THIS EXISTS FOR, and why the rest of this file cannot do it. Every
+// test above seeds `jungle_user_classes` straight into localStorage with
+// `slot: "06:00"` written by hand. So the Schedule's Add-class dialog and the
+// availability grid — the two controls a gym actually types a time into — have
+// never been driven against each other. Session 37 found they held two separate
+// copies of the five times and consolidated them into `RULE_SLOTS`, with a unit
+// test that fails if either file grows its own list again. That test asserts the
+// SOURCE. It cannot see a screen that renders the shared list differently:
+// relabelled, filtered, sorted, or 12-hour on one side and 24-hour on the other.
+// A coach would then be free at a time no class can be scheduled at, the cover
+// board would say "nobody has said they are free then", and every gate would be
+// green.
+//
+// So this drives both screens and never types a time literal: the slot comes out
+// of the Add-class `<select>` at run time and everything downstream is compared
+// against that same string.
+//
+// ⚠️ THE LAST SLOT, NOT THE FIRST. Both the Add-class form and this file's other
+// fixtures default to "06:00", so a dialog that ignored the selection entirely
+// would still land on 06:00 and pass. The last option is the one that can only
+// be there because it was chosen.
+test.describe("a class scheduled at a time and a coach free at that time", () => {
+  test("🔴 meet on the cover board, end to end through both screens", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    // ── 1 · The two vocabularies, as RENDERED ────────────────────────────────
+    await page.getByRole("button", { name: /Add class/ }).click();
+    const slotOpts = await page.getByLabel("Time slot").locator("option").allTextContents();
+    // POSITIVE CONTROL: the dialog opened and the picker has times in it. An
+    // empty `<select>` makes every set comparison below trivially true.
+    expect(slotOpts.length, "the Add-class time picker is empty").toBeGreaterThan(1);
+    const SLOT = slotOpts[slotOpts.length - 1];
+
+    // ── 2 · Schedule a class at that slot, through the dialog ────────────────
+    await page.getByPlaceholder("Class name").fill("Sunrise Strength");
+    await page.getByPlaceholder("Coach", { exact: true }).fill("Mara");
+    await page.getByLabel("Day").selectOption("Mon");
+    await page.getByLabel("Time slot").selectOption(SLOT);
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+
+    // The STORED rule carries the slot that was chosen, not the default. If this
+    // is "06:00" the dialog dropped the selection and nothing below means
+    // anything.
+    const rules = await stored(page, "jungle_user_classes");
+    expect(rules).toHaveLength(1);
+    expect(rules[0].slot, `the rule stored ${rules[0].slot}, not the chosen ${SLOT}`).toBe(SLOT);
+    expect(rules[0].day).toBe("Mon");
+
+    // ── 3 · Both people on the roster, one of them through the schedule ──────
+    await page.getByRole("button", { name: "Put Mara on the roster" }).click();
+    await page.getByLabel("Add a coach by name").fill("Dev");
+    await page.getByRole("button", { name: "Add coach", exact: true }).click();
+
+    // ── 4 · Mark Dev free at that same slot, through the GRID ────────────────
+    await page.getByRole("button", { name: "Set availability for Dev" }).click();
+
+    // 🔴 THE ASSERTION THE SOURCE TEST CANNOT MAKE. The grid must offer a cell
+    // for the slot the Schedule just accepted. Its column headers are the
+    // availability screen's rendered vocabulary; the picker's options are the
+    // Schedule's. A coach cannot state they are free at a time this grid does
+    // not draw.
+    const grid = page.getByRole("table", { name: /availability/ });
+    const cols = (await grid.locator("thead th").allTextContents()).slice(1);
+    expect(cols, "the availability grid draws a different set of times from the Add-class picker")
+      .toEqual(slotOpts);
+
+    await page.getByRole("button", { name: `Dev free Mon ${SLOT}` }).click();
+    // Stored against the same string, not a reformatted one.
+    const coaches = await stored(page, "jungle_coaches");
+    expect(coaches.find(c => c.name === "Dev").availability).toEqual({ Mon: [SLOT] });
+
+    // ── 5 · Mara is away that Monday ─────────────────────────────────────────
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(nextMonday());
+    await page.getByLabel("Last day away").fill(nextMonday());
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+
+    // ── 6 · The board offers the coach who said they were free ──────────────
+    const row = page.getByTestId("cover-row").filter({ hasText: "Sunrise Strength" });
+    await expect(row).toHaveCount(1);
+    // The honest empty state is the failure mode this whole test is about: a
+    // slot mismatch does not error, it produces an empty candidate list.
+    await expect(row).not.toContainText("Nobody has said they are free then");
+    const opts = await row.getByLabel(/^Coach to cover Sunrise Strength/).locator("option").allTextContents();
+    expect(opts.some(o => /Dev/.test(o) && /free then/.test(o)),
+      `the cover board offered ${JSON.stringify(opts)} for a ${SLOT} class Dev said they were free at`).toBe(true);
+
+    expectNoConsoleErrors(errors);
+  });
+
+  test("and a coach free at a DIFFERENT time is not offered", async ({ page }) => {
+    // 🔴 THE CONTROL FOR THE TEST ABOVE. If `coachesFreeAt` matched on the day
+    // alone — or on nothing — the assertion above would pass with the slots
+    // disagreeing, which is the exact defect it exists to catch.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Schedule");
+
+    await page.getByRole("button", { name: /Add class/ }).click();
+    const slotOpts = await page.getByLabel("Time slot").locator("option").allTextContents();
+    const LATE = slotOpts[slotOpts.length - 1], EARLY = slotOpts[0];
+    expect(LATE).not.toBe(EARLY);
+
+    await page.getByPlaceholder("Class name").fill("Sunrise Strength");
+    await page.getByPlaceholder("Coach", { exact: true }).fill("Mara");
+    await page.getByLabel("Day").selectOption("Mon");
+    await page.getByLabel("Time slot").selectOption(LATE);
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+
+    await page.getByRole("button", { name: "Put Mara on the roster" }).click();
+    await page.getByLabel("Add a coach by name").fill("Dev");
+    await page.getByRole("button", { name: "Add coach", exact: true }).click();
+    await page.getByRole("button", { name: "Set availability for Dev" }).click();
+    await page.getByRole("button", { name: `Dev free Mon ${EARLY}` }).click();
+
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(nextMonday());
+    await page.getByLabel("Last day away").fill(nextMonday());
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+
+    const row = page.getByTestId("cover-row").filter({ hasText: "Sunrise Strength" });
+    await expect(row).toHaveCount(1);   // positive control: the board is populated
+    const opts = await row.getByLabel(/^Coach to cover Sunrise Strength/).locator("option").allTextContents();
+    // ⚠️ Dev is STILL IN THE LIST, and that is the panel's own decision — "a
+    // stale grid is not a rota", so every active coach stays selectable. What
+    // changes is the label, and the label is the claim. The first draft of this
+    // test asserted Dev was absent and was simply wrong about the product.
+    expect(opts.some(o => /Dev/.test(o) && /has not said/.test(o))).toBe(true);
+    expect(opts.some(o => /Dev/.test(o) && /free then/.test(o))).toBe(false);
+    await expect(row).toContainText("Nobody has said they are free then");
+    expectNoConsoleErrors(errors);
+  });
+});

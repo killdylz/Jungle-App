@@ -47,8 +47,14 @@ export function RoomTV({ mode, onMode, onExit, stages, sessionName, liveState, n
           Following this room — waiting for the coach's runner to start…
         </div>
       )}
+      {/* `data-tv-chrome` below: this bar is the room's REMOTE, not the board.
+          It floats over whichever surface is showing and retracts after 4.5s, so
+          a sweep of "what is on the wall" that counts it is measuring the control
+          that was used to get there. Marked rather than waited out — this file's
+          own overlap sweep already records how a scan taken while it is up
+          reports five hits on a Coach board that is fine. */}
       {ctl && (
-        <div style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:550,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
+        <div data-tv-chrome style={{position:"absolute",top:"16px",left:"50%",transform:"translateX(-50%)",zIndex:550,display:"flex",gap:"8px",alignItems:"center",background:"rgba(10,14,20,0.72)",backdropFilter:"blur(10px)",padding:"8px 10px",borderRadius:"14px",border:"1px solid rgba(255,255,255,0.18)"}}>
           {[["studio","Plan"],["floor","Floor"],["coach","Coach"]].map(([m,lbl]) => (
             <button key={m} onClick={()=>onMode(m)} style={{padding:"10px 20px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"15px",fontWeight:"800",letterSpacing:"0.5px",background:mode===m?"var(--accent)":"transparent",color:mode===m?"var(--on-accent)":"rgba(255,255,255,0.85)"}}>{lbl}</button>
           ))}

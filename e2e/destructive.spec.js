@@ -275,3 +275,400 @@ test.describe("the toast primitive", () => {
     expect(pe).toBe("none");
   });
 });
+
+// ── The Class Builder's stage removal — the one that had no guard at all ─────
+//
+// 🔴 THE SWEEP ABOVE MISSED IT FOR TWENTY SESSIONS, and the shape of the miss is
+// worth more than the fix. This file enumerates the destructive actions somebody
+// thought of; a stage removal that writes straight to `jungle_draft_class` was
+// never on the list, so "every destructive action, reversed" was true of the list
+// and not of the product.
+//
+// `handleRemoveStage` was one line — `setStages(ss => ss.filter((_,j)=>j!==i))`
+// — thirty lines above `handleNewClass`, which carries a paragraph explaining why
+// destroying ONE draft needs an undo. Removing a stage destroys part of that same
+// draft plus every exercise in it, on a single click, with no confirm, no undo
+// and no toast. It survived a reload.
+//
+// ⚠️ THE POSITION IS THE ASSERTION. An undo that restores the stage to the END of
+// the class has not restored the class — the repo's rule is that the closure
+// holds the PRIOR LIST, not the deleted row, and a test that only counted stages
+// would pass on the version that appends.
+test.describe("removing a stage from the Class Builder", () => {
+  const names = (d) => (d.stages || []).map(s => s.name);
+
+  test("🔴 says what it took, and Undo puts it back where it was", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+
+    // POSITIVE CONTROL: the default class really is on screen, and the stage
+    // about to be removed really has exercises in it.
+    const before = await stored(page, "jungle_draft_class");
+    expect(names(before)).toEqual(["Warm-Up", "Circuit Blast", "Strength Block", "Active Recovery", "Cool-Down"]);
+    expect(before.stages[2].exercises.length).toBe(2);
+
+    await page.getByRole("button", { name: "Remove Strength Block" }).click();
+
+    // It NAMES what went, and counts what went with it. "Removed Strength Block"
+    // and "Removed Strength Block and its 2 exercises" are different amounts of
+    // alarm and only the second is true.
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText("Strength Block");
+    await expect(toast).toContainText("2 exercises");
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(names(after)).toEqual(["Warm-Up", "Circuit Blast", "Active Recovery", "Cool-Down"]);
+
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    // 🔴 IN ITS OWN PLACE, third of five. An undo that appends passes a count.
+    const back = await stored(page, "jungle_draft_class");
+    expect(names(back)).toEqual(["Warm-Up", "Circuit Blast", "Strength Block", "Active Recovery", "Cool-Down"]);
+    expect(back.stages[2].exercises.map(e => e.n)).toEqual(["Back Squat", "Overhead Press"]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the removal is a real write, and so is the undo", async ({ page }) => {
+    // The store, across a reload, on both sides. A removal held only in React
+    // state would look identical until the coach came back to it.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+
+    await page.getByRole("button", { name: "Remove Cool-Down" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(names(await stored(page, "jungle_draft_class"))).not.toContain("Cool-Down");
+
+    // And the undo, taken before a reload, survives one.
+    await page.getByRole("button", { name: "Remove Warm-Up" }).click();
+    await page.getByTestId("toast").getByRole("button", { name: "Undo" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    const back = names(await stored(page, "jungle_draft_class"));
+    expect(back[0]).toBe("Warm-Up");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a stage with nothing in it is not accused of holding exercises", async ({ page }) => {
+    // The count is real arithmetic, not a fixed sentence. A new stage is empty,
+    // and "and its 0 exercises" would be the confident wrong number this repo
+    // ranks below no number at all.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await nav(page, "Class Builder");
+    await page.getByRole("button", { name: "Add stage" }).click();
+
+    const added = await stored(page, "jungle_draft_class");
+    const last = added.stages[added.stages.length - 1];
+    expect(last.exercises).toEqual([]);          // positive control
+
+    await page.getByRole("button", { name: `Remove ${last.name}` }).click();
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText(last.name);
+    await expect(toast).not.toContainText("exercise");
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── Smart Distribute — the control that overwrote a written class ────────────
+//
+// 🔴 THE BIGGEST OF THE THREE, and the one whose copy was actively misleading.
+// `distributeLibraryExercises` maps EVERY stage to `{...stage, exercises}`: a
+// coach's own movements are not merged, appended to, or spared when the stage is
+// non-empty. They are replaced. The toast said "⚡ 11 exercises across 2 stages",
+// which is a sentence about a gain, for a click that had just deleted their
+// class.
+//
+// The Builder already knew how to tell: `hasCustomExercises` / `anyCustom` sit
+// forty lines above the button and gate BOTH the class-type picker and the style
+// picker behind a confirm before replacing stages. The button between those two
+// pickers consulted neither.
+test.describe("Smart Distribute over a class the coach wrote", () => {
+  const authored = {
+    name: "Dylan’s Tuesday", classChoice: { classType: "crossfit", subType: "wod" },
+    stages: [
+      { id:"s1", type:"warmup",   name:"Warm-Up",  dur:300, exercises:[{ n:"MY OWN WARMUP", s:"", r:"5 min", rest:"" }], tracks:[] },
+      { id:"s2", type:"strength", name:"The Lift", dur:900, exercises:[{ n:"MY OWN LIFT",   s:"5", r:"5", rest:"3m" }], tracks:[] },
+    ],
+  };
+  const exOf = (d) => (d.stages || []).map(s => (s.exercises || []).map(e => e.n));
+
+  async function seedAuthored(page) {
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), authored);
+    await page.reload();
+    await nav(page, "Class Builder");
+  }
+
+  test("🔴 says it REPLACED them, and Undo gives them back", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+
+    // POSITIVE CONTROL: the authored class really loaded.
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+
+    const toast = page.getByTestId("toast");
+    // The word that was missing. "11 exercises across 2 stages" is true and reads
+    // as an addition; a coach who has just lost their class needs the verb.
+    await expect(toast).toContainText("Replaced 2 exercises");
+    await expect(toast).toContainText("from the library");
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.stages[0].exercises.length).toBeGreaterThan(1);
+    expect(exOf(after).flat()).not.toContain("MY OWN WARMUP");
+
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    // Their own movements, in their own stages, in order.
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("the undo is a real write, not screen state", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+    await page.getByTestId("toast").getByRole("button", { name: "Undo" }).click();
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([["MY OWN WARMUP"], ["MY OWN LIFT"]]);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("filling EMPTY stages is still reported as a gain, with no undo", async ({ page }) => {
+    // 🔴 THE CONTROL, and a product rule rather than a technicality:
+    // `handleNewClass` says "an undo offering to restore an empty plan is noise".
+    // Nothing was taken here, so the sentence must not claim anything was, and
+    // no Undo may appear — a version that always says "Replaced 0 exercises"
+    // would pass the test above and be wrong every time a coach starts empty.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate(() => localStorage.setItem("jungle_draft_class", JSON.stringify({
+      name: "Blank", classChoice: { classType: "crossfit", subType: "wod" },
+      stages: [{ id:"s1", type:"warmup", name:"Warm-Up", dur:300, exercises:[], tracks:[] }],
+    })));
+    await page.reload();
+    await nav(page, "Class Builder");
+    expect(exOf(await stored(page, "jungle_draft_class"))).toEqual([[]]);   // positive control
+
+    await page.getByRole("button", { name: "Smart Distribute" }).click();
+
+    // 🔴 ONE READ, NOT THREE ASSERTIONS, and the reason is this file's own
+    // subject. A toast with no undo lives 2500ms; `not.toContainText("Replaced")`
+    // and `toHaveCount(0)` on the Undo button, evaluated a moment later, are both
+    // satisfied by the toast having EXPIRED. That is CLAUDE.md's toHaveCount(0)
+    // trap in its "already gone" form, and it would go green on exactly the
+    // version this test exists to catch. `innerText()` auto-waits for the element,
+    // so a toast that never rendered fails instead of passing quietly, and the
+    // three claims are read off one snapshot. The Undo button is a child of
+    // `[data-testid="toast"]`, so its label is in that text if it is there at all.
+    const said = await page.getByTestId("toast").innerText();
+    expect(said, "the toast did not report the fill").toContain("exercises across 1 stage");
+    expect(said).not.toContain("Replaced");
+    expect(said).not.toContain("Undo");
+    expect(exOf(await stored(page, "jungle_draft_class"))[0].length).toBeGreaterThan(1);
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── "Build for me" and "Or insert a template" — the doors past the confirm ────
+//
+// 🔴 THE GUARD EXISTED AND THREE CALLERS WALKED PAST IT. `applyTemplate` replaces
+// the whole stage list. `handleClassChange` checked `anyCustom` first and raised
+// a "replace your stages?" bar; `runSmartBuild`'s fallback and every tile under
+// "Or insert a template" called `applyTemplate` directly and did not.
+//
+// ⚠️ The fallback is not an edge case — it is the ONLY reachable Build-for-me
+// path on the shipped build. The branch above it needs `supabaseEnabled &&
+// supabase` to invoke a `smart-build` edge function, and the deployed build has
+// neither, so pressing Build always lands in `smartPickClass` → `applyTemplate`.
+//
+// 🔴 AND THE LABEL DID NOT FOLLOW THE STAGES. `classChoice` was written by
+// `handleClassChange` and by nothing else, so both dialog doors left a five-stage
+// Yoga class stored as `{classType:"crossfit"}`. That is not cosmetic: it reaches
+// `LiveScreen` as `classType` and `ensureClassInstance` writes it to
+// `class_instances.class_type`, so the class ran into the gym's attendance
+// history under the wrong type — the input `classTypeRetention.js` and Analytics
+// read. It also rides `handleExportClass` into the saved .json, and Smart
+// Distribute reads it, so the two buttons beside each other disagreed about what
+// class was on screen.
+test.describe("replacing the whole class from the Build dialog", () => {
+  const AUTHORED = {
+    name: "Dylan’s Tuesday", classChoice: { classType: "crossfit", subType: "wod" },
+    stages: [
+      { id:"s1", type:"warmup",   name:"Warm-Up",  dur:300, exercises:[{ n:"MY OWN WARMUP", s:"", r:"5 min", rest:"" }], tracks:[] },
+      { id:"s2", type:"strength", name:"The Lift", dur:900, exercises:[{ n:"MY OWN LIFT", s:"5", r:"5", rest:"3m" }], tracks:[] },
+    ],
+  };
+  const names = (d) => (d.stages || []).map(s => s.name);
+
+  async function seedAuthored(page, draft = AUTHORED) {
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), draft);
+    await page.reload();
+    await nav(page, "Class Builder");
+  }
+
+  // Both doors, same claim. The template tile is the one a coach reaches by
+  // accident; the Build button is the one they reach on purpose and which cannot
+  // do what its dialog says on a build with no server.
+  for (const [door, open] of [
+    ["a template tile", async (page) => page.getByRole("button", { name: /Yoga/ }).click()],
+    ["the Build button", async (page) => {
+      await page.getByPlaceholder(/45 min HIIT/).fill("45 min yoga flow");
+      await page.getByRole("button", { name: "Build", exact: true }).click();
+    }],
+  ]) {
+    test(`🔴 ${door} asks before replacing a class the coach wrote`, async ({ page }) => {
+      const errors = watchConsole(page);
+      await seedAuthored(page);
+      // POSITIVE CONTROL: the authored class really loaded.
+      expect(names(await stored(page, "jungle_draft_class"))).toEqual(["Warm-Up", "The Lift"]);
+
+      await page.getByRole("button", { name: /Build for me/ }).click();
+      await open(page);
+
+      await expect(page.getByText(/Apply .* template\?/)).toBeVisible();
+      // Nothing is written until they say so. A confirm that fires AFTER the
+      // write is decoration.
+      const held = await stored(page, "jungle_draft_class");
+      expect(names(held)).toEqual(["Warm-Up", "The Lift"]);
+      expect(held.stages[0].exercises[0].n).toBe("MY OWN WARMUP");
+      expectNoConsoleErrors(errors);
+    });
+  }
+
+  test("🔴 Apply moves the stages and the stored class type together", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+    await page.getByRole("button", { name: /Build for me/ }).click();
+    await page.getByRole("button", { name: /Yoga/ }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(names(after)).toContain("Sun Salutation");          // it really applied
+    // 🔴 THE HALF THAT REACHED THE DATABASE. A Yoga class stored as crossfit is
+    // what `ensureClassInstance` writes to `class_instances.class_type`.
+    expect(after.classChoice.classType,
+      "the stages are Yoga's and the stored class type is still the old one").toBe("yoga");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("and Undo returns the class AND its label, not one of them", async ({ page }) => {
+    const errors = watchConsole(page);
+    await seedAuthored(page);
+    await page.getByRole("button", { name: /Build for me/ }).click();
+    await page.getByRole("button", { name: /Yoga/ }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    const toast = page.getByTestId("toast");
+    await expect(toast).toContainText("replaced 2");
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    const back = await stored(page, "jungle_draft_class");
+    expect(names(back)).toEqual(["Warm-Up", "The Lift"]);
+    expect(back.stages[0].exercises[0].n).toBe("MY OWN WARMUP");
+    // Restoring the stages under the new label would be a different class, not
+    // the coach's one back.
+    expect(back.classChoice.classType).toBe("crossfit");
+    expect(back.classChoice.subType).toBe("wod");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("a draft with nothing in it applies straight through, unasked", async ({ page }) => {
+    // 🔴 THE CONTROL. `anyCustom` is the whole point: a coach shaping an empty
+    // draft is the overwhelmingly common case and must not be interrupted, and a
+    // version that always confirmed would pass every test above.
+    const errors = watchConsole(page);
+    await seedAuthored(page, { name: "Blank", classChoice: { classType: "crossfit", subType: "wod" },
+      stages: [{ id:"s1", type:"warmup", name:"Warm-Up", dur:300, exercises:[], tracks:[] }] });
+
+    await page.getByRole("button", { name: /Build for me/ }).click();
+    await page.getByRole("button", { name: /Yoga/ }).click();
+
+    await expect(page.getByText(/Apply .* template\?/)).toHaveCount(0);
+    const after = await stored(page, "jungle_draft_class");
+    expect(names(after)).toContain("Sun Salutation");
+    expect(after.classChoice.classType).toBe("yoga");
+    // Nothing was lost, so nothing is offered back. One read — see the note in
+    // "filling EMPTY stages" above for why three assertions here would pass on a
+    // toast that had simply gone.
+    const said = await page.getByTestId("toast").innerText();
+    expect(said, "the toast did not report the template load").toContain("loaded");
+    expect(said).not.toContain("replaced");
+    expect(said).not.toContain("Undo");
+    expectNoConsoleErrors(errors);
+  });
+});
+
+// ── "Keep Current" is the one control that exists to say no ──────────────────
+//
+// 🔴 IT KEPT THE STAGES AND RENAMED THE CLASS. The two pickers set `classChoice`
+// BEFORE raising the confirm — deliberately, so the `<select>` the coach just
+// moved does not snap back while the bar underneath asks about it. But the
+// button was `setTemplatePrompt(null)` and nothing else, so pressing the one
+// control that means "do not touch my class" left the draft holding its own
+// stages under the new type's name.
+//
+// Driven on a CrossFit draft: pick Yoga, press Keep Current, and the Builder
+// header reads "Yoga · target RPE 7–8" above "MY OWN WARMUP". It is the same
+// field and the same route to the database as the Build-dialog finding above —
+// `classChoice` reaches `LiveScreen`, `ensureClassInstance` writes it to
+// `class_instances.class_type`, and `classTypeRetention.js` reads it there.
+test.describe("declining a template change", () => {
+  const AUTHORED = {
+    name: "Dylan’s Tuesday", classChoice: { classType: "crossfit", subType: "wod" },
+    stages: [{ id:"s1", type:"warmup", name:"Warm-Up", dur:300,
+               exercises:[{ n:"MY OWN WARMUP", s:"", r:"5 min", rest:"" }], tracks:[] }],
+  };
+
+  test("🔴 Keep Current keeps the class AND the class type", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), AUTHORED);
+    await page.reload();
+    await nav(page, "Class Builder");
+
+    // POSITIVE CONTROL: the authored draft loaded and the picker really moved.
+    expect((await stored(page, "jungle_draft_class")).classChoice.classType).toBe("crossfit");
+    await page.locator("select").first().selectOption("yoga");
+    await expect(page.getByText(/Apply .* template\?/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Keep Current" }).click();
+    await expect(page.getByText(/Apply .* template\?/)).toHaveCount(0);
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.stages[0].exercises[0].n).toBe("MY OWN WARMUP");   // the stages, obviously
+    // 🔴 The half that used to change anyway, and the half that reaches the
+    // gym's attendance history.
+    expect(after.classChoice.classType,
+      "Keep Current kept the stages and renamed the class").toBe("crossfit");
+    expect(after.classChoice.subType).toBe("wod");
+    // And the picker agrees with the store, so the coach is not looking at a
+    // control that disagrees with what it controls.
+    expect(await page.locator("select").first().inputValue()).toBe("crossfit");
+    expectNoConsoleErrors(errors);
+  });
+
+  test("Apply still applies — declining is a choice, not a broken button", async ({ page }) => {
+    // The control. A "Keep Current" that reverted everything unconditionally, or
+    // a prompt that could no longer apply, would pass the test above.
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await page.evaluate((c) => localStorage.setItem("jungle_draft_class", JSON.stringify(c)), AUTHORED);
+    await page.reload();
+    await nav(page, "Class Builder");
+
+    await page.locator("select").first().selectOption("yoga");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    const after = await stored(page, "jungle_draft_class");
+    expect(after.classChoice.classType).toBe("yoga");
+    expect((after.stages || []).map(s => s.name)).toContain("Sun Salutation");
+    expectNoConsoleErrors(errors);
+  });
+});

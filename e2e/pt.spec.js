@@ -158,6 +158,113 @@ test.describe("1:1 clients", () => {
     });
   });
 
+  // ── The honesty notice costs a line, not a fold ───────────────────────────
+  //
+  // The card above the list is a permanent notice a coach reads once and scrolls
+  // past every day after. Measured at 390×844 with two clients before this
+  // change: the card was 211px, the list started at y=635 and its bottom edge was
+  // at y=911 — 67px past the fold, so a coach saw one row of the thing they
+  // opened the screen for.
+  //
+  // 🔴 THESE ARE GEOMETRY ASSERTIONS ON PURPOSE. Every string below was on the
+  // old screen too; the defect was SIZE. A `toBeVisible` on the card passed
+  // before and passes after, which is precisely why it cannot be the test.
+  test.describe("the 'Where this lives' notice", () => {
+    test("collapses on a gym with a roster, and the whole list fits the phone", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+
+      // POSITIVE CONTROL: the card and the list both rendered, and the list has
+      // rows. An empty screen clears any height claim trivially.
+      const lives = page.getByTestId("pt-local-only");
+      const list = page.getByTestId("pt-list");
+      await expect(lives).toBeVisible();
+      await expect(list.getByRole("button")).toHaveCount(2);
+
+      const livesBox = await lives.boundingBox();
+      const listBox = await list.boundingBox();
+      // 86px measured; 130 leaves room for a font that renders a hair taller
+      // without leaving room for the 211px card coming back.
+      expect(livesBox.height,
+        `"Where this lives" is ${livesBox.height}px of an 844px fold`).toBeLessThan(130);
+      // The consequence, and the one a coach feels: the LAST row of the list is
+      // on screen, not just the first.
+      expect(listBox.y + listBox.height,
+        `the client list ends at y=${listBox.y + listBox.height}, past the 844px fold`).toBeLessThan(844);
+    });
+
+    test("still states both claims while collapsed", async ({ page }) => {
+      // 🔴 The point of collapsing rather than dismissing. This is the only
+      // sentence in the product saying 1:1 data lives on one device; a collapsed
+      // state that hid it behind a control would be the defect, not the fix.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+      const short = page.getByTestId("pt-local-only-short");
+      await expect(short).toBeVisible();
+      await expect(short).toContainText("on this device only");
+      await expect(short).toContainText("not counted in studio analytics");
+    });
+
+    test("opens on demand, and the detail is all still there", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+      const lives = page.getByTestId("pt-local-only");
+      await lives.getByRole("button").click();
+      await expect(page.getByTestId("pt-local-only-short")).toHaveCount(0);
+      await expect(lives).toContainText("nothing is backed up");
+      await expect(lives).toContainText("would move every figure on the");
+    });
+
+    // ── The one thing on this screen it said WAS backed up ──────────────────
+    //
+    // 🔴 The card told every coach "Your member roster is unaffected — it syncs
+    // as it always has". `saveMembers` returns before `_bgUpsertDelta` whenever
+    // `_synced()` is false, and on the shipped build it always is. So the single
+    // sentence on the screen that promised a copy somewhere was the false one,
+    // one paragraph below a sentence that is the house standard for saying the
+    // opposite.
+    //
+    // ⚠️ The test is against the CREDENTIAL-LESS build, which is what
+    // playwright.config.js targets and what is deployed. The server-connected
+    // branch cannot be driven here — there is no server to connect — so it is a
+    // source-level claim, said plainly rather than implied by a passing test.
+    test("🔴 does not promise a roster backup on a build with no server", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seedTwoClients(page);
+      const lives = page.getByTestId("pt-local-only");
+      await lives.getByRole("button").click();
+
+      // POSITIVE CONTROL: the card really opened and is showing its detail.
+      await expect(lives).toContainText("stored");
+      await expect(lives).toContainText("on this device only");
+
+      // The claim that was there and could not be true.
+      await expect(lives, "the card still promises the member roster syncs")
+        .not.toContainText("it syncs as it always has");
+      await expect(lives, "the card still implies a server exists")
+        .not.toContainText("The server has no table for them yet, so");
+      // And it says what IS true, rather than saying nothing.
+      await expect(lives).toContainText("No server is connected");
+      await expect(lives).toContainText("your member roster included");
+    });
+
+    test("a gym with nothing on this screen still gets it in full", async ({ page }) => {
+      // The notice lands BEFORE anything is read off the screen, which is what
+      // the card has always been for. Collapsing is about the daily read, and a
+      // gym with no roster is not having one.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await freshApp(page);
+      // ⚠️ `navAnyWidth`: below 900px there is no sidebar and `nav` clicks a
+      // button that is not on the page.
+      await navAnyWidth(page, PT);
+      const lives = page.getByTestId("pt-local-only");
+      await expect(page.getByTestId("pt-local-only-short")).toHaveCount(0);
+      await expect(lives).toContainText("nothing is backed up");
+      await expect(lives).toContainText("not counted in studio analytics");
+      await expect(lives.getByRole("button")).toHaveAttribute("aria-expanded", "true");
+    });
+  });
+
   test("a member becomes a 1:1 client, and the roster is not forked", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);

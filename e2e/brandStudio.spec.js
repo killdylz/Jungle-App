@@ -553,3 +553,45 @@ test.describe("a gym wearing the palette every studio got", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// ── What the accessibility panel is entitled to claim ────────────────────────
+//
+// 🔴 CONTRAST IS NOT LEGIBILITY, and this panel said it was. Its tick read
+// "Member-visible text meets WCAG AA — legible at room-display size", and the
+// note beneath it said passing "keeps every branded member surface — including
+// the room TV read at 8 m — legible". WCAG AA is a RATIO. It says nothing about
+// type size, and size is the half that decides whether a wall reads from the
+// floor.
+//
+// It is not a hypothetical gap. Measured in session 38 on the three room boards:
+// the Fable spec (§3, P2) asks for a primary element at 8-12% of screen height
+// and secondary at ~3%, and the Plan board's LARGEST element is 2.4%. So a gym
+// can pass every row here and still have a board nobody at the back can read —
+// and the panel was telling them the opposite, on the screen where they decide
+// what this product is worth.
+//
+// ⚠️ These are string assertions, which this repo distrusts, and they are the
+// right tool exactly once: the defect IS the sentence. The positive controls are
+// that the panel rendered, that it is showing real measured ratios, and that it
+// still makes the contrast claim it is entitled to make.
+test.describe("the accessibility panel claims contrast, not legibility", () => {
+  test("🔴 does not promise a wall read at 8 m", async ({ page }) => {
+    await openBrandStudio(page);
+
+    // POSITIVE CONTROL: the panel is on screen and measuring something real.
+    const panel = page.getByText(/AA needs 4\.5:1 for body text/).locator("..");
+    await expect(panel).toBeVisible();
+    await expect(page.getByText(/Body text on background/)).toBeVisible();
+    await expect(page.getByText(/needs 4\.5:1/).first()).toBeVisible();
+
+    const body = await page.locator("body").innerText();
+    expect(body, "the panel still promises the room TV is legible at 8 m")
+      .not.toMatch(/room TV read at 8/);
+    expect(body, "the tick still calls a contrast ratio room-display legibility")
+      .not.toMatch(/legible at room-display size/);
+
+    // And it still says the true thing, rather than saying nothing.
+    expect(body).toMatch(/contrast to be read/);
+    expect(body).toMatch(/other half of reading a wall at 8/);
+  });
+});

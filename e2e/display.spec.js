@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { freshApp, nav, waitForApp, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+// 🔴 IMPORTED, NOT RETYPED. This file held its own `const TV_MIN_PX = 11` and a
+// bare `fs < 11` inside the page evaluate — a third and fourth copy of a number
+// whose whole job is to be one number. Raising the floor in displayKit.js would
+// have left this suite still asserting the old one, and passing.
+import { TV_MIN_PX } from "../src/screens/runner/displayKit.js";
 
 // P2 · the 10-foot rule — the regression the Fable spec (§3) demands and the repo
 // did not have.
@@ -87,9 +92,20 @@ const VIEWPORTS = [
   { name: "4K", width: 3840, height: 2160 },
 ];
 
-// The two boards that run DURING a class and put a clock on the wall. Plan is a
-// pre-class overview with no timer, so the 10-foot rule below does not apply to
-// it — it navigates like the others (MODES) but is not one of the timer surfaces.
+// The two boards that run DURING a class and put a clock on the wall.
+//
+// 🔴 WHAT THE PLAN BOARD IS AND IS NOT EXEMPT FROM, because "no timer, so the
+// rule does not apply" was doing too much work. The Fable spec's P2 has two
+// halves: the PRIMARY element (current move + timer) holds ~8-12% of screen
+// height, and SECONDARY text ~3%. The Plan board has no timer, so it has no
+// primary element, so the band below genuinely cannot be asserted of it — that
+// part of the exemption is right and stays.
+//
+// It is not exempt from being read. It is the board a member walks in and looks
+// at, and `UI-UX-DIRECTION` §1 ranks it above every staff screen. So the rule it
+// DOES get is the invariance property — see "the Plan board holds its share of
+// the wall" at the bottom of this file — and the gap between what it renders and
+// the spec's ~3% is measured and written up rather than quietly exempted.
 const TIMER_MODES = ["Coach", "Floor"];
 
 test.describe("P2 · the 10-foot rule — the primary element holds its share of the wall", () => {
@@ -414,7 +430,6 @@ test.describe("nothing on a room-facing board is smaller than the wall allows", 
     { id:"s2", type:"strength", name:"Strength Block",dur:900, exercises:[{n:"Conventional Deadlift",s:"5",r:"5",rest:"3m"}], tracks:[] },
     { id:"s3", type:"circuit",  name:"Circuit Blast", dur:600, exercises:[{n:"Kettlebell Swing",s:"3",r:"15",rest:"30s"}], tracks:[] },
   ];
-  const TV_MIN_PX = 11;
 
   // What each board actually puts on the wall differs — the Floor board shows
   // STATIONS (movements), not stage names — so the "there is a class on this
@@ -436,7 +451,7 @@ test.describe("nothing on a room-facing board is smaller than the wall allows", 
       await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
       await page.getByRole("button", { name: new RegExp(`^${mode}$`) }).click();
 
-      const r = await page.evaluate(() => {
+      const r = await page.evaluate((MIN) => {
         const small = []; let measured = 0;
         document.querySelectorAll("body *").forEach((el) => {
           if (el.children.length) return;
@@ -444,10 +459,10 @@ test.describe("nothing on a room-facing board is smaller than the wall allows", 
           const rc = el.getBoundingClientRect(); if (rc.width < 2 || rc.height < 2) return;
           measured++;
           const fs = parseFloat(getComputedStyle(el).fontSize);
-          if (fs < 11) small.push(`${fs}px "${t.slice(0, 30)}"`);
+          if (fs < MIN) small.push(`${fs}px "${t.slice(0, 30)}"`);
         });
         return { measured, small };
-      });
+      }, TV_MIN_PX);
 
       // 🔴 The board must have a class on it. An empty Room TV clears any type
       // floor trivially — this repo has shipped that mistake in this very file's
@@ -807,5 +822,136 @@ test.describe("no two labels on a room board are drawn in the same place", () =>
     expect(s).not.toBeNull();
     const ox = Math.min(f.x + f.width, s.x + s.width) - Math.max(f.x, s.x);
     expect(ox, `FOLLOW and START overlap by ${Math.round(ox)}px`).toBeLessThanOrEqual(0);
+  });
+});
+
+// ─── The Plan board holds its share of the wall ──────────────────────────────
+//
+// 🔴 THE DEFECT THIS PINS, and it is one line of reasoning applied to one span
+// and not to its neighbours. `OverviewDisplayScreen.jsx` already carried the
+// rule in a comment beside the stage-type label:
+//
+//     room-facing: tvFont so it holds its share of the wall
+//
+// and every sibling on the same card — the stage's duration, the exercise's
+// sets and reps, the "NOW" badge, the header chips, the class summary — was a
+// fixed px literal. So on the board a member walks in and reads, the exercise
+// NAME grew with the wall and the prescription under it did not.
+//
+// ⚠️ 1080p AND 4K, NOT 720p, and that is the whole design of this test. Below
+// the 1080 reference `TV_MIN_PX` takes over and floors everything to the same
+// 11px, which HIDES the defect: at 720p a fixed 11px and a tvFont(11) render
+// identically. The divergence only appears above the reference, where tvFont
+// doubles and a literal does not. Measured before the fix: the Plan board's
+// exercise prescription was 1.02% of the wall at 1080p and 0.51% at 4K.
+//
+// This is deliberately NOT an assertion that the board meets the spec's ~3%
+// secondary floor. It does not — its largest element is 2.4% — and closing that
+// gap is a layout decision with a measured cost (a 3% floor truncates the Coach
+// board's stage-journey strip). Written up in SESSION-38-HANDOFF.md §5. What is
+// asserted here is the property that is unambiguously broken and unambiguously
+// fixable: a wall is a wall, and the same board must present the same type at
+// the same share of it.
+test.describe("the Plan board holds its share of the wall", () => {
+  const STAGES = [
+    { id:"s1", type:"warmup",   name:"Warm-Up",        dur:300, exercises:[{n:"World's Greatest Stretch",s:"",r:"5 min",rest:""}], tracks:[] },
+    { id:"s2", type:"strength", name:"Strength Block", dur:900, exercises:[{n:"Conventional Deadlift",s:"5",r:"5",rest:"3m"}], tracks:[] },
+  ];
+
+  // Every text element the BOARD draws, keyed by its text so the two viewports
+  // can be lined up. Chrome is excluded by the `data-tv-chrome` marker the
+  // component carries, not by a list of strings here: the back control and the
+  // brand mark are things a coach clicks and a logo, not the class.
+  async function share(page, w, h) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("./");
+    await page.evaluate((st) => {
+      localStorage.clear();
+      sessionStorage.setItem("jungle_pin_ok", "1");
+      localStorage.setItem("jungle_draft_class", JSON.stringify({ name: "Sunrise Strength", classChoice: null, stages: st }));
+    }, STAGES);
+    await page.reload();
+    await page.getByRole("button", { name: "Class Runner", exact: true }).click();
+    await page.getByRole("button", { name: /^Room TV$/ }).first().click();
+    await expect(page.getByRole("button", { name: /^Exit$/ })).toBeVisible();
+    await page.getByRole("button", { name: /^Plan$/ }).click();
+    await expect(page.getByText(/\d+ stages · /).first()).toBeVisible();
+    return page.evaluate(() => {
+      const vh = window.innerHeight;
+      const out = {};
+      // The board's own subtree: the transient Plan/Floor/Coach pill and the
+      // Exit button belong to RoomTV, float over the board, and are not it.
+      document.querySelectorAll("body *").forEach((el) => {
+        if (el.children.length) return;
+        if (el.closest("[data-tv-chrome]")) return;
+        const t = (el.textContent || "").trim(); if (!t) return;
+        const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return;
+        if (r.top >= vh) return;
+        out[t] = +((parseFloat(getComputedStyle(el).fontSize) / vh) * 100).toFixed(3);
+      });
+      return out;
+    });
+  }
+
+  test("🔴 every line on it is the same share of the screen at 1080p and at 4K", async ({ page }) => {
+    const hd = await share(page, 1920, 1080);
+    const uhd = await share(page, 3840, 2160);
+
+    // POSITIVE CONTROL. The board really rendered a class both times, and the
+    // things this is about are on it. An empty board agrees with itself.
+    for (const probe of ["Sunrise Strength", "Warm-Up", "Conventional Deadlift", "5× 5 · 3m rest"]) {
+      expect(Object.keys(hd), `"${probe}" is not on the 1080p board`).toContain(probe);
+      expect(Object.keys(uhd), `"${probe}" is not on the 4K board`).toContain(probe);
+    }
+    expect(Object.keys(hd).length).toBeGreaterThan(10);
+
+    // ── The three that CANNOT be fixed yet, named rather than skipped ────────
+    //
+    // 🔴 THE FLOOR BLOCKS ITS OWN FIX. These render at a 12px literal, and
+    // `tvFont(12)` on a 720p wall comes out at 11px because TV_MIN_PX floors it
+    // there — so moving them onto the scale to win 4K would cost a pixel on the
+    // projector this repo actually measures on, on the board a member reads.
+    // Every base below 16 has the same problem. They stay literals until the
+    // floor question in SESSION-38-HANDOFF.md §5 is answered.
+    //
+    // ⚠️ THE LIST IS CHECKED IN BOTH DIRECTIONS. An allowlist rots silently
+    // downward: if one of these is fixed, or its copy changes, the sweep would
+    // keep excusing a name that no longer exists and nobody would notice. So an
+    // entry that is NOT drifting fails too — the same shape as
+    // `audit.staleSeams` in scripts/audit-store-writers.mjs.
+    const KNOWN_LITERAL = [
+      /^\d+ stages · /,     // the class summary under the class name
+      /^\d+m$/,             // each stage's duration on its card header
+    ];
+    const excused = t => KNOWN_LITERAL.some(re => re.test(t));
+
+    const drift = [], excusedButFixed = [];
+    for (const [text, pct] of Object.entries(hd)) {
+      const other = uhd[text];
+      if (other === undefined) continue;          // wrapped differently; not a size claim
+      // 2% relative slack for subpixel rounding at two very different heights.
+      const moved = Math.abs(other - pct) / pct > 0.02;
+      if (moved && !excused(text)) drift.push(`"${text}" ${pct}% at 1080p, ${other}% at 4K`);
+      if (!moved && excused(text)) excusedButFixed.push(`"${text}" holds ${pct}% — take it off KNOWN_LITERAL`);
+    }
+    expect(drift, `the Plan board changes size relative to the wall:\n${drift.join("\n")}`).toEqual([]);
+    expect(excusedButFixed, excusedButFixed.join("\n")).toEqual([]);
+    // And the list must still MATCH something, or it is excusing nothing and
+    // proving nothing.
+    expect(Object.keys(hd).filter(excused).length,
+      "KNOWN_LITERAL matched nothing — the copy changed and the exclusion is dead")
+      .toBeGreaterThan(1);
+  });
+
+  test("and the class's own words are never the smallest thing on it", async ({ page }) => {
+    // The control for the test above, which a board rendering EVERYTHING at one
+    // size would also satisfy. The class name is the biggest, and the movements
+    // a member is here to read outrank the chrome around them.
+    const hd = await share(page, 1920, 1080);
+    const nameShare = hd["Sunrise Strength"];
+    const move = hd["Conventional Deadlift"];
+    expect(nameShare).toBeGreaterThan(move);
+    expect(move, "the movement name is smaller than the fixed 11px it used to be")
+      .toBeGreaterThanOrEqual(11 / 1080 * 100);
   });
 });
