@@ -2194,26 +2194,69 @@ export default function App() {
   // ⚠️ The closure holds the PRIOR LIST, not a rebuilt one. `mkStages()` would
   // produce a fresh default set, and restoring that is not restoring the coach's
   // plan — it is quietly replacing it with a different blank.
-  const handleNewClass = () => {
-    const before = { stages, sessionName };
-    setStages(mkStages());
-    setSessionName("My Workout");
+  // ── One rule, one implementation, and it had FIVE callers ──────────────────
+  //
+  // 🔴 `handleNewClass` below has held the rule since the toast primitive landed:
+  // replacing the coach's whole class is destruction, and destruction is
+  // confirmed or undoable. It was the only one of the five whole-list writers of
+  // `stages` in this file that did. `handleSelectTemplate` (the Builder's
+  // "Jungle presets…" picker), `handleLoadPtSession` ("Open in Builder" on a 1:1
+  // client), `handleDraftFromPersona` (SEVEN controls on the Coaches screen:
+  // "Fill this shape with this coach's own movements", "Draft <plan>", "Reopen",
+  // and the five Generate-draft presets) and `handleImportTemplate` ("Open" a
+  // class file) each replaced a class a coach had written, on one click, with
+  // nothing offered back and no toast at all.
+  //
+  // Driven, not inferred: a hand-authored "MY OWN TUESDAY" of eight exercises was
+  // replaced by a persona draft with `undo=0` and no toast on screen.
+  //
+  // This is session 38's §4 one layer out, and its lesson stated as a method:
+  // when a guard is found that one caller skipped, the question is not "who
+  // skipped it" but "how many callers are there". Session 38 counted the callers
+  // INSIDE `BuilderScreen` and fixed four; nobody counted the ones out here.
+  //
+  // ⚠️ The undo restores `classChoice` as well as the stages. Session 38's §4.3:
+  // giving a coach their stages back under someone else's class type is a
+  // different class, not their class, and the label reaches
+  // `class_instances.class_type` through the Runner.
+  //
+  // ⚠️ It holds the PRIOR LIST rather than rebuilding one. `mkStages()` would
+  // produce a fresh default set, and restoring that is quietly replacing the
+  // coach's plan with a different blank.
+  const replaceWholeClass = (said, apply) => {
+    const before = { stages, sessionName, classChoice };
+    apply();
     setView("builder");
-    // Nothing was lost if there was nothing there, and an undo offering to restore
-    // an empty plan is noise. Defence rather than a live path: the Dashboard
-    // renders this control only `{hasDraft && ...}`, so an empty plan never reaches
-    // here today — which is also why no e2e drives this branch.
+    // Nothing was lost if there was nothing there, and an undo offering to
+    // restore an empty plan is noise — `handleNewClass`'s rule, kept.
     if (!before.stages.length) return;
-    toast("Started a new class", { undo: () => {
+    toast(said, { undo: () => {
       setStages(before.stages);
       setSessionName(before.sessionName);
-      toast("Your previous plan is back");
+      setClassChoice(before.classChoice);
+      toast("Your own class is back");
     } });
+  };
+  // How much of the coach's own work a replacement is about to take. The sentence
+  // has to say WHICH thing happened: filling an empty draft and replacing a
+  // written class are different events (session 38 §4.1).
+  const exerciseCount = (list) => list.reduce((a, st) => a + (st.exercises?.length || 0), 0);
+
+  const handleNewClass = () => {
+    // The message is unchanged on purpose — this caller was already correct, and
+    // this commit is about the four that were not.
+    replaceWholeClass("Started a new class", () => {
+      setStages(mkStages());
+      setSessionName("My Workout");
+    });
   };
   const handleSelectTemplate = t => {
     const saved = templateTracks[t.id]||{};
-    setStages(t.stages.map((s,i) => ({...s,id:uid(),tracks:[...(saved[i]||[])],exercises:s.exercises.map(e=>({...e}))})));
-    setSessionName(t.name); setView("builder");
+    const lost = exerciseCount(stages);
+    replaceWholeClass(lost ? `Opened “${t.name}” · replaced ${lost} exercises` : `Opened “${t.name}”`, () => {
+      setStages(t.stages.map((s,i) => ({...s,id:uid(),tracks:[...(saved[i]||[])],exercises:s.exercises.map(e=>({...e}))})));
+      setSessionName(t.name);
+    });
   };
   // Workstream D: draft a persona plan's blocks into the Builder as an editable
   // starting session (coach edits + approves — the hard gate before it's a class).
@@ -2224,24 +2267,28 @@ export default function App() {
   // one would put the wrong header and the wrong BPM targets on it.
   const handleLoadPtSession = ({ name, stages: st }) => {
     if (!st?.length) return;
-    setStages(st);
-    setSessionName(name || "1:1 session");
-    setView("builder");
+    const lost = exerciseCount(stages);
+    replaceWholeClass(
+      lost ? `Opened “${name || "1:1 session"}” · replaced ${lost} exercises` : `Opened “${name || "1:1 session"}”`,
+      () => { setStages(st); setSessionName(name || "1:1 session"); });
   };
 
   const handleDraftFromPersona = (draftStages, name, builderClass) => {
     if (!draftStages?.length) return;
-    setStages(draftStages);
-    setSessionName(name || "Persona draft");
-    // Item 9: land on the right Builder class type (strength/circuit/hyrox…) so the
-    // header + BPM targets match. Sets the selector only — does NOT apply a template,
-    // so the drafted persona stages are preserved.
-    const LIB = getLibrary();
-    if (builderClass && LIB[builderClass]) {
-      const sub = Object.keys(LIB[builderClass].subTypes || {})[0] || null;
-      setClassChoice({ classType: builderClass, subType: sub });
-    }
-    setView("builder");
+    const lost = exerciseCount(stages);
+    const title = name || "Persona draft";
+    replaceWholeClass(lost ? `Drafted “${title}” · replaced ${lost} exercises` : `Drafted “${title}”`, () => {
+      setStages(draftStages);
+      setSessionName(title);
+      // Item 9: land on the right Builder class type (strength/circuit/hyrox…) so the
+      // header + BPM targets match. Sets the selector only — does NOT apply a template,
+      // so the drafted persona stages are preserved.
+      const LIB = getLibrary();
+      if (builderClass && LIB[builderClass]) {
+        const sub = Object.keys(LIB[builderClass].subTypes || {})[0] || null;
+        setClassChoice({ classType: builderClass, subType: sub });
+      }
+    });
   };
   // (§3A — starting a class FROM the Schedule — moved into useClassRunner as
   //  `handleStartScheduled`, along with the `pinnedClass` it sets. The Schedule
@@ -2292,10 +2339,13 @@ export default function App() {
   const handleImportTemplate = (data) => {
     if(!data || !Array.isArray(data.stages)) { alert("That file isn't a Jungle template (no stages found)."); return; }
     const imported = data.stages.map(s=>({ ...s, id:uid(), exercises:Array.isArray(s.exercises)?s.exercises:[], tracks:Array.isArray(s.tracks)?s.tracks:[] }));
-    setStages(imported);
-    setSessionName(data.name || "Imported Template");
-    if(data.classType) setClassChoice({classType:data.classType, subType:data.subType||null});
-    setView("builder");
+    const lost = exerciseCount(stages);
+    const title = data.name || "Imported Template";
+    replaceWholeClass(lost ? `Opened “${title}” · replaced ${lost} exercises` : `Opened “${title}”`, () => {
+      setStages(imported);
+      setSessionName(title);
+      if(data.classType) setClassChoice({classType:data.classType, subType:data.subType||null});
+    });
   };
 
   if (window.opener&&!window.opener.closed&&new URLSearchParams(window.location.search).get("code")) {
