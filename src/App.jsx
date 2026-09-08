@@ -1032,11 +1032,26 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           </button>
           <div style={{minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
-              <span style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"21px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled Session"}</span>
+              <span style={{fontFamily:"var(--display)",fontSize:isMobile?"16px":"21px",fontWeight:"700",color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMobile?"140px":"320px"}}>{sessionName||"Untitled class"}</span>
               {/* Icon-only, so it had no accessible name at all — a screen reader
                   announced "button". aria-label and not title: a title does not
-                  override text content for a button's accessible name. */}
-              <button aria-label="Rename class" data-tap onClick={()=>{const n=prompt("Session name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
+                  override text content for a button's accessible name.
+                  The prompt said "Session name:" while the button that opens it
+                  says "Rename class", and the empty header said "Untitled
+                  Session" — three words for one object in one 4-line block.
+                  `session` is this file's variable name, not the product's word:
+                  the screen is the Class Builder, the buttons open and save a
+                  "class file", and the Dashboard calls it "today's class". The
+                  aria-label is the one the specs address, so the two that were
+                  wrong moved to it. (`PTScreen`'s "Session name" is a different
+                  object — a 1:1 session really is one — and stays.)
+                  ⚠️ The `||` fallback above is currently UNREACHABLE and is kept
+                  as a guard, not as copy: `getDraftClass` coerces a missing name
+                  to "" and line ~2054 then reads `savedDraft?.name || "My
+                  Workout"`, while this button refuses an empty rename. Nothing
+                  can put "" in `sessionName`, so no test drives that string —
+                  only the dialog below is asserted. */}
+              <button aria-label="Rename class" data-tap onClick={()=>{const n=prompt("Class name:",sessionName);if(n)onSessionNameChange(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",padding:"2px",display:"flex",flexShrink:0}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
