@@ -850,10 +850,47 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   const hasCustomExercises = s => (s.exercises||[]).some(e => !e.source || e.source !== "library");
   const anyCustom = stages.some(hasCustomExercises);
 
-  // Apply a template + immediately smart-distribute exercises from the library
-  const applyTemplate = (classType, subType) => {
+  // Apply a template + immediately smart-distribute exercises from the library.
+  //
+  // 🔴 THE GUARD LIVES HERE NOW, BECAUSE THIS IS THE CHOKE-POINT. It used to live
+  // in `handleClassChange` alone, and the comment above still says the scheduled-
+  // type button is "routed through handleClassChange so a draft carrying custom
+  // exercises still gets the existing replace-your-stages confirm". Three other
+  // callers were not routed through it and walked straight past:
+  //
+  //   · `runSmartBuild`'s fallback (App.jsx) — the ONLY reachable Build-for-me
+  //     path on the shipped build, because the edge-function branch above it
+  //     needs `supabaseEnabled && supabase`.
+  //   · every tile under "Or insert a template" in `SmartBuildDialog`.
+  //   · the prompt's own Apply button, which is the one that SHOULD skip it.
+  //
+  // Driven on a hand-authored class: both dialog doors replaced "MY OWN WARMUP"
+  // and "MY OWN LIFT" with a five-stage Yoga template, no confirm, no undo. The
+  // class picker beside them asked first. This is CLAUDE.md's own rule about
+  // `parqStatus`/`blocksLoad` in another costume — a gate that lives in one
+  // caller is one the next caller walks through — so it moves to the function
+  // every caller has to go through, and `confirmed` is how the Apply button
+  // says it has already asked.
+  //
+  // 🔴 AND THE STORED CLASS TYPE FOLLOWS THE STAGES. `classChoice` was set by
+  // `handleClassChange` and by nothing else, so the two dialog doors left a Yoga
+  // class labelled CrossFit — and that label is not cosmetic. It reaches
+  // `LiveScreen` as `classType`, which `ensureClassInstance` writes to
+  // `class_instances.class_type`; a Yoga class run after Build-for-me was
+  // recorded against CrossFit in the gym's own attendance history, which is what
+  // `classTypeRetention.js` and the Analytics screen read. It also rides
+  // `handleExportClass` into the saved .json, and it is what Smart Distribute
+  // reads — so the two buttons beside each other disagreed about what class this
+  // is. Setting it here is idempotent for the picker path, which already set it.
+  const applyTemplate = (classType, subType, { confirmed = false } = {}) => {
     const newStages = buildStagesFromTemplate(classType, subType, LIB);
     if (!newStages) return;
+    if (!confirmed && anyCustom) { setTemplatePrompt({ classType, subType }); return; }
+    // The PRIOR list and the prior label, together: restoring the stages under
+    // the wrong type would be a different class, not the coach's one back.
+    const before = { stages, classChoice };
+    const lost = stages.reduce((a, st) => a + (st.exercises?.length || 0), 0);
+    onClassChoiceChange({ classType, subType });
     // Replace entire stage list
     onReorderStages(newStages);
     setSelIdx(0);
@@ -867,7 +904,16 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
       const clsInfo = lib[classType];
       const subInfo = clsInfo?.subTypes?.[subType];
       const total   = distributed.reduce((a, s) => a + (s.exercises?.length||0), 0);
-      toast(`✅ ${clsInfo?.icon} ${clsInfo?.label} — ${subInfo?.label||subType} · ${newStages.length} stages · ${total} exercises loaded`);
+      const said = `✅ ${clsInfo?.icon} ${clsInfo?.label} — ${subInfo?.label||subType} · ${newStages.length} stages · ${total} exercises loaded`;
+      // No undo when there was nothing to lose — `handleNewClass`'s rule, and the
+      // overwhelmingly common case is a coach shaping an empty draft.
+      if (!lost) { toast(said); return; }
+      toast(`${said} · replaced ${lost}`, { undo: () => {
+        onClassChoiceChange(before.classChoice);
+        onReorderStages(before.stages);
+        setSelIdx(0);
+        toast("Your own class is back");
+      } });
     }, 50);
   };
 
@@ -887,22 +933,18 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   // Handle class type change from the selector
   const handleClassChange = (classType) => {
     const firstSub = Object.keys(LIB[classType]?.subTypes||{})[0]||null;
+    // ⚠️ Still set UP FRONT on this path, deliberately. The picker is a `<select>`
+    // the coach has already moved; leaving it on the old value while the confirm
+    // bar underneath says "Apply Yoga template?" reads as the control having
+    // failed. `applyTemplate` raises the prompt and sets it again on Apply.
     onClassChoiceChange({classType, subType:firstSub});
-    if (anyCustom) {
-      setTemplatePrompt({classType, subType:firstSub});
-    } else {
-      applyTemplate(classType, firstSub);
-    }
+    applyTemplate(classType, firstSub);
   };
 
   // Handle sub-type change from the selector
   const handleSubChange = (subType) => {
     onClassChoiceChange({classType:selectedClass, subType});
-    if (anyCustom) {
-      setTemplatePrompt({classType:selectedClass, subType});
-    } else {
-      applyTemplate(selectedClass, subType);
-    }
+    applyTemplate(selectedClass, subType);   // the guard is inside it now
   };
   const runSmartBuild = async () => {
     const pr = (smartPrompt||"").trim(); if (!pr) return;
@@ -1184,7 +1226,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           </span>
           <div style={{display:"flex",gap:"6px",flexShrink:0}}>
             <button onClick={()=>setTemplatePrompt(null)} style={{padding:"5px 12px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"6px",cursor:"pointer",color:"var(--muted)",fontSize:"11px"}}>Keep Current</button>
-            <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType)} style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--bg)",fontSize:"11px",fontWeight:"700"}}>Apply</button>
+            <button onClick={()=>applyTemplate(templatePrompt.classType,templatePrompt.subType,{confirmed:true})} style={{padding:"5px 12px",background:"var(--accent)",border:"none",borderRadius:"6px",cursor:"pointer",color:"var(--bg)",fontSize:"11px",fontWeight:"700"}}>Apply</button>
           </div>
         </div>
       )}
