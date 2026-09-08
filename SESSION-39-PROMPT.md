@@ -14,8 +14,8 @@ There is exactly one thing that ends the session early, and it is in §6.
 domain rules. **This file does not repeat them.** It carries state, authority and the work.
 
 `SESSION-38-HANDOFF.md` is the session before this one, in full. **Read §4 and §6 of it before you
-start.** §4 is five defects that were live in the shipped product; §6 is what the last brief got
-wrong plus four of the last session's own retractions. Both are the argument for how this one is
+start.** §4 is six defects that were live in the shipped product — three of them one defect wearing
+three faces; §6 is what the last brief got wrong plus five of the last session's own retractions. Both are the argument for how this one is
 shaped.
 
 ### 0.1 🔴 Your base is a stack of three, and you have to check it
@@ -43,7 +43,7 @@ gh pr list --repo killdylz/Jungle-App --state open --json number,title,headRefNa
 | **Conflicts** | Resolve them ON YOUR BRANCH after basing off #17's. Do not force-push a branch you did not create |
 
 **Confirm position with a gate, not with the log.** `npm test` should report **1304 unit (46
-files)** and `npx playwright test --list` **588 in 48 files**. A tree that merely builds is not proof
+files)** and `npx playwright test --list` **590 in 48 files**. A tree that merely builds is not proof
 you are where this prompt thinks you are. ⚠️ If those numbers are higher, somebody has worked since —
 read `git log` before assuming this file is current.
 
@@ -64,7 +64,7 @@ meaning nothing. **Only a run started on a quiet tree counts.**
 ### 0.3 What in this prompt will have rotted
 
 Sessions 26, 27, 34, 35, 36, 37 and 38 each found false premises in their own briefs. Session 38
-found three, and retracted four of its own besides. Verify before building:
+found three, and retracted five of its own besides. Verify before building:
 
 | Claim | Verify with |
 |---|---|
@@ -261,8 +261,9 @@ message. Structure:
    🔴 **Carry forward anything of session 38's §5 that Dylan has not answered**, so an unanswered
    decision does not quietly fall off the list after one session.
 6. **Anything in THIS prompt that was false.** Every session since 26 has found something.
-   **Include your own retractions** — session 38 recorded four, including a screenshot it read wrong
-   and a regression it shipped and had caught by an existing sweep. Recording a threshold you had to
+   **Include your own retractions** — session 38 recorded five, including a screenshot it read wrong,
+   a regression it shipped and had caught by an existing sweep, and a commit message that miscounted
+   the callers of the very guard it was fixing. Recording a threshold you had to
    move is worth more than the appearance of getting it right first time.
 
 Then, and only then, **open one pull request** (§1.1). Do not merge it.

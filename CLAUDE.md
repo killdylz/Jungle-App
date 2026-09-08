@@ -15,7 +15,7 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 588 e2e (48 spec files) ·
+Green as of session 38: **`lint:crash` 0 · 1304 unit (46 files) · 590 e2e (48 spec files) ·
 14-chunk build · 0 over budget.** App.jsx is **2,565 lines**. StaffApp **333.00 / 360 kB — 27.0 kB
 left.** PTScreens **39.31 / 41**, RetentionScreen **17.13 / 18**, index **203.06 / 215**. A new
 screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk

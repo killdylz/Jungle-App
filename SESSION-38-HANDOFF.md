@@ -101,7 +101,7 @@ Covered as findings in §4 below, which is where they were found.
 ```
 lint:crash          0
 unit                1304 passed (46 files)      unchanged — every new test is e2e
-e2e                 588 passed (48 files)        was 567; +21
+e2e                 590 passed (48 files)        was 567; +23
 build               14 chunks
 size                0 over budget
 audit-store-writers exit 0 · 0 unexplained
