@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { newClassTypeKey } from "./libraryAccess.js";
 import { WORKOUT_LIBRARY } from "../data/library.js";
 import { diffLibrary, mergeLibrary, isLegacyLibraryBlob, LIBRARY_BLOB_VERSION,
-         resolveClassType } from "./libraryStore.js";
+         resolveClassType, classTypeLabel } from "./libraryStore.js";
 
 // DEC-13. The thing under test is not "does a diff work" — it is the PROMISE
 // "the studio's movement catalogue, editable per gym". A gym must be able to
@@ -213,5 +214,57 @@ describe("resolveClassType — the schedule and the runner must agree", () => {
     expect(resolveClassType(undefined, WORKOUT_LIBRARY)).toBe("");
     expect(resolveClassType("hiit", null)).toBe("hiit");
     expect(resolveClassType("hiit", {})).toBe("hiit");
+  });
+});
+
+// ── classTypeLabel: the key whose label was deleted ──────────────────────────
+//
+// Session 22 shipped `GYM-BARRE-MRKHJ2LC` onto the Dashboard and
+// `rawValues.spec.js` was written to stop it happening again. That sweep seeds a
+// gym-authored class type and never deletes it, so `LIB[key]?.label || key`
+// always found a label and the fallback — the half that leaks — was never
+// exercised. Pressing "Reset to Defaults" in the Exercise Library removes the
+// gym's own types and leaves every schedule rule still pointing at the key.
+describe("classTypeLabel — a key whose catalogue entry is gone", () => {
+  const LIB = { hiit: { label: "HIIT" }, "gym-barre-ms4pk827": { label: "Barre" } };
+
+  it("prefers the catalogue's own label whenever there is one", () => {
+    expect(classTypeLabel("hiit", LIB)).toBe("HIIT");
+    expect(classTypeLabel("gym-barre-ms4pk827", LIB)).toBe("Barre");
+  });
+
+  it("🔴 gives back the gym's own words when the entry has been deleted", () => {
+    // The whole defect in one line: this used to render as the key.
+    expect(classTypeLabel("gym-mobility-mtsg6zhy", {})).toBe("Mobility");
+    expect(classTypeLabel("gym-barre-ms4pk827", {})).toBe("Barre");
+    // Multi-word names keep their words. `newClassTypeKey` hyphenates them.
+    expect(classTypeLabel("gym-reformer-pilates-ms4pk827", {})).toBe("Reformer Pilates");
+  });
+
+  it("leaves anything that is not a gym-minted key exactly as it is", () => {
+    // A pre-session-21 schedule stored display strings, and those are already
+    // the word a human wants.
+    expect(classTypeLabel("Mobility", {})).toBe("Mobility");
+    // A built-in key with no entry is a catalogue bug and must stay visible
+    // rather than being dressed up as a name.
+    expect(classTypeLabel("hiit", {})).toBe("hiit");
+    expect(classTypeLabel("", LIB)).toBe("");
+    expect(classTypeLabel(null, LIB)).toBe("");
+  });
+
+  it("survives a key that is gym-prefixed and nothing else", () => {
+    // `gym-` with no slug cannot happen from `newClassTypeKey` (it substitutes
+    // "class"), but a hand-edited store can hold anything and a blank name on a
+    // timetable is worse than the key.
+    expect(classTypeLabel("gym-", {})).toBe("gym-");
+    expect(classTypeLabel("gym-x", {})).toBe("gym-x");
+  });
+
+  it("round-trips a key this product actually mints", () => {
+    // Positive control: the shape is taken from `newClassTypeKey` rather than
+    // typed from memory, so a change to the minting breaks this test.
+    const key = newClassTypeKey("Reformer Pilates");
+    expect(key).toMatch(/^gym-reformer-pilates-[0-9a-z]+$/);
+    expect(classTypeLabel(key, {})).toBe("Reformer Pilates");
   });
 });

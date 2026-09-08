@@ -361,6 +361,50 @@ test.describe("studio analytics", () => {
     expectNoConsoleErrors(errors);
   });
 
+  test("the headcount beside the studio average is people, and cannot exceed the roster", async ({ page }) => {
+    // 🔴 Found by seeding fourteen months and two hundred members and READING the
+    // screen: this line said "studio average 90% · 562 members measured" on a gym
+    // that had two hundred members. `studioOf` is the pooled average's
+    // denominator and counts a member once per class type they tried — right for
+    // the rate, impossible as a headcount.
+    //
+    // ⚠️ Every fixture in this file gives each class type its OWN members
+    // (`${type}-m${i}`), so the two numbers coincide and the defect is invisible.
+    // This one is the shape a real timetable has: ten people who go to both.
+    const TEN = 10;
+    const members = [], attendance = [], classInstances = [];
+    for (let i = 0; i < TEN; i++) {
+      members.push({ id: `m${i}`, name: `Member ${i}`, email: "", status: "active", joinedAt: "", externalRef: "" });
+    }
+    for (const type of ["hiit", "strength"]) {
+      classInstances.push({ id: `${type}-a`, classType: type, startsAt: ago(200), name: type, durationMin: 45 });
+      classInstances.push({ id: `${type}-b`, classType: type, startsAt: ago(193), name: type, durationMin: 45 });
+      for (let i = 0; i < TEN; i++) {
+        attendance.push({ id: `${type}-at-a-${i}`, classInstanceId: `${type}-a`, memberId: `m${i}`, source: "import", checkedInAt: ago(200) });
+        attendance.push({ id: `${type}-at-b-${i}`, classInstanceId: `${type}-b`, memberId: `m${i}`, source: "import", checkedInAt: ago(193) });
+      }
+    }
+    await seedTimetable(page, { members, attendance, classInstances });
+    await nav(page, "Analytics");
+
+    const panel = page.getByTestId("class-type-retention");
+    // Positive control: the panel is ranking two real types over these ten
+    // people, so there is something for the headcount to be wrong about.
+    await expect(panel).toContainText("10/10");
+    const rows = await panel.locator("div[title]").evaluateAll((els) => els.length);
+    expect(rows, "two ranked types, or this test measures nothing").toBe(2);
+
+    const said = await panel.innerText();
+    const stated = Number((said.match(/·\s*(\d+)\s+members/) || [])[1]);
+    expect(stated, "the studio line must state a headcount at all").toBeGreaterThan(0);
+    expect(stated, "a headcount larger than the roster is a confident wrong number")
+      .toBeLessThanOrEqual(members.length);
+    expect(stated).toBe(TEN);
+    // And it says which number it is, so 10 beside a 20-strong denominator does
+    // not read as an undercount.
+    expect(said).toContain("once per class type they tried");
+  });
+
   test("a class type too thin to rank is NAMED as excluded, never silently dropped", async ({ page }) => {
     // An owner who cannot see that Barre was left out reads the list as the whole
     // timetable and concludes Barre has no problem.

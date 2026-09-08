@@ -162,6 +162,37 @@ describe("classTypeRetention — the return rate, over one comparable population
     expect(m.studioOf).toBe(100);
   });
 
+  it("counts a member who tried three types ONCE as a person and three times in the average", () => {
+    // 🔴 The screen read "studio average 90% · 562 members measured" on a gym
+    // with TWO HUNDRED members. `studioOf` is the average's denominator and
+    // counts a member once per class type they tried, which is right for the
+    // rate and impossible as a headcount. A number larger than the roster is a
+    // confident wrong number, and this repo's rule is that one of those is worse
+    // than no number at all.
+    //
+    // Both are asserted, because the fix must not "correct" the average: the
+    // pooled weighting above is deliberate and stays.
+    const classInstances = [], attendance = [];
+    ["hiit", "hyrox", "mobility"].forEach((t, ti) => {
+      classInstances.push({ id: `ci-${t}-a`, classType: t, startsAt: at(200) });
+      classInstances.push({ id: `ci-${t}-b`, classType: t, startsAt: at(193) });
+      for (let i = 0; i < MIN_TRIERS; i++) {
+        attendance.push({ id: `x${ti}-${i}a`, classInstanceId: `ci-${t}-a`, memberId: `m${i}`, checkedInAt: at(200) });
+        attendance.push({ id: `x${ti}-${i}b`, classInstanceId: `ci-${t}-b`, memberId: `m${i}`, checkedInAt: at(193) });
+      }
+    });
+    const m = classTypeRetention(attendance, classInstances, { now: NOW });
+
+    expect(m.ready, "positive control: three full types must be measurable").toBe(true);
+    expect(m.types).toHaveLength(3);
+    expect(m.studioOf, "the average is still weighted per member-per-type").toBe(MIN_TRIERS * 3);
+    expect(m.studioMembers, "the headcount is people, and there are only MIN_TRIERS of them").toBe(MIN_TRIERS);
+
+    const roster = new Set(attendance.map((a) => a.memberId));
+    expect(m.studioMembers, "a headcount can never exceed the people it is about")
+      .toBeLessThanOrEqual(roster.size);
+  });
+
   // ── Data shapes the importer really produces ─────────────────────────────
   it("survives rows with no date, no member, or no instance", () => {
     const g = gym({ hiit: cohort(10, 200, 5) });

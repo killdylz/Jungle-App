@@ -218,3 +218,36 @@ export function resolveClassType(raw, lib) {
   const byLabel = keys.find(k => String(lib[k]?.label ?? "").trim().toLowerCase() === want);
   return byLabel || s;
 }
+
+// ── What a human reads when the catalogue has no label for a key ─────────────
+//
+// 🔴 `LIB[key]?.label || key` is the pattern that printed `GYM-BARRE-MRKHJ2LC`
+// on the Dashboard in session 22, and `rawValues.spec.js` exists because of it.
+// That sweep seeds a gym-authored class type and asserts no stored value reaches
+// a human — and it passes, because it never DELETES the label. Press "Reset to
+// Defaults" in the Exercise Library and every rule that used the gym's own type
+// keeps the key while the catalogue entry that named it is gone: the timetable
+// then reads `GYM-MOBILITY-MTSG6ZHY` in the slot where it said "Mobility".
+// Driven end to end — author the type, schedule a class with it, reset, look at
+// the week.
+//
+// The recovery is not a guess. `newClassTypeKey` builds `gym-<slug>-<base36 ms>`
+// out of the gym's OWN words, so the slug is what they typed, hyphenated and
+// lower-cased. Turning it back is restoring their text, not inventing a name —
+// which is the line `resolveClassType` draws above and this stays on the right
+// side of: the stored VALUE is untouched, and only what is drawn changes.
+//
+// A key that is not gym-minted falls through unchanged. `Mobility` typed into a
+// pre-session-21 schedule is already the word a human wants, and a built-in key
+// with no entry is a catalogue bug that should stay visible.
+export function classTypeLabel(raw, lib) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const known = lib?.[s]?.label;
+  if (known) return String(known);
+  const m = /^gym-(.+)-[0-9a-z]+$/i.exec(s);
+  if (!m) return s;
+  const words = m[1].split("-").filter(Boolean);
+  if (!words.length) return s;
+  return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}

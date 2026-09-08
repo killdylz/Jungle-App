@@ -126,6 +126,60 @@ test.describe("nor in a panel that only exists after a click", () => {
   }
 });
 
+// ── The hole this file had, and the one it exists to close ──────────────────
+//
+// 🔴 EVERY TEST ABOVE KEEPS THE LABEL. `seedRichGym` authors a gym class type
+// and leaves it in the catalogue, so `LIB[key]?.label || key` always found a
+// label and the `|| key` half — the half that leaks, and the half session 22
+// shipped — was never once exercised by the sweep written to catch it.
+//
+// "Reset to Defaults" in the Exercise Library is the shipped, confirmed button
+// that removes the gym's own types. It does not touch the schedule, so every
+// rule that used one keeps the key while the entry that named it is gone. Driven
+// end to end: author "Mobility", schedule a class with it, reset, look at the
+// week — the slot read GYM-MOBILITY-MTSG6ZHY.
+//
+// ⚠️ This is a SECOND fixture, not a stricter assertion on the first: the case
+// is a state the existing fixture cannot reach, which is exactly why the guard
+// went eight sessions without noticing.
+test.describe("nor after the gym resets the catalogue out from under its own schedule", () => {
+  test("a class type whose entry was deleted still reads as words on the week", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    const gymKey = await seedRichGym(page);
+
+    // Positive control: the label is on the timetable BEFORE the reset, so the
+    // assertion afterwards is about the reset and not about the seed.
+    await nav(page, "Schedule");
+    await expect(page.getByText("Barre", { exact: false }).first()).toBeVisible();
+
+    await nav(page, "Exercise Library");
+    await page.getByRole("button", { name: /Edit/ }).first().click();
+    await page.getByRole("button", { name: /^Reset$/ }).first().click();
+    await page.getByRole("button", { name: /Reset Library/ }).first().click();
+    await expect.poll(async () => {
+      const blob = await stored(page, "jungle_library_custom");
+      return Object.keys(blob?.classes || {}).includes(gymKey);
+    }, { message: "the reset must actually have removed the gym's own type" }).toBe(false);
+    await page.getByRole("button", { name: "Close" }).click();
+
+    // The rule still points at the key — that is the state, not a bug to fix here.
+    const rules = await stored(page, "jungle_user_classes");
+    expect(rules.find((r) => r.id === "uc1").type,
+      "the schedule must still hold the orphaned key, or this proves nothing").toBe(gymKey);
+
+    await nav(page, "Schedule");
+    const bad = await rawValues(page);
+    expect(bad, reportRawValues("Schedule after Reset to Defaults", bad)).toEqual([]);
+    await proveScannerLive(page, "Schedule after Reset to Defaults");
+
+    // And it says the gym's own word, rather than merely not saying the key.
+    await expect(page.getByText("Barre", { exact: false }).first()).toBeVisible();
+
+    expectNoConsoleErrors(errors);
+  });
+});
+
 // 🔴 The one that matters most, and the one whose own fixture hides it.
 //
 // `memberSummary.spec.js` stubs the Edge Function with `classType:

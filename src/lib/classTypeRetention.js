@@ -99,7 +99,7 @@ export function classTypeRetention(attendance = [], classInstances = [], opts = 
   const base = {
     ready: false, types: [], excluded: [], attributed, unattributed, undated,
     windowDays: RETURN_WINDOW_DAYS, minTriers: MIN_TRIERS,
-    studioRate: null, studioOf: 0, reason: "",
+    studioRate: null, studioOf: 0, studioMembers: 0, reason: "",
   };
 
   if (!attributed) {
@@ -123,12 +123,22 @@ export function classTypeRetention(attendance = [], classInstances = [], opts = 
   // newest class on the timetable look like the worst one.
   const rows = [];
   let studioReturned = 0, studioOf = 0;
+  // 🔴 HOW MANY PEOPLE, as opposed to how many measurements. `studioOf` counts a
+  // member ONCE PER CLASS TYPE they tried, which is right for the average and
+  // wrong as a headcount: a gym of 200 members whose members each try three
+  // types produces 562, and the screen said "562 members measured". A number
+  // larger than the roster is a confident wrong number, and this repo's rule is
+  // that one of those is worse than no number at all. Found by seeding fourteen
+  // months and two hundred members and READING the screen — the arithmetic was
+  // never wrong, only the noun.
+  const measuredMembers = new Set();
   for (const [type, members] of byType) {
     let triers = 0, returned = 0, tooNew = 0;
-    for (const visits of members.values()) {
+    for (const [memberId, visits] of members) {
       const first = Math.min(...visits);
       if (first > now - windowMs) { tooNew++; continue; }
       triers++;
+      measuredMembers.add(memberId);
       if (visits.some((v) => v > first && v <= first + windowMs)) returned++;
     }
     // The studio-wide baseline is the SAME population summed, not the mean of
@@ -157,7 +167,10 @@ export function classTypeRetention(attendance = [], classInstances = [], opts = 
 
   return { ...base, ready: true, types: ranked, excluded,
            studioRate: studioOf ? Math.round((studioReturned / studioOf) * 100) : null,
-           studioOf };
+           // Both, and named for what each one is. `studioOf` is the average's
+           // denominator and stays; `studioMembers` is the only one of the two a
+           // person can be counted in twice.
+           studioOf, studioMembers: measuredMembers.size };
 }
 
 /**
