@@ -744,8 +744,33 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { onImportClass?.(JSON.parse(reader.result)); }
-      catch { alert("Could not read that file — please choose a Jungle class file (.json)."); }
+      // 🔴 TWO FAILURES, TWO SENTENCES. One `try` used to wrap both halves, so
+      // anything thrown INSIDE the import was reported to the coach as "Could
+      // not read that file — please choose a Jungle class file (.json)". That
+      // sends them to find a better file when the file was never the problem,
+      // and there is no better file to find.
+      //
+      // It is not hypothetical. `{"stages":[null]}` is valid JSON and clears
+      // `handleImportTemplate`'s own guard (`stages` IS an array), and the map
+      // that follows reads `s.exercises` off the null and throws. A coach whose
+      // file has one empty stage in it is told their file is unreadable.
+      //
+      // ⚠️ Narrowing the catch alone would trade a wrong message for NO message,
+      // which is worse — the press would do nothing at all and say nothing about
+      // it. The second half needs a sentence of its own.
+      //
+      // The second sentence deliberately offers no advice. "Choose a different
+      // file" is what was wrong with the first one, and "this is a fault in
+      // Jungle" is a claim this catch cannot make — a damaged file reaches it
+      // too. What it CAN say, and all it says, is which half failed.
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch {
+        alert("Could not read that file — please choose a Jungle class file (.json).");
+        return;
+      }
+      try { onImportClass?.(parsed); }
+      catch { alert("That file opened, but Jungle could not build a class from what is inside it."); }
     };
     reader.readAsText(file);
     e.target.value = ""; // let the same file be picked twice in a row

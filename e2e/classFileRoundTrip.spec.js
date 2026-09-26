@@ -200,4 +200,48 @@ test.describe("a class survives being written to a file and opened again", () =>
 
     expectNoConsoleErrors(errors);
   });
+
+  // 🔴 THE THIRD FAILURE, WHICH USED TO WEAR THE SECOND ONE'S SENTENCE.
+  //
+  // `handleImportFile` wrapped `JSON.parse` and `onImportClass` in ONE `try`, so
+  // anything thrown inside the import was reported as "Could not read that file
+  // — please choose a Jungle class file (.json)". The file above is readable,
+  // parses, and clears `handleImportTemplate`'s guard (`stages` IS an array);
+  // the map that follows reads `s.exercises` off the null and throws. The coach
+  // is told to go and find a better file, and there is no better file to find.
+  //
+  // ⚠️ Asserting on the MESSAGE, not on the silence — Playwright auto-dismisses
+  // dialogs, so "I imported rubbish and the stages did not change" passes
+  // whether a sentence was shown or not. And `said` is captured into a variable
+  // rather than asserted inside the handler, so a page that opened NO dialog
+  // fails `toBeTruthy` rather than passing a `not.toMatch` vacuously.
+  test("a readable file that the import chokes on does not blame the file", async ({ page }, testInfo) => {
+    const errors = watchConsole(page);
+    await openBuilder(page);
+    const before = await renderedStages(page);
+    expect(before.length).toBeGreaterThan(1);
+
+    // Valid JSON. Valid enough to clear the template guard. One empty stage.
+    const oneNullStage = testInfo.outputPath("one-null-stage.json");
+    fs.writeFileSync(oneNullStage, JSON.stringify({ name: "Tuesday", stages: [null] }));
+
+    let said;
+    page.once("dialog", (d) => { said = d.message(); return d.accept(); });
+    await fileInput(page).setInputFiles(oneNullStage);
+    await expect.poll(() => said, { message: "the import must SAY something" }).toBeTruthy();
+
+    // The claim, both ways round. Putting the single `try` back fails the first
+    // of these with `Received: "Could not read that file — please choose a
+    // Jungle class file (.json)."`
+    expect(said, "the file was read; saying otherwise sends the coach after a file that does not exist")
+      .not.toMatch(/could not read that file/i);
+    expect(said).toMatch(/could not build a class/i);
+
+    // And the coach's own class is still there — a failed import must not take
+    // half of one with it.
+    expect(await renderedStages(page)).toEqual(before);
+    expect((await stored(page, KEY))?.stages?.map((s) => s.name)).toEqual(before);
+
+    expectNoConsoleErrors(errors);
+  });
 });
