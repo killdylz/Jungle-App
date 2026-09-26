@@ -133,14 +133,17 @@ export function lostRows(before, after, path = "") {
 }
 
 const snapshot = (page) =>
-  page.evaluate((keys) => {
+  bounded(page.evaluate((keys) => {
     const o = {};
     for (const k of keys) { try { o[k] = JSON.parse(localStorage.getItem(k) || "null"); } catch { o[k] = null; } }
     return o;
-  }, GYM_KEYS);
+  }, GYM_KEYS), null);
 
 function diffGym(before, after) {
   const out = [];
+  // A read that could not be taken (see `bounded`) is not an empty gym — it is
+  // no answer at all, and treating it as one would report every row as lost.
+  if (!before || !after) return out;
   for (const k of GYM_KEYS) {
     if (before[k] === null || before[k] === undefined) continue;
     out.push(...lostRows(before[k], after[k], k));
@@ -165,7 +168,7 @@ const NAME_OF = (el) =>
     .trim().replace(/\s+/g, " ").slice(0, 48);
 
 const candidateNames = (page) =>
-  page.evaluate(`(${CANDIDATES.toString()})().map(${NAME_OF.toString()})`);
+  bounded(page.evaluate(`(${CANDIDATES.toString()})().map(${NAME_OF.toString()})`), []);
 
 // ── One round trip for everything a press has to be judged on ────────────────
 //
@@ -194,10 +197,64 @@ const candidateNames = (page) =>
 // list from this same moment. A settle that watches the store cannot see that.
 // A sweep that quietly stops sweeping is the exact failure this file was written
 // to avoid, so the wait stays fixed and the saving comes from the round trips.
+// ── 🔴 NO `page.evaluate` IN THIS FILE MAY RUN UNBOUNDED ─────────────────────
+//
+// `page.evaluate` has no timeout. A page that stops answering — and one does,
+// reproducibly, after the Profile modal's "Sign Out", which this sweep could
+// never reach until the second look below let it — takes the WHOLE test down
+// with it: the sweep sits in one evaluate for 240 seconds and Playwright reports
+// a timeout naming whatever call was pending, which is never the control that
+// caused it. That is the same failure this file exists to avoid, one level below
+// the sweep: a timeout is not a finding.
+//
+// So every read is bounded. A read that cannot be taken returns the fallback,
+// the press is recorded as skipped, and the report says so — an answer the next
+// session can act on, instead of a stack trace pointing at `localStorage.clear`.
+const READ_MS = 8000;
+const bounded = (promise, fallback) =>
+  Promise.race([promise, new Promise((res) => setTimeout(() => res(fallback), READ_MS))])
+    .catch(() => fallback);
+
 const SETTLE_MS = 200;
 
+// ── ⚠️ THE SWEEP CANNOT DESCEND INTO A `React.lazy` PANEL, AND NEVER COULD ───
+//
+// `ProfileModal` and `LibraryBrowserModal` are `React.lazy` (App.jsx:93-96), so
+// the press that opens one starts a dynamic import and the panel renders only
+// when the chunk lands — well after `SETTLE_MS`. The revealed set is empty and
+// the press is recorded as having opened nothing.
+//
+// The old code reached the Profile modal only BY ACCIDENT: that press failed its
+// actionability check, waited 1500ms and was then forced, so its revealed set
+// was read nearly two seconds late. Removing the forced path (above) took the
+// accident away, which is how this was found.
+//
+// 🔴 A SECOND LOOK WAS WRITTEN AND REMOVED, and the reason is worth more than the
+// code was. Waiting for the control count to move recovers the descent on eight
+// screens — and it then reaches the Profile modal's "Sign Out", which no run of
+// this sweep had ever pressed. Pressing it leaves the page unable to run ANY
+// `page.evaluate`: no dialog, no page error, a screenshot that looks perfectly
+// normal, and every subsequent read hangs until Playwright kills the test at
+// 240s. `installGym`'s `localStorage.clear()` is where it lands, which is why
+// the failure names a line that has nothing to do with it.
+//
+// That is a real defect in something — the sweep, the modal, or the dev server —
+// and it is not this commit's to chase. It is written up in the handoff with the
+// evidence. Until it is understood, the descent into a lazy panel stays missing,
+// which is a known gap rather than an accident.
+
+
+// ⚠️ `reject` IS NOT OPTIONAL HERE, and leaving it out cost a 240s timeout.
+// Everything below runs inside a `setTimeout` callback, so a throw in it — a
+// detached node, a bad regexp source, anything — escapes to the page's error
+// handler and the promise is NEVER SETTLED. `page.evaluate` has no timeout of
+// its own, so the sweep sits in one evaluate until Playwright kills the test,
+// and the failure it reports names whatever call happened to be pending. The
+// old code asked these questions in five separate evaluates, each of which
+// rejected promptly on a throw; folding them into one took that away.
 const POST_PRESS = ({ keys, confirmSrc, candSrc, nameSrc, waitMs }) =>
-  new Promise((resolve) => setTimeout(() => {
+  new Promise((resolve, reject) => setTimeout(() => {
+  try {
     document.querySelector("[data-sweep-target]")?.removeAttribute("data-sweep-target");
     const store = {};
     for (const k of keys) {
@@ -215,6 +272,7 @@ const POST_PRESS = ({ keys, confirmSrc, candSrc, nameSrc, waitMs }) =>
     // eslint-disable-next-line no-eval
     const names = eval(`(${candSrc})`)().map(eval(`(${nameSrc})`));
     resolve({ store, confirmUp, undo, names, toast: !!document.querySelector("[data-testid=toast]") });
+  } catch (e) { reject(new Error(String((e && e.message) || e))); }
   }, waitMs));
 
 const postPress = (page) =>
@@ -254,8 +312,16 @@ async function sweepScreen(page, screen) {
   const corpus = await captureSampleCoach(page, { freshApp, nav, expect });
   const blob = { ...usedGym(), ...corpus };
 
+  // ⚠️ Bounded like every other read, and for a sharper reason: `installGym`
+  // opens with a `page.evaluate`, so a wedged page hangs HERE, and the timeout
+  // Playwright then reports names `localStorage.clear()` — a line that has
+  // nothing to do with the control that caused it. Failing fast and saying so is
+  // worth more than four minutes of waiting and a misleading stack.
   const restore = async () => {
-    await installGym(page, blob);
+    const ok = await bounded(installGym(page, blob).then(() => true), false);
+    if (!ok) throw new Error(
+      "the page stopped answering page.evaluate, so the gym could not be reinstalled — " +
+      "the press before this one wedged it; see the note above CANDIDATES");
     await waitForApp(page);
     await nav(page, screen.side);
   };
@@ -266,12 +332,15 @@ async function sweepScreen(page, screen) {
   // the control could not be pressed at all.
   async function press(i, name, { allowRepeat = true } = {}) {
     const before = await snapshot(page);
+    // ⚠️ A snapshot that could not be TAKEN is not a gym with nothing in it.
+    // Comparing against `{}` would report every row in the gym as lost.
+    if (!before) return null;
     dialogs.length = 0;
 
     // A `<select>` is a control that writes too, and the Builder's "Jungle
     // presets…" — one of the four doors this file found — IS one. Its press is
     // choosing an option, not a click.
-    const marked = await page.evaluate(([src, idx]) => {
+    const marked = await bounded(page.evaluate(([src, idx]) => {
       // eslint-disable-next-line no-eval
       const el = eval(`(${src})`)()[idx];
       if (!el) return null;
@@ -279,7 +348,7 @@ async function sweepScreen(page, screen) {
       if (el.tagName !== "SELECT") return { kind: "click" };
       const other = [...el.options].map((o) => o.value).find((v) => v && v !== el.value);
       return { kind: "select", value: other || null };
-    }, [CANDIDATES.toString(), i]);
+    }, [CANDIDATES.toString(), i]), null);
     if (!marked) return null;
 
     const unmark = () =>
@@ -335,7 +404,7 @@ async function sweepScreen(page, screen) {
     } catch {
       // What is actually at the control's own centre? Anything that is not the
       // control, and not inside it, is something painted over it.
-      const covering = await page.evaluate(() => {
+      const covering = await bounded(page.evaluate(() => {
         const el = document.querySelector("[data-sweep-target]");
         if (!el) return "the control is gone";
         const b = el.getBoundingClientRect();
@@ -344,7 +413,7 @@ async function sweepScreen(page, screen) {
         if (hit === el || el.contains(hit) || hit.contains(el)) return null;
         const text = (hit.innerText || "").trim().replace(/\s+/g, " ").slice(0, 44);
         return `<${hit.tagName.toLowerCase()}> ${JSON.stringify(text)}`;
-      }).catch(() => "could not be read");
+      }), "could not be read");
       if (covering) { await unmark().catch(() => {}); return { obstructed: covering }; }
       try { await attempt(true); r.forced.push(name); }
       catch { await unmark().catch(() => {}); return null; }
@@ -352,7 +421,11 @@ async function sweepScreen(page, screen) {
     // The settle, the unmark, the store, the undo toast, the in-app confirm and
     // the control list, in ONE evaluate — see POST_PRESS for why, and for what
     // the 200ms is still protecting.
-    const settled = await postPress(page).catch(() => null);
+    // ⚠️ And a backstop, because "never settles" is not a state the try/catch
+    // above can cover on its own — a page whose main thread is wedged never runs
+    // the callback at all. A press whose reads cannot be taken is `null`, which
+    // the caller already records as skipped.
+    const settled = await bounded(postPress(page), null);
     if (!settled) { await unmark().catch(() => {}); return null; }
 
     const after = settled.store;
@@ -510,8 +583,21 @@ async function sweepScreen(page, screen) {
     // one identical form, and descending into each would be thirty-four
     // repetitions of the same walk for no extra coverage.
     if (outcome.lost.length) continue;
-    const revealedList = outcome.names ?? await candidateNames(page);
-
+    // ── 🔴 THE DESCENT READS ITS OWN LIST, ONE ROUND TRIP LATER ──────────────
+    //
+    // `outcome.names` is right here and free, and using it COSTS DESCENTS. It is
+    // captured inside POST_PRESS at exactly `SETTLE_MS`; this call lands 20-40ms
+    // after that. A modal still arriving at 200ms has no buttons yet, so the
+    // revealed set is empty and the press is recorded as having opened nothing.
+    //
+    // Measured: reading `outcome.names` here took the Dashboard from 1 descent to
+    // 0 — the Profile modal, which is not in `ALL_SCREENS` and is walked from
+    // nowhere else — and the Exercise Library from 13 to 12. ~16ms a press
+    // against a descent the sweep would otherwise never make is not a trade.
+    //
+    // ⚠️ So `outcome.names` exists for the cheap comparisons only (is the screen
+    // still at baseline), never for deciding what to walk into.
+    const revealedList = await candidateNames(page);
     const revealedIdx = revealedList
       .map((n, j) => [n, j])
       .filter(([n]) => n && !known.has(n));

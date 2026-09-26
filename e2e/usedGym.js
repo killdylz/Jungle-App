@@ -146,5 +146,5 @@ export async function installGym(page, blob) {
     sessionStorage.setItem("jungle_pin_ok", "1");
     for (const [k, v] of Object.entries(b)) localStorage.setItem(k, JSON.stringify(v));
   }, blob);
-  await page.reload({ waitUntil: "commit" });
+  await page.reload();
 }
