@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import * as store from "../lib/store.js";
 import { FLAGS } from "../config/flags.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
+import { useAfterMount } from "../ui/useAfterMount.js";
 import { SCFG } from "../data/stageConfig.js";
 import { apiGetPlaylists } from "./spotifyApi.js";
 
@@ -23,13 +24,28 @@ function MusicHubScreen({onBack, stages=[], nowPlaying=null, liveState={}, playe
   const [takeRequests,    setTakeRequests]    = React.useState(()=>store.getDjTakeRequests());
   const [cleanEdits,      setCleanEdits]      = React.useState(()=>store.getDjCleanEdits());
 
-  // Persist settings
-  React.useEffect(()=>{ store.saveDjEnergy(energy); },[energy]);
-  React.useEffect(()=>{ store.saveDjBpmRange(bpmMin, bpmMax); },[bpmMin,bpmMax]);
-  React.useEffect(()=>{ store.saveDjTransition(transition); },[transition]);
-  React.useEffect(()=>{ store.saveDjFollowStructure(followStructure); },[followStructure]);
-  React.useEffect(()=>{ store.saveDjTakeRequests(takeRequests); },[takeRequests]);
-  React.useEffect(()=>{ store.saveDjCleanEdits(cleanEdits); },[cleanEdits]);
+  // Persist settings.
+  //
+  // 🔴 `useAfterMount`, NOT `useEffect`. These are six copies of the exact shape
+  // that hook exists to prevent — "initialise from storage, persist on change" —
+  // and every one of these writers pushes to `user_prefs` behind the local write
+  // (`saveDjEnergy` and friends in store.js all end `if (_synced()) _bgUpsert`).
+  // On a fresh device the initialisers return DEFAULTS, so merely OPENING this
+  // screen would push "Balanced / 120-142 / Beat-match" over whatever the coach
+  // had chosen, racing the hydrate that would have read the real values.
+  //
+  // ⚠️ THIS SHIPPED NOTHING, and only because `FLAGS.music` is false: the screen
+  // has two mount points and both are gated, so it never renders. It is a
+  // landmine rather than a defect — it arrives the day music is turned on, in a
+  // file no sweep can reach while the flag is off. `mountWrites.spec.js` drives
+  // screens; it cannot drive this one. `src/ui/mountWrite.test.js` is the check
+  // that can, and it reads the source rather than the product.
+  useAfterMount(()=>{ store.saveDjEnergy(energy); },[energy]);
+  useAfterMount(()=>{ store.saveDjBpmRange(bpmMin, bpmMax); },[bpmMin,bpmMax]);
+  useAfterMount(()=>{ store.saveDjTransition(transition); },[transition]);
+  useAfterMount(()=>{ store.saveDjFollowStructure(followStructure); },[followStructure]);
+  useAfterMount(()=>{ store.saveDjTakeRequests(takeRequests); },[takeRequests]);
+  useAfterMount(()=>{ store.saveDjCleanEdits(cleanEdits); },[cleanEdits]);
 
   // Real playlists from Spotify
   const [playlists, setPlaylists] = React.useState([]);
