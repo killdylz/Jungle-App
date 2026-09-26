@@ -522,6 +522,76 @@ test.describe("a gym can author its own class type", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // 🔴 THE CONFIRM HAS TO SAY WHAT IT ORPHANS, session 40 §3.1.
+  //
+  // "Reset to Defaults" asks — which is why the destructive sweep passes it and
+  // why nothing here was ever a finding. What it did not say is that it removes
+  // the gym's OWN class types, leaving every schedule rule that used one pointing
+  // at a key the catalogue no longer has. Session 39 §4.3 is what that costs, and
+  // fixing the timetable's LABEL did not mean the coach had been warned.
+  //
+  // `DeleteCoachConfirm` is the precedent and its comment is the rule: the
+  // inventory IS the guard. So the numbers are asserted, not just the presence of
+  // a paragraph — a sentence that said "some classes" would pass a looser test
+  // and tell a coach nothing.
+  test("Reset names the class types it deletes and the classes that used them", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+    await closeLibrary(page);
+
+    // Two rules on the gym's own type, and one on a built-in that must NOT be
+    // counted — a cascade number that includes classes the reset does not touch
+    // is the confident wrong number this repo refuses.
+    await page.evaluate((k) => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "uc1", name: "Barre Flow", type: k, coach: "", day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
+        { id: "uc2", name: "Barre Deep", type: k, coach: "", day: "Wed", slot: "18:00", dur: "45m", repeat: "weekly" },
+        { id: "uc3", name: "Morning WOD", type: "crossfit", coach: "", day: "Tue", slot: "06:00", dur: "45m", repeat: "weekly" },
+      ]));
+      localStorage.setItem("jungle_class_instances", JSON.stringify([
+        { id: "ci1", startsAt: new Date().toISOString(), name: "Barre Flow", classType: k, coachName: "" },
+      ]));
+    }, gymKey);
+    await page.reload();
+
+    await openLibraryEditMode(page);
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await expect(page.getByText("Reset to Defaults?")).toBeVisible();
+
+    const cascade = page.getByTestId("reset-cascade");
+    await expect(cascade, "the confirm must name what it is about to orphan").toBeVisible();
+    // The gym's own word, not the key — `classTypeLabel` draws it.
+    await expect(cascade).toContainText(`the class type you created — ${TYPE}`);
+    await expect(cascade).toContainText("2 classes on your schedule");
+    await expect(cascade).toContainText("1 already run or published");
+    await expect(page.getByText(gymKey), "the storage key must never reach a coach's screen")
+      .toHaveCount(0);
+
+    // Cancelling writes nothing. The confirm is a guard, not a step.
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Reset to Defaults?")).toHaveCount(0);
+    expect(await stored(page, KEY), "cancel must leave the gym's types alone").not.toBeNull();
+
+    expectNoConsoleErrors(errors);
+  });
+
+  // The other half: a gym that authored nothing loses no class type, and a
+  // sentence about types it does not have would be a guard crying wolf.
+  test("Reset says nothing about class types when the gym authored none", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Exercise Library");
+    await page.getByRole("button", { name: /Edit/ }).first().click();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await expect(page.getByText("Reset to Defaults?")).toBeVisible();
+    await expect(page.getByTestId("reset-cascade")).toHaveCount(0);
+    // …and the sentence that was always there still is.
+    await expect(page.getByText(/All custom exercises will be removed/)).toBeVisible();
+  });
+
   // Reset means the BUILT-IN catalogue. If `handleReset` read the merged library
   // it would reset to whatever the gym currently has, i.e. to nothing.
   test("Reset to defaults removes the gym's type", async ({ page }) => {

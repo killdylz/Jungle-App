@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { newClassTypeKey } from "./libraryAccess.js";
 import { WORKOUT_LIBRARY } from "../data/library.js";
 import { diffLibrary, mergeLibrary, isLegacyLibraryBlob, LIBRARY_BLOB_VERSION,
-         resolveClassType, classTypeLabel } from "./libraryStore.js";
+         resolveClassType, classTypeLabel, resetCascade } from "./libraryStore.js";
 
 // DEC-13. The thing under test is not "does a diff work" — it is the PROMISE
 // "the studio's movement catalogue, editable per gym". A gym must be able to
@@ -266,5 +266,67 @@ describe("classTypeLabel — a key whose catalogue entry is gone", () => {
     const key = newClassTypeKey("Reformer Pilates");
     expect(key).toMatch(/^gym-reformer-pilates-[0-9a-z]+$/);
     expect(classTypeLabel(key, {})).toBe("Reformer Pilates");
+  });
+});
+
+// ── What "Reset to Defaults" is about to orphan ──────────────────────────────
+//
+// The counting behind the confirm's inventory sentence. `DeleteCoachConfirm`
+// sets the precedent: the inventory IS the guard, so these numbers are the
+// guard and a wrong one is worse than none.
+describe("resetCascade — the inventory the reset confirm has to show", () => {
+  const BUILT_IN = { crossfit: { label: "CrossFit" }, hiit: { label: "HIIT" } };
+  const BARRE = "gym-barre-mrkhj2lc";
+  const MOBILITY = "gym-mobility-mtsg6zhy";
+  const GYM = {
+    crossfit: { label: "CrossFit" },
+    hiit:     { label: "HIIT" },
+    [BARRE]:    { label: "Barre" },
+    [MOBILITY]: { label: "Mobility" },
+  };
+
+  it("names the types the gym authored, and only those", () => {
+    const c = resetCascade(BUILT_IN, GYM, [], []);
+    expect(c.types.map(t => t.label)).toEqual(["Barre", "Mobility"]);
+    // A built-in the gym merely EDITED is not deleted by a reset in the sense
+    // this sentence means — it comes back, it does not disappear.
+    expect(c.types.map(t => t.key)).not.toContain("crossfit");
+  });
+
+  it("counts the schedule rules and the recorded classes that name one", () => {
+    const rules = [
+      { id: "uc1", type: BARRE },
+      { id: "uc2", type: "crossfit" },      // built-in: survives, not counted
+      { id: "uc3", type: MOBILITY },
+      { id: "uc4", type: BARRE },
+    ];
+    const instances = [{ id: "ci1", classType: MOBILITY }, { id: "ci2", classType: "hiit" }];
+    const c = resetCascade(BUILT_IN, GYM, rules, instances);
+    expect(c.rules).toBe(3);
+    expect(c.instances).toBe(1);
+  });
+
+  // 🔴 The reason this goes through `resolveClassType` rather than comparing
+  // keys. A rule written before session 21 stores the LABEL where a key now
+  // goes, and a straight comparison would under-report the cascade — telling a
+  // coach that two classes are affected when four are.
+  it("finds a rule that stored the LABEL instead of the key", () => {
+    const c = resetCascade(BUILT_IN, GYM, [{ type: "Barre" }, { type: BARRE }], []);
+    expect(c.rules, "a rule saying 'Barre' points at the same type as one saying the key").toBe(2);
+  });
+
+  it("says there is nothing to warn about when the gym authored nothing", () => {
+    const c = resetCascade(BUILT_IN, BUILT_IN, [{ type: "crossfit" }], [{ classType: "hiit" }]);
+    expect(c.types).toEqual([]);
+    expect(c.rules).toBe(0);
+    expect(c.instances).toBe(0);
+  });
+
+  // The confirm renders before anything is read from storage on a fresh gym, and
+  // a crash in a destructive confirm is the worst possible place for one.
+  it("survives missing and malformed inputs rather than throwing", () => {
+    expect(resetCascade(null, null)).toEqual({ types: [], rules: 0, instances: 0 });
+    expect(resetCascade(BUILT_IN, GYM, null, undefined).rules).toBe(0);
+    expect(resetCascade(BUILT_IN, GYM, [null, { type: null }], [null]).rules).toBe(0);
   });
 });

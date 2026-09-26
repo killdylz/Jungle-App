@@ -57,6 +57,16 @@ const KB = 1000;
 // shapes should agree and the prod ceilings are one KB looser only to absorb
 // minifier drift between shapes.
 //
+// ⚠️ LibraryBrowserModal 20 -> 21 (prod 21 -> 22), session 40. "Reset to
+// Defaults" now counts what it is about to orphan and says so — the gym's own
+// class types by name, and the schedule rules and recorded classes that point at
+// them — which is `describeResetCascade` plus its sentence and two imports
+// (`resetCascade`, and `getUserClasses`/`getClassInstances` to count against).
+// Measured 20.11 KB credential-less, so the ceiling is the usual ~4% over.
+// It does NOT drag `store.js` into this lazy chunk: store is already eager, so
+// rollup hoists it — StaffApp moved 333.81 -> 334.19 KB, which is where those
+// bytes went.
+//
 // ─── §2.6 · WHAT IS ACTUALLY IN index.js — measured, session 29 ──────────────
 //
 // The queue called this "the thing that will block the session after next" and
@@ -214,8 +224,8 @@ const KB = 1000;
 // chunks above. Taking its numbers wholesale would have silently deleted five
 // ceilings; an unlisted chunk has no ceiling at all.
 const BUDGETS = prod
-  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 43, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
-  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 41, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 20, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
+  ? { "index.js": 215, "StaffApp.js": 610, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 43, "BrandStudioScreen.js": 34, "LibraryBrowserModal.js": 22, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 5, "brandGenerator.js": 4 }
+  : { "index.js": 215, "StaffApp.js": 360, "PersonasScreen.js": 100, "RetentionScreen.js": 18, "PTScreens.js": 41, "BrandStudioScreen.js": 32, "LibraryBrowserModal.js": 21, "ProfileModal.js": 15, "ClassSummary.js": 8, "summaryApi.js": 3, "brandGenerator.js": 4 };
 // What a browser actually downloads, which is the claim worth defending.
 const PATHS = prod
   ? { member: 225, staff: 825 }
