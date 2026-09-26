@@ -25,6 +25,29 @@
 // Eight compass points on the 44px square rather than the four corners: a
 // horizontal neighbour eats E/W while N/S stay clean, and knowing WHICH side was
 // stolen is most of the diagnosis.
+//
+// ── ⚠️ WHAT THIS SCANS, AND THE HOLE THAT LEFT (session 40 §3.5) ─────────────
+//
+// It is OPT-IN: it scans `[data-tap]` and nothing else. So a control without the
+// attribute is not "passing", it has never been asked — and until session 40 no
+// `<select>` in the product carried one. The Health Screen's client picker, the
+// first control on the screen and the one a coach uses standing up, measured
+// 37px at 390px and had never been measured at all.
+//
+// 🔴 AND `data-tap` ALONE WOULD NOT HAVE FIXED IT. The 44px hit area is a
+// `::after` pseudo-element (index.css), and `<select>` is a replaced element for
+// which Chrome generates no `::after`. Measured: the same rule computes to a used
+// height of `44px` on a `<button>` and stays the unresolved string
+// `max(100%, 44px)` on a `<select>`. Marking a select `data-tap` and leaving its
+// box at 37px produces a control that now FAILS this sweep and is no easier to
+// hit — which is the worst of both. The shared `Select` primitive carries
+// `minHeight: 44px` for that reason; see the comment there.
+//
+// ⚠️ The per-screen sweeps in `mobile.spec.js` run against `freshApp`, so a
+// screen whose controls only exist once the gym has data is scanned EMPTY. The
+// Health Screen renders "you have no 1:1 clients yet" and no picker, which is
+// how a 37px control sat under a green sweep for four sessions. A screen that
+// needs data needs a seeded scan; `mobile.spec.js` has one now.
 
 export const tapScan = (page, minPx = 44) => page.evaluate((MIN) => {
   const out = { scanned: 0, obscured: 0, misses: [] };
