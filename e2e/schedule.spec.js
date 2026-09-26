@@ -455,21 +455,29 @@ test.describe("a class run from the Schedule keeps the occurrence it was publish
     await expect(page.getByTestId("scheduled-type-notice")).toHaveCount(0);
   });
 
-  // A rule stored before session 21 can carry "Mobility", which no catalogue
-  // class type answers to — `resolveClassType` leaves it alone rather than
-  // guessing at a near-neighbour. There is therefore no plan to load, and a
-  // button offering to load one would be the dead control this repo keeps
-  // deleting. The honest answer is to say nothing.
+  // 🔴 CHANGED ASSERTION, session 40 §3.3, and the old one is quoted because it
+  // was not a typo — it was an argument, and only half of it was right.
   //
-  // 🔴 And the guard is not cosmetic. Mutating it away
-  // (`scheduledType && LIB[scheduledType]` → `scheduledType`) does not produce a
-  // dead button, it produces `TypeError: Cannot read properties of undefined
-  // (reading 'label')` and an error boundary over the whole Builder — a coach
-  // whose gym still has one pre-session-21 rule loses the screen entirely the
-  // moment they press Start on it. The console-error assertion is what catches
-  // that; `toHaveCount(0)` alone would still have passed, because a crashed
-  // Builder renders no notice either.
-  test("says nothing when the scheduled type is one the catalogue never had", async ({ page }) => {
+  // This test used to be "says nothing when the scheduled type is one the
+  // catalogue never had", reasoning: a rule stored before session 21 can carry
+  // "Mobility", which no catalogue class type answers to, so there is no plan to
+  // load, and a button offering to load one would be the dead control this repo
+  // keeps deleting — "the honest answer is to say nothing."
+  //
+  // The button half still holds and is still asserted below. The SENTENCE half
+  // does not. The coach pressed Start on a class the schedule calls Mobility and
+  // the Builder header says CrossFit; that disagreement is the entire reason this
+  // notice exists (§3A: "the header said CrossFit … and the plan underneath was
+  // Back Squat and Burpee Complex"). Whether the catalogue can offer a template
+  // has nothing to do with whether the coach is entitled to know. Saying nothing
+  // is what left the Builder printing its own class type over somebody else's
+  // class.
+  //
+  // ⚠️ The crash guard the old comment described is now structurally impossible
+  // rather than merely tested: nothing in the notice reads `LIB[schedKey].label`
+  // any more, so there is no `undefined.label` to hit. `expectNoConsoleErrors`
+  // stays anyway — it is what caught that the first time.
+  test("says what the schedule calls a class the catalogue never had, and offers nothing to load", async ({ page }) => {
     const errors = watchConsole(page);
     await page.clock.setFixedTime(NOON_ISH());
     await freshApp(page);
@@ -486,12 +494,23 @@ test.describe("a class run from the Schedule keeps the occurrence it was publish
     // POSITIVE CONTROL (§0b#1): the pin DID happen. Without it, "no notice"
     // and "Start did nothing" are the same observation.
     await expect(page.getByTestId("pinned-class")).toContainText("Evening Mob");
-    await expect(page.getByTestId("scheduled-type-notice")).toHaveCount(0);
+
+    const notice = page.getByTestId("scheduled-type-notice");
+    await expect(notice, "the coach is entitled to know the schedule disagrees with the header")
+      .toBeVisible();
+    await expect(notice).toContainText("Scheduled as Mobility");
+    // …and nothing offers to load a template that does not exist. This is the
+    // half of the original argument that was right.
+    await expect(notice.getByRole("button"),
+      "there is no Mobility plan to load, so no control may claim there is")
+      .toHaveCount(0);
+
     // …and the occurrence still records the type verbatim, unguessed.
     expect((await stored(page, "jungle_class_instances"))[0].classType).toBe("Mobility");
 
     expectNoConsoleErrors(errors);
   });
+
 });
 
 test.describe("publishing ahead does not inflate what the gym has done", () => {

@@ -455,6 +455,73 @@ test.describe("a gym can author its own class type", () => {
       .toHaveAttribute("style", /var\(--accent\)/);
   });
 
+  // 🔴 THE CLASS TYPE THE CATALOGUE HAS LOST, IN THE BUILDER.
+  //
+  // `schedKey` was `scheduledType && LIB[scheduledType] ? scheduledType : ""`, so
+  // the "Scheduled as X · Load X" notice appeared only for a type the catalogue
+  // still had. Reset the library — which drops every gym-authored type while the
+  // schedule rules keep pointing at them (session 39 §4.3) — start the class, and
+  // the Builder printed its OWN class type in the header with no notice at all.
+  // The coach is shown CrossFit, the schedule says Barre, and nothing says so.
+  //
+  // The comment that produced it is an argument about the BUTTON — a Load button
+  // for a template that no longer exists would be a control that does nothing —
+  // and it was applied to the whole notice. The sentence now ships without it.
+  //
+  // ⚠️ The rule is asserted to still hold the orphaned key FIRST. Without that
+  // this test could pass against a product that silently rewrote the rule on
+  // reset, which is a different (and worse) product than the one being tested.
+  test("a class whose type was reset away still says what it is scheduled as", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.clock.setFixedTime(new Date(2026, 6, 14, 18, 5, 0));   // Tue, 18:05
+    await freshApp(page);
+    await openLibraryEditMode(page);
+    await addClassType(page, TYPE);
+    await expect.poll(async () => await stored(page, KEY)).not.toBeNull();
+    const gymKey = Object.keys((await stored(page, KEY)).classes).find(k => k.startsWith("gym-"));
+    await closeLibrary(page);
+
+    await nav(page, "Schedule");
+    await page.getByRole("button", { name: "+ Add class" }).click();
+    await page.getByPlaceholder("Class name").fill("Barre Flow");
+    await page.getByLabel("Class type").selectOption(gymKey);
+    await page.locator("select").filter({ has: page.locator('option[value="Mon"]') }).selectOption("Tue");
+    await page.locator("select").filter({ has: page.locator('option[value="18:00"]') }).selectOption("18:00");
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+
+    // Now take the catalogue entry away, exactly as a coach would.
+    await openLibraryEditMode(page);
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await page.getByRole("button", { name: "Reset Library" }).click();
+    await expect.poll(async () => await stored(page, KEY)).toBeNull();
+    await closeLibrary(page);
+
+    // The precondition, without which this test proves nothing.
+    const rule = (await stored(page, "jungle_user_classes")).find(r => r.name === "Barre Flow");
+    expect(rule.type, "the rule must still point at the key the catalogue lost").toBe(gymKey);
+
+    await nav(page, "Schedule");
+    await page.getByLabel("Start Barre Flow at 18:00").click();
+
+    // The claim. Reverting `orphanType` fails this with the notice absent.
+    const notice = page.getByTestId("scheduled-type-notice");
+    await expect(notice, "the Builder must say what the schedule calls this class").toBeVisible();
+    await expect(notice).toContainText(`Scheduled as ${TYPE}`);
+
+    // …by NAME. `classTypeLabel` recovers the gym's own words from the key, so
+    // dropping it would put GYM-BARRE-<base36> on the Builder's header.
+    await expect(page.getByText(gymKey, { exact: false }),
+      "the storage key must never reach a coach's screen").toHaveCount(0);
+
+    // …and with no button, because there is no template left to load. A control
+    // that does nothing is the other half of the argument, and it still holds.
+    await expect(notice.getByRole("button"),
+      "an orphaned type has no template behind it, so nothing may offer to load one")
+      .toHaveCount(0);
+
+    expectNoConsoleErrors(errors);
+  });
+
   // Reset means the BUILT-IN catalogue. If `handleReset` read the merged library
   // it would reset to whatever the gym currently has, i.e. to nothing.
   test("Reset to defaults removes the gym's type", async ({ page }) => {
