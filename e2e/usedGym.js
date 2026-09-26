@@ -127,11 +127,24 @@ export async function captureSampleCoach(page, { freshApp, nav, expect }) {
 
 // Write the whole gym and reload into it. Used both to set up and to RESTORE
 // between presses, which is what makes a destructive sweep repeatable.
+//
+// ⚠️ `waitUntil: "commit"` rather than the default `load`, and it is a real
+// saving rather than a cut corner: this is the single most expensive line in
+// `destructiveSweep.spec.js` (106 restores on the Schedule alone, ~692ms each,
+// a third of that screen's whole budget), and both callers already follow it
+// with `waitForApp`, which waits for the app to be USABLE. The default reload
+// waits for `load` first and then `waitForApp` waits again for the thing that
+// actually matters. Returning on commit removes the first of those two waits;
+// nothing reads the page in between.
+//
+// 🔴 A NEW CALLER MUST FOLLOW THIS WITH `waitForApp` (or an equivalent
+// assertion). On commit the document has been replaced and the app has not
+// booted, so a `page.evaluate` here would read an empty page.
 export async function installGym(page, blob) {
   await page.evaluate((b) => {
     localStorage.clear();
     sessionStorage.setItem("jungle_pin_ok", "1");
     for (const [k, v] of Object.entries(b)) localStorage.setItem(k, JSON.stringify(v));
   }, blob);
-  await page.reload();
+  await page.reload({ waitUntil: "commit" });
 }
