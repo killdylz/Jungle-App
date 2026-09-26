@@ -219,12 +219,34 @@ export function cohortModel(members = [], attendance = [], opts = {}) {
     curve.push({ offset: k, retained, of: panel.length, pct: Math.round((retained / panel.length) * 100) });
   }
 
-  // The one number an owner will quote. The first month where fewer than half are
-  // still coming — NOT an extrapolation. If the curve never crosses 50% inside
-  // the observed window the answer is `null` and the screen says the data does not
-  // reach far enough yet, because a projected half-life is precisely the confident
-  // wrong number this product refuses.
-  const halfLifeMonths = curve.find(p => p.pct < 50)?.offset ?? null;
+  // The one number an owner will quote. The first month at which HALF ARE GONE —
+  // NOT an extrapolation. If that never happens inside the observed window the
+  // answer is `null` and the screen says the data does not reach far enough yet,
+  // because a projected half-life is precisely the confident wrong number this
+  // product refuses.
+  //
+  // 🔴 TWO THINGS HERE WERE WRONG, BOTH IN THE FLATTERING DIRECTION, on the one
+  // number an owner quotes. It read `curve.find(p => p.pct < 50)`.
+  //
+  //   1. `< 50` ON A ROUNDED VALUE. `pct` is `Math.round(retained / of * 100)`,
+  //      so a panel of 101 with 50 still training is 49.5% — genuinely fewer than
+  //      half — and rounds to 50, which is not below 50. The screen then said
+  //      "More than half were still training". The unrounded ratio is compared
+  //      instead; nothing but this comparison needs the exact value, and `pct`
+  //      stays rounded for drawing.
+  //
+  //   2. `<` RATHER THAN `<=`. At exactly half remaining, half are GONE, which is
+  //      what a half-life is. Driven: twelve members, six of whom stop after
+  //      their first month, gives 6/12 = 50.0000% at every observed month — and
+  //      the screen reported `8m+` over "STILL OVER HALF", with "More than half
+  //      were still training at 8 months". Half of that gym stopped after one
+  //      month, and an owner reading it would conclude the opposite of the truth.
+  //
+  // ⚠️ The screen's copy is unchanged and did not need to change: with this
+  // comparison `null` genuinely means more than half were still training at every
+  // observed month, so "More than half …" and "STILL OVER HALF" are true whenever
+  // they are shown. The sentence was not the defect; the test behind it was.
+  const halfLifeMonths = curve.find(p => p.retained / p.of <= 0.5)?.offset ?? null;
 
   // ── Per-cohort detail ─────────────────────────────────────────────────────
   // The pooled curve above answers "how long do members stay"; this answers "is

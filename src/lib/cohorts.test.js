@@ -274,19 +274,60 @@ describe("the curve is a survival curve, not an attendance one", () => {
     expect(m.curve.find(p => p.offset === 1).pct).toBe(50);
   });
 
-  it("reports a half-life only when the curve actually crosses 50%", () => {
-    // 12 lasting 8 months, 12 gone after 2 → drops to 50% at month 3, and 50 is
-    // not below 50, so the crossing is month 3 only if it goes strictly under.
+  it("reports a half-life only when half are actually gone", () => {
     const m = model([...cohort("a", 12, JUL_2026 - 9, 8), ...cohort("b", 12, JUL_2026 - 9, 2),
                      ...cohort("c", 4, JUL_2026 - 9, 1)]);
     expect(m.halfLifeMonths).not.toBeNull();
-    expect(m.curve.find(p => p.offset === m.halfLifeMonths).pct).toBeLessThan(50);
+    const p = m.curve.find(x => x.offset === m.halfLifeMonths);
+    expect(p.retained / p.of).toBeLessThanOrEqual(0.5);
 
     // A gym whose members mostly stay gets `null` — NOT an extrapolated figure.
     // A projected half-life is exactly the confident wrong number this refuses.
     const loyal = model(cohort("a", 20, JUL_2026 - 10, 10));
     expect(loyal.ready).toBe(true);
     expect(loyal.halfLifeMonths).toBeNull();
+  });
+
+  // 🔴 EXACTLY HALF. Session 40 §4, and the assertion above used to read
+  // `.pct).toBeLessThan(50)` with a comment explaining that "50 is not below 50,
+  // so the crossing is month 3 only if it goes strictly under". That strictness
+  // was the defect, not the rule.
+  //
+  // Twelve members, six of whom stop after their first month: 6/12 = 50.0000% at
+  // every observed month. Under `pct < 50` the model returned `null`, and
+  // RetentionScreen renders `null` as "More than half were still training at 8
+  // months", `8m+`, "STILL OVER HALF". Half of that gym stopped after one month
+  // and the one number an owner quotes said the opposite.
+  //
+  // A half-life is the point at which half are GONE, so at exactly half
+  // remaining it has been reached.
+  it("calls exactly half remaining a half-life, not 'still over half'", () => {
+    // Anchors 14 months back so the cohort under test is not sitting in the
+    // import-boundary month, which would exclude all of it by design.
+    // ⚠️ `import`, all three. The boundary month is dropped only for IMPORTED
+    // history (it is where an export begins), so coach-sourced anchors would
+    // stay in the panel and move the denominator off the boundary being tested.
+    const m = model([...cohort("anchor", 2, JUL_2026 - 13, 13, "import"),
+                     ...cohort("stay", 6, JUL_2026 - 8, 8, "import"),
+                     ...cohort("gone", 6, JUL_2026 - 8, 0, "import")]);
+    const first = m.curve.find(p => p.offset === 1);
+    expect(first.retained / first.of, "the fixture must sit exactly on the boundary").toBe(0.5);
+    expect(m.halfLifeMonths, "half are gone at month 1; saying otherwise flatters the gym").toBe(1);
+  });
+
+  // 🔴 AND THE ROUNDING, which is the same defect one step further out. `pct` is
+  // `Math.round(retained / of * 100)`, so 49.5% rounds to 50 — not below 50 —
+  // and a panel that has genuinely lost more than half was reported as "more
+  // than half still training". The comparison reads the unrounded ratio.
+  it("is not fooled by a ratio that ROUNDS to fifty", () => {
+    const curve = [{ offset: 0, retained: 101, of: 101, pct: 100 },
+                   { offset: 1, retained: 50, of: 101, pct: Math.round(50 / 101 * 100) }];
+    expect(curve[1].pct, "precondition: 49.5% rounds to 50").toBe(50);
+    expect(curve[1].retained / curve[1].of, "…and is genuinely under half").toBeLessThan(0.5);
+    // The comparison the model makes, stated here because building a 101-member
+    // fixture for one boundary would test the fixture rather than the rule.
+    expect(curve.find(p => p.retained / p.of <= 0.5)?.offset).toBe(1);
+    expect(curve.find(p => p.pct < 50)?.offset, "the old test reported nothing here").toBeUndefined();
   });
 });
 
