@@ -15,11 +15,19 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 39: **`lint:crash` 0 · 1310 unit (46 files) · 615 e2e (53 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,646 lines**. StaffApp **333.81 / 360 kB — 26.2 kB
-left.** PTScreens **39.31 / 41**, RetentionScreen **17.22 / 18**, index **203.06 / 215**. A new
-screen goes in a `lazy()` chunk **with its own budget line in `check-size.mjs`**: an unlisted chunk
-has no ceiling at all.
+Green as of session 40: **`lint:crash` 0 · 1321 unit (47 files) · 620 e2e (53 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,708 lines**. StaffApp **334.25 / 360 kB — 25.8 kB
+left.** PTScreens **39.31 / 41**, RetentionScreen **17.23 / 18**, LibraryBrowserModal
+**20.11 / 21** (raised in session 40 for the reset confirm's cascade inventory), index
+**203.06 / 215**. A new screen goes in a `lazy()` chunk **with its own budget line in
+`check-size.mjs`**: an unlisted chunk has no ceiling at all.
+
+🔴 **A FULL e2e RUN HERE IS ~15 MINUTES, AND WAS ~21 BEFORE SESSION 40.** `destructiveSweep`
+alone cost ~13.5m and **failed on an untouched tree** — `Class Builder` exceeded its own 240s
+`test.setTimeout`. Its header's "~4m40s" was measured on a faster machine. It is 4.8m now.
+⚠️ **That file's press count was also non-deterministic** — 68, then 50, then 51 controls on
+three identical runs — because a failed click was forced past whatever was covering it. If it
+looks flaky, run it twice and **diff the report, not the pass/fail**.
 
 ⚠️ **These numbers were `@@UNIT@@`-shaped placeholders for two sessions.** The S29–33 merge
 commit (`d6c0270`) wrote the gate line as a template and substituted nothing, so the one line a
@@ -455,7 +463,12 @@ not. **Assert the STORED object, not only what was rendered.**
   destroyed something with no confirm and no undo. It found **four more** on its first run — every
   whole-class replacement in App.jsx except `handleNewClass`. Its header states what it cannot see:
   a SOFT delete (a scalar change is a write, not a loss), anything needing typing or a file, and
-  controls more than one level below a screen. ⚠️ It costs **~4m40s** of the e2e run.
+  controls more than one level below a screen. ⚠️ It costs **~4.8m** of the e2e run (session 40;
+  it was ~13.5m here and timed out). 🔴 **It also cannot descend into a `React.lazy` panel** —
+  `ProfileModal` and `LibraryBrowserModal` render after the settle, so a press that opens one
+  looks like a press that opened nothing. It used to reach the Profile modal only because that
+  click failed and was FORCED, which read the revealed set two seconds late; see
+  `SESSION-40-HANDOFF.md` §5.4 for the fix that is written and not landed, and why.
   `e2e/usedGym.js` is its fixture — a gym that has been used — and is meant to be shared: an empty
   roster has no delete buttons, and the coach corpus in it is captured by pressing "Load sample
   coach" rather than typed.
