@@ -251,3 +251,42 @@ export function classTypeLabel(raw, lib) {
   if (!words.length) return s;
   return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
+
+// ── What "Reset to Defaults" takes with it, counted ──────────────────────────
+//
+// `DeleteCoachConfirm` (PersonasScreen) states the principle this serves, and
+// its code says it in one line: the inventory of what is about to be destroyed
+// IS the guard — "a coach has to be able to see that 'and 3 generated classes'
+// is in the sentence". A confirm that names nothing is one a coach says yes to
+// by reflex.
+//
+// The library's reset asks, which is why the destructive sweep passes it. What
+// it does not say is that removing the gym's own class types leaves every
+// schedule rule and every recorded class that named one pointing at a key the
+// catalogue no longer has. That is how session 39 §4.3 happened, and
+// `classTypeLabel` above only fixed what is DRAWN afterwards: the timetable
+// stopped printing `GYM-MOBILITY-MTSG6ZHY`, and nobody was ever warned it was
+// about to happen.
+//
+// Counted, not guessed:
+//
+//   · a gym-authored type is a key the BUILT-IN catalogue does not have, which
+//     is exactly what `mergeLibrary` treats as gym-owned and stores whole;
+//   · a reference is matched through `resolveClassType`, because a rule written
+//     before session 21 stores the LABEL where a key now goes and a straight
+//     key comparison would miss it and under-report the cascade.
+//
+// ⚠️ It counts what is REFERENCED, not what is lost. Nothing is deleted from the
+// rules or the instances — `resolveClassType`'s comment argues at length that
+// the stored value stays — so the sentence this feeds says the rows keep their
+// names and lose the type behind them, which is what actually happens.
+export function resetCascade(builtIn, current, rules = [], instances = []) {
+  const base = builtIn || {}, cur = current || {};
+  const types = Object.keys(cur)
+    .filter(k => !has(base, k))
+    .map(k => ({ key: k, label: classTypeLabel(k, cur) }));
+  const keys = new Set(types.map(t => t.key));
+  const hits = (list, field) => (Array.isArray(list) ? list : [])
+    .filter(row => row && keys.has(resolveClassType(row[field], cur))).length;
+  return { types, rules: hits(rules, "type"), instances: hits(instances, "classType") };
+}

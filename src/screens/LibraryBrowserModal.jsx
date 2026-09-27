@@ -17,6 +17,8 @@ import { Plus, Search, X } from "lucide-react";
 import { GLOSSARY } from "../data/glossary.js";
 import { getLibrary, saveLibrary, resetLibrary, BUILT_IN_LIBRARY,
          makeClassType, newClassTypeKey } from "../lib/libraryAccess.js";
+import { resetCascade } from "../lib/libraryStore.js";
+import { getUserClasses, getClassInstances } from "../lib/store.js";
 import { inkOn, hueInk } from "../lib/colors.js";
 import { useWindowWidth } from "../ui/primitives.jsx";
 import { useDialog } from "../ui/dialog.js";
@@ -46,16 +48,71 @@ function glossaryEntry(name) {
   return GLOSSARY_BY_NAME.get(normMovementName(name)) || null;
 }
 
+// "1 class plan, 11 movements and 3 generated classes" — an Oxford-less list
+// rather than `join(", ")`, which reads as a sentence that was cut off mid-way.
+// Same shape as `askRemovePersona`'s, because it is the same sentence.
+const oxfordless = (parts) =>
+  parts.length < 2 ? parts.join("")
+    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+
+// The two sentences the inventory adds, or null when the gym authored no class
+// types and a reset takes nothing but exercises with it.
+//
+// ⚠️ Capped at five names with "and N more". A gym's own words belong in the
+// sentence — they are how a coach recognises what they are about to lose — but a
+// studio with twenty types would produce a dialog nobody reads, and an
+// unreadable inventory is the same as no inventory.
+export function describeResetCascade(c) {
+  if (!c || !c.types.length) return null;
+  const n = c.types.length;
+  const shown = c.types.slice(0, 5).map(t => t.label);
+  const names = oxfordless(n > 5 ? [...shown, `${n - 5} more`] : shown);
+  const head = n === 1
+    ? `the class type you created — ${names}`
+    : `the ${n} class types you created — ${names}`;
+
+  const refs = oxfordless([
+    c.rules && `${c.rules} class${c.rules === 1 ? "" : "es"} on your schedule`,
+    c.instances && `${c.instances} already run or published`,
+  ].filter(Boolean));
+
+  // Says what actually happens, which is NOT that the rows are deleted: the
+  // stored value is untouched (see `resolveClassType`), so they keep their names
+  // and lose the type behind them.
+  return {
+    head,
+    refs: refs
+      ? `${refs} use ${n === 1 ? "it" : "one of them"}. They keep their names, but the class type and its exercises will be gone.`
+      : "",
+  };
+}
+
 // The library's "are you sure" — a nested dialog. Split out of the render below
-// only so it can own a `useDialog` of its own; the markup is unchanged.
-function ResetLibraryConfirm({ onCancel, onConfirm }) {
+// only so it can own a `useDialog` of its own.
+//
+// 🔴 IT NOW CARRIES THE CASCADE, and that is the whole point of it. The confirm
+// said "All custom exercises will be removed and the built-in library restored"
+// — true, and not the cost. It does not mention the gym's OWN class types, and
+// every schedule rule that used one is left pointing at a key the catalogue no
+// longer has. Four clicks from a button that ships with a confirm, which is how
+// session 39 §4.3 put `GYM-MOBILITY-MTSG6ZHY` on a coach's timetable.
+//
+// The precedent is `DeleteCoachConfirm`, and its comment is the rule: the
+// inventory IS the guard — "a coach has to be able to see that 'and 3 generated
+// classes' is in the sentence".
+function ResetLibraryConfirm({ cascade, onCancel, onConfirm }) {
   const dlg = useDialog(onCancel, "Reset the exercise library to defaults?");
   return (
     <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,borderRadius:"18px"}}>
       <div {...dlg} style={{background:"var(--card)",border:`1px solid var(--border)`,borderRadius:"12px",padding:"24px",maxWidth:"340px",textAlign:"center",outline:"none"}}>
         <p style={{fontSize:"28px",marginBottom:"8px"}}>⚠️</p>
         <p style={{fontSize:"15px",fontWeight:"700",color:"var(--text)",marginBottom:"8px"}}>Reset to Defaults?</p>
-        <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
+        <p style={{fontSize:"12px",color:"var(--muted)",marginBottom:cascade?"10px":"18px",lineHeight:"1.5"}}>All custom exercises will be removed and the built-in library restored.</p>
+        {cascade && (
+          <p data-testid="reset-cascade" style={{fontSize:"12px",color:"var(--text)",marginBottom:"18px",lineHeight:"1.6",textAlign:"left"}}>
+            This also deletes <strong>{cascade.head}</strong>.{cascade.refs ? ` ${cascade.refs}` : ""}
+          </p>
+        )}
         <div style={{display:"flex",gap:"8px",justifyContent:"center"}}>
           <button onClick={onCancel} style={{padding:"8px 20px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",cursor:"pointer",color:"var(--muted)",fontSize:"12px"}}>Cancel</button>
           <button onClick={onConfirm} style={{padding:"8px 20px",background:"var(--danger)",border:"none",borderRadius:"7px",cursor:"pointer",color:"#FFFFFF",  // white on --danger is 3.76:1 at 12px/700 — see the WOD tab; --danger is a FIXED colour, so `inkOn` against black/white is the rule
@@ -95,7 +152,10 @@ export function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=
   const [editMode,     setEditMode]     = useState(false);
   const [editingId,    setEditingId]    = useState(null);
   const [draftEx,      setDraftEx]      = useState({});
-  const [resetConfirm, setResetConfirm] = useState(false);
+  // null while closed; the cascade sentence while the confirm is up. Counted at
+  // press time rather than per render, exactly as `askRemovePersona` does it —
+  // the dialog is a dumb renderer and the counting stays next to what it counts.
+  const [resetConfirm, setResetConfirm] = useState(null);
 
   const cls      = libData[selClass];
   const subKeys  = cls ? Object.keys(cls.subTypes) : [];
@@ -166,7 +226,7 @@ export function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=
   // BUILT_IN_LIBRARY, deliberately, not getLibrary(): "reset to defaults" means
   // the built-in catalogue. Reading the merged one here would reset to whatever
   // the gym currently has, i.e. to nothing.
-  const handleReset = () => { resetLibrary(); setLibData(BUILT_IN_LIBRARY); setResetConfirm(false); showToast("Reset to defaults"); };
+  const handleReset = () => { resetLibrary(); setLibData(BUILT_IN_LIBRARY); setResetConfirm(null); showToast("Reset to defaults"); };
 
   // ── Reordering a pool ──────────────────────────────────────────────────────
   // The row rendered a ⠿ handle with `cursor:grab` and no `draggable` and no
@@ -319,7 +379,7 @@ export function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=
                     style={{padding:"7px 14px",background:editMode?classColor+"22":"var(--navy)",border:`1px solid ${editMode?classColor:"var(--border)"}`,borderRadius:"8px",cursor:"pointer",color:editMode?classColor:"var(--muted)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
                     ✏️ {editMode?"Done":"Edit"}
                   </button>
-                  {editMode && <button onClick={()=>setResetConfirm(true)} style={{padding:"7px 12px",background:"transparent",border:"1px solid var(--danger-border)",borderRadius:"8px",cursor:"pointer",color:"var(--danger)",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
+                  {editMode && <button onClick={()=>setResetConfirm({ said: describeResetCascade(resetCascade(BUILT_IN_LIBRARY, libData, getUserClasses(), getClassInstances())) })} style={{padding:"7px 12px",background:"transparent",border:"1px solid var(--danger-border)",borderRadius:"8px",cursor:"pointer",color:"var(--danger)",fontSize:"11px",fontWeight:"700",flexShrink:0}}>Reset</button>}
               </>
             </div>
 
@@ -507,7 +567,7 @@ export function LibraryBrowserModal({ onClose, onAddExercise=null, initialClass=
             hook's topmost-wins stack exists for: Escape must cancel the confirm
             and leave the library open. */}
         {resetConfirm && (
-          <ResetLibraryConfirm onCancel={()=>setResetConfirm(false)} onConfirm={handleReset}/>
+          <ResetLibraryConfirm cascade={resetConfirm.said} onCancel={()=>setResetConfirm(null)} onConfirm={handleReset}/>
         )}
       </div>
     </div>

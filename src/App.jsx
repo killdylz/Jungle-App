@@ -744,8 +744,33 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { onImportClass?.(JSON.parse(reader.result)); }
-      catch { alert("Could not read that file — please choose a Jungle class file (.json)."); }
+      // 🔴 TWO FAILURES, TWO SENTENCES. One `try` used to wrap both halves, so
+      // anything thrown INSIDE the import was reported to the coach as "Could
+      // not read that file — please choose a Jungle class file (.json)". That
+      // sends them to find a better file when the file was never the problem,
+      // and there is no better file to find.
+      //
+      // It is not hypothetical. `{"stages":[null]}` is valid JSON and clears
+      // `handleImportTemplate`'s own guard (`stages` IS an array), and the map
+      // that follows reads `s.exercises` off the null and throws. A coach whose
+      // file has one empty stage in it is told their file is unreadable.
+      //
+      // ⚠️ Narrowing the catch alone would trade a wrong message for NO message,
+      // which is worse — the press would do nothing at all and say nothing about
+      // it. The second half needs a sentence of its own.
+      //
+      // The second sentence deliberately offers no advice. "Choose a different
+      // file" is what was wrong with the first one, and "this is a fault in
+      // Jungle" is a claim this catch cannot make — a damaged file reaches it
+      // too. What it CAN say, and all it says, is which half failed.
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch {
+        alert("Could not read that file — please choose a Jungle class file (.json).");
+        return;
+      }
+      try { onImportClass?.(parsed); }
+      catch { alert("That file opened, but Jungle could not build a class from what is inside it."); }
     };
     reader.readAsText(file);
     e.target.value = ""; // let the same file be picked twice in a row
@@ -843,8 +868,40 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
   // resolves to no class type at all (deliberately — `resolveClassType` does not
   // guess), and a button offering to load one would be a control that does
   // nothing, which is the failure this repo keeps deleting.
+  // ⚠️ NO `resolveClassType` HERE, AND I ADDED ONE BEFORE CHECKING.
+  // The reasoning was that `startScheduledClass` records the rule's value
+  // verbatim, so a pre-session-21 rule carrying "CrossFit" — the LABEL — would
+  // make `LIB["CrossFit"]` undefined while `LIB.crossfit` is the class the coach
+  // is already on, and the notice would announce a mismatch between a class and
+  // itself. Driven, it does not happen: `CalendarScreen:203` normalises every
+  // rule (`type: resolveClassType(uc.type, LIB)`) BEFORE deriving occurrences,
+  // so a started class already carries `crossfit`. Probed end to end — the
+  // instance reads `"crossfit"`, not `"CrossFit"`.
+  // A guard for a state the product cannot reach is the thing this repo keeps
+  // deleting, and the test written for it could not be made to fail.
   const schedKey = scheduledType && LIB[scheduledType] ? scheduledType : "";
   const typeMismatch = !!schedKey && schedKey !== selectedClass;
+
+  // 🔴 …BUT "NO TEMPLATE TO OFFER" IS NOT A REASON TO SAY NOTHING.
+  //
+  // The paragraph above is an argument about the BUTTON and it was applied to
+  // the whole notice. So a class whose type the catalogue has lost — press
+  // "Reset to Defaults" in the Exercise Library and every gym-authored type goes
+  // with it, which is session 39 §4.3 — opened the Builder with `schedKey === ""`
+  // and printed the Builder's OWN class type in the header with no notice at
+  // all. The coach is shown CrossFit, the schedule says Mobility, and nothing on
+  // screen says the two disagree. That is the §3A defect this notice was written
+  // for, in the one case the notice excludes itself from.
+  //
+  // `classTypeLabel` rather than the raw value, for the reason its header gives:
+  // the stored key is untouched and only what is DRAWN is recovered, so this
+  // says "Mobility" rather than `GYM-MOBILITY-MTSG6ZHY`.
+  //
+  // ⚠️ The button still does not render here, and that half of the argument
+  // above still holds — there is no template to load, so offering one would be a
+  // control that does nothing.
+  const orphanType = !!scheduledType && !schedKey;
+  const schedName  = scheduledType ? classTypeLabel(scheduledType, LIB) : "";
 
   // Helper: does a stage have any manually-authored exercises?
   const hasCustomExercises = s => (s.exercises||[]).some(e => !e.source || e.source !== "library");
@@ -1122,20 +1179,25 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             The button's visible text carries the class name, so it needs no
             aria-label — "Load it" would announce as "Load it" beside four other
             controls. */}
-        {typeMismatch && (
+        {(typeMismatch || orphanType) && (
           <div data-testid="scheduled-type-notice"
             style={{display:"flex",alignItems:"center",gap:"7px",padding:"3px 4px 3px 9px",borderRadius:"7px",
                     background:"color-mix(in srgb, var(--accent) 10%, transparent)",
                     border:"1px solid color-mix(in srgb, var(--accent) 32%, transparent)",flexShrink:0,minWidth:0}}>
             <span style={{fontSize:"11px",color:"var(--text)",fontWeight:"600",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-              Scheduled as {LIB[schedKey].label}
+              Scheduled as {schedName}
             </span>
+            {/* Only when there is something to load. An orphaned type has no
+                template behind it, so the sentence ships without the button
+                rather than the button suppressing the sentence. */}
+            {typeMismatch && (
             <button onClick={()=>handleClassChange(schedKey)}
-              title={`Rebuild this class from the ${LIB[schedKey].label} template`}
+              title={`Rebuild this class from the ${schedName} template`}
               style={{padding:"4px 9px",background:"var(--accent)",color:"var(--on-accent)",border:"none",borderRadius:"5px",
                       cursor:"pointer",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap",flexShrink:0}}>
-              Load {LIB[schedKey].label}
+              Load {schedName}
             </button>
+            )}
           </div>
         )}
         {/* Jungle presets — the six starter classes that used to be their own

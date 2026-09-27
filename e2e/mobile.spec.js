@@ -135,6 +135,48 @@ test.describe("tap targets at phone width", () => {
     });
   }
 
+  // 🔴 A SCREEN WHOSE CONTROLS ONLY EXIST ONCE THE GYM HAS DATA (session 40 §3.5)
+  //
+  // The per-screen sweeps above run against `freshApp`. The Health Screen with no
+  // 1:1 clients renders "A health screen belongs to a 1:1 client, and you have
+  // none yet" and NO picker, so its sweep was scanning a screen with nothing on
+  // it — the documented trap, and how a 37px control sat under a green sweep.
+  //
+  // The picker is the first control on the screen and the one a coach uses
+  // standing up. It is asserted twice: through the sweep, which is the rule, and
+  // by measuring the box, which is what the sweep cannot say — a `<select>` gets
+  // no `::after`, so `data-tap` alone would leave it failing and no easier to
+  // hit. See the note in `tapScan.js`.
+  test("the Health Screen's client picker is thumb-sized once there IS a client", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await freshApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_members", JSON.stringify([
+        { id: "m1", name: "Sarah Chen", email: "", status: "active", joinedAt: "" }]));
+      localStorage.setItem("jungle_pt_clients", JSON.stringify([
+        { id: "c1", memberId: "m1", goal: "First pull-up", coachName: "Dylan",
+          status: "active", startedAt: "2026-01-01" }]));
+    });
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await navAnyWidth(page, ALL_SCREENS.find((s) => s.key === "pt-parq"));
+
+    // PRECONDITION: the picker exists. Without this the two assertions below are
+    // both true of the empty screen this test exists because of.
+    const picker = page.locator("#parq-client");
+    await expect(picker, "the seeded client must produce a picker to measure").toBeVisible();
+
+    const box = await picker.boundingBox();
+    expect(Math.round(box.height),
+      `the picker a coach taps standing up is ${Math.round(box.height)}px; the rule is 44`)
+      .toBeGreaterThanOrEqual(44);
+
+    const scan = await tapScan(page);
+    expect(scan.misses, reportTaps("Health Screen at 390px, with a client", scan)).toEqual([]);
+    expect(scan.scanned, "the scan must have matched the picker, not skipped it")
+      .toBeGreaterThan(0);
+  });
+
   test("the sweep is actually looking at something", async ({ page }) => {
     // POSITIVE CONTROL, and the only assertion here that can catch the sweep
     // being switched off by accident. Every `misses: []` above is equally true

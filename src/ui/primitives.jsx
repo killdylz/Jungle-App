@@ -34,8 +34,25 @@ export const Btn = ({children, onClick, variant="primary", style:s={}, ...p}) =>
 export const Input = ({style:s={}, ...p}) => (
   <input style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",boxSizing:"border-box",...s}} {...p}/>
 );
+// 🔴 `minHeight`, NOT `data-tap` ALONE — a `<select>` cannot have an overlay.
+//
+// The 44px rule is enforced by `[data-tap]::after`, a transparent pseudo-element
+// laid over the control's centre (index.css). That mechanism exists so a row of
+// quiet icon buttons does not have to become a row of chunky ones. It does not
+// work here: `<select>` is a replaced element and Chrome generates no `::after`
+// for it. Measured rather than remembered — on a `<button>` the rule computes to
+// a used height of `44px`, and on a `<select>` it stays the unresolved string
+// `max(100%, 44px)`, because there is no box to apply it to.
+//
+// So the box itself carries the rule. That is the trade the icon buttons refused
+// and it is the right one here: these are full-width fields stacked in a form,
+// not a header row, so 37px -> 44px costs 7px of vertical space and nothing else.
+//
+// `data-tap` is still set, and it is what makes this MEASURABLE — `tapScan` is
+// opt-in and scans `[data-tap]`, so without the attribute the rule had never once
+// been asked of a select anywhere in the product.
 export const Select = ({children, style:s={}, ...p}) => (
-  <select style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",...s}} {...p}>{children}</select>
+  <select data-tap style={{padding:"9px 12px",background:"var(--navy)",border:"1px solid var(--border)",borderRadius:"6px",color:"var(--text)",fontSize:"13px",outline:"none",width:"100%",minHeight:"44px",boxSizing:"border-box",...s}} {...p}>{children}</select>
 );
 export const Tag = ({children, color, style:s={}}) => (
   <span style={{display:"inline-block",padding:"3px 9px",background:color||"var(--navy)",color:"white",borderRadius:"4px",fontSize:"11px",fontWeight:"700",...s}}>{children}</span>
