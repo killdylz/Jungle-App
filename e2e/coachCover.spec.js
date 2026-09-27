@@ -334,6 +334,35 @@ test.describe("being away, and the board that comes from it", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // Session 42. A week after the absence, the panel said "1 still has nobody"
+  // about a class taught seven days earlier, and offered "I'm back" — which
+  // cancels the unfilled request and hides the absence, erasing the one record
+  // that the class went uncovered.
+  test("🔴 a week later the absence is history: past tense, and nothing to erase it with", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await markAway(page);
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
+    const absence = page.getByTestId("absence-row");
+    // PRECONDITION, on the day it is recorded: still to come, and withdrawable.
+    await expect(absence).toContainText("1 of 2 covered — 1 still has nobody.");
+    await expect(absence.getByRole("button", { name: /is back/ })).toBeVisible();
+    const before = await stored(page, "jungle_cover_requests");
+
+    await page.clock.setFixedTime(new Date(`${nextMonday(8)}T10:00:00`));
+    await page.reload();
+    await nav(page, "Schedule");
+    await expect(absence).toContainText("ended");
+    await expect(absence).toContainText("Of 2 already taught, 1 had cover and 1 went uncovered.");
+    await expect(absence).not.toContainText("still");
+    await expect(absence.getByRole("button", { name: /is back/ })).toHaveCount(0);
+    // Nothing about the record moved by being read a week later.
+    expect(await stored(page, "jungle_cover_requests")).toEqual(before);
+    expectNoConsoleErrors(errors);
+  });
+
   test("🔴 the board says that day only — never 'from now on'", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);

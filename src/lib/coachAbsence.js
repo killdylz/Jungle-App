@@ -170,3 +170,49 @@ export function absencesFor(list, coachId) {
 export function isAwayOn(list, coachId, dateStr) {
   return (list || []).some(a => a && a.coachId === coachId && coversDate(a, dateStr));
 }
+
+// ── How much of one absence has somebody, said in the right TENSE ───────────
+//
+// Counted from the live requests rather than stored on the absence, so claiming
+// or withdrawing one is reflected without a second write that could disagree.
+//
+// 🔴 SPLIT AT TODAY. The panel used to count every request an absence raised as
+// one pool and say "1 still has nobody" — a week after the absence ended, about
+// a class that was taught (or not) seven days ago. Present tense about the past
+// reads as a job still to do. A class whose day has gone either had somebody or
+// went uncovered, and that is a different sentence (session 42).
+//
+// `ended` is what decides whether the panel offers "I'm back": on an absence
+// that is over, withdrawing it cancels the unfilled past requests and hides the
+// absence — erasing exactly the record that a class went uncovered.
+export function absenceProgress(absence, requests, today) {
+  const mine = (requests || []).filter(r => r && r.absenceId === absence?.id && r.status !== "cancelled");
+  const tally = list => ({ total: list.length, covered: list.filter(r => r.status === "approved").length });
+  return {
+    ended: !!absence?.to && absence.to < today,
+    upcoming: tally(mine.filter(r => !(r.classDate < today))),
+    past: tally(mine.filter(r => r.classDate < today)),
+  };
+}
+
+const classes = n => `${n} class${n === 1 ? "" : "es"}`;
+
+// One sentence per absence. Upcoming first, because it is the part a coach can
+// still act on; what already happened is said after it, in the past tense.
+export function describeAbsenceProgress({ upcoming, past }) {
+  const out = [];
+  if (upcoming.total) {
+    const left = upcoming.total - upcoming.covered;
+    // Unchanged wording for what is still to come.
+    out.push(upcoming.covered === 0 ? `${classes(upcoming.total)}, nobody yet.`
+      : left === 0 ? `All ${upcoming.total} covered.`
+      : `${upcoming.covered} of ${upcoming.total} covered — ${left} still ${left === 1 ? "has" : "have"} nobody.`);
+  }
+  if (past.total) {
+    const missed = past.total - past.covered;
+    out.push(missed === 0 ? `${past.total === 1 ? "The class" : `All ${past.total} classes`} already taught had cover.`
+      : past.covered === 0 ? `${classes(past.total)} went uncovered.`
+      : `Of ${past.total} already taught, ${past.covered} had cover and ${missed} went uncovered.`);
+  }
+  return out.length ? out.join(" ") : "No classes to cover those days.";
+}

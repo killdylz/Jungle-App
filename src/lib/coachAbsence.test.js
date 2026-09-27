@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { occurrenceDate, isDateStr, daysInclusive, absenceError, makeAbsence,
+         absenceProgress, describeAbsenceProgress,
          coversDate, occurrencesInRange, classesAffectedBy, absencesFor,
          isAwayOn, MAX_ABSENCE_DAYS } from "./coachAbsence.js";
 
@@ -236,5 +237,37 @@ describe("occurrence dates are LOCAL calendar dates", () => {
     // And the raw ISO really does say the 25th, so the assertion above is doing work.
     expect(hit[0].startsAt.slice(0, 10)).toBe("2026-08-25");
     expect(occurrenceDate(hit[0])).toBe("2026-08-24");
+  });
+});
+
+// Session 42. "1 still has nobody", a week after the absence ended, about a
+// class that was taught seven days ago.
+describe("absenceProgress — split at today, so the past is said in the past tense", () => {
+  const A = { id: "ab1", from: "2026-09-28", to: "2026-09-30" };
+  const req = (classDate, status) => ({ absenceId: "ab1", classDate, status });
+  const REQS = [req("2026-09-28", "open"), req("2026-09-30", "approved"), req("2026-09-29", "cancelled"),
+                { absenceId: "other", classDate: "2026-09-28", status: "open" }];
+
+  it("before it starts, everything is still to come", () => {
+    const p = absenceProgress(A, REQS, "2026-09-27");
+    expect(p).toEqual({ ended: false, upcoming: { total: 2, covered: 1 }, past: { total: 0, covered: 0 } });
+    expect(describeAbsenceProgress(p)).toBe("1 of 2 covered — 1 still has nobody.");
+  });
+
+  it("🔴 once it is over, nothing 'still has nobody' — it went uncovered", () => {
+    const p = absenceProgress(A, REQS, "2026-10-07");
+    expect(p.ended).toBe(true);
+    expect(p.upcoming.total).toBe(0);
+    expect(describeAbsenceProgress(p)).toBe("Of 2 already taught, 1 had cover and 1 went uncovered.");
+    expect(describeAbsenceProgress(p)).not.toMatch(/still/);
+  });
+
+  it("part-way through, the two halves are said separately", () => {
+    const p = absenceProgress(A, REQS, "2026-09-29");
+    expect(describeAbsenceProgress(p)).toBe("All 1 covered. 1 class went uncovered.");
+  });
+
+  it("an absence with nothing to cover says so", () => {
+    expect(describeAbsenceProgress(absenceProgress(A, [], "2026-09-27"))).toBe("No classes to cover those days.");
   });
 });

@@ -2710,7 +2710,12 @@ export async function cancelAbsence(id, { now = Date.now() } = {}) {
   saveAbsences(next);
 
   const mine = getCoverRequests().filter(r => r && r.absenceId === id);
-  const open = mine.filter(isOpen);
+  // 🔴 ONLY ASKS WHOSE DAY HAS NOT PASSED. A request for Monday that nobody took
+  // is, by Tuesday, the record that Monday went uncovered — not an ask. Coming
+  // back early withdraws what is still to come; cancelling Monday's would
+  // rewrite a missed class as "withdrawn" (session 42).
+  const today = localDateStr(now);
+  const open = mine.filter(r => isOpen(r) && !(r.classDate < today));
   const kept = mine.filter(r => r.status === "approved").length;
   // Withdrawn one at a time through the ordinary settle so each goes through the
   // same transition rule — and, when there is a server, the same conditional

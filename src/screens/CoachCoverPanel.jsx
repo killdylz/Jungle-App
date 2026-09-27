@@ -31,7 +31,8 @@ import { rosterCoverage, coachesFreeAt, availabilityState, coachReach,
 // front of it. Calling the pure version from a screen again would restore
 // exactly the last-writer-wins approval this session removed.
 import { openCovers, deliveryTruth, reachableCoaches } from "../lib/coverRequests.js";
-import { absenceError, classesAffectedBy, absencesFor, isAwayOn } from "../lib/coachAbsence.js";
+import { absenceError, classesAffectedBy, absencesFor, isAwayOn,
+         absenceProgress, describeAbsenceProgress } from "../lib/coachAbsence.js";
 import { coverApprovedPayload, pushCoverApproved } from "../lib/bookingAdapter.js";
 import { RULE_DAYS, RULE_SLOTS } from "../lib/scheduleInstances.js";
 import { useToast } from "../ui/toast.jsx";
@@ -167,15 +168,6 @@ export function CoachCoverPanel({ userClasses, onCoversChanged, isMobile }) {
   // absence covers it is how a gym ends up with two people missing.
   const candidatesFor = (req) => coachesFreeAt(coaches, { day: req.classDay, slot: req.classSlot }, nowMs)
     .filter(f => !isAwayOn(absences, f.coach.id, req.classDate));
-
-  // How much of one absence still has nobody. Counted from the live requests
-  // rather than stored on the absence, so withdrawing or claiming one is
-  // reflected without a second write that could disagree.
-  const absenceProgress = (a) => {
-    const mine = (requests || []).filter(r => r && r.absenceId === a.id && r.status !== "cancelled");
-    const covered = mine.filter(r => r.status === "approved").length;
-    return { total: mine.length, covered };
-  };
 
   const addCoach = (name) => {
     const n = String(name || "").trim();
@@ -670,9 +662,9 @@ export function CoachCoverPanel({ userClasses, onCoversChanged, isMobile }) {
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: "14px", marginTop: "14px" }}>
           <div style={{ ...h, fontSize: "13px", marginBottom: "8px" }}>Away</div>
           {shownAbsences.map(a => {
-            const p = absenceProgress(a);
+            const p = absenceProgress(a, requests, localDateStr(nowMs));
             return (
-              <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: "10px",
+              <div key={a.id} data-testid="absence-row" style={{ border: "1px solid var(--border)", borderRadius: "10px",
                                        padding: "10px 12px", marginBottom: "8px" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text)" }}>
@@ -681,31 +673,25 @@ export function CoachCoverPanel({ userClasses, onCoversChanged, isMobile }) {
                   <span style={sub}>
                     {fmtDay(a.from)}{a.to !== a.from ? ` – ${fmtDay(a.to)}` : ""}
                     {a.note ? ` · ${a.note}` : ""}
+                    {p.ended ? " · ended" : ""}
                   </span>
                 </div>
-                <div style={{ ...sub, marginTop: "3px" }}>
-                  {/* Counted from the live requests, so it cannot disagree with
-                      the board two inches below it. */}
-                  {/* ⚠️ ONE STATEMENT OF ONE FACT. This read "0 of 2 covered —
-                      2 still have nobody", which is the same number twice in one
-                      sentence and makes a reader stop to check they mean the
-                      same thing. Same defect `availSummary` above was fixed for,
-                      and found the same way: by rendering the panel and reading
-                      it rather than by a test. */}
-                  {p.total === 0
-                    ? <>No classes still to come those days.</>
-                    : p.covered === 0
-                      ? <><strong style={{ color: "var(--text)" }}>{p.total} class{p.total === 1 ? "" : "es"}</strong>, nobody yet.</>
-                      : p.covered === p.total
-                        ? <strong style={{ color: "var(--text)" }}>All {p.total} covered.</strong>
-                        : <>{p.covered} of {p.total} covered &mdash;{" "}
-                           <strong style={{ color: "var(--text)" }}>{p.total - p.covered} still {p.total - p.covered === 1 ? "has" : "have"} nobody</strong>.</>}
-                </div>
+                {/* Counted from the live requests, so it cannot disagree with the
+                    board below it — and split at today, so a class already
+                    taught is said in the past tense (see `absenceProgress`). */}
+                <div style={{ ...sub, marginTop: "3px" }}>{describeAbsenceProgress(p)}</div>
+                {/* 🔴 NOT ON AN ABSENCE THAT IS OVER AND HAS A RECORD. "I'm back"
+                    cancels the unfilled requests and hides the absence, which on a
+                    finished one erases the record that a class went uncovered.
+                    One with no requests at all has nothing to lose, and keeps the
+                    button so a mistaken entry can still be taken off. */}
+                {!(p.ended && p.past.total) && (
                 <div style={{ marginTop: "8px" }}>
                   <button onClick={() => withdrawAbsence(a.id)}
                           aria-label={`${nameOf(a.coachId)} is back — withdraw this absence`}
                           style={btn(false)}>I&rsquo;m back</button>
                 </div>
+                )}
               </div>
             );
           })}

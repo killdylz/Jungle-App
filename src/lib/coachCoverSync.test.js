@@ -311,7 +311,11 @@ describe("🔴 an absence raises the covers, and withdrawing it takes them back"
 
   it("withdrawing the absence takes the unclaimed asks back", async () => {
     const { absence } = await awayWeek();
-    const r = await store.cancelAbsence(absence.id);
+    // `now: BEFORE`, the same clock the asks were raised on: withdrawn BEFORE
+    // the week, which is the case this test is about. Without it the real clock
+    // has passed these fixed dates, and (since session 42) an ask whose day has
+    // gone is a record, not something to withdraw — see the test after next.
+    const r = await store.cancelAbsence(absence.id, { now: BEFORE });
     await flush();
     expect(r.withdrawn).toBe(2);
     expect(r.kept).toBe(0);
@@ -326,13 +330,35 @@ describe("🔴 an absence raises the covers, and withdrawing it takes them back"
     const wed = store.getCoverRequests().find(q => q.classLabel === "Engine Room");
     await store.settleCoverRequest(wed.id, "approved", { coachId: dev.id });
 
-    const r = await store.cancelAbsence(absence.id);
+    const r = await store.cancelAbsence(absence.id, { now: BEFORE });
     await flush();
     expect(r.withdrawn).toBe(1);
     expect(r.kept).toBe(1);
     const after = store.getCoverRequests().find(q => q.id === wed.id);
     expect(after.status).toBe("approved");
     expect(after.toCoachId).toBe(dev.id);
+  });
+
+  // Session 42. Coming back EARLY withdraws what is still to come; an ask for a
+  // day already gone is the record that the class went uncovered, and cancelling
+  // it would rewrite a missed class as "withdrawn".
+  it("🔴 coming back after some of the days leaves the missed ones on record", async () => {
+    const { absence } = await awayWeek();
+    const reqs = store.getCoverRequests();
+    const days = [...new Set(reqs.map(q => q.classDate))].sort();
+    // PRECONDITION: the absence spans at least two class days, or "some passed,
+    // some to come" cannot be set up.
+    expect(days.length).toBeGreaterThan(1);
+    // The morning of the last class day: every earlier day has gone.
+    const now = new Date(`${days[days.length - 1]}T08:00:00`).getTime();
+    const r = await store.cancelAbsence(absence.id, { now });
+    await flush();
+    const after = store.getCoverRequests();
+    const past = after.filter(q => q.classDate < days[days.length - 1]);
+    expect(past.length).toBeGreaterThan(0);
+    expect(past.every(q => q.status === "open")).toBe(true);
+    expect(after.filter(q => q.classDate === days[days.length - 1]).every(q => q.status === "cancelled")).toBe(true);
+    expect(r.withdrawn).toBe(after.length - past.length);
   });
 
   it("a coach who withdrew one ask can raise it again", async () => {
