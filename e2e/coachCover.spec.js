@@ -299,6 +299,41 @@ test.describe("being away, and the board that comes from it", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // Session 42. Publishing only ever CREATED rows, so a week published before
+  // the cover was agreed kept the away coach on the row the check-ins land on —
+  // and that row is what the member link ("with Mara") and the member's own
+  // export read. The grid said "covering for Mara" while the button went grey.
+  test("🔴 a cover agreed after the week was published reaches the published row", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: two });
+    await page.getByRole("button", { name: "Next week" }).click();
+    await page.getByTestId("publish-week").click();
+    const before = (await stored(page, "jungle_class_instances")).find(c => c.name === "Engine Room");
+    // PRECONDITION: the row exists and names the coach who is about to be away.
+    expect(before.coachName.toLowerCase()).toBe("mara");
+    await expect(page.getByTestId("publish-week")).toBeDisabled();
+
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(MON);
+    await page.getByLabel("Last day away").fill(WED);
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
+    await expect(page.getByText("covering for Mara").first()).toBeVisible();
+
+    // The button says there is something to do, and doing it fixes the row.
+    await expect(page.getByTestId("publish-week")).toHaveText("Publish week · 1");
+    await page.getByTestId("publish-week").click();
+    await expect(page.getByText(/Updated the coach on 1 class/)).toBeVisible();
+    const after = (await stored(page, "jungle_class_instances")).filter(c => c.name === "Engine Room");
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: before.id, coachName: "Dev" });
+    await expect(page.getByTestId("publish-week")).toBeDisabled();
+    expectNoConsoleErrors(errors);
+  });
+
   test("🔴 the board says that day only — never 'from now on'", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);

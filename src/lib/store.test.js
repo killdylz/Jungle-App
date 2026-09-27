@@ -175,6 +175,27 @@ describe("ensureClassInstance", () => {
   //
   // This is the test that pins the whole point of the change: the names diverge
   // as badly as they ever did, and the check-in still lands on the published row.
+  // Session 42. A week published before a cover was agreed: the row still names
+  // the coach who is away. The grid offers Start to the coach who is covering,
+  // with the occurrence carrying the cover — and the row must follow, or every
+  // check-in about to land on it is credited to someone who was not there.
+  it("🔴 starting a class takes the coach the occurrence names, not the stale published one", () => {
+    const startsAt = new Date().toISOString();
+    const published = publishOccurrences([{ startsAt, name: "Engine Room", coachName: "Mara" }]).instances[0];
+    const started = startScheduledClass({ name: "Engine Room", startsAt, coachName: "Dev" });
+    expect(started.instance.id).toBe(published.id);
+    expect(started.instance.coachName).toBe("Dev");
+    expect(getClassInstances()).toEqual([expect.objectContaining({ id: published.id, coachName: "Dev" })]);
+  });
+
+  it("🔴 republishing retags a future row whose cover was agreed after it was published", () => {
+    const startsAt = new Date(Date.now() + 2 * 86400_000).toISOString();
+    publishOccurrences([{ startsAt, name: "Engine Room", coachName: "Mara" }]);
+    const r = publishOccurrences([{ startsAt, name: "Engine Room", coachName: "Dev" }]);
+    expect(r).toMatchObject({ created: 0, retagged: 1 });
+    expect(getClassInstances().map(c => c.coachName)).toEqual(["Dev"]);
+  });
+
   it("carries the Schedule's occurrence into the Runner so the names cannot diverge", () => {
     const startsAt = new Date().toISOString();
     const published = publishOccurrences([{ startsAt, name: "S360", classType: "HIIT",

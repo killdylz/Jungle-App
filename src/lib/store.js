@@ -1808,9 +1808,16 @@ export function ensureClassInstance({ name, classType, coachName, durationMin, i
 // occurrence splits one class's check-ins across two rows and nothing surfaces
 // the split.
 export function publishOccurrences(occurrences) {
-  const list = getClassInstances();
-  const { create, already } = diffOccurrences(occurrences, list);
-  if (!create.length) return { created: 0, already: already.length, instances: list };
+  let list = getClassInstances();
+  const { create, already, retag } = diffOccurrences(occurrences, list);
+  // A cover agreed after the week was published — see `retag` in
+  // scheduleInstances.js. Only rows not yet started; the diff enforces that.
+  if (retag.length) {
+    const to = new Map(retag.map(t => [t.id, t.coachName]));
+    list = list.map(c => (to.has(c.id) ? { ...c, coachName: to.get(c.id) } : c));
+    if (!create.length) saveClassInstances(list);
+  }
+  if (!create.length) return { created: 0, already: already.length, retagged: retag.length, instances: list };
 
   const rows = create.map(o => ({
     id: newId(),
@@ -1824,7 +1831,7 @@ export function publishOccurrences(occurrences) {
   }));
   const next = [...list, ...rows];
   saveClassInstances(next);
-  return { created: rows.length, already: already.length, instances: next };
+  return { created: rows.length, already: already.length, retagged: retag.length, instances: next };
 }
 
 // ── §3A: start a scheduled class, so the occurrence is CHOSEN not inferred ────
@@ -1847,6 +1854,20 @@ export function startScheduledClass(occurrence) {
   const list = getClassInstances();
   const key = occurrenceKey(occurrence);
   const hit = list.find(c => occurrenceKey(c) === key);
+  // The occurrence a coach presses Start on carries the covers the grid shows
+  // (CalendarScreen applies them before anything reads it). If the published row
+  // still names someone else — a cover agreed after publishing and nobody
+  // pressed Publish again — the person starting the class is the truth, and the
+  // check-ins about to land here must not be credited to the coach who was away
+  // (session 42). The row is being taught NOW, so this is not rewriting history.
+  // ⚠️ A NAME REPLACES A NAME, never a blank: starting must not erase what the
+  // Schedule wrote (the session-10 trap the test below this door pins).
+  if (hit && occurrence.coachName && occurrence.coachName !== (hit.coachName || "")) {
+    const fixed = { ...hit, coachName: occurrence.coachName };
+    const next = list.map(c => (c.id === hit.id ? fixed : c));
+    saveClassInstances(next);
+    return { instance: fixed, instances: next, created: false };
+  }
   if (hit) return { instance: hit, instances: list, created: false };
   // Reuses the publish writer so there is one mapper from occurrence to row —
   // a second one is how the two doors came to record different amounts of the
