@@ -296,6 +296,25 @@ test.describe("every select is thumb-sized on a phone", () => {
     expect(small, "selects under 44px at 390px").toEqual([]);
   });
 
+  // Found by LOOKING at the screen the rule above had just made taller. At 390px
+  // the Builder's three toolbar dropdowns were bare ~30px chevrons: the row wraps,
+  // but `flex: 1; minWidth: 0` never forces a wrap, it shrinks. Every select passed
+  // a height check and a coach still could not read which class type the plan was
+  // under. Height is not legibility, so this measures width too.
+  test("at 390px the Builder's toolbar dropdowns are wide enough to read", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await freshApp(page);
+    await installGym(page, usedGym());
+    await waitForAppAnyWidth(page);
+    await navAnyWidth(page, ALL_SCREENS.find((s) => s.key === "builder"));
+    for (const name of ["Class type", "Start from a ready-made Jungle class"]) {
+      const box = await page.getByRole("combobox", { name, exact: true }).boundingBox();
+      expect(box, `"${name}" must be on screen`).toBeTruthy();
+      expect(Math.round(box.width), `"${name}" is ${Math.round(box.width)}px wide at 390px`)
+        .toBeGreaterThanOrEqual(96);
+    }
+  });
+
   test("at 1280px the rule is off — a desk keeps its compact toolbar", async ({ page }) => {
     // The other half of the rule's scope. A 44px select in the Builder's toolbar
     // on a desktop is 16px of header for a mouse that did not need it.

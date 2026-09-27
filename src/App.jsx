@@ -1161,14 +1161,19 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             `!isMobile`, so on a phone they are not merely unassociated — they
             are not on the page at all, and three adjacent unnamed dropdowns is
             what a screen-reader user got. */}
+        {/* ⚠️ `flex: 1 1 96px` on a phone, not `flex: 1; minWidth: 0`. The row
+            wraps, but a zero-basis item never forces a wrap — it shrinks — so at
+            390px all three dropdowns were bare 30px chevrons and a coach could not
+            see which class type the plan was under. With a real basis the three
+            take the first line and the buttons wrap to the second (session 41). */}
         <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)} aria-label="Class type"
-          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
           {classKeys.map(k=><option key={k} value={k}>{LIB[k].icon} {LIB[k].label}</option>)}
         </select>
         {selectedSubKeys.length > 0 && <>
           {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
           <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)} aria-label="Class style"
-            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{LIB[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
@@ -1213,7 +1218,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           }}
           aria-label="Start from a ready-made Jungle class"
           title="Start from a ready-made Jungle class"
-          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
           <option value="">Jungle presets…</option>
           {TEMPLATES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.name} · {t.tag}</option>)}
         </select>
