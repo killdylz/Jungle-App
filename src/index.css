@@ -57,6 +57,32 @@ body {
   height: max(100%, 44px);
 }
 
+/* ─── Every <select> is 44px tall on a phone (session 41 §3.3) ────────────────
+   `data-tap` cannot help a select: it is a replaced element and Chrome generates
+   no `::after` for it, so the only way to make it hittable is a taller BOX. The
+   shared `Select` primitive has carried `minHeight: 44px` since session 40, and
+   eighteen raw `<select>`s outside it measured 18–37px at 390px. One rule here
+   rather than eighteen inline edits, because an opt-in rule is exactly how those
+   eighteen were never asked: the next raw select a screen grows is covered too.
+
+   Phone and tablet widths only — the same 900px line below which the sidebar
+   gives way to the bottom bar. On a desk the Builder's toolbar selects are 28px
+   on purpose and a mouse does not need the room.
+
+   ⚠️ `data-dense` opts ONE control out, and it has to earn it: the Builder's
+   per-exercise "Move to another stage" select sits in ~30px rows beside icon
+   buttons that are deliberately not `data-tap` either (see App.jsx). Growing it
+   alone would make every exercise row 44px — a Builder redesign, not a fix.
+
+   Text fields are deliberately NOT in this rule. A field is a wide target, a
+   miss lands visibly in the neighbouring field rather than doing something,
+   and several (the Library search) are a borderless input inside a larger pill
+   whose own box is the target — a height rule on the input would measure the
+   wrong thing. */
+@media (max-width: 899px) {
+  select:not([data-dense]) { min-height: 44px; }
+}
+
 /* ─── Keyboard focus must be visible on a text field ──────────────────────────
    §2.5, session 29. Tabbing the app with real key presses (programmatic
    `.focus()` does NOT trigger `:focus-visible`, and measuring that way reports

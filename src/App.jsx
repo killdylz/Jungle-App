@@ -1400,7 +1400,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                               dropdown with no options, which is the empty-menu
                               version of a control that refuses the click. */}
                           {onMoveExercise && stages.length > 1 && (
-                            <select value="" aria-label={`Move ${ex.n} to another stage`}
+                            <select value="" aria-label={`Move ${ex.n} to another stage`} data-dense
                               onClick={ev=>ev.stopPropagation()}
                               onChange={ev=>{
                                 ev.stopPropagation();

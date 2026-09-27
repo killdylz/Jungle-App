@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { freshApp, watchConsole, expectNoConsoleErrors, ALL_SCREENS, navAnyWidth, waitForAppAnyWidth } from "./helpers.js";
 import { tapScan, reportTaps, orphanScan, reportOrphans } from "./tapScan.js";
+import { usedGym, installGym } from "./usedGym.js";
 
 // The phone layout (audit 1.1). "Most of this will be used on a phone in a loud
 // room", so the navigation a coach uses mid-class gets its own tests.
@@ -252,4 +253,59 @@ test("the schedule grid's icon buttons stay clickable once there IS a class", as
   // the pencil still opens the edit dialog rather than deleting the class.
   await pencil.click();
   await expect(page.getByRole("dialog", { name: "Edit class" })).toBeVisible();
+});
+
+// ── Every <select> is 44px on a phone (session 41 §3.3) ──────────────────────
+//
+// `tapScan` is opt-in (it scans `[data-tap]`) and a `<select>` can never carry a
+// working `data-tap` — no `::after` on a replaced element. So eighteen raw
+// selects outside the shared primitive had never been measured, and measured
+// 18–37px at 390px. This measures the BOX, on every screen, on a gym that has
+// been used: the Health Screen and the 1:1 picker only exist once there is a
+// client, and an empty screen passes every scan trivially.
+const measureSelects = (page) => page.evaluate(() =>
+  [...document.querySelectorAll("select")]
+    .filter((el) => el.getBoundingClientRect().height > 0 && !el.hasAttribute("data-dense"))
+    .map((el) => ({
+      name: el.getAttribute("aria-label") || el.id || el.options[el.selectedIndex]?.text || "(unnamed)",
+      h: Math.round(el.getBoundingClientRect().height),
+    })));
+
+test.describe("every select is thumb-sized on a phone", () => {
+  test("at 390px, on every screen of a used gym", async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await freshApp(page);
+    const seen = [];
+    for (const screen of ALL_SCREENS) {
+      await installGym(page, usedGym());
+      await waitForAppAnyWidth(page);
+      await navAnyWidth(page, screen);
+      for (const s of await measureSelects(page)) seen.push({ ...s, screen: screen.side });
+    }
+    // POSITIVE CONTROL: the scan found the raw selects this exists for, not just
+    // the primitive that already passed. The Builder's toolbar and the
+    // Library's picker are two of the eighteen.
+    const names = seen.map((s) => s.name);
+    expect(names, "the scan must reach the Builder's raw class-type select").toContain("Class type");
+    expect(names, "…and the Exercise Library's").toContain("Class type to browse");
+    expect(seen.length, "a scan of a used gym measuring almost nothing is measuring the wrong page")
+      .toBeGreaterThanOrEqual(8);
+
+    const small = seen.filter((s) => s.h < 44).map((s) => `${s.screen} › ${s.name}: ${s.h}px`);
+    expect(small, "selects under 44px at 390px").toEqual([]);
+  });
+
+  test("at 1280px the rule is off — a desk keeps its compact toolbar", async ({ page }) => {
+    // The other half of the rule's scope. A 44px select in the Builder's toolbar
+    // on a desktop is 16px of header for a mouse that did not need it.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await freshApp(page);
+    await installGym(page, usedGym());
+    await waitForAppAnyWidth(page);
+    await navAnyWidth(page, ALL_SCREENS.find((s) => s.key === "builder"));
+    const classType = (await measureSelects(page)).find((s) => s.name === "Class type");
+    expect(classType, "the Builder's class-type select must be on screen to measure").toBeTruthy();
+    expect(classType.h).toBeLessThan(44);
+  });
 });
