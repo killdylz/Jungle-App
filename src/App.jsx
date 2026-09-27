@@ -1161,14 +1161,19 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
             `!isMobile`, so on a phone they are not merely unassociated — they
             are not on the page at all, and three adjacent unnamed dropdowns is
             what a screen-reader user got. */}
+        {/* ⚠️ `flex: 1 1 96px` on a phone, not `flex: 1; minWidth: 0`. The row
+            wraps, but a zero-basis item never forces a wrap — it shrinks — so at
+            390px all three dropdowns were bare 30px chevrons and a coach could not
+            see which class type the plan was under. With a real basis the three
+            take the first line and the buttons wrap to the second (session 41). */}
         <select value={selectedClass} onChange={e=>handleClassChange(e.target.value)} aria-label="Class type"
-          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",fontWeight:"600",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
           {classKeys.map(k=><option key={k} value={k}>{LIB[k].icon} {LIB[k].label}</option>)}
         </select>
         {selectedSubKeys.length > 0 && <>
           {!isMobile && <span style={{fontSize:"10px",color:"var(--muted)",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.5px",flexShrink:0}}>Style</span>}
           <select value={selectedSub||""} onChange={e=>handleSubChange(e.target.value)} aria-label="Class style"
-            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+            style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid ${LIB[selectedClass]?.color||"var(--border)"}`,borderRadius:"7px",color:"var(--text)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
             {selectedSubKeys.map(sk=><option key={sk} value={sk}>{LIB[selectedClass].subTypes[sk].label}</option>)}
           </select>
         </>}
@@ -1213,7 +1218,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
           }}
           aria-label="Start from a ready-made Jungle class"
           title="Start from a ready-made Jungle class"
-          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1":"0 0 auto",minWidth:0}}>
+          style={{padding:"5px 8px",background:"var(--navy)",border:`1px solid var(--border)`,borderRadius:"7px",color:"var(--muted)",fontSize:isMobile?"11px":"12px",cursor:"pointer",flex:isMobile?"1 1 96px":"0 0 auto",minWidth:isMobile?"96px":0}}>
           <option value="">Jungle presets…</option>
           {TEMPLATES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.name} · {t.tag}</option>)}
         </select>
@@ -1400,7 +1405,7 @@ function BuilderScreen({stages, onStageChange, onAddStage, onRemoveStage, onRemo
                               dropdown with no options, which is the empty-menu
                               version of a control that refuses the click. */}
                           {onMoveExercise && stages.length > 1 && (
-                            <select value="" aria-label={`Move ${ex.n} to another stage`}
+                            <select value="" aria-label={`Move ${ex.n} to another stage`} data-dense
                               onClick={ev=>ev.stopPropagation()}
                               onChange={ev=>{
                                 ev.stopPropagation();
@@ -2131,8 +2136,6 @@ export default function App() {
     store.saveDraftClass({ name: sessionName, stages, classChoice });
   }, [stages, sessionName, classChoice]);
 
-  const [templateTracks, setTemplateTracks] = useState(() => store.getTemplateTracks());
-  useAfterMount(() => { store.saveTemplateTracks(templateTracks); }, [templateTracks]);
   const [sessionHistory, setSessionHistory] = useState(() => store.getHistory());
 
   // Local-first: on login, pull every domain's server state into localStorage
@@ -2154,7 +2157,6 @@ export default function App() {
       }
       if (r.prefs) {
         setCrossfade(r.prefs.crossfade ?? 0);
-        setTemplateTracks(r.prefs.templateTracks ?? {});
       }
       if (r.history) setSessionHistory(r.history);
     });
@@ -2261,8 +2263,7 @@ export default function App() {
   // 🔴 `handleNewClass` below has held the rule since the toast primitive landed:
   // replacing the coach's whole class is destruction, and destruction is
   // confirmed or undoable. It was the only one of the five whole-list writers of
-  // `stages` in this file that did. `handleSelectTemplate` (the Builder's
-  // "Jungle presets…" picker), `handleLoadPtSession` ("Open in Builder" on a 1:1
+  // `stages` in this file that did. `handleSelectTemplate`, `handleLoadPtSession` ("Open in Builder" on a 1:1
   // client), `handleDraftFromPersona` (SEVEN controls on the Coaches screen:
   // "Fill this shape with this coach's own movements", "Draft <plan>", "Reopen",
   // and the five Generate-draft presets) and `handleImportTemplate` ("Open" a
@@ -2271,6 +2272,12 @@ export default function App() {
   //
   // Driven, not inferred: a hand-authored "MY OWN TUESDAY" of eight exercises was
   // replaced by a persona draft with `undo=0` and no toast on screen.
+  //
+  // ⚠️ Session 41: `handleSelectTemplate` is GONE, and it was never a door. It had
+  // no caller — the Builder's "Jungle presets…" picker goes through `onImportClass`
+  // (`handleImportTemplate`), and the Templates screen that once called it is
+  // retired in flags.js with no render branch. Four doors, not five; the dead one
+  // is deleted rather than guarded, and `deadHandlers.test.js` keeps it that way.
   //
   // This is session 38's §4 one layer out, and its lesson stated as a method:
   // when a guard is found that one caller skipped, the question is not "who
@@ -2310,14 +2317,6 @@ export default function App() {
     replaceWholeClass("Started a new class", () => {
       setStages(mkStages());
       setSessionName("My Workout");
-    });
-  };
-  const handleSelectTemplate = t => {
-    const saved = templateTracks[t.id]||{};
-    const lost = exerciseCount(stages);
-    replaceWholeClass(lost ? `Opened “${t.name}” · replaced ${lost} exercises` : `Opened “${t.name}”`, () => {
-      setStages(t.stages.map((s,i) => ({...s,id:uid(),tracks:[...(saved[i]||[])],exercises:s.exercises.map(e=>({...e}))})));
-      setSessionName(t.name);
     });
   };
   // Workstream D: draft a persona plan's blocks into the Builder as an editable
@@ -2676,7 +2675,6 @@ export default function App() {
             always reached from a client, and returning somewhere else loses the
             place the coach was working in. */}
         {view==="pt-parq"&&<ParqScreen onBack={()=>setView("pt")} onNavigate={navToPt} memberId={parqMemberId}/>}
-        {view==="integrations"&&<MockDisabledScreen title="Integrations" note="Booking, payments and wearable integrations land in a later phase. The cards that used to sit here showed services as “connected” that never were." onBack={()=>setView("dashboard")}/>}
         {view==="brand-studio"&&<BrandStudioScreen onBack={()=>setView("dashboard")} gymBranding={gymBranding} onBrandingChange={setGymBranding} activeSkinId={activeSkinId} onSkinChange={id=>setActiveSkinId(id)} customSkinTokens={customSkinTokens} onCustomSkinChange={setCustomSkinTokens}/>}
         {view==="team"&&<AdminTeamScreen onBack={()=>setView("dashboard")}/>}
         </Suspense>

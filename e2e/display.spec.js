@@ -955,3 +955,32 @@ test.describe("the Plan board holds its share of the wall", () => {
       .toBeGreaterThanOrEqual(11 / 1080 * 100);
   });
 });
+
+// ─── A class with more stages than the Floor board draws ─────────────────────
+//
+// The board draws five stations. The Builder's "Add stage" has no ceiling, so a
+// sixth stage is one click away — and on that class the board used to print
+// FINISH on the fifth card and "5 stations" under the loop, to the whole room,
+// while a sixth stage was still to come (session 41). Driven through the
+// shipped UI rather than seeded, because "reachable" is the claim.
+test("the Floor board says when a class is longer than it can draw", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await freshApp(page);
+  await nav(page, "Class Builder");
+  const before = await page.getByRole("button", { name: /^Remove / }).count();
+  await page.getByRole("button", { name: /Add stage/ }).click();
+  // PRECONDITION: the class really is longer than five, or every assertion
+  // below is true of the five-stage default.
+  await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(before + 1);
+  expect(before + 1).toBeGreaterThan(5);
+
+  await nav(page, "Class Runner");
+  await page.getByRole("button", { name: /Room TV/ }).click();
+  await page.mouse.move(640, 400);
+  await page.getByRole("button", { name: "Floor", exact: true }).click();
+
+  await expect(page.getByText(`showing 5 of ${before + 1} stages`)).toBeVisible();
+  await expect(page.getByText("FINISH", { exact: true }),
+    "no station on the board is the class's finish").toHaveCount(0);
+  await expect(page.getByText("START", { exact: true })).toHaveCount(1);
+});

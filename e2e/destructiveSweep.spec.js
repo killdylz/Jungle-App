@@ -199,17 +199,23 @@ const candidateNames = (page) =>
 // to avoid, so the wait stays fixed and the saving comes from the round trips.
 // ── 🔴 NO `page.evaluate` IN THIS FILE MAY RUN UNBOUNDED ─────────────────────
 //
-// `page.evaluate` has no timeout. A page that stops answering — and one does,
-// reproducibly, after the Profile modal's "Sign Out", which this sweep could
-// never reach until the second look below let it — takes the WHOLE test down
-// with it: the sweep sits in one evaluate for 240 seconds and Playwright reports
-// a timeout naming whatever call was pending, which is never the control that
-// caused it. That is the same failure this file exists to avoid, one level below
-// the sweep: a timeout is not a finding.
+// `page.evaluate` has no timeout. A page that stops answering takes the WHOLE
+// test down with it: the sweep sits in one evaluate for 240 seconds and
+// Playwright reports a timeout naming whatever call was pending, which is never
+// the control that caused it. A timeout is not a finding.
+//
+// Session 40 saw exactly that after the Profile modal's "Sign Out" and bounded
+// every read. ⚠️ SESSION 41 COULD NOT REPRODUCE IT, and looked hard: a throwaway
+// spec pressing every Profile-modal control on a used gym, then this sweep with
+// the second look below landed — "Sign Out" pressed ten times across twelve
+// screens, every read answered, 12/12 green. Session 40's second-look code was
+// never committed, so the likeliest home for that wedge is the instrument that
+// reached it, and there is nothing left to test that claim against. The bounds
+// stay: they cost nothing while the page answers, and they turn the next wedge,
+// whatever causes it, into a sentence instead of four minutes.
 //
 // So every read is bounded. A read that cannot be taken returns the fallback,
-// the press is recorded as skipped, and the report says so — an answer the next
-// session can act on, instead of a stack trace pointing at `localStorage.clear`.
+// the press is recorded as skipped, and the report says so.
 const READ_MS = 8000;
 const bounded = (promise, fallback) =>
   Promise.race([promise, new Promise((res) => setTimeout(() => res(fallback), READ_MS))])
@@ -217,32 +223,26 @@ const bounded = (promise, fallback) =>
 
 const SETTLE_MS = 200;
 
-// ── ⚠️ THE SWEEP CANNOT DESCEND INTO A `React.lazy` PANEL, AND NEVER COULD ───
+// ── ⚠️ A `React.lazy` PANEL ARRIVES AFTER THE SETTLE — hence the second look ─
 //
 // `ProfileModal` and `LibraryBrowserModal` are `React.lazy` (App.jsx:93-96), so
 // the press that opens one starts a dynamic import and the panel renders only
-// when the chunk lands — well after `SETTLE_MS`. The revealed set is empty and
-// the press is recorded as having opened nothing.
+// when the chunk lands — well after `SETTLE_MS`. Read at the settle, the revealed
+// set is empty and the press is recorded as having opened nothing. Until session
+// 40 the sweep reached the Profile modal only BY ACCIDENT (a failed click waited
+// 1500ms and was forced, so its revealed set was read two seconds late).
 //
-// The old code reached the Profile modal only BY ACCIDENT: that press failed its
-// actionability check, waited 1500ms and was then forced, so its revealed set
-// was read nearly two seconds late. Removing the forced path (above) took the
-// accident away, which is how this was found.
+// The second look is keyed on the one thing only such a press does: it FETCHES
+// CODE. When a script request started after the press and nothing new is on
+// screen, the sweep waits for the scripts to land (bounded) and reads again. A
+// blanket wait after every quiet press would cost ~1.7s × every control on the
+// Schedule, and a sweep past its own budget reports a timeout, not a finding.
+// The same look runs after a REOPEN, because the reopen reloads the page and the
+// chunk is fetched again — without it "Sign Out" and "Close" were `skipped`.
 //
-// 🔴 A SECOND LOOK WAS WRITTEN AND REMOVED, and the reason is worth more than the
-// code was. Waiting for the control count to move recovers the descent on eight
-// screens — and it then reaches the Profile modal's "Sign Out", which no run of
-// this sweep had ever pressed. Pressing it leaves the page unable to run ANY
-// `page.evaluate`: no dialog, no page error, a screenshot that looks perfectly
-// normal, and every subsequent read hangs until Playwright kills the test at
-// 240s. `installGym`'s `localStorage.clear()` is where it lands, which is why
-// the failure names a line that has nothing to do with it.
-//
-// That is a real defect in something — the sweep, the modal, or the dev server —
-// and it is not this commit's to chase. It is written up in the handoff with the
-// evidence. Until it is understood, the descent into a lazy panel stays missing,
-// which is a known gap rather than an accident.
-
+// Measured, session 41, descents per screen before → after: Dashboard 0→1,
+// Class Builder 5→7, Coaches 7→8, Schedule 8→9, Members 2→3, Analytics 1→2,
+// 1:1 Clients 4→5, Health Screen 1→2, Brand Studio 4→5.
 
 // ⚠️ `reject` IS NOT OPTIONAL HERE, and leaving it out cost a 240s timeout.
 // Everything below runs inside a `setTimeout` callback, so a throw in it — a
@@ -309,6 +309,24 @@ async function sweepScreen(page, screen) {
   const dialogs = [];
   page.on("dialog", (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
+  // Every script the page asks for, and the ones not yet back. A press that
+  // opens a `React.lazy` panel is the only kind that fetches code, so "did a
+  // script load start after this press" is the exact signal for a second look —
+  // see the note above POST_PRESS for why a blanket wait is not an option.
+  let scriptLoads = 0;
+  const inflight = new Set();
+  page.on("request", (q) => { if (q.resourceType() === "script") { scriptLoads++; inflight.add(q); } });
+  page.on("requestfinished", (q) => inflight.delete(q));
+  page.on("requestfailed", (q) => inflight.delete(q));
+  // Wait for code that a press asked for to arrive and render. Bounded: a chunk
+  // that never lands must cost a few seconds, not the test.
+  const secondLook = async () => {
+    const t0 = Date.now();
+    while (inflight.size && Date.now() - t0 < 3000) await page.waitForTimeout(50);
+    await page.waitForTimeout(SETTLE_MS);
+    return candidateNames(page);
+  };
+
   const corpus = await captureSampleCoach(page, { freshApp, nav, expect });
   const blob = { ...usedGym(), ...corpus };
 
@@ -321,7 +339,7 @@ async function sweepScreen(page, screen) {
     const ok = await bounded(installGym(page, blob).then(() => true), false);
     if (!ok) throw new Error(
       "the page stopped answering page.evaluate, so the gym could not be reinstalled — " +
-      "the press before this one wedged it; see the note above CANDIDATES");
+      "the press before this one wedged it; see the note above READ_MS");
     await waitForApp(page);
     await nav(page, screen.side);
   };
@@ -550,6 +568,7 @@ async function sweepScreen(page, screen) {
     }
     const i0 = at;
 
+    const loadsBefore = scriptLoads;
     let outcome = await press(i0, baseline[i]);
     // An obstruction means the screen is not what the sweep thinks it is. A
     // reload is the only thing that reliably takes a modal, a panel and a toast
@@ -597,7 +616,10 @@ async function sweepScreen(page, screen) {
     //
     // ⚠️ So `outcome.names` exists for the cheap comparisons only (is the screen
     // still at baseline), never for deciding what to walk into.
-    const revealedList = await candidateNames(page);
+    let revealedList = await candidateNames(page);
+    if (!revealedList.some((n) => n && !known.has(n)) && scriptLoads > loadsBefore) {
+      revealedList = await secondLook();
+    }
     const revealedIdx = revealedList
       .map((n, j) => [n, j])
       .filter(([n]) => n && !known.has(n));
@@ -630,17 +652,29 @@ async function sweepScreen(page, screen) {
         if (r.guarded.length && r.guarded[r.guarded.length - 1].name.endsWith("(reopen)")) r.guarded.pop();
         return true;
       };
+      // Reopen the parent and find this child again. The reopen reloaded the
+      // page, so a lazy panel's chunk is fetched AGAIN and lands after the
+      // settle — the first press's blindness, one step later. Without this the
+      // Profile modal's "Sign Out" and "Close" were `skipped` on every screen.
+      // `null` when the parent itself is gone.
+      const reopenTo = async () => {
+        const loads = scriptLoads;
+        if (!(await reopen())) return null;
+        let now = await candidateNames(page);
+        if (occurrenceOf(now, childName, childNth) === -1 && scriptLoads > loads) now = await secondLook();
+        return occurrenceOf(now, childName, childNth);
+      };
       let at = occurrenceOf(await candidateNames(page), childName, childNth);
       if (at === -1) {
-        if (!(await reopen())) break;
-        at = occurrenceOf(await candidateNames(page), childName, childNth);
+        at = await reopenTo();
+        if (at === null) break;
         if (at === -1) { r.skipped.push(`${baseline[i]} › ${childName}`); continue; }
       }
       let child = await press(at, `${baseline[i]} › ${childName}`);
       if (child && child.obstructed) {
         r.obstructed.push(`${baseline[i]} › ${childName} ← ${child.obstructed}`);
-        if (!(await reopen())) break;
-        const retryAt = occurrenceOf(await candidateNames(page), childName, childNth);
+        const retryAt = await reopenTo();
+        if (retryAt === null) break;
         child = retryAt === -1 ? null : await press(retryAt, `${baseline[i]} › ${childName}`);
         if (child && child.obstructed) {
           r.skipped.push(`${baseline[i]} › ${childName} (still covered)`);
@@ -709,6 +743,13 @@ test.describe("no control destroys the gym's data unguarded", () => {
 
   // Screens with known destructive controls must FIND them. The number is a
   // floor, not a fingerprint: a new guarded control should not fail a test.
+  // Descents the sweep must make. The Profile modal is walked from nowhere else —
+  // it is not in `ALL_SCREENS` — so a sweep that stops seeing it (a lazy panel
+  // read too early, see the second look) stops checking "Sign Out" silently.
+  const EXPECT_WALKED = {
+    dashboard: ["Your profile and settings › Sign Out", "Your profile and settings › Close"],
+  };
+
   const EXPECT_GUARDED = {
     builder: 1,   // the stage removals, Smart Distribute, the Build dialog doors
     personas: 1,  // delete coach, remove plan, delete movement
@@ -725,6 +766,11 @@ test.describe("no control destroys the gym's data unguarded", () => {
 
       expect(r.pressed.length, `${screen.side}: the sweep must actually press something`)
         .toBeGreaterThanOrEqual(1);
+
+      for (const name of EXPECT_WALKED[screen.key] || []) {
+        expect(r.pressed, `${screen.side}: the sweep must reach "${name}" — a lazy panel read ` +
+          `before its chunk landed is a descent silently not made`).toContain(name);
+      }
 
       const floor = EXPECT_GUARDED[screen.key];
       if (floor) {

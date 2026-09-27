@@ -82,8 +82,8 @@ test.describe("dashboard hero controls", () => {
       .toBe("Thursday Hyrox");
     // ⚠️ The sentence CHANGED, and this assertion changed with it rather than
     // being loosened. Session 39 gave the other four whole-class replacements
-    // (`handleSelectTemplate`, `handleDraftFromPersona`, `handleLoadPtSession`,
-    // `handleImportTemplate`) the undo this one already had, through one shared
+    // (`handleDraftFromPersona`, `handleLoadPtSession`, `handleImportTemplate`,
+    // and `handleSelectTemplate`, deleted in session 41 as unreachable) the undo this one already had, through one shared
     // `replaceWholeClass`. Six callers restoring the same object were about to
     // say it in two sentences — "your previous plan" here and "your own class"
     // in `applyTemplate` — which is the same one-object-two-words fault the

@@ -51,6 +51,7 @@ undo it. Nothing in Part A needs me.
 | **A18** | **You said yes. Four facts before anyone signs anything: Mindbody** | 20 min | none — a decision |
 | **A19** | **Decide the `health_screen` consent scope** — one CHECK constraint, and the health screen is already collecting the consent locally | **10 min to decide** | none until you write it |
 | **A20** | **A gym cannot enter a 07:00 class.** The Schedule supports five fixed times, full stop — a decision, then ~2 days of work | **15 min to decide** | none until you say yes |
+| 🔴 **A21** | **When does an absent member stop being "revenue at risk"?** Today never — a two-year import prices every member who ever left | **10 min to decide** | none until you choose |
 
 ---
 
@@ -1175,3 +1176,31 @@ so out loud, which is honest but is not support. Whether Jungle models concurren
 room or studio field, and that IS a migration. See `SESSION-36-HANDOFF.md` §4.3 and §5.2.
 
 **What I need from you:** yes / no on entering arbitrary times, and if yes, grid or list.
+
+---
+
+## A21 · When does an absent member stop being "revenue at risk"?  ·  added 2026-09-27 (session 41)
+
+**The owner's most quotable number is inflated by every member who left before Jungle arrived.**
+Full evidence in `SESSION-41-HANDOFF.md` §4.1.
+
+### The finding
+
+The absence rule (`src/lib/retention.js`, rule 2) flags a member absent 14+ days and has **no
+upper limit**. An attendance CSV carries no cancellations, so `applyAttendanceImport` creates every
+imported person as `active`. A gym that imports two years of history therefore gets every member
+who ever left flagged "at risk", and once a price is set in Brand Studio, priced as monthly revenue
+at risk. Measured on the shipped modules: 30 current regulars and 60 members who stopped between
+60 and 591 days ago → **"60 members need attention · S$9,540/month at risk"**. All 60 are gone.
+
+### The options
+
+- **(a) A ceiling** — absent more than N days is "lapsed": listed separately, and **not priced**.
+  Recommended at **60 days**: memberships bill monthly, and a member absent two full billing
+  cycles who has not been marked Paused has almost always stopped paying.
+- **(b) Import-aware** — a member whose last check-in is an imported row is history, not risk.
+  No number to choose, but it hides the member imported yesterday who was last in 20 days ago,
+  the one a coach most wants to call on day one.
+- **(c) Both** — (b) for the revenue figure only, (a) for the list.
+
+**What I need from you:** a, b or c, and if a or c, the number (or "60 is fine"). ~2h of work after.

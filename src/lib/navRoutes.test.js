@@ -29,8 +29,10 @@ import { isViewEnabled } from "../config/flags.js";
 // agree, rather than restating one of them in a second hard-coded list.
 //
 // Retiring a screen is still fine. It means removing the controls that point at
-// it, or leaving an honest branch behind — which is exactly what `integrations`
-// does (`MockDisabledScreen`), and what `templates` did not.
+// it, or leaving an honest branch behind. `integrations` used to be cited here
+// as the honest-branch example — but it is ALSO mapped to `false` in flags.js, so
+// its `MockDisabledScreen` branch could never be reached: an honest panel behind
+// a door nobody can open. Session 41 deleted it; a retired view has no branch.
 
 const APP = fs.readFileSync(new URL("../App.jsx", import.meta.url), "utf8");
 
@@ -118,10 +120,10 @@ describe("navigation targets", () => {
   });
 
   it("keeps a retired view unreachable from the navs", () => {
-    // The choke-point's own promise. `templates` and `glossary` are folded away;
-    // if either is ever given a render branch again it should come back through
+    // The choke-point's own promise. `templates`, `glossary` and `integrations`
+    // are retired; if any is ever given a render branch again it should come back through
     // flags.js, not by a nav array quietly disagreeing with it.
-    for (const key of ["templates", "glossary"]) {
+    for (const key of ["templates", "glossary", "integrations"]) {
       expect(isViewEnabled(key), `${key} is retired in flags.js`).toBe(false);
       expect(
         rendered.has(key),

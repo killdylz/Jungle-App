@@ -47,7 +47,8 @@ export const FLAGS = {
 // no flag brings it back. Spelling it as a literal keeps it from reading like a
 // typo'd flag name that silently returns undefined.
 //
-//   integrations → deleted; route renders the honest coming-soon panel
+//   integrations → deleted; no render branch (session 41 removed the unreachable
+//                  coming-soon panel it used to keep)
 //   templates    → folded into the Builder's class-type picker as Jungle presets
 //   glossary     → folded into the Exercise Library (cues on the movement row)
 //

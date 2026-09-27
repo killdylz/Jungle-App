@@ -78,7 +78,10 @@ jobs:
             echo
             echo "### Commits"
             echo
-            git log --no-merges --format='- %s' "origin/main..origin/$BRANCH" | head -50
+            # `--max-count`, NOT `| head -50`. Under `set -o pipefail` head closing
+            # the pipe kills git with SIGPIPE and the step exits 141 — on any
+            # branch more than 50 commits ahead of main (PR #20 hit it).
+            git log --no-merges --format='- %s' --max-count=50 "origin/main..origin/$BRANCH"
             echo
             echo "### Checks"
             echo
