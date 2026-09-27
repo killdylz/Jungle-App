@@ -233,6 +233,29 @@ export function analyzeAttendanceCsv(text, members = [], opts = {}) {
     if (m.name) byName.set(norm(m.name), m);
   });
 
+  // 🔴 THE SAME RULE FOR A PERSON THE FILE INTRODUCES. An email-less row already
+  // matches a ROSTER member by exact name (above). It did not match a NEW member
+  // introduced by another row of the same file, because the new member's key was
+  // their email on one row and their name on the next: "Sarah Chen,sarah@…" and
+  // "Sarah Chen," made TWO Sarah Chens, each holding half her history — so the
+  // retention rules saw two lapsing members where there was one regular
+  // (session 42). An email-less row now takes the email this file gives that
+  // exact name, but only when the file gives it exactly ONE: two different
+  // emails under one name are two people, and guessing between them is the
+  // fuzzy match this importer refuses.
+  const fileEmailsByName = new Map();
+  for (let r = 1; r < grid.length; r++) {
+    const n = norm(String(grid[r][map.member] ?? "").trim());
+    const e = norm(String(grid[r][map.email] ?? "").trim());
+    if (map.member == null || map.email == null || !n || !e) continue;
+    if (!fileEmailsByName.has(n)) fileEmailsByName.set(n, new Set());
+    fileEmailsByName.get(n).add(e);
+  }
+  const fileEmailFor = (name) => {
+    const set = fileEmailsByName.get(norm(name));
+    return set && set.size === 1 ? [...set][0] : "";
+  };
+
   const rows = [], problems = [], newMembers = new Map(), classes = new Map();
   const seenPairs = new Set();
   let skipped = 0;
@@ -252,9 +275,10 @@ export function analyzeAttendanceCsv(text, members = [], opts = {}) {
     else {
       // A name not on the roster becomes a NEW member — created explicitly and
       // counted in the preview, never quietly attached to a similar existing one.
-      memberKey = `new:${norm(email) || norm(name)}`;
+      const email2 = email || (name ? fileEmailFor(name) : "");
+      memberKey = `new:${norm(email2) || norm(name)}`;
       if (!newMembers.has(memberKey)) newMembers.set(memberKey,
-        { name: name || email, email: email || "", externalRef: cell(map.externalRef) });
+        { name: name || email2, email: email2 || "", externalRef: cell(map.externalRef) });
     }
 
     const className = cell(map.className) || "Imported class";

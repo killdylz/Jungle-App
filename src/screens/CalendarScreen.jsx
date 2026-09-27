@@ -412,6 +412,10 @@ export function CalendarScreen({onBack, onStartClass}) {
   const weekOccurrences = applyCovers(
     occurrencesForWeek(rules, startOfWeek, { days: DAYS }), covers.requests, covers.roster);
   const pending = diffOccurrences(weekOccurrences, instances);
+  // Retags count as work to do: a cover agreed after this week was published
+  // leaves a row naming the coach who is away, and a grey "already on the
+  // books" button said there was nothing to fix (session 42).
+  const pendingCount = pending.create.length + pending.retag.length;
   const publishWeek = () => {
     const r = store.publishOccurrences(weekOccurrences);
     setInstances(r.instances);
@@ -509,16 +513,18 @@ export function CalendarScreen({onBack, onStartClass}) {
               demand data. "Publish week" is back, because the thing it was
               waiting for now exists: class_instances (0007). Disabled with a
               reason rather than hidden, so the schedule explains itself. */}
-          <button onClick={publishWeek} disabled={!pending.create.length} data-testid="publish-week"
+          <button onClick={publishWeek} disabled={!pendingCount} data-testid="publish-week"
             title={weekOccurrences.length === 0
               ? "Add a class to this week first"
-              : pending.create.length === 0
+              : pendingCount === 0
                 ? "Every class on this week is already on the books"
-                : `Put ${pending.create.length} class${pending.create.length===1?"":"es"} on the books, ready to check people into`}
+                : pending.create.length
+                  ? `Put ${pending.create.length} class${pending.create.length===1?"":"es"} on the books, ready to check people into`
+                  : `Update the coach on ${pending.retag.length} class${pending.retag.length===1?"":"es"} already on the books`}
             style={{padding:"8px 14px",background:"transparent",border:`1px solid var(--border)`,borderRadius:"8px",
-                    cursor:pending.create.length?"pointer":"not-allowed",color:pending.create.length?"var(--text)":"var(--muted)",
-                    fontSize:"12px",fontWeight:"700",opacity:pending.create.length?1:0.55}}>
-            Publish week{pending.create.length ? ` · ${pending.create.length}` : ""}
+                    cursor:pendingCount?"pointer":"not-allowed",color:pendingCount?"var(--text)":"var(--muted)",
+                    fontSize:"12px",fontWeight:"700",opacity:pendingCount?1:0.55}}>
+            Publish week{pendingCount ? ` · ${pendingCount}` : ""}
           </button>
           <button onClick={()=>{setAddForm(blankForm());setShowAddClass(true);}} style={{padding:"8px 14px",background:"var(--accent)",border:"none",borderRadius:"8px",cursor:"pointer",color:"var(--on-accent)",fontSize:"12px",fontWeight:"700"}}>
             + Add class

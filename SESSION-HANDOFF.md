@@ -1,12 +1,383 @@
 # Jungle — Session Handoff
 
-_Last updated: 2026-09-27 (session 41)_
+_Last updated: 2026-09-27 (session 42)_
 
-> 📁 **Sessions 6–39 (plus 28-PT) are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
+> 📁 **Sessions 6–40 (plus 28-PT) are in `docs/history/HANDOFF-ARCHIVE.md`.** This file keeps the **two
 > most recent** blocks, which is the window a new session actually needs. It was 165 KB and
 > growing ~18 KB a session — larger than every source file but `App.jsx` — so the first thing
 > a new session was told to read had become the biggest thing it would read. Nothing was
 > summarised or dropped; the older blocks moved verbatim.
+
+---
+
+## Session 42 — four skips that were the instrument, and a covered class credited to the coach who was away
+
+> Written in full to `SESSION-42-HANDOFF.md`; this is that file, filed here per the two-block rule.
+
+_2026-09-27. Branch `claude/bold-babbage-r8gz1o` (the branch this environment assigned), based on
+`claude/relaxed-knuth-s6p32q` (PR #20). **PRs #15–#20 were all still open**, `main` was still
+`7508de1`, none was closed unmerged. All six conversations were read through the GitHub MCP tools:
+**#15–#19 have no comments and no reviews**; #20 has session 41's own two comments about the
+auto-PR fix and nothing else. That is §0.1's second row. Eight commits ahead._
+
+Position confirmed by gate, not by log: `npm test` reported **1328 unit (50 files)** and
+`npx playwright test --list` **624 in 53 files** at the branch point, exactly as the brief said.
+
+> **Gates at HEAD.** `lint:crash` **0** · **1344 unit** (50 files) · **629 e2e in 53 spec files**, one clean
+> full run on a quiet machine (**16.1m**) · build ok · `npm run size` **0 over budget** (StaffApp
+> **335.46 / 360 kB**, PTScreens **39.42 / 41**) · `node scripts/audit-store-writers.mjs` exit 0,
+> 0 unexplained. **The branch point was green too: 624 passed (16.1m), measured on a quiet machine
+> before anything else ran.**
+
+---
+
+## 1 · What shipped, per commit
+
+Every commit landed with a test that fails when the change is reverted. Each mutation was made in
+the source, run red, and restored (by the inverse edit or a copy of the file taken just before),
+with `grep -rn MUTATION src e2e` clean before the commit.
+
+### 1.1 `18fa2e6` — §3.1: the sweep skipped four 1:1 controls because a reload forgot a choice
+
+**Diagnosis.** None of the brief's three candidates, exactly. "Add client" reveals a client card
+only because the press **before** it chose a member in the picker. Choosing an option writes
+nothing, so it leaves no dirt. But every child of a descent is reached by `reopen`, which
+reinstalls the gym. The reload puts the picker back on "Choose someone…", so "Add client" answers
+"Pick a member first." and reveals nothing, and all four children were skipped.
+
+NAME_OF contributed a second fault: a `<select>` was named by its options run together, so the
+picker was "Choose someone… Raj Kumar Tom Wallace" before the add and "Choose someone… Tom
+Wallace" after it. It was the same control under a new name, so the sweep counted it as revealed.
+
+**Fix.** `reopen` replays the select choices in effect when the descent started (`prelude`). Only
+select choices: they are the one kind of press that carries state without dirtying anything. A
+select is named by its `<label>` (`textContent`, because CSS uppercases the rendered label).
+`EXPECT_WALKED.pt` names the three children.
+
+**Honest scope.** The same three controls were already being pressed on Sarah's and Ana's cards.
+This recovers a PATH (a client added a moment ago), not a control type nobody had pressed.
+
+1:1 Clients **pressed 23 → 26, skipped 4 → 0**; every other screen unchanged. Mutation
+`replay([])` → "pressed 23 · skipped 3", red.
+
+### 1.2 `a049956` — §3.4: "Brand Studio · 1 pressed with force" was a press that delivered no event
+
+**The control is "Start Class"**, at the foot of Brand Studio's live preview. It is a real
+`<button>` inside a container marked `inert` on purpose (it is a picture of the gym's app).
+Playwright's click fails with "`<div>` intercepts pointer events". The sweep's cover check
+accepted `hit.contains(el)`, an **ancestor** at the control's centre, as "the control itself",
+so it forced. **Measured: the forced click delivered no click event at all.**
+
+So it was **not** the honest case §3.4 describes. It was a press that did not happen, recorded as
+one that did: session 40's §4.1 one layer out. It was harmless to a gym (the button does nothing
+by design), but it is the instrument overstating its own coverage.
+
+**Fix.** CANDIDATES skips `[inert]`. An ancestor at the centre is now an obstruction, not the
+control. The report names every forced press instead of counting them. `EXPECT_UNPRESSED` says
+"Start Class" must never be recorded. Brand Studio 31 → 30. The full sweep now reports **no
+forced presses anywhere**. Mutation: either guard alone removed leaves the other holding; both
+removed → "1 pressed with force (Start Class)", red.
+
+### 1.3 `a666368` — the 1:1 picker offered a member who had left as if they were current
+
+Found by §3.1's probe. `availableMembers` offers every roster row without a 1:1 record, and the
+option was the bare name. "Tom Wallace" had **Left**. Now "Tom Wallace (Left)" / "Ana Ferreira
+(Paused)". The member is still addable (a returning member is who a 1:1 often starts with), and
+this follows CheckInPanel's rule: reachable, but labelled. Mutation → red on the label.
+`pt.spec.js` 30 passed.
+
+### 1.4 `ad629b5` — an import made two members of one person when only some rows had an email
+
+`Sarah Chen,sarah@…` and `Sarah Chen,` in one file → **"3 new members" for two people**, each
+holding half the history. An email-less row matched a ROSTER member by name, but not a NEW member
+the same file had introduced, whose key was their email. Now an email-less row takes the email
+the file gives that exact name, **only when the file gives exactly one** (two emails under one
+name stay two people, as before). Four unit tests + one driven e2e. Two mutations, both red.
+
+### 1.5 `3b88bf5` — a cover agreed after the week was published never reached the published class
+
+See §4.1. `diffOccurrences` gains `retag`: a **future** row whose coach differs from the
+cover-applied occurrence, and never a blank replacing a name. `publishOccurrences` applies it; the
+button counts it ("Publish week · 1"); `describePublish` says so. `startScheduledClass` takes the
+named coach onto the row it starts. Five unit tests + one driven e2e; two mutations, both red.
+unit 1339 at this commit.
+
+### 1.6 `fe6a883` — two Coaches controls behind a closed `<details>` had never been pressed
+
+The sweep reported "skipped 2: Generate draft › BUTTON (still covered)" on every run. Those two
+are **"Generate in style"** and **"Draft from recent"**, inside the "…or write a brief"
+`<details>` that "Generate draft" reveals. Chromium gives closed-details content a layout box, so
+the sweep counted them as on screen. `innerText` is empty, so they were named by tag, and no
+click can land. `summary` was never a candidate, so nothing ever opened them.
+
+CANDIDATES now includes `summary` and drops anything `checkVisibility()` says is not rendered. A
+child that is a `<summary>` queues what it reveals as further children, reached by reopening the
+parent and opening the same summaries (`via`). This is the one named exception to "one level
+down". **Both are now pressed, and both are guarded** (undoable). Coaches 158 → 161, skipped
+2 → 0. `EXPECT_NO_SKIPS` makes a skip a failure on 1:1 Clients and Coaches. Three mutations, all
+red.
+
+### 1.7 `31ce506` — a week after an absence, "still has nobody" and a button that erased the record
+
+See §4.2. Requests are now split at today (`absenceProgress` / `describeAbsenceProgress`), with
+the past said in the past tense. A finished absence with a record shows "· ended" and no "I'm
+back". `cancelAbsence` withdraws only asks whose day has not passed. Two existing tests raised
+covers on a fixed August clock and cancelled on the real one; they now pass the same clock to the
+cancel. That states their scenario and does not loosen an assertion. Three mutations, all red.
+unit 1344.
+
+### 1.8 `c17b30c` — the coach roster's header left out every coach who teaches no regular class
+
+"1 named · 0 with an account" sat above two coaches. It counted schedule names that resolve to the
+roster, so a sub (the person cover is for) was in neither number. It now reads "2 on the roster ·
+1 with an account". Mutation (the old computation) → red. The commit message first said
+"26 passed" for a run of 25; amended before anyone could have pulled it (my own branch).
+
+---
+
+## 2 · What is still red, and why
+
+**Nothing.** Branch point: **624 passed (16.1m)** on a quiet machine, the first thing run, with
+nothing else on the CPU. HEAD: **629 passed (16.1m)**, same conditions, with every probe spec
+deleted first. No flake was seen in either full run. `destructive.spec.js:526` (§4.2 item 6)
+passed both times, so there is no new information there.
+
+---
+
+## 3 · 🟥 Dylan's list — restated in full, unchanged
+
+Nothing here moved. `DYLAN-QUEUE.md` (A20 and A21 unanswered), all six PR conversations (above),
+and `git log` (every commit since `7508de1` is Claude-authored) were checked before any work
+started.
+
+| # | What | Blocks a user-visible outcome? |
+|---|---|---|
+| **A14** | Run `0010_staff_read_boundary.sql` | **YES** |
+| **A17** | Run `0011_coach_cover.sql` **and** put Supabase credentials in the build | **YES** |
+| **A12 / A13** | Turn on member links (N4) and open one on a phone | **YES** |
+| **A20** | Arbitrary class times — a one-array change, still a decision | **YES, on day one** |
+| **A21** | When an absent member stops being "revenue at risk" | **YES, on the day a gym imports** |
+| **A15 / A16 / A18 / A19** | Actions PR checkbox · accent legibility · Mindbody · consent scope | Mostly decisions |
+
+**Repeat, in words: merging branches does not let coaches find cover; A17 does.** And this
+session's §4.1 fix makes the cover data *right*; it does not make it reach anyone. A17 still does
+that.
+
+**Four decisions are in writing and waiting, none answered:**
+
+- `docs/PT-RECONCILIATION.md` §6 — second lens, or a PT product?
+- `DYLAN-QUEUE.md` A20 — arbitrary class times: yes/no, and grid or list.
+- `DYLAN-QUEUE.md` A21 — the at-risk ceiling: (a) N days, (b) import-aware, or (c) both.
+- `SESSION-38-HANDOFF.md` §5.1 — how big should the room boards draw? **Now five sessions old.**
+
+Nothing new for Dylan's list this session. §5 has two new decisions, neither of which blocks
+anything today.
+
+---
+
+## 4 · Findings, ranked by what they cost a gym
+
+### 4.1 🔴 A covered class was recorded as taught by the coach who was away · FIXED (`3b88bf5`)
+
+**What was wrong.** `publishOccurrences` only ever *created* rows, and `startScheduledClass`
+returned an existing row as-is. Covers are overlaid on the derived occurrences, never on rows
+already on the books. So the normal order of events left the published row naming the absent
+coach, and nothing on any screen could change it: publish a week ahead, then agree cover when
+someone falls ill.
+
+**Evidence, driven through the shipped UI.** Schedule → Next week → Publish week (Engine Room,
+Wed 18:00, Mara). Record Mara away; assign Dev. The grid reads "covering for Mara"; the Publish
+button goes **grey** ("Every class on this week is already on the books"). Clock → Wed 17:40,
+reload: Dev presses Start. The Runner reads "Running Engine Room from the schedule · today 18:00 —
+check-ins land on this class". The stored row: **`coachName: "Mara"`**.
+
+**What it cost a gym.** Every check-in of a covered class was credited to the coach who was not
+there. The member link reads that row's `coach_name`, so the member was told "with Mara". The
+member's own data export (the PDPA access response) printed Mara in its Coach column.
+
+**Fix.** Two narrow doors (§1.5). Deliberately **future rows only**: a past row keeps the coach the
+product believed was teaching, or a permanent change of coach would rewrite every class the old
+coach ever taught. **A blank never replaces a name**; `startScheduledClass`'s existing
+session-10 test pins exactly that, and it still passes unchanged.
+
+⚠️ Session 41's §5.3 calls `class_instances` "append-only by design". That is about deleting.
+Updating a field was always the sync model here (`_bgUpsertDelta`, and 0007's `updated_at`
+trigger), and this uses it.
+
+### 4.2 🔴 "I'm back" on a finished absence erased the record that a class went uncovered · FIXED (`31ce506`)
+
+**Evidence.** Mara away Mon–Wed, Dev takes Wednesday, nobody takes Monday. Clock → the following
+Tuesday: "1 of 2 covered — **1 still has nobody**. [I'm back]". Present tense about a class seven
+days gone. The button calls `cancelAbsence`, which hides the absence and settles Monday's request
+as "cancelled". The panel's own comment says that record ("that class went uncovered") is exactly
+what should be kept. The same store call did it to an *ongoing* absence: back early on Tuesday
+cancelled Monday's missed ask.
+
+**What it cost a gym.** The only record that cover failed was one harmless-looking tap from being
+rewritten as "the ask was withdrawn". That record is how an owner learns cover is not working.
+
+### 4.3 🟡 One person became two members on an import with mixed email rows · FIXED (`ad629b5`)
+
+On the **first** import, not the second (§4.2 item 2 asked about the second, and that path is
+sound; see §4.7). The two halves split visits and "last in", so the retention rules could flag a
+regular as lapsing. Mixed rows are an ordinary export shape: a walk-in entered by hand.
+
+### 4.4 🟡 The 1:1 picker listed a member who had left, unlabelled · FIXED (`a666368`)
+
+A coach picking a name for a new 1:1 client saw a Left member exactly like a current one. With two
+similar names, that is a mis-pick, and a health record against the wrong person.
+
+### 4.5 🟢 The roster header left out cover-only coaches · FIXED (`c17b30c`)
+
+### 4.6 🟢 The instrument, three times · FIXED (`18fa2e6`, `a049956`, `fe6a883`)
+
+Every skip and every force the sweep reported this session was the sweep, not the product. After
+these commits the full sweep reports **one** skip in total: the Exercise Library's header profile
+button, under the library's own modal, which no user can press either. That one is honest and
+deliberately left.
+
+### 4.7 🟢 The near-misses — chased and not reported
+
+- **§3.2, the member's page.** Built a real payload from the Builder's own stages through the
+  shipped `summaryContent`, stubbed `summary-read`, opened it at 390×844. No overflow; "40 min ·
+  9 movements" checks out (5+10+15+5+5; nine distinct names); "3 × 10, rest 30s"; "2 × 30 sec";
+  "60 sec each"; no Jungle mark; "Links stay live for a couple of weeks" matches the 14-day TTL.
+  **It says nothing about the member, by design** (see §6).
+- **§3.3, the Plan and Coach boards with a long class.** At 7 stages (one named "Posterior Chain
+  Strength Block", 30 characters), both boards draw **all** stages at 1280×720 and 3840×2160.
+  Every number checks: "7 stages · 60m · 9 exercises" (5+10+15+5+5+10+10; 2+2+2+1+2).
+  Nothing either board *says* is false. The Coach strip truncates names ("Poster…" at 4K), which
+  is known. At **12** stages the Plan board's third row runs off a 720p wall with no marker, but
+  the chips above still list all twelve with durations. That belongs with §5.4, not a copy fix.
+- **Importing the same CSV twice**, driven again: members, classes, check-ins and every number
+  unchanged; "5 were already recorded and were skipped".
+- **The Dashboard with a used gym** says "Run your first class" and "No sessions yet" to a gym
+  with classes and check-ins on record. Its numbers are all Runner session history, and it says
+  so ("your numbers appear on this page as soon as you have run a class"). An imported gym stays
+  on the cold-start card; that is a design question, not a false statement. See §5.11.
+- **The 1:1 list says "Nothing booked"** for a client whose planned session passed unmarked. I
+  first wrote this up as "overdue is computed and never shown", then retracted it: the sentence
+  above the list says "N planned sessions are in the past and still unmarked". Honest.
+- **The member link for an ad-hoc class** records `coachName` from `displayProfile`, which is null
+  in the local build, so the fact is dropped rather than printed as "with Coach". Honest.
+- **`node scripts/audit-store-writers.mjs`** — exit 0, 0 unexplained, after every change.
+- **"stated -26385 days ago"** on the cover board: my own fixture's `availabilityAt: "2099-…"`
+  (the trick coachCover.spec.js documents). Not reported.
+
+---
+
+## 5 · Proposals
+
+### 5.1 🔴 Carried forward, unanswered — A21: when does "at risk" become "gone"? · ~2h after the decision
+
+Session 41 §5.1 verbatim in substance. **Recommendation unchanged: (a) at 60 days**, one constant
+that the flag list, the revenue figure and the Analytics copy all pass through, with the argument
+beside it the way `MIN_TRIERS = 8` has one.
+
+### 5.2 🟡 NEW — an untimed export followed by a timed re-export duplicates the classes · a decision
+
+Measured on the shipped modules: the same two check-ins imported as `2026-03-04`, then as
+`2026-03-04 18:00` → **2 classes, 4 check-ins** for one class and two people. The importer matches
+at the file's own precision *on purpose*: an untimed row may already be two classes merged (06:00
+and 18:00 of the same name), so there is no safe automatic join. Options:
+(a) leave it, and have the preview warn when a timed row lands on a day that already has an
+untimed occurrence of the same name; (b) join a timed row to the ONE untimed occurrence of that
+name that day when there is exactly one. **Recommendation: (a)**. It says what is happening
+without guessing, and it is ~1h.
+
+### 5.3 🟡 NEW — the Away list grows forever · a number
+
+A manager sees every absence ever recorded, newest first. The cover board drops a request once
+its day passes ("the list only ever grows and stops being read"), and the same argument applies
+here. Dropping ended absences after N days is a number: **30** keeps the last month's "went
+uncovered" in view for a monthly review. Yours to accept or replace.
+
+### 5.4 🔴 Carried forward, unanswered: how big should the room boards draw? · ~1 day
+
+Session 38 §5.1, now **five** sessions old. Session 41's §5.2 (the Floor board calls every class a
+clockwise station loop) waits on it, and so does this session's 12-stage Plan board (§4.7).
+
+### 5.5 🟡 Carried forward: raise `TV_MIN_PX` so the floor stops blocking its own fix · ~2h after 5.4
+
+### 5.6 🟢 Carried forward: a re-slot's old occurrence stays on the books, empty (session 41 §5.3)
+
+### 5.7 🟡 Carried forward: the Builder's exercise rows on a phone — a design call (session 41 §5.6)
+
+### 5.8 🟢 Carried forward: recommend CLOSING the semicolon-CSV item
+
+Session 41's recommendation, carried as a recommendation rather than as an item: no reason to
+believe a pilot gym's export is `;`-separated (Singapore GTM, Mindbody exports commas), and
+`b266830` already tells a `;` file what is wrong.
+
+### 5.9 🟢 Carried forward: "A typical class here is 2 members" needs a minimum-sessions floor
+
+Still deliberately not taken: choosing that number is the work.
+
+### 5.10 🟡 Carried forward: the Floor board calls every class a station loop (session 41 §5.2)
+
+Waits on 5.4.
+
+### 5.11 🟢 NEW — the Dashboard of an imported gym stays on the cold-start card
+
+A gym that imports two years of history sees "Run your first class" until someone runs one through
+the Runner, because every Dashboard number is Runner session history. It is honest; the question
+is whether the Dashboard should say what it *does* have ("412 check-ins across 96 classes on
+record") before a Runner session exists. A copy-and-count decision, ~2h.
+
+---
+
+## 6 · What in the session-42 prompt was false, and my own retractions
+
+### ⚠️ §3.2 — "read what it tells them about themselves"
+
+`ClassSummary.jsx` is deliberately class-scoped. Its header says it must never render a member's
+name, streak or attendance, because the token is shareable and a personalised page would be a PDPA
+disclosure. A used gym changes only the *class content* it shows, so there is nothing about the
+member to read. I read what it does say (§4.7), and it is right.
+
+### ⚠️ §3.1 — the three candidate causes
+
+"The NAME_OF function, the revealed-set dedupe, or a control that really cannot be reached" was
+**none of them as the cause**. The cause was the reopen forgetting a select choice. NAME_OF was a
+real second fault (composite select names), and the brief's reading of the names as "the TEXT of a
+composite control" was exactly right. "A skip is a press that did not happen" was true, but those
+controls *were* pressed elsewhere, so the gap was a path, not a blind control.
+
+### ⚠️ §3.3 — "what does each board say about a class it cannot fully draw?"
+
+Both boards *can* draw a 7-stage class, fully, at both sizes. Not a defect (§4.7).
+
+### 🟢 What the prompt got exactly right
+
+- §0.1: all six open, `main` at `7508de1`, **1328 / 50** and **624 / 53** to the test.
+- §0.2: the chromium block, first try, sixth session running; the full run at **16.1m**.
+- §3.4's suspicion: it was the dishonest case, and it was worth checking.
+- §4.2's list: items 1 and 2 each led to a real finding within an hour, and item 4 (the sweep's
+  blind spots) led to two controls that had never been pressed.
+
+### 🔴 My own retractions
+
+- **"The 1:1 lens computes overdue sessions and never shows them"**: wrong, caught before it
+  reached this file (§4.7).
+- **A commit-message count**: `c17b30c` first said "coachCover.spec 26 passed" for a run of 25.
+  Amended on my own branch.
+- **My first NAME_OF fix read the label's `innerText`**, which CSS uppercases ("THIS
+  RELATIONSHIP"), and my `EXPECT_WALKED` entry failed on it. Caught by the test, fixed to
+  `textContent` before committing.
+- **The `checkVisibility` filter was not bitten by any test when first written**: the named
+  presses passed with it removed. I added `EXPECT_NO_SKIPS` so it is, rather than claim a guard
+  the suite could not see.
+- **§3.4's two guards each mask the other.** With one removed the test stays green; only both
+  removed turns it red. That is stated in the commit rather than reported as a single mutation.
+
+---
+
+## 7 · If you only do three things
+
+1. **Run `0011_coach_cover.sql` and put Supabase credentials in the build (A17), then
+   `0010_staff_read_boundary.sql` (A14).** Unchanged from sessions 38–41.
+2. **Decide A21**: the number at which an absent member stops being revenue at risk.
+3. **Answer the room-board question (§5.4)**, now five sessions old.
 
 ---
 
@@ -410,464 +781,3 @@ to the next commit). Amended before pushing.
 2. **Decide §5.1** — the number at which an absent member stops being revenue at risk. It is the
    figure an owner quotes, and today a two-year import makes it up.
 3. **Answer the room-board question (§5.4)** — four sessions old now, and §5.2 waits on it.
-
----
-
-## Session 40 — the instrument was lying, and four things the product said that were not true
-
-> Written in full to `SESSION-40-HANDOFF.md`; this is that file, filed here per the
-> two-block rule.
-
-_2026-09-08. Branch `claude/jungle-session-40-q4batq`, based on
-`claude/session-39-prompt-vl5r13` — PRs **#15, #16, #17 and #18 were all still open**, `main`
-was still `7508de1`, and there were **zero comments on all four**. That is §0.1's second row.
-Eight commits ahead of it._
-
-Position confirmed by gate, not by log: `npm test` reported **1310 unit (46 files)** and
-`npx playwright test --list` **615 in 53 files** at the branch point, exactly as the brief said.
-
-> **Gates.** `lint:crash` **0** · **1321 unit** (47 files) · **620 e2e in 53 spec files** ·
-> 14-chunk build · **0 over budget** (StaffApp **334.25 / 360 kB**, index **203.06 / 215**,
-> LibraryBrowserModal **20.11 / 21** — raised this session, see §1.4 — RetentionScreen
-> **17.23 / 18**, PTScreens **39.31 / 41**). App.jsx **2,708 lines**.
->
-> Full suite on the finished tree: **620 passed (15.1m)**, against 21.1m at the branch point.
->
-> 🔴 **The branch-point suite was NOT green.** `npm run test:e2e` on the untouched tree
-> reported **614 passed / 1 failed** — see §2. Session 39 reported the same suite green, and
-> it is green there; the failure is environmental and the fix is §1.1.
-
-**§3 landed in full, all five. §4 then found three things, and the first of them is that the
-sweep session 39 shipped had been reporting a clean run over controls it never pressed.**
-
----
-
-## 1 · What shipped, per commit
-
-### 1.1 `9ed9735` — the destructive sweep pressed 68, then 50, then 51 controls on the same tree
-
-§3.2 asked for the sweep to be made cheaper. Measuring it first found something worse than its
-cost, and the two turn out to be the same defect.
-
-`destructiveSweep.spec.js` fell back to `{ force: true }` whenever Playwright's actionability
-check failed, reasoning — in its own comment — that the obstruction would be a live toast and
-that a forced click "costs nothing and is recorded". Both halves are wrong. A forced click is
-delivered to the coordinates regardless of what is painted there. Reading `elementFromPoint` at
-the moment each click failed says what was actually covering the control:
-
-```
-Back              ← the Profile modal     ("Profile  Gym Branding  YOUR STATS")
-Smart Distribute  ← the class-style panel  ("WOD (Workout of the Day) AMRAP EMOM")
-Settings          ← the Exercise Library   ("Thruster")
-```
-
-All three are panels an EARLIER press left open. So the click landed on the overlay, the press
-did nothing, and it was recorded as a press that found no loss. **`Smart Distribute` — one of
-the four unguarded doors session 38 found by hand — reported `lost=0 wrote=false` and was
-classified harmless.**
-
-It compounds: the modal is still open afterwards, so the descent walks into it and attributes
-it to the wrong parent. The Library's 23 controls were swept as children of "Smart Distribute",
-which burned the descent signature "Browse Library" would have claimed, so the Library panel was
-never walked from that screen at all.
-
-Run the Class Builder screen three times on an untouched tree and it presses **68, then 50, then
-51**. Nothing in the report says so, because the presses it loses are recorded as pressed.
-
-**This is session 39's own retraction — "the sweep silently stopped sweeping" — one layer out, in
-the file that retraction was written about.**
-
-**Verified the way §3.2 asked.** With the guard taken off one door
-(`handleImportTemplate`, the Builder's "Jungle presets…" picker), the sweep goes red and names
-it:
-
-```
-🔴 Start from a ready-made Jungle class — destroyed with no confirm and no undo:
-     Start from a ready-made Jungle class: jungle_draft_class: Warm-Up is gone
-```
-
-⚠️ **The first attempt at that check proved nothing, and why is worth keeping.** I took the guard
-off `handleSelectTemplate` — named in session 39's table as one of the four doors — and the sweep
-stayed green. It is not that the sweep missed it: `handleSelectTemplate` has **no reachable
-caller**. The Builder's presets picker calls `onImportClass`, and the Templates nav destination
-that used to call it is `MOCK_VIEW_FLAG.templates === false`. Session 39's table lists it as a
-door; it is a door into a room nobody can enter. See §5.7.
-
-An obstruction is no longer forced past: `press` reports it, the caller reinstalls the gym (a
-reload takes every modal, panel and toast with it) and presses again by name. Still covered after
-that → `skipped`, in the report. `force` survives only where it is honest — the target IS the
-element at its own centre.
-
-Also: **`reopen()` popped `r.pressed` unconditionally**, so it was already taking real presses
-off the ledger whenever `press` returned early. And a surviving toast is now dirt (2.5s plain,
-9s with an undo), so the next press cannot be covered by it.
-
-### 1.2 `aaaee9f` — a sweep that can hang forever reports a timeout, not a finding
-
-Removing the forced clicks exposed two more things in the same file.
-
-**`page.evaluate` has no timeout, and this file had six of them.** Pressing the Profile modal's
-"Sign Out" leaves the page unable to run any `page.evaluate` — no dialog, no page error, a
-screenshot that looks perfectly normal, and every read after it never returns. The sweep then
-sits in one evaluate until Playwright kills the test at 240s, reporting a timeout that names
-`installGym`'s `localStorage.clear()`, a line with nothing to do with it. Every read is bounded
-now; `restore` throws a sentence naming what happened.
-
-**And `POST_PRESS` could never settle.** 9ed9735 folded five round trips into one evaluate
-returning a Promise, with the work inside a `setTimeout` callback and no `reject`. A throw in
-there escapes to the page's error handler and the promise is never settled. My own defect,
-introduced and removed in consecutive commits.
-
-`waitUntil: "commit"` on the restore reload is reverted — it made the wedge above arrive one
-control earlier.
-
-**Cost: `12 passed (4.8m)`, against ~13.5m and one 240s timeout.**
-
-### 1.3 `c55eef3` — "Could not read that file" was shown for a file it had just read
-
-§3.4, and it is reachable rather than mutation-only, which is where the brief and session 39 were
-both one step short. `{"name":"Tuesday","stages":[null]}` is valid JSON and clears
-`handleImportTemplate`'s own guard, because `stages` IS an array; the map on the next line reads
-`s.exercises` off the null and throws. One `try` wrapped both halves, so the coach was told their
-file was unreadable and asked to choose a Jungle class file — which is what they just did.
-
-Two failures, two sentences. The second offers no advice on purpose: "choose a different file" is
-exactly what was wrong with the first, and "this is a fault in Jungle" is a claim the catch cannot
-make, since a genuinely damaged file reaches it too.
-
-### 1.4 `956f292` — the Builder printed its own class type over somebody else's class
-
-§3.3. `schedKey = scheduledType && LIB[scheduledType] ? scheduledType : ""`, so the notice
-appeared only for a type the catalogue still had. Reset the library — which drops every
-gym-authored type while the rules keep pointing at them — start that class, and the Builder showed
-CrossFit while the schedule said Barre, with nothing on screen saying so.
-
-The comment that produced it is an argument about the BUTTON applied to the whole notice. The
-sentence now ships without the button.
-
-⚠️ **A passing test pinned it.** `schedule.spec.js` asserted "says nothing when the scheduled type
-is one the catalogue never had". Its reason was the same conflation, so the assertion is changed
-and the old sentence is quoted at the test with why only half of it survived.
-
-### 1.5 `ec9b055` — "Reset to Defaults" now says which class types it deletes
-
-§3.1. `DeleteCoachConfirm`'s rule, applied: the inventory IS the guard. `resetCascade` in
-`libraryStore.js` counts the gym-authored types and the rules and instances that name one — through
-`resolveClassType`, because a pre-session-21 rule stores the LABEL and a key comparison
-under-reports.
-
-**LibraryBrowserModal 20 → 21 kB (prod 21 → 22), measured 20.11.** It does not drag `store.js`
-into the lazy chunk — store is already eager, so rollup hoists it; StaffApp moved 333.81 → 334.19.
-
-### 1.6 `ab3dec1` — the 44px rule had never once been asked of a select
-
-§3.5. The Health Screen's client picker measures **37px** at 390px. `tapScan` is opt-in and no
-`<select>` in the product carried `data-tap`.
-
-🔴 **And `data-tap` alone would have made it worse.** The 44px hit area is a `::after`
-pseudo-element, and `<select>` is a replaced element for which Chrome generates none. Probed: the
-same rule computes to a used height of `44px` on a `<button>` and stays the unresolved string
-`max(100%, 44px)` on a `<select>`. Marking it and leaving the box at 37px gives a control that
-now fails the sweep and is no easier to hit.
-
-The shared `Select` primitive carries `minHeight: 44px`. Why four sessions of green sweeps missed
-it: `mobile.spec.js` runs against `freshApp`, and the Health Screen with no 1:1 clients renders no
-picker at all.
-
-### 1.7 `93d9561` — six mount writes in the one screen no sweep can reach
-
-§4. `MusicHubScreen.jsx` holds six copies of the exact shape `useAfterMount` exists to prevent,
-and every one of those writers pushes to `user_prefs`. On a fresh device, opening the screen would
-push defaults over the coach's real settings, racing the hydrate.
-
-⚠️ **It ships nothing today** — `FLAGS.music` is `false` and both mount points are gated. A
-landmine, not a defect. Which is why no sweep found it: `mountWrites.spec.js` drives the app, and
-a flagged-off screen is unreachable **by construction**.
-
-`src/ui/mountWrite.test.js` reads the source instead, and **derives** the dangerous writer set from
-`store.js` (an exported `save*` reaching `_bgUpsert`/`_bgDelete`/`supabase`) rather than carrying
-an allowlist that rots. `saveDraftClass` is local-only, so App.jsx's raw effect is correctly not
-reported.
-
-### 1.8 `aa68352` — "STILL OVER HALF" on a gym where half had stopped after one month
-
-§4. `halfLifeMonths = curve.find(p => p.pct < 50)`. Two ways wrong, both flattering, on what the
-code itself calls "the one number an owner will quote":
-
-1. **`<` where the definition is `<=`.** A half-life is when half are GONE. Driven: twelve
-   members, six stopping after month one, gives **6/12 = 50.0000%** at every observed month — and
-   the screen said *"More than half were still training at 8 months"*, `8m+`, **STILL OVER HALF**.
-2. **It compares a ROUNDED value.** A panel of 101 with 50 still training is 49.5% — fewer than
-   half — and rounds to 50, which is not below 50.
-
-Now `curve.find(p => p.retained / p.of <= 0.5)`. **The screen's copy did not change and did not
-need to**: with this comparison `null` genuinely means more than half were still training, so the
-sentence is true whenever it appears. The sentence was never the defect; the test behind it was.
-
----
-
-## 2 · What is still red, and why
-
-**Nothing, on the tree as it stands.** But the branch point was not green and that has to be
-said plainly:
-
-```
-npm run test:e2e on 8e50d0b, untouched:   614 passed / 1 failed
-  destructiveSweep.spec.js › Class Builder — Test timeout of 240000ms exceeded
-```
-
-Not a flake. The sweep's whole-file cost on this machine was **~13.5 minutes**, not the ~4m40s its
-header claimed, and Class Builder and Schedule were both at or over their own 240s budget. The
-header's number was measured on a faster machine. §1.1 and §1.2 bring the file to **4.8m** and all
-twelve screens pass.
-
-⚠️ **A full run here is ~21 minutes at the branch point**, not the ~14 the brief says.
-
----
-
-## 3 · 🟥 Dylan's list — restated in full, unchanged
-
-Nothing here moved. `DYLAN-QUEUE.md`, all four PR conversations (**zero comments on #15, #16, #17
-or #18**) and `git log` were all checked before any work started.
-
-| # | What | Blocks a user-visible outcome? |
-|---|---|---|
-| **A14** | Run `0010_staff_read_boundary.sql` | **YES** |
-| **A17** | Run `0011_coach_cover.sql` **and** put Supabase credentials in the build | **YES** |
-| **A12 / A13** | Turn on member links (N4) and open one on a phone | **YES** |
-| **A20** | Arbitrary class times — a one-array change, still a decision | **YES, on day one** |
-| **A15 / A16 / A18 / A19** | Actions PR checkbox · accent legibility · Mindbody · consent scope | Mostly decisions |
-
-**Repeat, in words: merging branches does not let coaches find cover; A17 does.**
-
-**Three decisions are in writing and waiting, and none has been answered:**
-
-- `docs/PT-RECONCILIATION.md` §6 — second lens, or a PT product?
-- `DYLAN-QUEUE.md` A20 — arbitrary class times: yes/no, and grid or list.
-- `SESSION-38-HANDOFF.md` §5.1 — how big should the room boards draw? **Now three sessions old.**
-
----
-
-## 4 · Findings, ranked by what they cost a gym
-
-### 4.1 🔴 The sweep reported a clean run over controls it never pressed · FIXED (§1.1)
-
-Above. The cost to a gym is indirect and large: this is the instrument the repo now relies on to
-find unguarded destructive controls, and it was silently skipping up to a third of them — including
-`Smart Distribute`, which really does destroy a coach's exercises.
-
-**Evidence:** three runs of one screen on an untouched tree pressing 68 / 50 / 51;
-`elementFromPoint` at each failed click naming the panel that covered it.
-
-### 4.2 🔴 "STILL OVER HALF" over a gym that had lost half its members · FIXED (§1.8)
-
-**What it costs a gym.** An owner reads the retention headline and concludes the opposite of the
-truth. This repo's own rule is that a confident wrong number is worse than no number, and this one
-is wrong in the flattering direction on the number the code itself says an owner will quote.
-
-**Evidence:** seeded a year of history, opened Analytics and read it — the half-life card said
-"More than half were still training at 8 months" over a chart whose every bar from month 1 read
-**50%**. Then reproduced exactly: 6/12 = 50.0000%.
-
-### 4.3 🟡 Six mount writes behind a false flag · FIXED (§1.7)
-
-Costs nothing today and costs a gym its DJ settings the day music is turned on. The value is the
-generalisation: **a sweep whose fixture cannot EXIST.** `MOCK_VIEW_FLAG` has three more `false`
-entries (`integrations`, `templates`, `glossary`) and nothing behind any of them has been read by
-any sweep in this repo.
-
-### 4.4 🟢 The near-misses — chased and not reported
-
-- **A member or 1:1 client deleted with history.** There is deliberately no `deleteMember` and no
-  `deletePtClient`, and `store.js` says so at both sites. Closed by design.
-- **The coach "Still coaches here" checkbox** — a soft delete the destructive sweep structurally
-  cannot see (a scalar change is a write, not a loss). It is honest: the consequence is stated
-  in-line, right under the checkbox.
-- **`ProfileModal.jsx:186`'s `?.label || key` over stage types** — left alone, correctly: those
-  keys are ours and a missing one is our bug to see.
-- **"0 CLASSES RUN" beside "382 CHECK-INS"** on the Members header looked like a contradiction. It
-  is my fixture: `applyAttendanceImport` creates a class instance for every imported class, so a
-  real gym that imports history has instances. Do not report a defect your own fixture made.
-- **"41 MEMBERS" (tile) vs "Roster · 37 (4 not active)"** two lines below. Both true, and the
-  second discloses the difference. Not the "562 members" shape.
-- **The at-risk panel's answer** reads correctly with real data: 6 members × S$159 = S$954/month,
-  and the per-member lines agree.
-- **`node scripts/audit-store-writers.mjs`** — 0 unexplained, three permanent seams green.
-
-### 4.5 ⚠️ The e2e flakes — what I actually saw
-
-Not the classic flake. What I saw instead, and both are worse because they look like flakes:
-
-1. **A 240s timeout on an untouched tree** (§2), which is a cost problem, not a flake.
-2. **A non-deterministic press count** in the sweep — 68 / 50 / 51 across three identical runs.
-   Nothing failed; the sweep just did less, silently.
-
-**I spent two rounds diagnosing my own changes for a coverage regression that was the sweep's
-pre-existing variance.** If something looks like a flake in this file, check whether it is
-deterministic first — run it twice and diff the report, not the pass/fail.
-
-No `syncBanner`/`responsive`-shaped mount flake appeared in any run.
-
----
-
-## 5 · Proposals
-
-### 5.1 🔴 Carried forward, unanswered: how big should the room boards draw? · ~1 day
-
-Session 38 §5.1, session 39 §5.1, **still waiting and now three sessions old**. Requirement:
-primary 8–12% of screen height, secondary ~3%. What ships is 1.0–2.5% on the Plan board. A global
-floor is not shippable — the Coach board's stage strip truncates — so the work is per-board.
-**The decision needed: should the pre-class Plan board fill the wall the way the timer boards do?**
-
-### 5.2 🟡 Carried forward: raise `TV_MIN_PX` so the floor stops blocking its own fix · ~2h after 5.1
-
-Session 38 §5.2, unchanged.
-
-### 5.3 🟡 Carried forward: `parseCsv` and semicolons · half a day
-
-Session 37's, still open. Worth doing if a pilot gym's export is `;`-separated; not speculatively.
-
-### 5.4 🔴 NEW — the sweep cannot descend into a `React.lazy` panel, and a control wedges the page
-
-The most important thing I could not finish. Two halves:
-
-**(a) The descent is blind to lazy panels.** `ProfileModal` and `LibraryBrowserModal` are
-`React.lazy`, so the press that opens one starts a dynamic import and the panel renders long after
-`SETTLE_MS`. The old code reached the Profile modal only **by accident** — that press failed its
-actionability check, waited 1500ms and was forced, so the revealed set was read nearly two seconds
-late. Take the accident away and the Dashboard goes from 1 descent to 0.
-
-I wrote the second look (wait for the control count to move, capped) and **measured it recovering
-the descent on eight screens**. It is not in the branch, because:
-
-**(b) It then reaches "Sign Out", and pressing it wedges the page.** After that press, no
-`page.evaluate` ever returns — no dialog, no page error, a normal-looking screenshot. I could not
-find the cause. `logout` is the Spotify stub, `auth?.signOut?.()` is a no-op with no Supabase, and
-there is no `beforeunload` in the tree.
-
-**Cost: ~half a day, and it needs (b) understood first.** The reasoning and the measurements are
-in the file where the next person will find them. Until then the sweep has a known hole rather
-than an accidental one, and `ProfileModal` is walked from nowhere.
-
-### 5.5 🟡 NEW — the `Input` primitive is 35px, and 18 raw `<select>`s are unmeasured · ~2h
-
-§1.6 fixed the shared `Select`. The shared `Input` renders **35px** at 390px — the same padding
-and font size, but an `<input>`'s line box is 2px shorter than a `<select>`'s — with the same
-absent `data-tap`. Outside the primitive there are **18 raw `<select>` elements**: App.jsx (5),
-CalendarScreen (3), CoachCoverPanel (3), AdminTeamScreen (2), LibraryBrowserModal (2), and one
-each in RosterScreen, BrandStudioScreen and PlaylistImportModal. None has ever been measured, for
-the same opt-in reason.
-
-⚠️ **Both numbers are measured, and the first draft of this section had both wrong** — "the same
-37px", read off the shared padding rather than the rendered box, and "21", from a grep that
-counted the word `<select>` inside comments. Corrected in a follow-up commit rather than left,
-because a handoff number is a claim.
-
-The work is mechanical; the judgement is whether text fields belong in the 44px rule at all,
-which is worth one line of a decision.
-
-### 5.6 🟢 Carried forward from session 39: the Builder/check-in items not taken
-
-- **§5.8, "A typical class here is 2 members" from one class.** Unchanged and deliberately not
-  taken again: it needs a minimum-sessions floor and **choosing that number is the work**.
-- Session 39 §5.3 (`parseCsv`) is 5.3 above.
-
-### 5.7 🟢 NEW — what is behind a false flag, including one of session 39's "four doors"
-
-`MOCK_VIEW_FLAG` maps `integrations`, `templates` and `glossary` to `false`. §1.7 found six real
-defects in the one flagged-off screen anybody looked at, and §1.1's verification turned up
-another: **`handleSelectTemplate` has no reachable caller.** Session 39's table names it as one
-of the four whole-class replacements it guarded; the Builder's presets picker calls
-`onImportClass` instead, and the Templates screen that used to reach it is flagged off. The guard
-on it is correct and costs nothing — but a reader counting doors from that table will count one
-that does not open.
-
-A source-level pass over the three flagged-off routes is cheap and nobody has done it, and this
-repo has already deleted a screen (`AnalyticsScreen`, session 29) rather than leave a mock behind
-a flag. ~2h.
-
----
-
-## 6 · What in the session-40 prompt was false, and my own retractions
-
-### ⚠️ §0.2's "a full run now takes ~14 minutes" — it was 21
-
-And the sweep's own "~4m40s" (repeated from session 39's header) was **~13.5 minutes** here.
-Class Builder and Schedule were both at or past their 240s per-test budget, and one of them failed
-on the untouched tree. The brief's number was right on the machine it was measured on, which is
-exactly the failure mode `§0.3` warns about.
-
-### ⚠️ §3.5's "give it `data-tap` and a 44px box" is not an available option
-
-`data-tap` alone does nothing on a `<select>` — no `::after` is generated for a replaced element.
-The brief offers it as one of two choices and it is neither: marking a select and leaving its box
-at 37px makes it fail the sweep without making it easier to hit.
-
-### ⚠️ §3.4 understates it: the defect ships today
-
-The brief (following session 39) says it was found by mutation and that nothing ships broken.
-`{"stages":[null]}` is a readable file that reaches the wrong message.
-
-### 🟢 What the prompt got exactly right
-
-- **§0.1's branch table and gate numbers.** All four PRs open, `main` still `7508de1`, and
-  **1310 unit / 615 e2e** matched to the test.
-- **§0.2's chromium block.** Verbatim, first try, fourth session running.
-- **§3.1, §3.3 and §3.5's diagnoses**, each checked against the code before building.
-- **§4.1's method.** All three §4 findings came from seed → render → **read** → check the store.
-  Not one came from a test.
-
-### 🔴 My retraction: I twice blamed my own change for the sweep's pre-existing variance
-
-I measured Class Builder at 68 presses, made it faster, measured 47, and concluded I had cost
-coverage. I then produced two confident mechanisms — the adaptive settle, then reading
-`outcome.names` — reverted each, and got 47 both times. **The original, untouched, presses 68 then
-50 then 51.** The sweep was never deterministic and I had taken one run as a baseline.
-
-I reported the "coverage regression" to Dylan mid-session before establishing that. The finding
-that came out of it is real; the attribution in that report was not.
-
-### 🔴 My retraction: I introduced a 240-second hang and shipped it for one commit
-
-Folding five round trips into one `page.evaluate` (9ed9735), I put the work in a `setTimeout`
-callback with no `reject`. A throw there never settles the promise and `page.evaluate` has no
-timeout. Fixed in `aaaee9f`, one commit later, along with bounding every other read — which is the
-part worth keeping.
-
-### 🔴 My retraction: the lazy-panel second look was a silent no-op for two runs
-
-I compared `document.querySelectorAll("button, …").length` against `revealedList.length` — an
-unfiltered count against a filtered one. The condition was satisfied the instant it was asked, so
-the "second look" returned immediately and I read two runs of unchanged numbers as evidence the
-hypothesis was wrong.
-
-### 🔴 My retraction: I added a guard for a state the product cannot reach, with a test that could not fail
-
-In §3.3 I added `resolveClassType` to the Builder's scheduled-type read, reasoning that a legacy
-rule carrying a LABEL would make the notice announce a mismatch between a class and itself. I wrote
-a test for it. **The test passed with the guard mutated away**, which is the tell.
-`CalendarScreen:203` normalises every rule before deriving occurrences, so a started class already
-carries `crossfit` — probed end to end. Both removed, and the reasoning left at the line.
-
-### 🔴 My own process failures: I invalidated two full e2e runs
-
-Once by editing `src/` while a run was in flight, and once by running `npm run size` — which
-builds `dist/` — while the preview server was serving it. CLAUDE.md warns about the first in two
-separate places. Both runs were discarded and re-run on a quiet tree.
-
-### 🔴 My retraction, inside §4: "0 CLASSES RUN" was my fixture
-
-I seeded attendance rows with no `class_instances` and read "0 CLASSES RUN" beside "382
-CHECK-INS" as a contradiction the product ships. `applyAttendanceImport` creates an instance for
-every imported class, so no real gym is in that state. Checked before reporting, which is the only
-reason it is here as a near-miss instead of as a finding.
-
----
-
-## 7 · If you only do three things
-
-1. **Run `0011_coach_cover.sql` and put Supabase credentials in the build (A17), then
-   `0010_staff_read_boundary.sql` (A14).** Unchanged from sessions 38 and 39.
-2. **Answer A20**, and the room-board question in §5.1 — three sessions old now.
-3. **Merge PR #15, then #16, #17, #18, then this branch.** `main` is eight sessions stale.
-   **Merging them still does not let a coach find cover — A17 does.**

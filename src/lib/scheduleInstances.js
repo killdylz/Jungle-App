@@ -189,9 +189,24 @@ export function occurrenceKey(o) {
  * Split a week's occurrences into the ones that need creating and the ones
  * already on the books. The caller writes only `create`.
  */
-export function diffOccurrences(occurrences, existing = []) {
-  const have = new Set((existing || []).map(occurrenceKey));
-  const create = [], already = [];
+//
+// 🔴 `retag` — AN AGREED COVER HAS TO REACH A WEEK THAT WAS ALREADY PUBLISHED.
+// Publishing only ever created rows, so a week published on Sunday and a cover
+// agreed on Monday left the Wednesday row naming the coach who was away. The
+// grid showed "covering for Mara", the Publish button went grey ("already on
+// the books"), Dev started the class — and every check-in landed on a row whose
+// `coachName` was Mara. That row is what the member's link says ("with Mara")
+// and what the member's own data export prints in its Coach column (session 42).
+//
+// So an existing row whose coach differs from the occurrence's is returned for
+// retagging, but ONLY IF IT HAS NOT STARTED. A past row records who the product
+// believed was teaching when it happened; rewriting it from TODAY's rule would
+// let a permanent change of coach ("Mara left, the rule says Dev now") rewrite
+// every class Mara ever taught. The class being started is the other door, and
+// `startScheduledClass` takes it.
+export function diffOccurrences(occurrences, existing = [], { now = Date.now() } = {}) {
+  const have = new Map((existing || []).map(r => [occurrenceKey(r), r]));
+  const create = [], already = [], retag = [];
   const seen = new Set();
   for (const o of occurrences || []) {
     const k = occurrenceKey(o);
@@ -200,18 +215,30 @@ export function diffOccurrences(occurrences, existing = []) {
     // twice in a single batch.
     if (seen.has(k)) continue;
     seen.add(k);
-    (have.has(k) ? already : create).push(o);
+    const row = have.get(k);
+    if (!row) { create.push(o); continue; }
+    already.push(o);
+    // A name replaces a name, never a blank — an occurrence with no coach says
+    // nothing about who is teaching, and must not erase a row that does.
+    const coachName = o.coachName || "";
+    if (coachName && coachName !== (row.coachName || "") && new Date(row.startsAt).getTime() > now) {
+      retag.push({ id: row.id, coachName });
+    }
   }
-  return { create, already };
+  return { create, already, retag };
 }
 
 /**
  * What the button did, in a sentence a coach reads. Written for the case that
  * actually happens most — pressing it again on a week already published.
  */
-export function describePublish({ created = 0, already = 0 } = {}) {
+export function describePublish({ created = 0, already = 0, retagged = 0 } = {}) {
   if (!created && !already) return "There are no classes on this week's schedule yet.";
+  const coach = retagged
+    ? ` Updated the coach on ${retagged} class${retagged === 1 ? "" : "es"} to match an agreed cover or an edit.`
+    : "";
+  if (!created && retagged) return `This week was already on the books.${coach}`;
   if (!created) return `This week is already on the books — all ${already} class${already === 1 ? "" : "es"}.`;
   const tail = already ? ` ${already} ${already === 1 ? "was" : "were"} already there.` : "";
-  return `Added ${created} class${created === 1 ? "" : "es"} to the books.${tail}`;
+  return `Added ${created} class${created === 1 ? "" : "es"} to the books.${tail}${coach}`;
 }

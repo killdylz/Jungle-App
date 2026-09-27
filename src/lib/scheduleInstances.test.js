@@ -356,3 +356,46 @@ describe("the schedule's slots are defined once", () => {
     expect(RULE_SLOTS).toEqual(["06:00", "09:00", "12:00", "18:00", "19:30"]);
   });
 });
+
+// Session 42. A cover agreed after the week was published left the published
+// row naming the coach who was away — and that row is what the member link and
+// the member's own export read.
+describe("diffOccurrences — a published row learns an agreed cover, but only before it starts", () => {
+  const NOW = new Date(2026, 6, 15, 10, 0, 0, 0).getTime();
+  const occ = (startsAt, coachName) => ({ name: "Engine Room", startsAt, coachName });
+  const FUTURE = new Date(2026, 6, 15, 18, 0).toISOString();
+  const PAST = new Date(2026, 6, 14, 18, 0).toISOString();
+
+  it("🔴 retags a row that has not started when its coach changed", () => {
+    const { create, already, retag } = diffOccurrences([occ(FUTURE, "Dev")],
+      [{ id: "ci1", ...occ(FUTURE, "Mara") }], { now: NOW });
+    expect(create).toHaveLength(0);
+    expect(already).toHaveLength(1);
+    expect(retag).toEqual([{ id: "ci1", coachName: "Dev" }]);
+  });
+
+  it("🔴 never rewrites a class that has already happened", () => {
+    // A permanent change of coach ("Mara left, the rule says Dev") must not
+    // rewrite every class Mara taught.
+    const { retag } = diffOccurrences([occ(PAST, "Dev")], [{ id: "ci0", ...occ(PAST, "Mara") }], { now: NOW });
+    expect(retag).toEqual([]);
+  });
+
+  it("never blanks a named coach from an occurrence that names nobody", () => {
+    expect(diffOccurrences([occ(FUTURE, "")], [{ id: "ci1", ...occ(FUTURE, "Mara") }], { now: NOW }).retag)
+      .toEqual([]);
+  });
+
+  it("leaves a row alone when the coach already matches", () => {
+    expect(diffOccurrences([occ(FUTURE, "Mara")], [{ id: "ci1", ...occ(FUTURE, "Mara") }], { now: NOW }).retag)
+      .toEqual([]);
+  });
+
+  it("says what it did", () => {
+    expect(describePublish({ created: 0, already: 3, retagged: 1 }))
+      .toBe("This week was already on the books. Updated the coach on 1 class to match an agreed cover or an edit.");
+    expect(describePublish({ created: 2, already: 1, retagged: 2 }))
+      .toMatch(/^Added 2 classes to the books\. 1 was already there\. Updated the coach on 2 classes/);
+    expect(describePublish({ created: 0, already: 3 })).toBe("This week is already on the books — all 3 classes.");
+  });
+});

@@ -154,17 +154,42 @@ function diffGym(before, after) {
 // Every pressable control that is NOT navigation. The sidebar and the bottom bar
 // move between screens rather than writing, and pressing them would turn this
 // into a navigation test with a sweep bolted on.
+//
+// ⚠️ `summary` IS A CONTROL, and a closed `<details>` HIDES controls. Chromium
+// gives the content of a closed `<details>` a layout box, so a size check read
+// the Coaches screen's "Generate in style" and "Draft from recent" as on screen
+// — nameless ("BUTTON", because `innerText` of unrendered content is empty) and
+// unpressable, "skipped (still covered)" on every run. Nothing pressed the
+// "…or write a brief" summary that shows them, because `summary` was not a
+// candidate, so those two had never been pressed at all (session 42).
+// `checkVisibility()` is the browser's own answer to "is this rendered".
 const CANDIDATES = () =>
-  [...document.querySelectorAll("button, [role=button], select")]
+  [...document.querySelectorAll("button, [role=button], select, summary")]
     .filter((el) => {
       if (el.disabled) return false;
+      if (typeof el.checkVisibility === "function" && !el.checkVisibility()) return false;
       if (el.closest("aside") || el.closest("nav")) return false;
+      // ⚠️ Nor anything under `inert`. The product uses it to say "this is a
+      // PICTURE of a control" — Brand Studio's live preview ends in a real
+      // <button>Start Class</button> made inert so nobody can press it. Nobody
+      // can, and neither could the sweep: every run reported it as "1 pressed
+      // with force", a forced click that delivered no event at all (session 42).
+      if (el.closest("[inert]")) return false;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
 
+// ⚠️ A `<select>` is named by its LABEL, not its text. A select's `innerText` is
+// every option it holds, run together — the 1:1 member picker read "Choose
+// someone… Raj Kumar Tom Wallace", and after Raj was added it read "Choose
+// someone… Tom Wallace". Same control, new name, so the sweep counted it as a
+// control the press had REVEALED and went looking for it after a reload that
+// had put the old name back. A label says what the control is, and does not
+// change when the list does (session 42).
 const NAME_OF = (el) =>
-  (el.getAttribute("aria-label") || el.getAttribute("title") || el.innerText || el.tagName)
+  (el.getAttribute("aria-label") || el.getAttribute("title") ||
+   (el.tagName === "SELECT" && el.labels && el.labels[0] && el.labels[0].textContent) ||
+   el.innerText || el.tagName)
     .trim().replace(/\s+/g, " ").slice(0, 48);
 
 const candidateNames = (page) =>
@@ -428,7 +453,11 @@ async function sweepScreen(page, screen) {
         const b = el.getBoundingClientRect();
         const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
         if (!hit) return "nothing (outside the viewport)";
-        if (hit === el || el.contains(hit) || hit.contains(el)) return null;
+        // `hit.contains(el)` is NOT the control: it is an ANCESTOR taking the
+        // click in its place — which is exactly what an `inert` subtree does,
+        // and what forcing then papered over. Only the control or something
+        // inside it is the honest case for `force` below.
+        if (hit === el || el.contains(hit)) return null;
         const text = (hit.innerText || "").trim().replace(/\s+/g, " ").slice(0, 44);
         return `<${hit.tagName.toLowerCase()}> ${JSON.stringify(text)}`;
       }), "could not be read");
@@ -455,9 +484,10 @@ async function sweepScreen(page, screen) {
     const names = settled.names;
 
     r.pressed.push(name);
+    const chose = marked.kind === "select" ? marked.value : undefined;
     if (lost.length === 0) {
       if (asked || confirmUp) r.guarded.push({ name, how: asked ? "asked (native)" : "asked (in-app)" });
-      return { lost, wrote, asked: asked || confirmUp, undo, names, toast: settled.toast };
+      return { lost, wrote, asked: asked || confirmUp, undo, names, toast: settled.toast, chose };
     }
     if (undo) { r.guarded.push({ name, how: `undoable · ${lost.length} lost` }); return { lost, wrote, asked, undo, names, toast: settled.toast }; }
 
@@ -482,6 +512,32 @@ async function sweepScreen(page, screen) {
     r.unguarded.push({ name, lost });
     return { lost, wrote, asked, undo, names, toast: settled.toast };
   }
+
+  // Make the recorded choices again, by name, without recording them as presses.
+  // `false` when one of them cannot be found — the parent is then unreachable
+  // the way it was reached, and the caller reports that rather than guessing.
+  const replay = async (steps) => {
+    for (const p of steps) {
+      const at = occurrenceOf(await candidateNames(page), p.name, p.nth);
+      if (at === -1) return false;
+      const ok = await bounded(page.evaluate(([src, idx, value]) => {
+        // eslint-disable-next-line no-eval
+        const el = eval(`(${src})`)()[idx];
+        if (!el || el.tagName !== "SELECT") return false;
+        el.setAttribute("data-sweep-target", "1");
+        return [...el.options].some((o) => o.value === value);
+      }, [CANDIDATES.toString(), at, p.value]), false);
+      if (!ok) return false;
+      try {
+        await page.locator("[data-sweep-target]").selectOption(p.value, { timeout: 1500 });
+      } catch { return false; }
+      finally {
+        await page.evaluate(() => document.querySelector("[data-sweep-target]")?.removeAttribute("data-sweep-target")).catch(() => {});
+      }
+    }
+    if (steps.length) await page.waitForTimeout(SETTLE_MS);
+    return true;
+  };
 
   await restore();
   const baseline = await candidateNames(page);
@@ -525,8 +581,28 @@ async function sweepScreen(page, screen) {
   // needs the whole gym reinstalled and the page reloaded. The Schedule has 59
   // controls and 35 of them open the same form — paying a reload for each one
   // is the difference between a 40-second sweep and a timeout.
+  // ── 🔴 A CHOICE IN A `<select>` IS STATE THE RELOAD THROWS AWAY ─────────────
+  //
+  // Choosing an option writes nothing, raises nothing and reveals nothing, so it
+  // leaves no dirt and the screen stays as it is for the next press. That is
+  // right, and it is how the 1:1 screen's "Add client" came to reveal a whole
+  // client card: the press BEFORE it had chosen a member. But every child of a
+  // descent is reached by `reopen`, which reinstalls the gym — and the reload
+  // puts the picker back on "Choose someone…". "Add client" pressed on THAT
+  // screen answers "Pick a member first." and reveals nothing, so every child
+  // was `skipped`, on every run, for three sessions: "Start health screen",
+  // "Edit details" and the relationship status were never pressed at all.
+  //
+  // So the choices in effect when a descent starts are part of how the parent
+  // was reached, and `reopen` makes them again before it presses the parent.
+  // Only select choices, deliberately: they are the one kind of press that
+  // carries state without dirtying anything. Replaying every quiet press would
+  // cost the Schedule its budget for no coverage. Cleared whenever the screen is
+  // rebuilt, because that is when the choices really are gone.
+  let prelude = [];
+
   const reset = async () => {
-    if (storeDirty || toastDirty) { await restore(); viewDirty = false; storeDirty = false; toastDirty = false; return; }
+    if (storeDirty || toastDirty) { await restore(); prelude = []; viewDirty = false; storeDirty = false; toastDirty = false; return; }
     if (viewDirty) {
       await page.keyboard.press("Escape").catch(() => {});
       let back = await candidateNames(page);
@@ -534,9 +610,10 @@ async function sweepScreen(page, screen) {
         try {
           await nav(page, "Dashboard");
           await nav(page, screen.side);
+          prelude = [];
           back = await candidateNames(page);
         } catch { back = []; }
-        if (back.join("|") !== baseline.join("|")) await restore();
+        if (back.join("|") !== baseline.join("|")) { await restore(); prelude = []; }
       }
     }
     viewDirty = false; storeDirty = false; toastDirty = false;
@@ -563,6 +640,7 @@ async function sweepScreen(page, screen) {
     let at = occurrenceOf(await candidateNames(page), baseline[i], nth);
     if (at === -1) {
       await restore();
+      prelude = [];
       at = occurrenceOf(await candidateNames(page), baseline[i], nth);
       if (at === -1) { r.skipped.push(baseline[i]); continue; }
     }
@@ -576,6 +654,7 @@ async function sweepScreen(page, screen) {
     if (outcome && outcome.obstructed) {
       r.obstructed.push(`${baseline[i]} ← ${outcome.obstructed}`);
       await restore();
+      prelude = [];
       viewDirty = false; storeDirty = false; toastDirty = false;
       const retryAt = occurrenceOf(await candidateNames(page), baseline[i], nth);
       outcome = retryAt === -1 ? null : await press(retryAt, baseline[i]);
@@ -587,6 +666,8 @@ async function sweepScreen(page, screen) {
     }
     if (!outcome) { r.skipped.push(baseline[i]); viewDirty = true; continue; }
     if (outcome.lost.length || outcome.wrote) storeDirty = true;
+    const parentPrelude = [...prelude];
+    if (outcome.chose && !outcome.wrote && !outcome.lost.length) prelude.push({ name: baseline[i], nth, value: outcome.chose });
     if (outcome.asked) viewDirty = true;
     if (outcome.toast) toastDirty = true;
 
@@ -634,15 +715,44 @@ async function sweepScreen(page, screen) {
     descendedSignatures.add(signature);
     r.descended.push(`${baseline[i]} → ${revealedIdx.length}`);
 
-    const revealedNames = revealedIdx.map(([n]) => n);
-    for (let c = 0; c < revealedNames.length; c++) {
-      const childName = revealedNames[c];
-      const childNth = revealedNames.slice(0, c).filter((n) => n === childName).length;
+    // ── A disclosure is the one exception to "one level down" ────────────────
+    // A child that is a `<summary>` opens a `<details>`, and the controls in it
+    // are queued as further children, reached by reopening the parent and
+    // opening the same summaries again (`via`). Only summaries: a disclosure
+    // writes nothing and exists only to reveal, so walking into it costs a click,
+    // where descending into every child would multiply the run. Without it the
+    // Coaches screen's "Generate in style" and "Draft from recent" — behind
+    // "…or write a brief", inside what "Generate draft" opens — were never
+    // pressed (session 42).
+    const queue = revealedIdx.map(([n]) => ({ name: n, via: [] }));
+    const openVia = async (via) => {
+      for (const v of via) {
+        const at = occurrenceOf(await candidateNames(page), v.name, v.nth);
+        if (at === -1) return false;
+        const ok = await bounded(page.evaluate(([src, idx]) => {
+          // eslint-disable-next-line no-eval
+          const el = eval(`(${src})`)()[idx];
+          if (!el || el.tagName !== "SUMMARY") return false;
+          if (!el.parentElement.open) el.click();
+          return true;
+        }, [CANDIDATES.toString(), at]), false);
+        if (!ok) return false;
+      }
+      return true;
+    };
+    for (let c = 0; c < queue.length; c++) {
+      const { name: childName, via } = queue[c];
+      const childNth = queue.slice(0, c).filter((q) => q.name === childName).length;
       const reopen = async () => {
         await restore();
+        if (!(await replay(parentPrelude))) return false;
         const back = occurrenceOf(await candidateNames(page), baseline[i], nth);
         if (back === -1) return false;
         await press(back, `${baseline[i]} (reopen)`);
+        if (via.length && !(await openVia(via))) {
+          if (r.pressed[r.pressed.length - 1] === `${baseline[i]} (reopen)`) r.pressed.pop();
+          return false;
+        }
         // ⚠️ Guarded, not unconditional. `press` returns without recording
         // anything when the control could not be marked, when the click failed
         // outright, and now when it was covered — so an unguarded pop takes a
@@ -670,6 +780,11 @@ async function sweepScreen(page, screen) {
         if (at === null) break;
         if (at === -1) { r.skipped.push(`${baseline[i]} › ${childName}`); continue; }
       }
+      const isSummary = await bounded(page.evaluate(([src, idx]) => {
+        // eslint-disable-next-line no-eval
+        const el = eval(`(${src})`)()[idx];
+        return !!el && el.tagName === "SUMMARY";
+      }, [CANDIDATES.toString(), at]), false);
       let child = await press(at, `${baseline[i]} › ${childName}`);
       if (child && child.obstructed) {
         r.obstructed.push(`${baseline[i]} › ${childName} ← ${child.obstructed}`);
@@ -679,6 +794,14 @@ async function sweepScreen(page, screen) {
         if (child && child.obstructed) {
           r.skipped.push(`${baseline[i]} › ${childName} (still covered)`);
           child = null;
+        }
+      }
+      if (isSummary && child && !child.lost.length && !child.wrote) {
+        const queued = new Set(queue.map((q) => q.name));
+        for (const n of await candidateNames(page)) {
+          if (!n || known.has(n) || queued.has(n)) continue;
+          queued.add(n);
+          queue.push({ name: n, via: [...via, { name: childName, nth: childNth }] });
         }
       }
       // `child.toast` for the same reason as the top-level loop: a toast left by
@@ -696,7 +819,7 @@ function report(screen, r) {
   const lines = [
     `${screen.side}: pressed ${r.pressed.length} (${r.baseline.length} on the screen, ` +
       `${r.descended.length} opened something worth walking into)` +
-      (r.forced.length ? ` · ${r.forced.length} pressed with force` : "") +
+      (r.forced.length ? ` · ${r.forced.length} pressed with force (${r.forced.join(", ")})` : "") +
       (r.obstructed.length ? `\n   ⚠️ covered on the first attempt, reloaded and pressed again:\n       ${r.obstructed.join("\n       ")}` : "") +
       (r.skipped.length ? ` · skipped ${r.skipped.length}: ${r.skipped.join(", ")}` : ""),
     ...r.guarded.map((g) => `   ✅ ${g.name} — ${g.how}`),
@@ -748,7 +871,33 @@ test.describe("no control destroys the gym's data unguarded", () => {
   // read too early, see the second look) stops checking "Sign Out" silently.
   const EXPECT_WALKED = {
     dashboard: ["Your profile and settings › Sign Out", "Your profile and settings › Close"],
+    // The client card "Add client" opens exists only because the member picker
+    // was set by the press before it. Skipped on every run until session 42 —
+    // see `prelude`. The status select is the one control on this card that
+    // ends a 1:1 relationship.
+    pt: ["Add client › Start health screen", "Add client › Edit details", "Add client › This relationship"],
+    // Two levels down, behind the "…or write a brief" disclosure inside what
+    // "Generate draft" opens. Both replace the Builder's draft (guarded by an
+    // undo). Never pressed before session 42 — see the note above `queue`.
+    personas: ["Generate draft › Generate in style", "Generate draft › Draft from recent"],
   };
+
+  // Presses the sweep must NOT record. "Start Class" is a picture of a control
+  // inside Brand Studio's `inert` preview — see the `[inert]` rule in CANDIDATES.
+  // It was reported as "1 pressed with force" on every run until session 42, by
+  // a forced click that delivered no event. Any press recorded with force is
+  // also named in the report now, so the next one is read rather than counted.
+  const EXPECT_UNPRESSED = {
+    "brand-studio": ["Start Class"],
+  };
+
+  // Screens where every control the sweep sees, it presses. A skip is a press
+  // that did not happen; on these screens every skip the report used to carry
+  // turned out to be the INSTRUMENT (a reload that forgot a choice, content of a
+  // closed <details> counted as on screen), not the product (session 42). The
+  // Exercise Library is not listed: its one skip is the header's profile button
+  // under the library's own modal, which nobody can press either.
+  const EXPECT_NO_SKIPS = ["pt", "personas"];
 
   const EXPECT_GUARDED = {
     builder: 1,   // the stage removals, Smart Distribute, the Build dialog doors
@@ -768,8 +917,19 @@ test.describe("no control destroys the gym's data unguarded", () => {
         .toBeGreaterThanOrEqual(1);
 
       for (const name of EXPECT_WALKED[screen.key] || []) {
-        expect(r.pressed, `${screen.side}: the sweep must reach "${name}" — a lazy panel read ` +
-          `before its chunk landed is a descent silently not made`).toContain(name);
+        expect(r.pressed, `${screen.side}: the sweep must reach "${name}" — a descent silently ` +
+          `not made (a lazy panel read before its chunk landed, or a parent reopened without ` +
+          `the choice that revealed it)`).toContain(name);
+      }
+
+      for (const name of EXPECT_UNPRESSED[screen.key] || []) {
+        expect(r.pressed, `${screen.side}: "${name}" cannot be pressed by anyone, so a press of it ` +
+          `recorded here is one that did not happen`).not.toContain(name);
+      }
+
+      if (EXPECT_NO_SKIPS.includes(screen.key)) {
+        expect(r.skipped, `${screen.side}: every control on this screen is reachable, so a skip ` +
+          `is the sweep failing to press it`).toEqual([]);
       }
 
       const floor = EXPECT_GUARDED[screen.key];

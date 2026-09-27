@@ -113,6 +113,19 @@ test.describe("the roster", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // Session 42. The header counted schedule names resolving to the roster, so a
+  // coach who teaches nothing regularly (a sub — who cover is FOR) was in the
+  // list below it and in neither number.
+  test("the roster header counts the roster, including a coach with no regular class", async ({ page }) => {
+    await freshApp(page);
+    await seed(page, { coaches: [roster(),
+      roster({ id: "c-sub", name: "Jo", userId: "u-jo" })] });
+    // PRECONDITION: Jo is on the roster and on no class.
+    await expect(page.getByText("Jo", { exact: true }).first()).toBeVisible();
+    expect(CLASSES.some(c => /jo/i.test(c.coach))).toBe(false);
+    await expect(page.getByTestId("roster-count")).toHaveText("2 on the roster · 1 with an account");
+  });
+
   test("removing a coach is confirmed and undoable", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);
@@ -296,6 +309,70 @@ test.describe("being away, and the board that comes from it", () => {
     await page.getByRole("button", { name: "Next week" }).click();
     await expect(page.getByText("Week +2")).toBeVisible();
     await expect(page.getByText("covering for Mara")).toHaveCount(0);
+    expectNoConsoleErrors(errors);
+  });
+
+  // Session 42. Publishing only ever CREATED rows, so a week published before
+  // the cover was agreed kept the away coach on the row the check-ins land on —
+  // and that row is what the member link ("with Mara") and the member's own
+  // export read. The grid said "covering for Mara" while the button went grey.
+  test("🔴 a cover agreed after the week was published reaches the published row", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await seed(page, { coaches: two });
+    await page.getByRole("button", { name: "Next week" }).click();
+    await page.getByTestId("publish-week").click();
+    const before = (await stored(page, "jungle_class_instances")).find(c => c.name === "Engine Room");
+    // PRECONDITION: the row exists and names the coach who is about to be away.
+    expect(before.coachName.toLowerCase()).toBe("mara");
+    await expect(page.getByTestId("publish-week")).toBeDisabled();
+
+    await page.getByLabel("Coach who is away").selectOption({ label: "Mara" });
+    await page.getByLabel("First day away").fill(MON);
+    await page.getByLabel("Last day away").fill(WED);
+    await page.getByRole("button", { name: /Record absence and ask for cover/ }).click();
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
+    await expect(page.getByText("covering for Mara").first()).toBeVisible();
+
+    // The button says there is something to do, and doing it fixes the row.
+    await expect(page.getByTestId("publish-week")).toHaveText("Publish week · 1");
+    await page.getByTestId("publish-week").click();
+    await expect(page.getByText(/Updated the coach on 1 class/)).toBeVisible();
+    const after = (await stored(page, "jungle_class_instances")).filter(c => c.name === "Engine Room");
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: before.id, coachName: "Dev" });
+    await expect(page.getByTestId("publish-week")).toBeDisabled();
+    expectNoConsoleErrors(errors);
+  });
+
+  // Session 42. A week after the absence, the panel said "1 still has nobody"
+  // about a class taught seven days earlier, and offered "I'm back" — which
+  // cancels the unfilled request and hides the absence, erasing the one record
+  // that the class went uncovered.
+  test("🔴 a week later the absence is history: past tense, and nothing to erase it with", async ({ page }) => {
+    const errors = watchConsole(page);
+    await freshApp(page);
+    await markAway(page);
+    const row = page.getByTestId("cover-row").filter({ hasText: "Engine Room" });
+    await row.getByLabel(/^Coach to cover Engine Room/).selectOption("c-dev");
+    await row.getByLabel(/^Assign cover for Engine Room/).click();
+    const absence = page.getByTestId("absence-row");
+    // PRECONDITION, on the day it is recorded: still to come, and withdrawable.
+    await expect(absence).toContainText("1 of 2 covered — 1 still has nobody.");
+    await expect(absence.getByRole("button", { name: /is back/ })).toBeVisible();
+    const before = await stored(page, "jungle_cover_requests");
+
+    await page.clock.setFixedTime(new Date(`${nextMonday(8)}T10:00:00`));
+    await page.reload();
+    await nav(page, "Schedule");
+    await expect(absence).toContainText("ended");
+    await expect(absence).toContainText("Of 2 already taught, 1 had cover and 1 went uncovered.");
+    await expect(absence).not.toContainText("still");
+    await expect(absence.getByRole("button", { name: /is back/ })).toHaveCount(0);
+    // Nothing about the record moved by being read a week later.
+    expect(await stored(page, "jungle_cover_requests")).toEqual(before);
     expectNoConsoleErrors(errors);
   });
 

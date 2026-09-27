@@ -295,6 +295,38 @@ test.describe("1:1 clients", () => {
 
     expectNoConsoleErrors(errors);
   });
+
+  // A member who has left is still on the roster, so the picker offers them, and
+  // it read exactly like a current member's name (session 42, found by the
+  // sweep's probe: "Choose someone… Raj Kumar Tom Wallace", Tom having left).
+  // CheckInPanel's rule is the precedent: reachable, but labelled.
+  test("the picker says which members have left or paused", async ({ page }) => {
+    await freshApp(page);
+    await page.evaluate(() => localStorage.setItem("jungle_members", JSON.stringify([
+      { id: "m1", name: "Raj Kumar",   status: "active" },
+      { id: "m2", name: "Tom Wallace", status: "cancelled" },
+      { id: "m3", name: "Ana Ferreira", status: "paused" },
+      { id: "m4", name: "Lee Park" },
+    ])));
+    await page.reload();
+    await waitForAppAnyWidth(page);
+    await nav(page, "1:1 Clients");
+
+    const options = await page.locator("#pt-member option").allInnerTexts();
+    // PRECONDITION: every seeded member is offered, or the labels below prove nothing.
+    expect(options).toHaveLength(5);
+    expect(options).toContain("Tom Wallace (Left)");
+    expect(options).toContain("Ana Ferreira (Paused)");
+    // A current member, and one with no status at all (which the product treats
+    // as current), carry no label.
+    expect(options).toContain("Raj Kumar");
+    expect(options).toContain("Lee Park");
+
+    // Still addable — the label informs, it does not refuse.
+    await page.selectOption("#pt-member", { label: "Tom Wallace (Left)" });
+    await page.getByRole("button", { name: "Add client" }).click();
+    expect((await stored(page, "jungle_pt_clients")).map((c) => c.memberId)).toEqual(["m2"]);
+  });
 });
 
 test.describe("the health screen gates individualised load", () => {

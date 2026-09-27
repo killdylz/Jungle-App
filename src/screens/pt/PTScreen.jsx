@@ -423,7 +423,16 @@ export function PTScreen({ onBack, onNavigate, onLoadSession }) {
                   <label style={label} htmlFor="pt-member">Member</label>
                   <Select id="pt-member" value={pickMember} onChange={e=>setPickMember(e.target.value)}>
                     <option value="">Choose someone&hellip;</option>
-                    {pickable.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    {/* A member who has LEFT or is PAUSED is still offered (a
+                        returning member is who a 1:1 often starts with), but it
+                        says so, the way the check-in list does: taking someone
+                        on is then a deliberate act rather than a mis-pick of a
+                        name that looks like everyone else's. It read "Tom
+                        Wallace" for a member who left (session 42). */}
+                    {pickable.map(m => {
+                      const st = store.memberStatus(String(m.status || "").toLowerCase());
+                      return <option key={m.id} value={m.id}>{st === "active" ? m.name : `${m.name} (${store.MEMBER_STATUS_LABEL[st]})`}</option>;
+                    })}
                   </Select>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
