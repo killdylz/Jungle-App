@@ -471,11 +471,11 @@ not. **Assert the STORED object, not only what was rendered.**
   whole-class replacement in App.jsx except `handleNewClass`. Its header states what it cannot see:
   a SOFT delete (a scalar change is a write, not a loss), anything needing typing or a file, and
   controls more than one level below a screen. ⚠️ It costs **~4.8m** of the e2e run (session 40;
-  it was ~13.5m here and timed out). 🔴 **It also cannot descend into a `React.lazy` panel** —
-  `ProfileModal` and `LibraryBrowserModal` render after the settle, so a press that opens one
-  looks like a press that opened nothing. It used to reach the Profile modal only because that
-  click failed and was FORCED, which read the revealed set two seconds late; see
-  `SESSION-40-HANDOFF.md` §5.4 for the fix that is written and not landed, and why.
+  it was ~13.5m here and timed out). ⚠️ **A `React.lazy` panel** (`ProfileModal`,
+  `LibraryBrowserModal`) renders after the settle; since session 41 the sweep takes a second look
+  whenever a press FETCHES CODE, and again after a reopen (which reloads and refetches). Without
+  that, a press that opens one looks like a press that opened nothing. Session 40's "Sign Out
+  wedges the page" did **not** reproduce in session 41 — see `SESSION-41-HANDOFF.md` §1.2.
   `e2e/usedGym.js` is its fixture — a gym that has been used — and is meant to be shared: an empty
   roster has no delete buttons, and the coach corpus in it is captured by pressing "Load sample
   coach" rather than typed.
@@ -562,7 +562,7 @@ not. **Assert the STORED object, not only what was rendered.**
 ## Where the rest lives
 
 - `SESSION-HANDOFF.md` — the two most recent sessions in full. Read the top block first.
-- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–28.
+- `docs/history/HANDOFF-ARCHIVE.md` — sessions 6–39.
 - `DYLAN-QUEUE.md` — what needs Dylan rather than code.
 - Commit messages carry the reasoning. `git log` is the real design record here.
 
