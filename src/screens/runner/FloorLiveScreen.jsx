@@ -15,14 +15,25 @@ import { prefersReducedMotion, tvFont, scaleMultOf } from "./displayKit.js";
 // Honest floor board derived from the coach's real class plan. No fabricated
 // member rosters, headcounts, or HR zones — the core is biometric-free (Fable M3)
 // and the roster returns for real once F4 attendance check-in lands.
+//
+// ⚠️ The board draws at most FIVE stations, and a class can have more. `isFinish`
+// is therefore "the class's last stage", not "the last card drawn": on a six-stage
+// class the fifth card used to carry FINISH while a sixth stage was still to come,
+// and the loop panel said "5 stations" of a class that had six (session 41).
+// `floorStationCount` says which it is, in words a member can read.
+export const FLOOR_MAX = 5;
+export function floorStationCount(shown, total){
+  return total > shown ? `showing ${shown} of ${total} stages` : `${shown} stations`;
+}
 export function buildFloorLayout(stages){
-  const src = (stages||[]).filter(Boolean).slice(0,5);
+  const all = (stages||[]).filter(Boolean);
+  const src = all.slice(0,FLOOR_MAX);
   return src.map((s,i)=>{
     const ex = (s.exercises && s.exercises[0]) || null;
     const cfg = SCFG[s.type] || SCFG.circuit;
     const move = (ex && ex.n) || s.name || cfg.label;
     const scheme = ex ? [ex.s && `${ex.s}×`, ex.r].filter(Boolean).join(" ").trim() : "";
-    return { id:"st"+i, type:s.type||"circuit", label:cfg.label, move, scheme, order:i, isStart:i===0, isFinish:i===src.length-1 };
+    return { id:"st"+i, type:s.type||"circuit", label:cfg.label, move, scheme, order:i, isStart:i===0, isFinish:i===all.length-1 };
   });
 }
 
@@ -33,6 +44,7 @@ export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,
   const scaleMult = scaleMultOf(store.getDisplayPrefs().fontScale);
   const reduce = prefersReducedMotion();
   const floor = React.useMemo(()=>buildFloorLayout(stages), [stages]);
+  const stageTotal = (stages||[]).filter(Boolean).length;
   useEffect(()=>{ const k=e=>{ if(e.key==="Escape") onBack&&onBack(); }; window.addEventListener("keydown",k); return ()=>window.removeEventListener("keydown",k); },[onBack]);
   const elapsed = liveState.elapsed||0;
   // The real pace of the stage the room is actually on — see floorPacer. `elapsed`
@@ -129,7 +141,7 @@ export function FloorLiveScreen({ stages=[], liveState={elapsed:0,playing:false,
         {stageRemaining!=null && (
           <div style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"13px",color:"var(--text)"}}>Next station in <span style={{fontFamily:"var(--display)",fontSize:"22px",fontWeight:"800",color:"var(--accent)",fontVariantNumeric:"var(--num)"}}>{fmt(stageRemaining)}</span></div>
         )}
-        <div style={{fontSize:"12px",color:"var(--muted)"}}>clockwise · {floor.length} stations</div>
+        <div style={{fontSize:"12px",color:"var(--muted)"}}>clockwise · {floorStationCount(floor.length, stageTotal)}</div>
       </div>
 
       {/* This board faces the FLOOR — members read it mid-class. The NOW PLAYING
