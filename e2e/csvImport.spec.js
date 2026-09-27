@@ -148,6 +148,26 @@ test.describe("a gym brings its history across", () => {
     }, "a second import of the same file must add nothing").toEqual(before);
   });
 
+  // An export that carries the email on some rows and not others — a walk-in
+  // entered by hand, a desk that skipped the field. Before session 42 one person
+  // became two members, each with half the history.
+  test("one person on rows with and without an email is one member", async ({ page }) => {
+    await freshApp(page);
+    await nav(page, "Members");
+    await paste(page, [HEADER,
+      "Sarah Chen,sarah@example.com,2026-03-04,Tuesday Burn,HIIT,Dylan",
+      "Sarah Chen,,2026-03-11,Tuesday Burn,HIIT,Dylan",
+    ].join("\n"));
+    await expect(page.getByText(/2 check-ins · 2 classes · 1 new member/)).toBeVisible();
+    await page.getByRole("button", { name: /^Import 2 check-ins$/ }).click();
+    await expect(page.getByText(/Imported 2 check-ins/)).toBeVisible();
+
+    const members = await stored(page, "jungle_members");
+    expect(members.map((m) => [m.name, m.email])).toEqual([["Sarah Chen", "sarah@example.com"]]);
+    const att = await stored(page, "jungle_attendance");
+    expect(att.map((a) => a.memberId)).toEqual([members[0].id, members[0].id]);
+  });
+
   // A member created by a file, not by a coach. `joinedAt: ""` is deliberate and
   // documented in `store.test.js`: an importer does not know when somebody
   // joined, and stamping today would be a confident wrong date on every member a

@@ -287,3 +287,46 @@ describe("a file separated by something other than commas says so", () => {
     expect(ok.newMembers.map(m => m.name)).toEqual(["Sarah Chen"]);
   });
 });
+
+// Session 42. An email-less row matched a ROSTER member by name but not a new
+// member the same file had just introduced with an email, so one person became
+// two — each holding half their history.
+describe("a person the file introduces is one person, whichever rows carry their email", () => {
+  const H = "Member Name,Email,Date,Class";
+
+  it("🔴 an email-less row joins the new member its name has an email for", () => {
+    const a = analyzeAttendanceCsv([H,
+      "Sarah Chen,sarah@example.com,2026-03-04,Tuesday Burn",
+      "Sarah Chen,,2026-03-11,Tuesday Burn",
+    ].join("\n"), []);
+    expect(a.newMembers).toEqual([
+      { key: "new:sarah@example.com", name: "Sarah Chen", email: "sarah@example.com", externalRef: "" },
+    ]);
+    expect(new Set(a.rows.map(r => r.memberKey))).toEqual(new Set(["new:sarah@example.com"]));
+  });
+
+  it("in either order — the email-less row may come first", () => {
+    const a = analyzeAttendanceCsv([H,
+      "sarah  chen,,2026-03-04,Tuesday Burn",
+      "Sarah Chen,Sarah@Example.com,2026-03-11,Tuesday Burn",
+    ].join("\n"), []);
+    expect(a.newMembers).toHaveLength(1);
+    expect(a.newMembers[0].email).toBe("sarah@example.com");
+  });
+
+  it("two emails under one name are two people, and an email-less row is not guessed onto either", () => {
+    const a = analyzeAttendanceCsv([H,
+      "Sam Lee,sam.a@example.com,2026-03-04,Tuesday Burn",
+      "Sam Lee,sam.b@example.com,2026-03-04,Tuesday Burn",
+      "Sam Lee,,2026-03-11,Tuesday Burn",
+    ].join("\n"), []);
+    expect(a.newMembers.map(m => m.key).sort())
+      .toEqual(["new:sam lee", "new:sam.a@example.com", "new:sam.b@example.com"]);
+  });
+
+  it("a file with no email column is unchanged — one member per name", () => {
+    const a = analyzeAttendanceCsv(["Member Name,Date,Class",
+      "Sarah Chen,2026-03-04,Tuesday Burn", "Sarah Chen,2026-03-11,Tuesday Burn"].join("\n"), []);
+    expect(a.newMembers.map(m => m.key)).toEqual(["new:sarah chen"]);
+  });
+});
