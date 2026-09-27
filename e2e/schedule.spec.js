@@ -517,28 +517,52 @@ test.describe("publishing ahead does not inflate what the gym has done", () => {
   // A number that goes up for work not yet done is the flattering lie the
   // Members screen exists to avoid — it is why the roster counts ACTIVE members
   // rather than list length.
-  test("classes run counts only classes that have happened", async ({ page }) => {
+  //
+  // 🔴 This test used to assert `shown === past` — the number of PUBLISHED
+  // occurrences whose time had gone by — and so it pinned the defect session 41
+  // found: a gym that published a week and taught nothing read every one of those
+  // classes as "run", and a class moved after publishing counted twice (its old
+  // slot stays on the books by design). A published occurrence is a plan; a
+  // check-in is the only record in the product that a class happened.
+  const shownRun = async (page) => {
+    await nav(page, "Members");
+    const body = await page.locator("body").innerText();
+    return Number(body.match(/(\d+)\s*\n*\s*CLASSES RUN/)?.[1]);
+  };
+
+  test("classes run counts classes somebody was checked into, not classes published", async ({ page }) => {
     const errors = watchConsole(page);
+    await page.clock.setFixedTime(new Date(2026, 6, 20, 9, 0, 0));   // Mon 20 July 2026
     await freshApp(page);
     await seedRules(page);
     await page.locator(PUBLISH).click();
     await expect(page.locator(RESULT)).toContainText("Added");
 
-    // Now publish a week that is entirely in the future.
-    await page.getByRole("button", { name: "Next week", exact: true }).click();
+    // Move a class AFTER publishing, and publish again: the old slot stays.
+    await page.getByRole("button", { name: /^Edit Hyrox Sim on Wed/ }).click();
+    await page.getByRole("dialog").getByRole("combobox", { name: "Day" }).selectOption("Tue");
+    await page.getByRole("dialog").getByRole("button").filter({ hasText: /Save|Update/ }).first().click();
     await page.locator(PUBLISH).click();
-    await expect(page.locator(RESULT)).toContainText("Added");
+    await expect(page.locator(RESULT)).toContainText("Added 1 class");
 
+    // A week later. Every occurrence is in the past and nothing was taught.
+    await page.clock.setFixedTime(new Date(2026, 6, 27, 9, 0, 0));
+    await page.reload();
     const ci = await stored(page, "jungle_class_instances");
-    expect(ci).toHaveLength(PER_WEEK * 2);
-    const past = ci.filter(c => new Date(c.startsAt) <= new Date()).length;
-    expect(past).toBeLessThan(ci.length);
+    // PRECONDITION: the books really hold more past occurrences than the week
+    // has classes — the moved class is on them twice.
+    expect(ci.filter(c => c.name === "Hyrox Sim")).toHaveLength(2);
+    expect(ci.filter(c => new Date(c.startsAt) <= new Date()).length).toBe(PER_WEEK + 1);
 
-    await nav(page, "Members");
-    const body = await page.locator("body").innerText();
-    const shown = Number(body.match(/(\d+)\s*\n*\s*CLASSES RUN/)?.[1]);
-    expect(shown).toBe(past);
-    expect(shown).toBeLessThan(ci.length);
+    expect(await shownRun(page), "a week nobody taught has run no classes").toBe(0);
+
+    // POSITIVE CONTROL: one check-in makes one class. Row shape from store.js.
+    await page.evaluate((id) => localStorage.setItem("jungle_attendance", JSON.stringify([
+      { id: "a1", classInstanceId: id, memberId: "m1", source: "coach", checkedInAt: new Date().toISOString() },
+      { id: "a2", classInstanceId: id, memberId: "m2", source: "coach", checkedInAt: new Date().toISOString() },
+    ])), ci[0].id);
+    await page.reload();
+    expect(await shownRun(page), "two check-ins into one class is one class run").toBe(1);
 
     expectNoConsoleErrors(errors);
   });

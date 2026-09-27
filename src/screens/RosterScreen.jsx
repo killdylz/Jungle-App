@@ -9,6 +9,7 @@
 // Lifted from App.jsx unchanged.
 
 import { useState, useEffect } from "react";
+import { classesWithCheckIns } from "../lib/classesRun.js";
 import * as store from "../lib/store.js";
 import { MEMBER_STATUSES, MEMBER_STATUS_LABEL, memberStatus } from "../lib/store.js";
 import { retentionSummary, describeRetention, applyRetentionActions, activityIndex } from "../lib/retention.js";
@@ -231,8 +232,19 @@ export function RosterScreen({ onBack, onNavigate }) {
                 counting those here would make "classes run" climb every time an
                 owner published next week — a number that goes up for work not
                 yet done is the kind of flattering lie this screen exists to
-                avoid. Same reasoning as counting ACTIVE members below. */}
-            <StatCard label="CLASSES RUN" value={String(classes.filter(c => !c.startsAt || new Date(c.startsAt) <= new Date()).length)}/>
+                avoid. Same reasoning as counting ACTIVE members below.
+
+                🔴 AND "ITS TIME HAS PASSED" WAS NOT "IT RAN" (session 41). A gym
+                that published a week, moved one class and taught NOTHING read
+                "10 classes run" a week later: nine occurrences whose time had
+                gone by, plus the moved class's old slot, which a re-slot leaves
+                on the books by design (CalendarScreen, "Edit a rule in place").
+                A published occurrence is a plan. The only record in the product
+                that a class happened is somebody checked into it — session
+                history carries no instance id — so that is what this counts.
+                A class taught with nobody checked in is not counted, and that
+                is the honest direction to be wrong in. */}
+            <StatCard label="CLASSES RUN" value={String(classesWithCheckIns(classes, attendance))}/>
           </div>
 
           {/* At-risk (N3). Same honesty rule as the P6 card below: when we cannot
