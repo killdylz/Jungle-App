@@ -346,12 +346,22 @@ there is no `beforeunload` in the tree.
 in the file where the next person will find them. Until then the sweep has a known hole rather
 than an accidental one, and `ProfileModal` is walked from nowhere.
 
-### 5.5 🟡 NEW — the `Input` primitive is 37px too, and 21 raw `<select>`s are unmeasured · ~2h
+### 5.5 🟡 NEW — the `Input` primitive is 35px, and 18 raw `<select>`s are unmeasured · ~2h
 
-§1.6 fixed the shared `Select`. The shared `Input` has the same 37px box and the same absent
-`data-tap`, and there are **21 raw `<select>` elements** outside the primitive. None of them has
-ever been measured, for the same opt-in reason. The work is mechanical; the judgement is whether
-text fields belong in the 44px rule at all, which is worth one line of a decision.
+§1.6 fixed the shared `Select`. The shared `Input` renders **35px** at 390px — the same padding
+and font size, but an `<input>`'s line box is 2px shorter than a `<select>`'s — with the same
+absent `data-tap`. Outside the primitive there are **18 raw `<select>` elements**: App.jsx (5),
+CalendarScreen (3), CoachCoverPanel (3), AdminTeamScreen (2), LibraryBrowserModal (2), and one
+each in RosterScreen, BrandStudioScreen and PlaylistImportModal. None has ever been measured, for
+the same opt-in reason.
+
+⚠️ **Both numbers are measured, and the first draft of this section had both wrong** — "the same
+37px", read off the shared padding rather than the rendered box, and "21", from a grep that
+counted the word `<select>` inside comments. Corrected in a follow-up commit rather than left,
+because a handoff number is a claim.
+
+The work is mechanical; the judgement is whether text fields belong in the 44px rule at all,
+which is worth one line of a decision.
 
 ### 5.6 🟢 Carried forward from session 39: the Builder/check-in items not taken
 
