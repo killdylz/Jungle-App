@@ -15,8 +15,8 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 40: **`lint:crash` 0 · 1321 unit (47 files) · 620 e2e (53 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,708 lines**. StaffApp **334.25 / 360 kB — 25.8 kB
+Green as of session 41: **`lint:crash` 0 · 1328 unit (50 files) · 624 e2e (53 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,706 lines**. StaffApp **334.09 / 360 kB — 25.9 kB
 left.** PTScreens **39.31 / 41**, RetentionScreen **17.23 / 18**, LibraryBrowserModal
 **20.11 / 21** (raised in session 40 for the reset confirm's cascade inventory), index
 **203.06 / 215**. A new screen goes in a `lazy()` chunk **with its own budget line in
@@ -242,6 +242,13 @@ cd ../jungle-s27 && npm install        # node_modules is not shared
 ```
 
 Merge back with a normal `git merge session-27`, then `git worktree remove ../jungle-s27`.
+
+⚠️ **Do not SYMLINK `node_modules` into a worktree to skip the install.** Vite's `fs.allow` refuses
+files resolved outside the project root with **403**, and the e2e run then reports console-error
+and tap-target failures that do not exist (session 41 lost a round to it). `cp -al` from the main
+checkout (hard links, same filesystem) is instant and works. ⚠️ **And a worktree protects the
+FILES, not the CPU** — a full e2e run sharing the machine with a second suite or a build is not a
+clean run, whichever tree it is in.
 
 ### Two sessions cannot share a dev server either
 
