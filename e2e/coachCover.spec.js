@@ -113,6 +113,19 @@ test.describe("the roster", () => {
     expectNoConsoleErrors(errors);
   });
 
+  // Session 42. The header counted schedule names resolving to the roster, so a
+  // coach who teaches nothing regularly (a sub — who cover is FOR) was in the
+  // list below it and in neither number.
+  test("the roster header counts the roster, including a coach with no regular class", async ({ page }) => {
+    await freshApp(page);
+    await seed(page, { coaches: [roster(),
+      roster({ id: "c-sub", name: "Jo", userId: "u-jo" })] });
+    // PRECONDITION: Jo is on the roster and on no class.
+    await expect(page.getByText("Jo", { exact: true }).first()).toBeVisible();
+    expect(CLASSES.some(c => /jo/i.test(c.coach))).toBe(false);
+    await expect(page.getByTestId("roster-count")).toHaveText("2 on the roster · 1 with an account");
+  });
+
   test("removing a coach is confirmed and undoable", async ({ page }) => {
     const errors = watchConsole(page);
     await freshApp(page);

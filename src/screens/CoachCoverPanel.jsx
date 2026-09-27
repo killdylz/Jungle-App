@@ -360,7 +360,14 @@ export function CoachCoverPanel({ userClasses, onCoversChanged, isMobile }) {
     <div style={{ ...card, marginBottom: "14px" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
         <div style={h}>Coach roster</div>
-        <div style={{ ...sub, fontWeight: "700" }}>{coverage.known.length} named · {coverage.accounts} with an account</div>
+        {/* Counts the ROSTER, which is what sits under it. It counted the
+            schedule's coach names that resolve to a roster entry, so a coach who
+            teaches nothing regularly — a sub, the person cover exists for — was
+            missing from both numbers: "1 named · 0 with an account" above two
+            coaches, one of them linked (session 42). */}
+        <div style={{ ...sub, fontWeight: "700" }} data-testid="roster-count">
+          {coaches.length} on the roster · {coaches.filter(c => c && c.userId).length} with an account
+        </div>
       </div>
 
       {/* 🔴 THE TRUTH LINE. Not a disclaimer bolted on — it is the most important
