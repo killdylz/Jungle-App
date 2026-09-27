@@ -159,6 +159,12 @@ const CANDIDATES = () =>
     .filter((el) => {
       if (el.disabled) return false;
       if (el.closest("aside") || el.closest("nav")) return false;
+      // ⚠️ Nor anything under `inert`. The product uses it to say "this is a
+      // PICTURE of a control" — Brand Studio's live preview ends in a real
+      // <button>Start Class</button> made inert so nobody can press it. Nobody
+      // can, and neither could the sweep: every run reported it as "1 pressed
+      // with force", a forced click that delivered no event at all (session 42).
+      if (el.closest("[inert]")) return false;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
@@ -437,7 +443,11 @@ async function sweepScreen(page, screen) {
         const b = el.getBoundingClientRect();
         const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
         if (!hit) return "nothing (outside the viewport)";
-        if (hit === el || el.contains(hit) || hit.contains(el)) return null;
+        // `hit.contains(el)` is NOT the control: it is an ANCESTOR taking the
+        // click in its place — which is exactly what an `inert` subtree does,
+        // and what forcing then papered over. Only the control or something
+        // inside it is the honest case for `force` below.
+        if (hit === el || el.contains(hit)) return null;
         const text = (hit.innerText || "").trim().replace(/\s+/g, " ").slice(0, 44);
         return `<${hit.tagName.toLowerCase()}> ${JSON.stringify(text)}`;
       }), "could not be read");
@@ -758,7 +768,7 @@ function report(screen, r) {
   const lines = [
     `${screen.side}: pressed ${r.pressed.length} (${r.baseline.length} on the screen, ` +
       `${r.descended.length} opened something worth walking into)` +
-      (r.forced.length ? ` · ${r.forced.length} pressed with force` : "") +
+      (r.forced.length ? ` · ${r.forced.length} pressed with force (${r.forced.join(", ")})` : "") +
       (r.obstructed.length ? `\n   ⚠️ covered on the first attempt, reloaded and pressed again:\n       ${r.obstructed.join("\n       ")}` : "") +
       (r.skipped.length ? ` · skipped ${r.skipped.length}: ${r.skipped.join(", ")}` : ""),
     ...r.guarded.map((g) => `   ✅ ${g.name} — ${g.how}`),
@@ -817,6 +827,15 @@ test.describe("no control destroys the gym's data unguarded", () => {
     pt: ["Add client › Start health screen", "Add client › Edit details", "Add client › This relationship"],
   };
 
+  // Presses the sweep must NOT record. "Start Class" is a picture of a control
+  // inside Brand Studio's `inert` preview — see the `[inert]` rule in CANDIDATES.
+  // It was reported as "1 pressed with force" on every run until session 42, by
+  // a forced click that delivered no event. Any press recorded with force is
+  // also named in the report now, so the next one is read rather than counted.
+  const EXPECT_UNPRESSED = {
+    "brand-studio": ["Start Class"],
+  };
+
   const EXPECT_GUARDED = {
     builder: 1,   // the stage removals, Smart Distribute, the Build dialog doors
     personas: 1,  // delete coach, remove plan, delete movement
@@ -838,6 +857,11 @@ test.describe("no control destroys the gym's data unguarded", () => {
         expect(r.pressed, `${screen.side}: the sweep must reach "${name}" — a descent silently ` +
           `not made (a lazy panel read before its chunk landed, or a parent reopened without ` +
           `the choice that revealed it)`).toContain(name);
+      }
+
+      for (const name of EXPECT_UNPRESSED[screen.key] || []) {
+        expect(r.pressed, `${screen.side}: "${name}" cannot be pressed by anyone, so a press of it ` +
+          `recorded here is one that did not happen`).not.toContain(name);
       }
 
       const floor = EXPECT_GUARDED[screen.key];
