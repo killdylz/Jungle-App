@@ -85,6 +85,10 @@ test.describe("win-back drafts", () => {
     expect(msg).toContain("The Garage");       // the gym signs it, not Jungle
     expect(msg).toMatch(/membership/i);        // the exemption rests on this
     expect(msg).not.toMatch(/\d+%|discount|offer/i); // never marketing
+    // Session 43: Larry was last in 30 days ago. The draft used to tell him it
+    // had been "the past couple of weeks" whatever the gap.
+    expect(msg).toContain("missed you in class the past 4 weeks");
+    expect(msg).not.toContain("couple of weeks");
   });
 
   test("drafting a message records nothing — the ledger must mean what it says", async ({ page }) => {

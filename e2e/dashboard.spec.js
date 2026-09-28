@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { freshApp, stored, watchConsole, expectNoConsoleErrors } from "./helpers.js";
+import { freshApp, nav, stored, watchConsole, expectNoConsoleErrors } from "./helpers.js";
 // The catalogue itself, so these assertions cannot drift from it. The failure
 // being guarded is "this screen does not read the catalogue at all", and a test
 // that hardcoded #F59E0B would go on passing the day HIIT's colour changed while
@@ -214,5 +214,75 @@ test.describe("today's classes name a class type the way the catalogue does", ()
     const unknown = await barOf(page, "Legacy Mob");
     expect(unknown).not.toBe(await barOf(page, "Burn"));
     expect(unknown).not.toBe(await barOf(page, "Ring Work"));
+  });
+});
+
+// ─── Session 43 · today's classes are today's OCCURRENCES ────────────────────
+//
+// `getDayClasses` matched raw rules on the weekday. The Schedule answers "what
+// is on today" through `occurrencesForWeek` and `applyCovers`; the Dashboard
+// asked the question without either, and two things the Schedule knows were
+// lost: a "This week" class, and an agreed cover.
+const MON_20_JUL = new Date(2026, 6, 20, 8, 0, 0);
+const MON_27_JUL = new Date(2026, 6, 27, 8, 0, 0);
+
+test.describe("today's classes are the day's occurrences, as the Schedule draws them", () => {
+  test("🔴 a 'This week' class is on the Dashboard that week, and not every week after", async ({ page }) => {
+    await page.clock.setFixedTime(MON_20_JUL);
+    await freshApp(page);
+    await page.evaluate(() => localStorage.setItem("jungle_user_classes", JSON.stringify([
+      // The positive control: a weekly Monday class, on both Mondays.
+      { id: "w1", name: "Morning Burn", type: "hiit", coach: "Dylan", day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
+    ])));
+    await page.reload();
+
+    // The one-off, made the way a coach makes one: the Schedule's own button.
+    await nav(page, "Schedule");
+    await page.getByRole("button", { name: "Add a class on Mon at 12:00" }).click();
+    await page.getByPlaceholder(/class name/i).fill("Pop-up Yoga");
+    await page.getByRole("button", { name: "This week", exact: true }).click();
+    await page.getByRole("button", { name: "Add to schedule" }).click();
+    await expect.poll(async () => (await stored(page, "jungle_user_classes")).length).toBe(2);
+
+    await nav(page, "Dashboard");
+    await expect(page.getByTestId("today-class")).toHaveCount(2);
+    await expect(rowByName(page, "Pop-up Yoga")).toHaveCount(1);
+
+    // A week later it is a class the gym ran once, last Monday.
+    await page.clock.setFixedTime(MON_27_JUL);
+    await page.reload();
+    await expect(rowByName(page, "Morning Burn")).toHaveCount(1);
+    await expect(page.getByTestId("today-class")).toHaveCount(1);
+    await expect(rowByName(page, "Pop-up Yoga")).toHaveCount(0);
+  });
+
+  test("🔴 an agreed cover names the coach who is teaching, as the Schedule does", async ({ page }) => {
+    await page.clock.setFixedTime(MON_20_JUL);
+    await freshApp(page);
+    await page.evaluate(() => {
+      localStorage.setItem("jungle_user_classes", JSON.stringify([
+        { id: "uc1", name: "Strength Lab", type: "hyrox", coach: "Mara", day: "Mon", slot: "06:00", dur: "45m", repeat: "weekly" },
+      ]));
+      const coach = (id, name) => ({ id, name, aliases: [], userId: "", active: true, availability: {} });
+      localStorage.setItem("jungle_coaches", JSON.stringify([coach("c-mara", "Mara"), coach("c-dev", "Dev")]));
+      // The row `makeCoverForOccurrence` builds, settled as `settleCover` settles it.
+      localStorage.setItem("jungle_cover_requests", JSON.stringify([{
+        id: "cr1", classClientId: "uc1", classLabel: "Strength Lab", classDay: "Mon", classSlot: "06:00",
+        classDate: "2026-07-20", absenceId: "", fromCoachId: "c-mara", toCoachId: "c-dev", note: "",
+        status: "approved", createdAt: "2026-07-18T09:00:00.000Z", settledAt: "2026-07-18T10:00:00.000Z", settledBy: "",
+      }]));
+    });
+    await page.reload();
+
+    const row = rowByName(page, "Strength Lab");
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText("Dev");
+    await expect(row).toContainText("covering for Mara");
+
+    // The cover is for one day. The next Monday is Mara's again.
+    await page.clock.setFixedTime(MON_27_JUL);
+    await page.reload();
+    await expect(rowByName(page, "Strength Lab")).toContainText("Mara");
+    await expect(rowByName(page, "Strength Lab")).not.toContainText("Dev");
   });
 });

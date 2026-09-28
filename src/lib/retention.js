@@ -254,7 +254,8 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
         flags.push({
           memberId: m.id, name: m.name || "", rule: RULE_NEW_MEMBER,
           reason: `Joined ${age} days ago and has attended ${visits} time${visits === 1 ? "" : "s"}${_breakdown(e)} — fewer than ${NEW_MEMBER_MIN_VISITS} in their first month.`,
-          visits, daysSince: e ? daysBetween(now, e.lastMs) : age,
+          visits, classVisits: e?.classVisits || 0, ptVisits: e?.ptVisits || 0,
+          daysSince: e ? daysBetween(now, e.lastMs) : age,
           since: dayOf(new Date(joinedMs).toISOString()),
           severity: NEW_MEMBER_MIN_VISITS - visits + 2,   // fewer visits = more urgent
         });
@@ -271,7 +272,8 @@ export function atRiskMembers(members = [], attendance = [], opts = {}) {
         flags.push({
           memberId: m.id, name: m.name || "", rule: RULE_ABSENCE,
           reason: `Last attended ${daysSince} days ago, after ${visits} visit${visits === 1 ? "" : "s"}${_breakdown(e)} — more than ${ABSENCE_DAYS} days away.`,
-          visits, daysSince, since: dayOf(new Date(e.lastMs).toISOString()),
+          visits, classVisits: e.classVisits, ptVisits: e.ptVisits,
+          daysSince, since: dayOf(new Date(e.lastMs).toISOString()),
           severity: Math.min(10, Math.floor(daysSince / ABSENCE_DAYS) + 1),
         });
       }

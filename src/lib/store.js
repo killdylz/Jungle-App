@@ -1496,7 +1496,7 @@ export function appendParqRecord({ memberId, answers, screenedAt, clearance = nu
           // above PARQ_CONSENT_NOTICE.
           method: "explicit_opt_in",
         },
-    screenedAt: String(screenedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    screenedAt: String(screenedAt || localDateStr()).slice(0, 10),
     // Copied, not referenced: the screen holds this object in state and would
     // otherwise keep mutating a row that is supposed to be a fixed record.
     answers: { ...(answers || {}) },
@@ -1526,7 +1526,10 @@ export function addPtClient({ memberId, goal = "", coachName = "", startedAt = "
   const c = {
     id: newId(), memberId,
     goal: String(goal || "").trim(), coachName: String(coachName || "").trim(),
-    startedAt: String(startedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    // The coach's calendar day (session 43). The 1:1 screen passes no date, and
+    // the UTC form dated a client added before 08:00 in Singapore yesterday —
+    // the S31 §2.4 defect `addMember` already had fixed.
+    startedAt: String(startedAt || localDateStr()).slice(0, 10),
     status: "active", notes: "",
   };
   const out = [...list, c];
@@ -1965,15 +1968,35 @@ export function applyAttendanceImport(analysis, lib = null) {
   const cis = getClassInstances();
   const ciIdFor = new Map();
   const byMinute = new Map(), byDay = new Map();
+  //
+  //    ⚠️ Both indexes are about the GYM'S calendar, not UTC (session 43). A
+  //    timed row is now a real instant (`parseDate`), so the minute key is the
+  //    UTC instant and it matches the Runner's own row for the same class. The
+  //    day key is the LOCAL day of each existing row: a 06:00 class in
+  //    Singapore is 22:00 UTC the day before, and a UTC slice filed it there.
+  //    An untimed incoming row is anchored at noon UTC, whose UTC day is the
+  //    stated day, so its own key needs no conversion.
+  const localDayKey = c => {
+    const t = Date.parse(c.startsAt);
+    return Number.isNaN(t) ? occurrenceKeyOf(c.name, c.startsAt, false) : `${c.name}@${localDateStr(t)}`;
+  };
+  // A row imported BEFORE that fix holds the file's wall clock as if it were
+  // UTC. Re-importing the same file must still find it, so a timed incoming
+  // row also tries its own wall clock written that old way.
+  const legacyMinuteKey = c => {
+    const d = new Date(c.startsAt), p = n => String(n).padStart(2, "0");
+    return `${c.name}@${localDateStr(d.getTime())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
   cis.forEach(c => {
     byMinute.set(occurrenceKeyOf(c.name, c.startsAt, true), c.id);
     // Last wins: with no time in hand there is nothing better to prefer, and
     // saying so is more honest than a rule that looks principled.
-    byDay.set(occurrenceKeyOf(c.name, c.startsAt, false), c.id);
+    byDay.set(localDayKey(c), c.id);
   });
   const newCis = [];
   (analysis.classes || []).forEach(c => {
-    const hit = c.timed ? byMinute.get(occurrenceKeyOf(c.name, c.startsAt, true))
+    const hit = c.timed ? (byMinute.get(occurrenceKeyOf(c.name, c.startsAt, true))
+                           || byMinute.get(legacyMinuteKey(c)))
                         : byDay.get(occurrenceKeyOf(c.name, c.startsAt, false));
     if (hit) { ciIdFor.set(c.key, hit); return; }
     // The THIRD door into class_type, and the one whose vocabulary we control

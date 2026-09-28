@@ -650,3 +650,18 @@ describe("atRiskMembers — the 1:1 log as a second activity source (D1)", () =>
     }
   });
 });
+
+// Session 43 · the flag carries the visit breakdown the win-back draft needs,
+// so a 1:1-only member is not told they were missed "in class".
+describe("an absence flag carries where the visits were", () => {
+  it("counts class and one-to-one visits separately", () => {
+    const now = new Date(2026, 8, 23, 12).getTime();
+    const ago = d => new Date(now - d * 86_400_000).toISOString();
+    const members = [{ id: "m1", name: "Pat Ong", status: "active", joinedAt: "" },
+                     { id: "m2", name: "Recent", status: "active", joinedAt: "" }];
+    const attendance = [{ memberId: "m2", checkedInAt: ago(1) }];
+    const ptSessions = [{ memberId: "m1", status: "done", date: ago(30).slice(0, 10) }];
+    const [f] = atRiskMembers(members, attendance, { now, ptSessions });
+    expect(f).toMatchObject({ memberId: "m1", rule: "absence", classVisits: 0, ptVisits: 1 });
+  });
+});

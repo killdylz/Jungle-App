@@ -39,7 +39,9 @@ import { PRESET_SKINS, baseSkin, resolveSkinTokens } from "./lib/skins.js";
 // `fmt` and `fmtOccurrence` now live in src/lib/format.js: the Builder (here)
 // and the Runner (extracted) both format the same durations, and a copy would
 // have let the two disagree about the same number on the same screen.
-import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec, stageDurNote } from "./lib/format.js";
+import { fmt, fmtOccurrence, fmtAgo, fmtSessionDay, stageDurSec, stageDurNote, localDateStr } from "./lib/format.js";
+import { occurrencesForWeek } from "./lib/scheduleInstances.js";
+import { applyCovers } from "./lib/coverRequests.js";
 // Only the field names and the currency table — the arithmetic that reads them
 // lives on the Members screen, which is the only surface that shows the figure.
 import { PRICE_FIELD, CURRENCY_FIELD, CURRENCIES, DEFAULT_CURRENCY } from "./lib/revenueAtRisk.js";
@@ -216,18 +218,36 @@ async function fetchExerciseGif(name){
 // `resolveClassType` deliberately leaves alone rather than guessing at.
 const UNKNOWN_TYPE_COLOR = "#8AA294";
 function getUserClasses(){ return store.getUserClasses(); }
-function getDayClasses(dayAbbrev){
+// 🔴 TODAY'S OCCURRENCES, NOT THE RULES THAT MATCH TODAY'S WEEKDAY (session 43).
+//
+// This matched raw rules on `uc.day === today`, which is the Schedule's grid
+// question asked without the Schedule's answer. Two things the Schedule knows
+// were lost on the way:
+//   • a "This week" class (`repeat: "once"`, pinned to a `weekKey`) appeared on
+//     the Dashboard on that weekday EVERY week, for ever — "Today's classes"
+//     listing a class the gym ran once, months ago;
+//   • an agreed cover (`applyCovers`) never reached it, so the one card a coach
+//     reads first thing named the coach who is away.
+// So it goes through the same two functions the Schedule grid does, and a row
+// carries who is covering for whom exactly as the grid cell does.
+function getDayClasses(now = new Date()){
   // BASE_SCHEDULE (20 invented classes with invented coaches and fill rates) is
   // deleted — the schedule shows the gym's own classes or nothing (audit 2.2).
   const LIB = getLibrary();
+  const today = localDateStr(now.getTime());
+  const byRule = new Map(getUserClasses().map(uc => [uc.id, uc]));
+  const occ = applyCovers(occurrencesForWeek(getUserClasses(), now), store.getCoverRequests(), store.getCoaches())
+    .filter(o => localDateStr(Date.parse(o.startsAt)) === today);
   const out = [];
-  getUserClasses().forEach(uc=>{
-    const hit = uc.repeat==="daily" || uc.day===dayAbbrev;
-    if(!hit) return;
+  occ.forEach(o=>{
+    // An id-less legacy rule has no `ruleId` to look up; its name and slot are
+    // what `occurrencesForWeek` copied from it.
+    const uc = (o.ruleId && byRule.get(o.ruleId))
+      || getUserClasses().find(r => !r.id && r.name === o.name && r.slot === o.slot) || {};
     // Healed on READ, exactly as CalendarScreen heals it, so one rule cannot be
     // described two ways by two screens looking at the same row.
-    const type = resolveClassType(uc.type, LIB);
-    out.push({time:uc.slot,name:uc.name,coach:uc.coach||"",type,
+    const type = resolveClassType(o.classType, LIB);
+    out.push({time:o.slot,name:o.name,coach:o.coachName||"",coveringFor:o.coveringFor||"",type,
               typeLabel:classTypeLabel(type, LIB),dur:uc.dur||"45m",fill:uc.fill||0,
               // Unlike the Schedule grid this appends no alpha, so a gym-authored
               // type's `var(--accent)` is a usable value here and is the gym's
@@ -502,8 +522,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
     members: ownCounts.members,
   });
 
-  const todayAbbrev = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][now.getDay()];
-  const todayClasses = getDayClasses(todayAbbrev).slice(0,5);
+  const todayClasses = getDayClasses(now).slice(0,5);
   const recent = sessionHistory.slice(0,3);
   const npName = nowPlaying?.name; const npArtist = (nowPlaying?.artists||[]).map(a=>a.name).join(", ");
 
@@ -636,7 +655,7 @@ function DashboardScreen({onNavigate, onNewSession, profile, sessionHistory=[], 
                 <div key={i} data-testid="today-class" style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 0",borderBottom:i<todayClasses.length-1?"1px solid var(--border)":"none"}}>
                   <div data-testid="today-class-color" style={{width:"3px",height:"34px",borderRadius:"2px",background:c.color,flexShrink:0}}/>
                   <div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)",width:"48px",flexShrink:0,fontVariantNumeric:"var(--num)"}}>{c.time}</div>
-                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{[c.coach, c.dur].filter(Boolean).join(" · ")}</div></div>
+                  <div style={{flex:1,minWidth:0}}><div style={{fontSize:"13px",fontWeight:"700",color:"var(--text)"}}>{c.name}</div><div style={{fontSize:"11px",color:"var(--muted)"}}>{[c.coach, c.coveringFor && `covering for ${c.coveringFor}`, c.dur].filter(Boolean).join(" · ")}</div></div>
                   {/* Was `{c.fill||0}%`. Nothing in the product ever SETS `fill`
                       — there is no capacity field and no booking integration —
                       so every class on every gym's dashboard read "0%", which

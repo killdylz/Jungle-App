@@ -15,8 +15,8 @@ actually gets read. The full reasoning behind every decision lives in commit mes
 npm run lint:crash && npm test && npm run test:e2e && npm run build && npm run size
 ```
 
-Green as of session 42: **`lint:crash` 0 · 1344 unit (50 files) · 629 e2e (53 spec files) ·
-14-chunk build · 0 over budget.** App.jsx is **2,706 lines**. StaffApp **335.46 / 360 kB — 24.5 kB
+Green as of session 43: **`lint:crash` 0 · 1362 unit (52 files) · 634 e2e (54 spec files) ·
+14-chunk build · 0 over budget.** App.jsx is **2,725 lines**. StaffApp **336.72 / 360 kB — 23.3 kB
 left.** PTScreens **39.42 / 41**, RetentionScreen **17.23 / 18**, LibraryBrowserModal
 **20.11 / 21** (raised in session 40 for the reset confirm's cascade inventory), index
 **203.06 / 215**. A new screen goes in a `lazy()` chunk **with its own budget line in
@@ -344,6 +344,17 @@ not. **Assert the STORED object, not only what was rendered.**
 
 ## Testing traps
 
+- 🔴 **THE WHOLE E2E SUITE RUNS IN UTC, and the market is UTC+8.** In UTC a wall-clock time and a
+  UTC time are one instant, so a writer that confuses them passes every spec. Session 43 found three
+  (import, member export, 1:1 start date) by setting the browser to Singapore and reading the page.
+  **Anything that writes or shows a date or a time needs a test on Singapore time:**
+  `e2e/singaporeClock.spec.js` (`test.use({ timezoneId: "Asia/Singapore" })`, with a precondition
+  test) or a unit file with `vi.stubEnv("TZ", "Asia/Singapore")` (`joinDate.test.js`). ⚠️ A value
+  computed at MODULE scope in that unit file is built before `beforeAll` sets the zone, in UTC.
+  Whole-suite probe: a scratch config spreading the real one with `use.timezoneId`, run with
+  `TZ=Asia/Singapore` so the Node-side fixtures agree. At session 43's HEAD: 633 / 634, the one
+  being `export.spec.js:114`, which pins a UTC reading. **Imported times are gym-local instants
+  since `0390aec`; a bare imported date is anchored at `T12:00:00.000Z`.**
 - ⚠️ **Playwright AUTO-DISMISSES dialogs.** A test that clicks a delete and asserts the row is
   gone is exercising **cancel**. Use `page.once("dialog", d => d.accept())` and drive both paths.
 - ⚠️ **`nav()` leaves focus on the button it clicked.** Any test pressing a key, or walking the
