@@ -10,7 +10,7 @@
 // — the config is infra and not this session's to change. `vi.unstubAllEnvs()`
 // restores it, so the rest of the suite is unaffected.
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
-import { addMember, getMembers } from "./store.js";
+import { addMember, getMembers, addPtClient, getPtClients, appendParqRecord } from "./store.js";
 
 beforeAll(() => { vi.stubEnv("TZ", "Asia/Singapore"); });
 afterAll(() => { vi.unstubAllEnvs(); });
@@ -54,5 +54,31 @@ describe("addMember stamps the local calendar day", () => {
   it("is still a plain ISO calendar date — the shape every reader parses", () => {
     const { member } = addMember("Cai Wen");
     expect(member.joinedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+// Session 43 · the same rule, in the 1:1 lens. `PTScreen` calls `addPtClient`
+// with no date, and both 1:1 writers defaulted to the UTC day.
+describe("the 1:1 writers stamp the local calendar day", () => {
+  beforeEach(() => { localStorage.clear(); });
+
+  it("🔴 a client added at 00:30 is started today, not yesterday", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(LATE_UTC);
+    try {
+      const { client } = addPtClient({ memberId: "m1" });
+      expect(client.startedAt).toBe("2026-03-04");
+      expect(getPtClients()[0].startedAt).toBe("2026-03-04");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("🔴 an undated health screen is dated today, not yesterday", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(LATE_UTC);
+    try {
+      const list = appendParqRecord({ memberId: "m1", answers: {},
+        consent: { grantedAt: "2026-03-04", policyVersion: "v1" } });
+      expect(list[list.length - 1].screenedAt).toBe("2026-03-04");
+    } finally { vi.useRealTimers(); }
   });
 });

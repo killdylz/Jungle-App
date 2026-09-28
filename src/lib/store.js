@@ -1496,7 +1496,7 @@ export function appendParqRecord({ memberId, answers, screenedAt, clearance = nu
           // above PARQ_CONSENT_NOTICE.
           method: "explicit_opt_in",
         },
-    screenedAt: String(screenedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    screenedAt: String(screenedAt || localDateStr()).slice(0, 10),
     // Copied, not referenced: the screen holds this object in state and would
     // otherwise keep mutating a row that is supposed to be a fixed record.
     answers: { ...(answers || {}) },
@@ -1526,7 +1526,10 @@ export function addPtClient({ memberId, goal = "", coachName = "", startedAt = "
   const c = {
     id: newId(), memberId,
     goal: String(goal || "").trim(), coachName: String(coachName || "").trim(),
-    startedAt: String(startedAt || new Date().toISOString().slice(0, 10)).slice(0, 10),
+    // The coach's calendar day (session 43). The 1:1 screen passes no date, and
+    // the UTC form dated a client added before 08:00 in Singapore yesterday —
+    // the S31 §2.4 defect `addMember` already had fixed.
+    startedAt: String(startedAt || localDateStr()).slice(0, 10),
     status: "active", notes: "",
   };
   const out = [...list, c];
