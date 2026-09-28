@@ -73,3 +73,35 @@ test.describe("importing the booking system's export", () => {
     expectNoConsoleErrors(errors);
   });
 });
+
+// Click, catch the download, read it back as text (the shape export.spec.js uses).
+async function grab(page, clicker) {
+  const [download] = await Promise.all([page.waitForEvent("download"), clicker()]);
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const c of stream) chunks.push(c);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+test.describe("a member's own data export", () => {
+  test("🔴 tells them the date and time they were actually in class", async ({ page }) => {
+    await seed(page, {
+      jungle_gym_branding: { gymName: "The Garage" },
+      jungle_members: [{ id: "m1", name: "Sarah Chen", email: "s@x.com", status: "active", joinedAt: "2026-01-01" }],
+      jungle_class_instances: [
+        { id: "ci1", name: "Evening Burn", classType: "hiit", coachName: "Dylan", startsAt: "2026-09-22T10:00:00.000Z" },
+        { id: "ci2", name: "Dawn Row",     classType: "hiit", coachName: "Dylan", startsAt: "2026-09-21T22:30:00.000Z" },
+      ],
+      jungle_attendance: [
+        { id: "a1", classInstanceId: "ci1", memberId: "m1", source: "coach", checkedInAt: "2026-09-22T10:05:00.000Z" },
+        { id: "a2", classInstanceId: "ci2", memberId: "m1", source: "qr",    checkedInAt: "2026-09-21T22:31:00.000Z" },
+      ],
+    });
+    await nav(page, "Members");
+    const text = await grab(page, () => page.getByRole("button", { name: "Download Sarah Chen's data" }).click());
+    const lines = text.replace(/^﻿/, "").trim().split("\r\n");
+    // Before the fix: "2026-09-21,22:31,Dawn Row…" and "2026-09-22,10:05,Evening Burn…".
+    expect(lines.some(l => l.startsWith("2026-09-22,06:31,Dawn Row"))).toBe(true);
+    expect(lines.some(l => l.startsWith("2026-09-22,18:05,Evening Burn"))).toBe(true);
+  });
+});

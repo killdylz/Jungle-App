@@ -78,11 +78,28 @@ const lastSeenDay = ms => {
   const d = new Date(ms), p = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
-const isoMinute = ts => {
-  if (!ts) return "";
-  const s = String(ts);
-  return s.length > 16 ? `${s.slice(0, 10)} ${s.slice(11, 16)}` : s;
+// A check-in as the member's own calendar and clock say it (session 43).
+//
+// 🔴 This sliced the stored ISO string, which is UTC. In Singapore a member in
+// the 06:30 class on the 22nd was told, in the document that answers their
+// access request, that they checked in at 22:31 on the 21st — and an 18:05
+// check-in read "10:05". Every date and time in the file was UTC.
+//
+// An imported row with no stated time sits on the importer's noon-UTC anchor
+// (`parseDate`). It has no time of day, and printing the anchor as one would
+// invent a time the member never gave — so its Time cell is left blank. The
+// cost: an import that genuinely stated the instant noon UTC (20:00 in
+// Singapore) also prints no time. A blank is the honest failure there.
+const NOON_ANCHOR = /T12:00:00(?:\.000)?Z$/;
+const checkInParts = (ts, source) => {
+  const ms = Date.parse(ts || "");
+  if (Number.isNaN(ms)) return [String(ts || "").slice(0, 10), ""];
+  if (source === "import" && NOON_ANCHOR.test(String(ts))) return [String(ts).slice(0, 10), ""];
+  const d = new Date(ms), p = n => String(n).padStart(2, "0");
+  return [lastSeenDay(ms), `${p(d.getHours())}:${p(d.getMinutes())}`];
 };
+// Any other stored instant, as a local calendar day.
+const localDay = ts => { const ms = Date.parse(ts || ""); return Number.isNaN(ms) ? isoDate(ts) : lastSeenDay(ms); };
 
 const SOURCE_LABEL = { qr: "Self check-in", coach: "Checked in by coach", import: "Imported from previous system" };
 
@@ -129,7 +146,7 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
   // file that opens with an unlabelled grid answers the request badly even when
   // the data in it is complete.
   rows.push(["Personal data held", gymName ? `${gymName} (via Jungle)` : "via Jungle"]);
-  rows.push(["Exported", new Date().toISOString().slice(0, 10)]);
+  rows.push(["Exported", lastSeenDay(Date.now())]);
   rows.push([]);
   rows.push(["Field", "Value"]);
   rows.push(["Name", member.name || ""]);
@@ -154,10 +171,10 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
   } else {
     for (const a of mine) {
       const c = classes.get(a.classInstanceId) || {};
-      const when = isoMinute(a.checkedInAt);
+      const [date, time] = checkInParts(a.checkedInAt, a.source);
       rows.push([
-        when.slice(0, 10),
-        when.slice(11),
+        date,
+        time,
         c.name || "",
         c.classType || "",
         c.coachName || "",
@@ -193,7 +210,7 @@ export function memberCsv(member, attendance = [], classInstances = [], { gymNam
   } else {
     for (const r of theirs) {
       rows.push([
-        isoDate(r.occurredAt),
+        localDay(r.occurredAt),
         RULE_LABEL[r.rule] || r.rule || "",
         ACTION_LABEL[r.action] || r.action || "",
         r.note || "",
@@ -258,10 +275,10 @@ export function safeFilePart(s, fallback = "export") {
 }
 
 export function memberCsvFilename(member, today = new Date()) {
-  return `${safeFilePart(member?.name, "member")}-data-${today.toISOString().slice(0, 10)}.csv`;
+  return `${safeFilePart(member?.name, "member")}-data-${lastSeenDay(today.getTime())}.csv`;
 }
 
 export function rosterCsvFilename(gymName = "", today = new Date()) {
   const who = safeFilePart(gymName, "jungle");
-  return `${who}-members-${today.toISOString().slice(0, 10)}.csv`;
+  return `${who}-members-${lastSeenDay(today.getTime())}.csv`;
 }
