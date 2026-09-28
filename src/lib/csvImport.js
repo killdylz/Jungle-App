@@ -103,7 +103,15 @@ export function parseDate(raw, { dayFirst = true } = {}) {
 
   // ISO 8601, with or without a time component.
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  if (m) return iso(m[1], m[2], m[3], m[4], m[5], m[6]);
+  if (m) {
+    // An explicit offset states the instant outright; nothing to interpret.
+    if (m[4] != null && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+      if (!iso(m[1], m[2], m[3])) return null;          // still reject 31 February
+      const t = Date.parse(s);
+      return Number.isNaN(t) ? null : new Date(t).toISOString();
+    }
+    return iso(m[1], m[2], m[3], m[4], m[5], m[6]);
+  }
 
   // "12 March 2026" / "12 Mar 2026"
   m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})/);
@@ -167,12 +175,36 @@ export function occurrenceKeyOf(name, startsAt, timed) {
   return `${name}@${String(startsAt).slice(0, timed ? 16 : 10)}`;
 }
 
+// 🔴 A STATED TIME IS THE GYM'S WALL CLOCK, NOT UTC (session 43).
+//
+// This built every timestamp with `Date.UTC`, so "2026-09-22 18:00" was stored
+// as 18:00 UTC — which is 02:00 the NEXT morning in Singapore. Every other
+// writer of `class_instances` and `attendance` (the Runner, the Schedule's
+// `occurrencesForWeek`) stores a real instant built from local time, so one
+// table held two conventions and nothing could tell them apart. Measured in the
+// shipped UI with the browser in Asia/Singapore:
+//
+//   • importing the booking system's export of an 18:00 class Jungle had
+//     itself run minted a SECOND class (`…T18:00Z` beside the Runner's
+//     `…T10:00Z`) and a second check-in for the same person;
+//   • every imported class from 16:00 onwards read as the next day, so
+//     "Last seen" and "last in N days ago" were a day late for an evening gym.
+//
+// The suite runs in UTC, where the two conventions coincide, which is how this
+// survived. A bare DATE keeps its noon-UTC anchor: it carries no time to be
+// wrong about, and noon lands on the stated day from UTC-11 to UTC+11. An
+// explicit offset (`Z`, `+08:00`) is honoured as written.
 function iso(y, mo, d, hh, mm, ss) {
   const Y = Number(y), M = Number(mo), D = Number(d);
   if (!Y || M < 1 || M > 12 || D < 1 || D > 31) return null;
-  const dt = new Date(Date.UTC(Y, M - 1, D, Number(hh || 12), Number(mm || 0), Number(ss || 0)));
-  // Round-trip check rejects impossible dates (31 February) that Date silently rolls over.
-  if (dt.getUTCMonth() !== M - 1 || dt.getUTCDate() !== D) return null;
+  const timed = hh != null && hh !== "";
+  const dt = timed
+    ? new Date(Y, M - 1, D, Number(hh), Number(mm || 0), Number(ss || 0))
+    : new Date(Date.UTC(Y, M - 1, D, 12, 0, 0));
+  // Round-trip check rejects impossible dates (31 February) that Date silently
+  // rolls over — read back in the frame the value was built in.
+  const [gm, gd] = timed ? [dt.getMonth(), dt.getDate()] : [dt.getUTCMonth(), dt.getUTCDate()];
+  if (gm !== M - 1 || gd !== D) return null;
   return dt.toISOString();
 }
 
