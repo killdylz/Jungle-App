@@ -344,6 +344,17 @@ not. **Assert the STORED object, not only what was rendered.**
 
 ## Testing traps
 
+- 🔴 **THE WHOLE E2E SUITE RUNS IN UTC, and the market is UTC+8.** In UTC a wall-clock time and a
+  UTC time are one instant, so a writer that confuses them passes every spec. Session 43 found three
+  (import, member export, 1:1 start date) by setting the browser to Singapore and reading the page.
+  **Anything that writes or shows a date or a time needs a test on Singapore time:**
+  `e2e/singaporeClock.spec.js` (`test.use({ timezoneId: "Asia/Singapore" })`, with a precondition
+  test) or a unit file with `vi.stubEnv("TZ", "Asia/Singapore")` (`joinDate.test.js`). ⚠️ A value
+  computed at MODULE scope in that unit file is built before `beforeAll` sets the zone, in UTC.
+  Whole-suite probe: a scratch config spreading the real one with `use.timezoneId`, run with
+  `TZ=Asia/Singapore` so the Node-side fixtures agree. At session 43's HEAD: 633 / 634, the one
+  being `export.spec.js:114`, which pins a UTC reading. **Imported times are gym-local instants
+  since `0390aec`; a bare imported date is anchored at `T12:00:00.000Z`.**
 - ⚠️ **Playwright AUTO-DISMISSES dialogs.** A test that clicks a delete and asserts the row is
   gone is exercising **cancel**. Use `page.once("dialog", d => d.accept())` and drive both paths.
 - ⚠️ **`nav()` leaves focus on the button it clicked.** Any test pressing a key, or walking the
