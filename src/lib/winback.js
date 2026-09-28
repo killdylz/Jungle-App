@@ -53,9 +53,30 @@ export function winBackMessage(flag, member, gymName = "") {
       + `Is there a class time that works better for your week? Happy to help you find one${sig}`;
   }
   // absence
-  return `Hi ${who}! We've missed you in class the past couple of weeks. `
+  return `Hi ${who}! We've missed you ${_where(flag)} ${_howLong(flag.daysSince)}. `
     + `Your membership's still active — anything we can do to help you get back in?${sig}`;
 }
+
+// 🔴 THE DRAFT IS SENT AS-IS, SO WHAT IT SAYS HAS TO BE TRUE (session 43).
+//
+// This always read "We've missed you in class the past couple of weeks". The
+// absence rule fires at 14 days and has no ceiling (DYLAN-QUEUE A21), so the
+// same sentence went to a member last seen 400 days ago — and "in class" went
+// to a 1:1 client who has never been to one. The coach does not proof-read a
+// message written to be sent in one tap; that is this file's whole premise.
+//
+// The span is the flag's own `daysSince` rounded the way a person says it.
+// These cut-offs are wording, not policy: they decide how a true number is
+// phrased, never who gets a message.
+function _howLong(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d < 21) return "the past couple of weeks";
+  if (d < 56) return `the past ${Math.round(d / 7)} weeks`;
+  if (d < 365) return `the past ${Math.max(2, Math.round(d / 30))} months`;
+  return "for over a year";
+}
+// Only a member whose every recorded visit was one-to-one is not missed "in class".
+const _where = flag => (flag.ptVisits && !flag.classVisits ? "at your sessions" : "in class");
 
 // wa.me deep link with the message pre-filled and NO recipient. Opens the
 // coach's own WhatsApp; they choose who it goes to.

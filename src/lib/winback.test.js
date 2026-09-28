@@ -98,3 +98,37 @@ describe("the link", () => {
     expect(winBackLink(flag("absence"), null)).toBe("");
   });
 });
+
+// ── Session 43 · the draft says how long, and where, truthfully ─────────────
+// The absence rule has no ceiling (A21), so the same flag can be 14 days old or
+// 400. A message written to be sent unedited has to say which.
+describe("the absence draft tells the truth about the absence", () => {
+  const absent = (daysSince, over = {}) => ({ memberId: "m1", rule: "absence", daysSince,
+                                              visits: 3, classVisits: 3, ptVisits: 0, ...over });
+  const msg = f => winBackMessage(f, member(), "The Garage");
+
+  it("keeps the familiar phrasing for the fortnight the rule was written for", () => {
+    expect(msg(absent(14))).toContain("missed you in class the past couple of weeks");
+    expect(msg(absent(20))).toContain("the past couple of weeks");
+  });
+
+  it("🔴 does not tell someone gone for months that it has been a couple of weeks", () => {
+    expect(msg(absent(30))).toContain("the past 4 weeks");
+    expect(msg(absent(90))).toContain("the past 3 months");
+    expect(msg(absent(400))).toContain("in class for over a year");
+    [30, 90, 400].forEach(d => expect(msg(absent(d))).not.toContain("couple of weeks"));
+  });
+
+  it("🔴 does not say 'in class' to someone who has only ever trained one-to-one", () => {
+    expect(msg(absent(20, { classVisits: 0, ptVisits: 5 }))).toContain("missed you at your sessions");
+    // A mix is still missed in class — that is where most of their visits were.
+    expect(msg(absent(20, { classVisits: 2, ptVisits: 5 }))).toContain("missed you in class");
+  });
+
+  it("stays inside the exemption at every length", () => {
+    [14, 30, 90, 400].forEach(d => {
+      expect(msg(absent(d))).toMatch(/membership/i);
+      expect(msg(absent(d))).not.toMatch(MARKETING);
+    });
+  });
+});
