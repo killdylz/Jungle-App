@@ -13,8 +13,8 @@ _2026-09-28. Branch `claude/new-session-3ts8qe` (the branch this environment ass
 #21 has **no comments and no reviews**. `DYLAN-QUEUE.md` A20 and A21 are unanswered;
 `docs/PT-RECONCILIATION.md` §6 is unanswered; every commit since `7508de1` is Claude-authored.
 
-> **Gates at HEAD.** `lint:crash` **0** · **1362 unit** (52 files) · **__E2E__** · build ok ·
-> `npm run size` **0 over budget** (StaffApp **__STAFF__ / 360 kB**) ·
+> **Gates at HEAD.** `lint:crash` **0** · **1362 unit** (52 files) · **634 e2e in 54 spec files**, one clean full run on a quiet machine (**18.1m**) · build ok ·
+> `npm run size` **0 over budget** (StaffApp **336.72 / 360 kB**) ·
 > `node scripts/audit-store-writers.mjs` exit 0, 0 unexplained.
 > **The branch point was green: 1344 unit (50 files), 629 e2e passed (18.2m)**, measured on a quiet
 > machine as the first thing run.
@@ -140,7 +140,7 @@ mutation red.
 ## 2 · What is still red, and why
 
 **Nothing.** Branch point: **629 passed (18.2m)**, quiet machine, first thing run. HEAD:
-**__E2E_RUN__**, same conditions. No flake was seen in either run; `destructive.spec.js:526` passed
+**634 passed (18.1m)**, same conditions. No flake was seen in either run; `destructive.spec.js:526` passed
 both times.
 
 ⚠️ The 18.2m (session 42 measured 16.1m for the same 629 tests at the same commit) is the
